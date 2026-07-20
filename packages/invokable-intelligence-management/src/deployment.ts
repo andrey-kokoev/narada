@@ -277,6 +277,13 @@ export async function deployManagementBundle(
   }
   for (const request of materializationRequests) {
     const response = await service.execute(request);
+    if (!response.ok) {
+      throw new ManagementError(
+        "deployment-materialization-rejected",
+        "A materialization mutation was rejected; the deployment is not complete.",
+        [...bundle.evidence_refs, ...response.evidence_refs],
+      );
+    }
     receipts.push((response.data as { receipt: ManagementMutationReceipt }).receipt);
   }
   const validation = await service.execute({ operation: "validate" });

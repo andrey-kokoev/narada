@@ -5,8 +5,8 @@ import {
   ManagementError,
   deployManagementBundle,
   managementErrorResult,
-} from '@narada2/invokable-intelligence-management';
-import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization';
+} from '@narada2/invokable-intelligence-management/worker';
+import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization/d1';
 import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
 import { siteMatchesRegistryIdentity } from '@narada2/invokable-intelligence-contract';
 

@@ -57,6 +57,24 @@ async function postIntelligence(config, body, fetchImpl) {
   return { http_status: response.status, body: parsed };
 }
 
+function invocationControl({ intent_id, operation_id, mode }) {
+  return {
+    schema: 'narada.invokable-intelligence.invocation-control.v1',
+    intent_id,
+    operation_id,
+    mode,
+    allow_replan: true,
+  };
+}
+
+async function readExecution(config, attemptId, fetchImpl) {
+  return postIntelligence(config, {
+    schema: 'narada.cloudflare.invokable-intelligence.management-api-request.v1',
+    owning_site: { kind: 'site', id: config.intelligenceSiteId },
+    request: { operation: 'execution.read', attempt_id: attemptId },
+  }, fetchImpl);
+}
+
 export function formatLiveSmokeText(result) {
   const hasSiteId = typeof result.site_id === 'string' && result.site_id.length > 0;
   const hasOperationId = typeof result.operation_id === 'string' && result.operation_id.length > 0;
@@ -71,6 +89,7 @@ export function formatLiveSmokeText(result) {
     `Goal: ${result.goal?.text ?? 'unknown'} state=${result.goal?.state ?? 'unknown'}`,
     `Provider: posture=${result.provider_adapter_posture ?? 'unknown'} request=${result.provider_request_status ?? 'unknown'} execution=${String(result.provider_execution_enabled)}`,
     `Intelligence: attempt=${result.intelligence_attempt_id ?? 'none'} outcome=${result.intelligence_outcome_kind ?? 'unknown'} evidence_readback=${String(result.intelligence_evidence_readback)}`,
+    `Intelligence Diagnostics: ${Object.entries(result.intelligence_live_diagnostics ?? {}).map(([name, value]) => `${name}=${value?.outcome_kind ?? (value?.checked ? 'checked' : 'unknown')}`).join(' ') || 'none'}`,
     `Tool Effect: posture=${result.tool_effect_posture ?? 'unknown'} adapter=${result.tool_effect_adapter_kind ?? 'none'}`,
     `Task Mutation: create=${result.task_create_status ?? 'unknown'} update=${result.task_update_status ?? 'unknown'} persisted=${Array.isArray(result.persisted_tasks) ? result.persisted_tasks.length : 0}`,
   ];
@@ -100,10 +119,10 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
   assert.match(consoleCheck.body, /naradaCloudflareCarrierClient/);
   assert.match(consoleCheck.body, /\/api\/carrier/);
 
-  const providerRefusalInput = {
+  const successInput = {
     ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
     event_id: `input_live_smoke_${config.sessionSuffix}`,
-    content: 'Live smoke input requiring provider refusal evidence.',
+    content: 'Live smoke input proving successful provider execution and evidence readback.',
   };
 
   const start = await post(config, {
@@ -142,13 +161,13 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
     request_id: `live_smoke_input_${config.sessionSuffix}`,
     carrier_session_id: config.carrierSessionId,
     params: {
-      input: providerRefusalInput,
+      input: successInput,
     },
   }, fetchImpl);
   assert.equal(inputDelivery.http_status, 200);
   assert.equal(inputDelivery.body.ok, true);
   assertAuthenticatedPrincipal(inputDelivery.body.principal);
-  assert.equal(inputDelivery.body.input_event_id, providerRefusalInput.event_id);
+  assert.equal(inputDelivery.body.input_event_id, successInput.event_id);
   assert.equal(inputDelivery.body.terminal_state, 'completed');
   const inputEventKinds = inputDelivery.body.events.map((event) => event.event_kind);
   for (const eventKind of ['input_admitted_to_turn', 'turn_started', 'provider_request_recorded', 'provider_text_delta_recorded', 'turn_completed', 'input_completed']) {
@@ -197,8 +216,143 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
   assert.ok(executionRead.body.result.data.provenance.materializations.every(({ destination }) =>
     destination.site_id === config.intelligenceSiteId));
   const inputCompleted = inputDelivery.body.events.find((event) => event.event_kind === 'input_completed');
-  assert.equal(inputCompleted.payload.input_event_id, providerRefusalInput.event_id);
+  assert.equal(inputCompleted.payload.input_event_id, successInput.event_id);
   assert.equal(inputCompleted.payload.terminal_state, 'completed');
+
+  const resolverRefusalInput = {
+    ...successInput,
+    event_id: `input_live_smoke_resolver_refusal_${config.sessionSuffix}`,
+    content: 'Live smoke resolver refusal diagnostic.',
+  };
+  const resolverRefusal = await post(config, {
+    operation: 'carrier.input.deliver',
+    request_id: `live_smoke_resolver_refusal_${config.sessionSuffix}`,
+    carrier_session_id: config.carrierSessionId,
+    params: {
+      input: resolverRefusalInput,
+      intelligence_diagnostic: 'resolver-refusal',
+    },
+  }, fetchImpl);
+  assert.equal(resolverRefusal.http_status, 200);
+  assert.equal(resolverRefusal.body.ok, true);
+  assert.equal(resolverRefusal.body.terminal_state, 'failed');
+  const resolverRefusalFailure = resolverRefusal.body.events.find((event) => event.event_kind === 'turn_failed');
+  assert.equal(resolverRefusalFailure.payload.error_code, 'intelligence_resolver_no_candidates');
+  assert.equal(resolverRefusalFailure.payload.intelligence.outcome_kind, 'pre-invocation-refusal');
+  assert.equal(typeof resolverRefusalFailure.payload.intelligence.intent_id, 'string');
+  assert.equal(typeof resolverRefusalFailure.payload.intelligence.outcome_id, 'string');
+  assert.ok(resolverRefusalFailure.payload.intelligence.audit_evidence_ids.length >= 1);
+
+  const retryIntentId = `intent:cloudflare-live-smoke:${config.sessionSuffix}`;
+  const retryInput = {
+    ...successInput,
+    event_id: `input_live_smoke_retry_${config.sessionSuffix}`,
+    content: 'Live smoke provider failure followed by governed retry.',
+  };
+  const retryFailureRequest = {
+    operation: 'carrier.input.deliver',
+    request_id: `live_smoke_retry_failure_${config.sessionSuffix}`,
+    carrier_session_id: config.carrierSessionId,
+    params: {
+      input: retryInput,
+      intelligence_diagnostic: 'provider-failure',
+      intelligence_invocation: invocationControl({
+        intent_id: retryIntentId,
+        operation_id: `operation:cloudflare-live-smoke:${config.sessionSuffix}:failure`,
+        mode: 'immediate',
+      }),
+    },
+  };
+  const retryFailure = await post(config, retryFailureRequest, fetchImpl);
+  assert.equal(retryFailure.http_status, 200);
+  assert.equal(retryFailure.body.ok, true);
+  assert.equal(retryFailure.body.terminal_state, 'failed');
+  const retryFailureEvent = retryFailure.body.events.find((event) => event.event_kind === 'turn_failed');
+  assert.equal(retryFailureEvent.payload.error_code, 'cloudflare_workers_ai_provider_failed');
+  assert.equal(retryFailureEvent.payload.intelligence.outcome_kind, 'provider-failure');
+  assert.equal(typeof retryFailureEvent.payload.intelligence.attempt_id, 'string');
+
+  const retrySuccessRequest = {
+    operation: 'carrier.input.deliver',
+    request_id: `live_smoke_retry_success_${config.sessionSuffix}`,
+    carrier_session_id: config.carrierSessionId,
+    params: {
+      input: retryInput,
+      intelligence_diagnostic: 'provider-recovery',
+      intelligence_invocation: invocationControl({
+        intent_id: retryIntentId,
+        operation_id: `operation:cloudflare-live-smoke:${config.sessionSuffix}:retry`,
+        mode: 'retry',
+      }),
+    },
+  };
+  const retrySuccess = await post(config, retrySuccessRequest, fetchImpl);
+  assert.equal(retrySuccess.http_status, 200);
+  assert.equal(retrySuccess.body.ok, true);
+  assert.equal(retrySuccess.body.terminal_state, 'completed');
+  const retrySuccessCompleted = retrySuccess.body.events.find((event) => event.event_kind === 'turn_completed');
+  assert.equal(retrySuccessCompleted.payload.intelligence.outcome_kind, 'success');
+  assert.notEqual(
+    retrySuccessCompleted.payload.intelligence.attempt_id,
+    retryFailureEvent.payload.intelligence.attempt_id,
+  );
+  const retryExecutionRead = await readExecution(config, retrySuccessCompleted.payload.intelligence.attempt_id, fetchImpl);
+  assert.equal(retryExecutionRead.body.result.data.attempt.lineage.relation, 'retry-of');
+  assert.ok(retryExecutionRead.body.result.data.plan_revalidations.some(({ mode }) => mode === 'retry'));
+
+  const uncertainInput = {
+    ...successInput,
+    event_id: `input_live_smoke_ack_uncertain_${config.sessionSuffix}`,
+    content: 'Live smoke acknowledgment uncertainty diagnostic.',
+  };
+  const uncertainDelivery = await post(config, {
+    operation: 'carrier.input.deliver',
+    request_id: `live_smoke_ack_uncertain_${config.sessionSuffix}`,
+    carrier_session_id: config.carrierSessionId,
+    params: {
+      input: uncertainInput,
+      intelligence_diagnostic: 'acknowledgment-uncertain',
+      intelligence_invocation: invocationControl({
+        intent_id: `intent:cloudflare-live-smoke:${config.sessionSuffix}:uncertain`,
+        operation_id: `operation:cloudflare-live-smoke:${config.sessionSuffix}:uncertain`,
+        mode: 'immediate',
+      }),
+    },
+  }, fetchImpl);
+  assert.equal(uncertainDelivery.http_status, 200);
+  assert.equal(uncertainDelivery.body.ok, true);
+  assert.equal(uncertainDelivery.body.terminal_state, 'failed');
+  const uncertainFailure = uncertainDelivery.body.events.find((event) => event.event_kind === 'turn_failed');
+  assert.equal(uncertainFailure.payload.error_code, 'cloudflare_workers_ai_timeout');
+  assert.equal(uncertainFailure.payload.intelligence.outcome_kind, 'admission-unknown');
+  assert.equal(typeof uncertainFailure.payload.intelligence.outcome_id, 'string');
+
+  const replayedRetry = await post(config, retrySuccessRequest, fetchImpl);
+  assert.equal(replayedRetry.http_status, 200);
+  assert.deepEqual(replayedRetry.body, retrySuccess.body);
+
+  const replayRequest = {
+    operation: 'carrier.input.deliver',
+    request_id: `live_smoke_replay_${config.sessionSuffix}`,
+    carrier_session_id: config.carrierSessionId,
+    params: {
+      input: retryInput,
+      intelligence_diagnostic: 'provider-recovery',
+      intelligence_invocation: invocationControl({
+        intent_id: retryIntentId,
+        operation_id: `operation:cloudflare-live-smoke:${config.sessionSuffix}:replay`,
+        mode: 'replay',
+      }),
+    },
+  };
+  const replay = await post(config, replayRequest, fetchImpl);
+  assert.equal(replay.http_status, 200);
+  assert.equal(replay.body.ok, true);
+  assert.equal(replay.body.terminal_state, 'completed');
+  const replayCompleted = replay.body.events.find((event) => event.event_kind === 'turn_completed');
+  assert.equal(replayCompleted.payload.intelligence.outcome_kind, 'success');
+  const replayExecutionRead = await readExecution(config, replayCompleted.payload.intelligence.attempt_id, fetchImpl);
+  assert.equal(replayExecutionRead.body.result.data.attempt.lineage.relation, 'replay-of');
 
   const taskCreate = await post(config, {
     operation: 'carrier.command.execute',
@@ -294,7 +448,7 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
     principal_id: status.body.reader_principal.principal_id,
     principal_email: status.body.reader_principal.email,
     goal: status.body.goal,
-    input_event_id: providerRefusalInput.event_id,
+    input_event_id: successInput.event_id,
     input_terminal_state: inputDelivery.body.terminal_state,
     provider_request_status: providerRequest.payload.provider_request_status,
     provider_execution_enabled: providerRequest.payload.provider_execution_enabled,
@@ -308,6 +462,35 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
     intelligence_audit_evidence_count: executionRead.body.result.data.audit_evidence.length,
     intelligence_telemetry_count: executionRead.body.result.data.telemetry.length,
     intelligence_materialization_count: executionRead.body.result.data.provenance.materializations.length,
+    intelligence_live_diagnostics: {
+      resolver_refusal: {
+        checked: true,
+        outcome_kind: resolverRefusalFailure.payload.intelligence.outcome_kind,
+        error_code: resolverRefusalFailure.payload.error_code,
+      },
+      provider_failure: {
+        checked: true,
+        outcome_kind: retryFailureEvent.payload.intelligence.outcome_kind,
+        error_code: retryFailureEvent.payload.error_code,
+      },
+      acknowledgment_uncertain: {
+        checked: true,
+        outcome_kind: uncertainFailure.payload.intelligence.outcome_kind,
+        error_code: uncertainFailure.payload.error_code,
+      },
+      retry: {
+        checked: true,
+        predecessor_attempt_id: retryFailureEvent.payload.intelligence.attempt_id,
+        attempt_id: retrySuccessCompleted.payload.intelligence.attempt_id,
+        lineage: retryExecutionRead.body.result.data.attempt.lineage.relation,
+      },
+      replay: {
+        checked: true,
+        attempt_id: replayCompleted.payload.intelligence.attempt_id,
+        lineage: replayExecutionRead.body.result.data.attempt.lineage.relation,
+        idempotent_duplicate_checked: true,
+      },
+    },
     provider_text_preview: providerOutput.payload.text_delta.slice(0, 120),
     turn_terminal_status: turnCompleted.payload.terminal_status,
     task_create_status: taskCreateResult.payload.status,

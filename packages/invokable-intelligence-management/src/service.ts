@@ -32,7 +32,7 @@ import type {
   IntelligenceMaterializationStore,
   StoredMaterializationResult,
 } from "@narada2/invokable-intelligence-materialization";
-import { RegistryError } from "@narada2/invokable-intelligence-registry";
+import { RegistryError } from "@narada2/invokable-intelligence-registry/store";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 import { resolveInvocation } from "@narada2/invokable-intelligence-resolver";
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
@@ -716,6 +716,9 @@ export class IntelligenceManagementService {
     }
     if (request.operation === "refresh" && !current) {
       throw new ManagementError("materialization-required", "No current projection exists; use the explicit materialize operation.", request.context.evidence_refs);
+    }
+    if (request.operation === "refresh" && current && request.envelope.supersedes !== current.envelope.id) {
+      throw new ManagementError("refresh-supersedes-required", "A refresh must explicitly supersede the current materialization envelope.", request.context.evidence_refs);
     }
     if (request.operation !== "reject-materialization") validateMaterializationRecords(request);
   }

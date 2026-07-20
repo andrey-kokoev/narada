@@ -16,6 +16,7 @@ import {
   validateSessionEvent,
 } from '@narada2/carrier-protocol';
 import { commandTokens } from '@narada2/carrier-command-contract';
+import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
 
 export const CLOUDFLARE_CARRIER_KIND = 'cloudflare-carrier';
 export const CLOUDFLARE_CARRIER_HOST = 'cloudflare-durable-object';
@@ -49,6 +50,32 @@ const SUPPORTED_OPERATIONS = new Set([
 
 const TERMINAL_STATES = new Set(['completed', 'completed_without_provider', 'failed', 'rejected']);
 const MAX_PROVIDER_TOOL_ITERATIONS = 3;
+export const CLOUDFLARE_INTELLIGENCE_DIAGNOSTIC_MODES = Object.freeze([
+  'resolver-refusal',
+  'provider-failure',
+  'provider-recovery',
+  'acknowledgment-uncertain',
+]);
+
+/**
+ * Explicit service-only fault injection for the authenticated live intelligence
+ * matrix. It never selects a model or changes catalog authority; it only asks
+ * the deployed adapter to exercise a governed refusal/failure posture.
+ */
+export function normalizeCloudflareIntelligenceDiagnostic(value, principal = null) {
+  if (value === undefined || value === null) return null;
+  if (principal?.auth_type !== 'service') {
+    const error = new Error('cloudflare_intelligence_diagnostic_requires_service_principal');
+    error.code = 'cloudflare_intelligence_diagnostic_requires_service_principal';
+    throw error;
+  }
+  if (typeof value !== 'string' || !CLOUDFLARE_INTELLIGENCE_DIAGNOSTIC_MODES.includes(value)) {
+    const error = new Error(`cloudflare_intelligence_diagnostic_unknown_mode:${String(value)}`);
+    error.code = 'cloudflare_intelligence_diagnostic_unknown_mode';
+    throw error;
+  }
+  return value;
+}
 
 export class CloudflareCarrierRouter {
   constructor({ now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null, taskStoreAdapter = null } = {}) {
@@ -480,6 +507,20 @@ export class CloudflareCarrierSession {
   }
   #deliverInput(request) {
     if (this.state.closed) return this.#rejectClosed('carrier.input.deliver');
+    let intelligenceDiagnostic = null;
+    try {
+      intelligenceDiagnostic = normalizeCloudflareIntelligenceDiagnostic(
+        request?.params?.intelligence_diagnostic,
+        this.currentPrincipal,
+      );
+    } catch (error) {
+      return {
+        ok: false,
+        operation: 'carrier.input.deliver',
+        code: error?.code ?? 'cloudflare_intelligence_diagnostic_invalid',
+        message: error instanceof Error ? error.message : String(error),
+      };
+    }
     const input = normalizeInputEvent(request?.params?.input ?? request?.input);
     const admission = classifyCarrierInputQueueAdmission(input, {
       activeTurn: this.state.active_turn !== null,
@@ -518,7 +559,12 @@ export class CloudflareCarrierSession {
     }
 
     const terminal = admission.creates_turn
-      ? this.#recordProviderTurn(input, events)
+      ? this.#recordProviderTurn(
+        input,
+        events,
+        request?.params?.intelligence_invocation,
+        intelligenceDiagnostic,
+      )
       : 'completed_without_provider';
     if (isPromiseLike(terminal)) {
       return terminal.then((terminalState) => ({
@@ -540,12 +586,12 @@ export class CloudflareCarrierSession {
     return { ok: true, operation: 'carrier.input.deliver', input_event_id: input.event_id, terminal_state: terminal, admitted: true, queued: false, events };
   }
 
-  #recordProviderTurn(input, events) {
+  #recordProviderTurn(input, events, intelligenceInvocation = undefined, intelligenceDiagnostic = null) {
     if (!this.providerAdapter) return this.#recordProviderRefusal(input, events);
-    return this.#recordProviderExecution(input, events);
+    return this.#recordProviderExecution(input, events, intelligenceInvocation, intelligenceDiagnostic);
   }
 
-  async #recordProviderExecution(input, events) {
+  async #recordProviderExecution(input, events, intelligenceInvocation = undefined, intelligenceDiagnostic = null) {
     const turnId = `turn_${input.event_id}`;
     this.state.active_turn = { turn_id: turnId, input_event_id: input.event_id, state: 'active' };
     events.push(this.#appendEvent('turn_started', { turn_id: turnId, input_event_id: input.event_id }));
@@ -560,6 +606,7 @@ export class CloudflareCarrierSession {
       provider_adapter_kind: this.providerAdapter.adapter_kind,
       provider: this.providerAdapter.provider,
       model: this.providerAdapter.model,
+      ...(intelligenceDiagnostic ? { intelligence_diagnostic: intelligenceDiagnostic } : {}),
       thinking: null,
       stream: false,
       provider_streaming_contract: 'none',
@@ -567,6 +614,12 @@ export class CloudflareCarrierSession {
       content_preview: input.content,
     }));
     try {
+      const rawIntelligenceInvocation = intelligenceInvocation !== undefined
+        ? intelligenceInvocation
+        : input.metadata?.intelligence_invocation ?? input.intelligence_invocation ?? null;
+      const normalizedIntelligenceInvocation = rawIntelligenceInvocation === null
+        ? null
+        : normalizeIntelligenceInvocationControl(rawIntelligenceInvocation);
       let result = await this.providerAdapter.run({
         input,
         turn_id: turnId,
@@ -575,6 +628,8 @@ export class CloudflareCarrierSession {
         operation_id: this.state.operation_id ?? null,
         principal: this.currentPrincipal ?? null,
         carrier_context: clone(this.state.invocation_authority_context),
+        ...(normalizedIntelligenceInvocation ? { intelligence_invocation: normalizedIntelligenceInvocation } : {}),
+        ...(intelligenceDiagnostic ? { intelligence_diagnostic: intelligenceDiagnostic } : {}),
       });
       let textSequence = 1;
       let toolSequence = 2;
@@ -605,6 +660,7 @@ export class CloudflareCarrierSession {
           provider_adapter_kind: this.providerAdapter.adapter_kind,
           provider: this.providerAdapter.provider,
           model: this.providerAdapter.model,
+          ...(intelligenceDiagnostic ? { intelligence_diagnostic: intelligenceDiagnostic } : {}),
           thinking: null,
           stream: false,
           provider_streaming_contract: 'none',
@@ -621,6 +677,8 @@ export class CloudflareCarrierSession {
           operation_id: this.state.operation_id ?? null,
           principal: this.currentPrincipal ?? null,
           carrier_context: clone(this.state.invocation_authority_context),
+          ...(normalizedIntelligenceInvocation ? { intelligence_invocation: normalizedIntelligenceInvocation } : {}),
+          ...(intelligenceDiagnostic ? { intelligence_diagnostic: intelligenceDiagnostic } : {}),
         });
       }
       events.push(this.#appendEvent('turn_completed', {
@@ -975,9 +1033,10 @@ function toolEffectPosture(toolEffectAdapter) {
 }
 
 function normalizeProviderToolCall(rawToolCall) {
+  const functionCall = rawToolCall?.function ?? null;
   return {
-    tool_name: String(rawToolCall?.tool_name ?? rawToolCall?.name ?? '').trim() || 'unknown_tool',
-    arguments_summary: String(rawToolCall?.arguments_summary ?? rawToolCall?.arguments ?? '{}'),
+    tool_name: String(rawToolCall?.tool_name ?? rawToolCall?.name ?? functionCall?.name ?? '').trim() || 'unknown_tool',
+    arguments_summary: String(rawToolCall?.arguments_summary ?? rawToolCall?.arguments ?? functionCall?.arguments ?? '{}'),
     arguments_ref: rawToolCall?.arguments_ref ?? null,
   };
 }

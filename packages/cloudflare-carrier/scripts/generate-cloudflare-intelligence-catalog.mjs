@@ -1,20 +1,39 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { buildCanonicalCloudflareTestSeed } from '@narada2/invokable-intelligence-contract';
 
-const createdAt = '2026-07-19T12:00:00.000Z';
-const validUntil = '2036-07-19T12:00:00.000Z';
+const deploymentRevision = 4;
+const createdAt = '2026-07-20T20:25:00.000Z';
+const validUntil = '2036-07-20T20:25:00.000Z';
 const targetSiteId = 'site:narada-cloudflare';
 const targetSiteRegistryId = 'site_narada_cloudflare';
 const siteRegistryId = 'narada.cloudflare-site-registry.v1';
 const userSiteId = 'site:andrey-user';
 const principalId = 'principal:admin';
+const servicePrincipalId = 'principal:cloudflare-carrier-service';
+const serviceGrantId = 'grant:cloudflare-carrier-service-workers-ai';
+const serviceBudgetId = 'budget:cloudflare-carrier-service-workers-ai';
+const serviceConsentId = 'authority-statement:cloudflare-carrier-service-consent';
+const previousMaterializationEnvelopeIds = new Map([
+  [
+    'authority-statement:andrey-cloudflare-preferences',
+    `materialization:narada-cloudflare:authority-statement:andrey-cloudflare-preferences:r${deploymentRevision - 1}`,
+  ],
+  [
+    'authority-statement:admin-cloudflare-consent',
+    `materialization:narada-cloudflare:authority-statement:admin-cloudflare-consent:r${deploymentRevision - 1}`,
+  ],
+  ...(deploymentRevision > 2 ? [[
+    serviceConsentId,
+    `materialization:narada-cloudflare:${serviceConsentId}:r${deploymentRevision - 1}`,
+  ]] : []),
+]);
 const offeringId = 'model-offering:kimi-via-workers-ai';
-const modelId = 'model:kimi-k2-instruct';
-const evidenceRef = 'site-config:narada-cloudflare:invokable-intelligence:revision-1';
+const modelId = 'model:kimi-k2.7-code';
+const evidenceRef = `site-config:narada-cloudflare:invokable-intelligence:revision-${deploymentRevision}`;
 const targetAuthorityRef = 'authority:site:narada-cloudflare';
 const userAuthorityRef = 'authority:site:andrey-user';
 
@@ -101,7 +120,7 @@ function productionEvidence(value) {
 }
 
 let seed = buildCanonicalCloudflareTestSeed({
-  invocationModelKey: '@cf/moonshotai/kimi-k2-instruct',
+  invocationModelKey: '@cf/moonshotai/kimi-k2.7-code',
   now: createdAt,
   validUntil,
   principalId,
@@ -118,7 +137,7 @@ seed = replace(seed, new Map([
   ['authority-statement:narada-defaults', 'authority-statement:narada-cloudflare-defaults'],
   ['authority-statement:pc-eligibility', 'authority-statement:cloudflare-execution-eligibility'],
   ['authority-statement:andrey-cloudflare-consent', 'authority-statement:admin-cloudflare-consent'],
-  ['temporal-input:canonical-local', 'temporal-input:narada-cloudflare-catalog-revision-1'],
+  ['temporal-input:canonical-local', `temporal-input:narada-cloudflare-catalog-revision-${deploymentRevision}`],
   ['site:cloudflare-account', targetSiteId],
   ['authority:site:narada:canonical-fixture', `${targetAuthorityRef}:catalog`],
   ['authority:site:user', userAuthorityRef],
@@ -133,7 +152,7 @@ seed = replace(seed, new Map([
   ['clock-authority:test', 'authority:runtime:narada-cloudflare'],
 ])) ;
 
-seed.id = 'catalog-seed:narada-cloudflare:revision-1';
+seed.id = `catalog-seed:narada-cloudflare:revision-${deploymentRevision}`;
 seed.created_at = createdAt;
 seed.records = seed.records.filter(({ document }) => ![
   'assert:canonical-local-thinking-levels',
@@ -145,6 +164,100 @@ seed.records = seed.records.filter(({ document }) => ![
 ].includes(document.id));
 seed.records = seed.records.filter((record, index, records) =>
   records.findIndex(({ document }) => document.id === record.document.id) === index
+);
+const servicePrincipalAuthority = {
+  owner_kind: 'principal',
+  owner_id: servicePrincipalId,
+  authority_ref: `authority:principal:cloudflare-carrier-service`,
+};
+seed.records.push(
+  {
+    schema: 'narada.invokable-intelligence.canonical-catalog-record.v1',
+    record_kind: 'access',
+    document: {
+      schema: 'narada.invokable-intelligence.principal.v1',
+      id: servicePrincipalId,
+      kind: 'workload',
+      authority: servicePrincipalAuthority,
+      admission_bindings: [{
+        id: 'principal-binding:cloudflare-carrier-service',
+        kind: 'site-membership',
+        registry: siteRegistryId,
+        site_id: targetSiteRegistryId,
+        roles: ['owner'],
+        auth_types: ['service'],
+      }],
+    },
+  },
+  {
+    schema: 'narada.invokable-intelligence.canonical-catalog-record.v1',
+    record_kind: 'access',
+    document: {
+      schema: 'narada.invokable-intelligence.access-grant.v1',
+      id: serviceGrantId,
+      principal_id: servicePrincipalId,
+      account_id: 'account:cloudflare-workers-ai',
+      actions: ['invoke'],
+      scope: {
+        offering_ids: [offeringId],
+        route_ids: ['route:kimi-workers-ai'],
+        purposes: ['operator-chat', 'carrier-turn'],
+        target_site_ids: [targetSiteId],
+        topology_ids: ['topology:cloudflare-workers-ai'],
+      },
+      validity: { valid_from: createdAt, valid_until: validUntil },
+      status: 'active',
+      granted_by: {
+        owner_kind: 'account-owner',
+        owner_id: userSiteId,
+        authority_ref: `authority:account-owner:${userSiteId}`,
+      },
+      principal_consent_ref: serviceConsentId,
+      evidence: [{ kind: 'site-configuration', ref: evidenceRef }],
+    },
+  },
+  {
+    schema: 'narada.invokable-intelligence.canonical-catalog-record.v1',
+    record_kind: 'access',
+    document: {
+      schema: 'narada.invokable-intelligence.budget-authorization.v1',
+      id: serviceBudgetId,
+      principal_id: servicePrincipalId,
+      account_id: 'account:cloudflare-workers-ai',
+      target_site_id: targetSiteId,
+      currency: 'USD',
+      limit: 100,
+      committed: 1,
+      reserved: 0,
+      validity: { valid_from: createdAt, valid_until: validUntil },
+      status: 'authorized',
+      owner: {
+        owner_kind: 'target-site',
+        owner_id: targetSiteId,
+        authority_ref: targetAuthorityRef,
+      },
+      evidence: [{ kind: 'site-configuration', ref: evidenceRef }],
+    },
+  },
+  {
+    schema: 'narada.invokable-intelligence.canonical-catalog-record.v1',
+    record_kind: 'authority-statement',
+    document: {
+      schema: 'narada.invokable-intelligence.authority-statement.v1',
+      id: serviceConsentId,
+      kind: 'principal-consent',
+      origin: {
+        locus: 'principal',
+        site_id: userSiteId,
+        principal_id: servicePrincipalId,
+        authority_ref: servicePrincipalAuthority.authority_ref,
+      },
+      effect: 'consent-gate',
+      revision: deploymentRevision,
+      issued_at: createdAt,
+      payload_ref: serviceGrantId,
+    },
+  },
 );
 
 for (const record of seed.records) {
@@ -163,7 +276,7 @@ for (const record of seed.records) {
       auth_types: ['microsoft_oidc', 'user'],
     }];
   }
-  if (document.id === modelId) document.display_name = 'Kimi K2 Instruct';
+  if (document.id === modelId) document.display_name = 'Kimi K2.7 Code';
   if (document.id === 'policy:narada-cloudflare-defaults') {
     document.rules = [
       {
@@ -195,6 +308,21 @@ for (const record of seed.records) {
       reason: 'The Cloudflare execution Site admits only its bound Workers AI adapter.',
     }];
   }
+  if (document.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1') {
+    document.access.grant_refs = [...new Set([
+      ...(document.access.grant_refs ?? []),
+      serviceGrantId,
+    ])];
+    for (const edge of document.topology?.edges ?? []) {
+      if (edge.boundary?.admission?.validity) {
+        edge.boundary.admission.validity = {
+          valid_from: createdAt,
+          valid_until: validUntil,
+          fresh_as_of: createdAt,
+        };
+      }
+    }
+  }
   if (document.schema === 'narada.invokable-intelligence.access-grant.v1') {
     document.actions = ['invoke'];
   }
@@ -211,7 +339,7 @@ for (const record of seed.records) {
       authority_ref: 'authority:site:narada-cloudflare:configuration',
       instant: createdAt,
       timezone: 'UTC',
-      local: { date: '2026-07-19', time: '12:00:00', weekday: 0 },
+      local: { date: '2026-07-20', time: '20:00:00', weekday: 1 },
     };
     document.valid_until = validUntil;
   }
@@ -220,13 +348,16 @@ for (const record of seed.records) {
 
 seed = productionEvidence(seed);
 seed.records.forEach((record, index) => {
-  record.id = `catalog-record:narada-cloudflare:r1:${String(index + 1).padStart(3, '0')}`;
+  if (record.document.schema === 'narada.invokable-intelligence.authority-statement.v1') {
+    record.document.revision = deploymentRevision;
+  }
+  record.id = `catalog-record:narada-cloudflare:r${deploymentRevision}:${String(index + 1).padStart(3, '0')}`;
   record.record_id = record.document.id;
-  record.revision = 1;
+  record.revision = deploymentRevision;
   record.source = {
     schema: 'narada.site.invokable-intelligence.catalog-source.v1',
     reference: evidenceRef,
-    revision: '1',
+    revision: String(deploymentRevision),
     digest: digest(record.document),
   };
   record.validation = {
@@ -239,7 +370,8 @@ seed.records.forEach((record, index) => {
 
 const outputPath = fileURLToPath(new URL('../config/invokable-intelligence.catalog.json', import.meta.url));
 await mkdir(dirname(outputPath), { recursive: true });
-await writeFile(outputPath, `${JSON.stringify(seed, null, 2)}\n`, 'utf8');
+const catalogText = `${JSON.stringify(seed, null, 2)}\n`;
+await writeFile(outputPath, catalogText, 'utf8');
 
 const materializations = seed.records
   .filter(({ document }) => document.schema === 'narada.invokable-intelligence.authority-statement.v1'
@@ -250,6 +382,7 @@ const materializations = seed.records
     if (!payloadRecord) throw new Error(`missing materialization payload '${statement.payload_ref}'`);
     const envelopeId = `materialization:narada-cloudflare:${statement.id}:r${statement.revision}`;
     const admissionId = `admission:narada-cloudflare:${statement.id}:r${statement.revision}`;
+    const supersedes = previousMaterializationEnvelopeIds.get(statement.id);
     return {
       envelope: {
         schema: 'narada.invokable-intelligence.materialization-envelope.v1',
@@ -272,12 +405,13 @@ const materializations = seed.records
         allowed_scope: {
           purposes: ['operator-chat', 'carrier-turn'],
           target_site_ids: [targetSiteId],
-          principal_ids: [principalId],
+           principal_ids: [principalId, servicePrincipalId],
         },
         issued_at: createdAt,
         expires_at: validUntil,
         provenance_refs: [evidenceRef, statement.origin.authority_ref],
         authorization_ref: `authorization:narada-cloudflare:materialize:${statement.id}`,
+        ...(supersedes ? { supersedes } : {}),
       },
       admission: {
         schema: 'narada.invokable-intelligence.materialization-admission.v1',
@@ -294,9 +428,24 @@ const materializations = seed.records
     };
   });
 const materializationPath = fileURLToPath(new URL('../config/invokable-intelligence.materializations.json', import.meta.url));
-await writeFile(materializationPath, `${JSON.stringify({
+const materializationText = `${JSON.stringify({
   schema: 'narada.site.invokable-intelligence.materialization-seed.v1',
-  id: 'materialization-seed:narada-cloudflare:revision-1',
+  id: `materialization-seed:narada-cloudflare:revision-${deploymentRevision}`,
   created_at: createdAt,
   materializations,
-}, null, 2)}\n`, 'utf8');
+}, null, 2)}\n`;
+await writeFile(materializationPath, materializationText, 'utf8');
+
+const manifestPath = fileURLToPath(new URL('../config/invokable-intelligence.deployment.json', import.meta.url));
+const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+manifest.id = `deployment:narada-cloudflare:invokable-intelligence:revision-${deploymentRevision}`;
+manifest.consent_ref = `authorization:narada-cloudflare:intelligence-deployment:revision-${deploymentRevision}`;
+manifest.decided_at = createdAt;
+manifest.evidence_refs = [
+  manifest.consent_ref,
+  'authority:site:narada-cloudflare:catalog',
+  evidenceRef,
+];
+manifest.catalog.sha256 = createHash('sha256').update(catalogText).digest('hex');
+manifest.materializations.sha256 = createHash('sha256').update(materializationText).digest('hex');
+await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');

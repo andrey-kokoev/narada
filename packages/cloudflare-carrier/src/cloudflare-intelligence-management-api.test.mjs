@@ -44,7 +44,7 @@ function deploymentBundle() {
       locus: 'target-site',
       authority_ref: 'authority:site:narada-cloudflare:catalog',
     },
-    decided_at: '2026-07-19T12:00:00.000Z',
+    decided_at: '2026-07-20T20:30:00.000Z',
     evidence_refs: [
       'authorization:narada-cloudflare:intelligence-deployment:revision-1',
       'authority:site:narada-cloudflare:catalog',
@@ -85,8 +85,8 @@ test('D1 management API deploys canonical production authority without conflatin
   assert.equal(response.body.schema, CLOUDFLARE_INTELLIGENCE_MANAGEMENT_API_RESPONSE_SCHEMA);
   assert.equal(response.body.transport_authorization.principal_id, PRINCIPAL.principal_id);
   assert.equal(response.body.result.schema, MANAGEMENT_DEPLOYMENT_RESULT_SCHEMA);
-  assert.equal(response.body.result.admitted_record_ids.length, 24);
-  assert.equal(response.body.result.materialized_envelope_ids.length, 2);
+  assert.equal(response.body.result.admitted_record_ids.length, 27);
+  assert.equal(response.body.result.materialized_envelope_ids.length, 3);
   assert.ok(response.body.result.receipts.every(({ actor_id }) => actor_id !== PRINCIPAL.principal_id));
 
   const validation = await executeCloudflareIntelligenceManagement({
@@ -153,7 +153,7 @@ test('authenticated execution.read returns linked D1 plan, outcome, evidence, an
   assert.equal(readback.body.result.data.audit_evidence.length, 4);
   assert.equal(readback.body.result.data.telemetry.length, 1);
   assert.equal(readback.body.result.data.provenance.route_authority.site_id, TARGET_SITE.id);
-  assert.equal(readback.body.result.data.provenance.materializations.length, 2);
+  assert.equal(readback.body.result.data.provenance.materializations.length, 3);
   assert.ok(readback.body.result.data.provenance.materializations.every(({ destination }) =>
     destination.site_id === TARGET_SITE.id));
 });

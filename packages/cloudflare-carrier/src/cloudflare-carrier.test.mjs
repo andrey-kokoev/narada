@@ -40,6 +40,7 @@ import {
   classifyCloudflareCarrierControl,
   expectedObserverEventKindsForInput,
   isTerminalState,
+  normalizeCloudflareIntelligenceDiagnostic,
 } from './cloudflare-carrier.mjs';
 
 const inputPipelineCases = JSON.parse(readFileSync(new URL('../../carrier-protocol/fixtures/carrier-input-pipeline-cases.json', import.meta.url), 'utf8'));
@@ -889,6 +890,124 @@ test('router-created sessions carry configured provider and tool adapters', asyn
   assert.equal(router.sessions.get('carrier_session_cloudflare_fixture').status().provider_adapter_posture, 'test-provider');
   assert.equal(router.sessions.get('carrier_session_cloudflare_fixture').status().tool_effect_adapter_kind, 'test-tool-effect');
   assertValidEvents(response);
+});
+
+test('carrier forwards canonical invocation control through the provider tool loop', async () => {
+  const control = {
+    schema: 'narada.invokable-intelligence.invocation-control.v1',
+    intent_id: 'intent:test:carrier-control',
+    operation_id: 'operation:test:carrier-control',
+    mode: 'immediate',
+    allow_replan: false,
+  };
+  const calls = [];
+  const session = new CloudflareCarrierSession({
+    carrier_session_id: 'carrier_session_invocation_control',
+    agent_id: 'narada.fixture.agent',
+    site_id: 'site_fixture',
+    site_root: 'cloudflare://site_fixture',
+    providerAdapter: {
+      posture: 'fixture',
+      adapter_kind: 'fixture-provider',
+      provider: 'fixture',
+      model: 'fixture',
+      async run(args) {
+        calls.push(args);
+        if (args.tool_results?.length > 0) return { text: 'control preserved' };
+        return {
+          text: 'requesting control tool',
+          tool_calls: [{
+            tool_name: 'fixture_control_tool',
+            arguments_summary: '{}',
+            arguments_ref: null,
+          }],
+        };
+      },
+    },
+    toolEffectAdapter: {
+      adapter_kind: 'fixture-control-tool-effect',
+      supported_tools: ['fixture_control_tool'],
+      capabilities: [],
+      async execute() {
+        return { status: 'ok', result_summary: 'control tool completed', result_ref: null };
+      },
+    },
+  });
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_invocation_control_handoff',
+    content: 'Exercise the canonical invocation control handoff.',
+    metadata: { intelligence_invocation: control },
+  };
+
+  const response = await session.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_invocation_control_handoff',
+    principal: { principal_id: 'operator.fixture', controlled_actions: ['*'] },
+    params: { input },
+  });
+
+  assert.equal(response.terminal_state, 'completed');
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls.map(({ intelligence_invocation }) => intelligence_invocation), [control, control]);
+  assert.equal(calls[1].tool_results[0].tool_name, 'fixture_control_tool');
+  assertValidEvents(response);
+});
+
+test('intelligence diagnostics are service-only and forwarded as explicit adapter fault modes', async () => {
+  assert.equal(
+    normalizeCloudflareIntelligenceDiagnostic('provider-failure', { auth_type: 'service' }),
+    'provider-failure',
+  );
+  assert.throws(
+    () => normalizeCloudflareIntelligenceDiagnostic('provider-failure', { auth_type: 'user' }),
+    (error) => error.code === 'cloudflare_intelligence_diagnostic_requires_service_principal',
+  );
+
+  const calls = [];
+  const session = new CloudflareCarrierSession({
+    carrier_session_id: 'carrier_session_intelligence_diagnostic',
+    agent_id: 'narada.fixture.agent',
+    site_id: 'site_fixture',
+    providerAdapter: {
+      posture: 'fixture',
+      adapter_kind: 'fixture-provider',
+      provider: 'fixture',
+      model: 'fixture',
+      async run(args) {
+        calls.push(args);
+        return { text: 'diagnostic adapter response' };
+      },
+    },
+  });
+  const input = {
+    ...inputPipelineCases.cases.find((entry) => entry.name === 'manual_operator_admitted').input,
+    event_id: 'input_intelligence_diagnostic',
+  };
+  const response = await session.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_intelligence_diagnostic',
+    principal: { principal_id: 'service', auth_type: 'service' },
+    params: { input, intelligence_diagnostic: 'provider-failure' },
+  });
+  assert.equal(response.terminal_state, 'completed');
+  assert.equal(calls[0].intelligence_diagnostic, 'provider-failure');
+  assert.equal(
+    response.events.find((event) => event.event_kind === 'provider_request_recorded').payload.intelligence_diagnostic,
+    'provider-failure',
+  );
+
+  const denied = await session.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_intelligence_diagnostic_denied',
+    principal: { principal_id: 'operator.fixture', auth_type: 'user' },
+    params: {
+      input: { ...input, event_id: 'input_intelligence_diagnostic_denied' },
+      intelligence_diagnostic: 'provider-failure',
+    },
+  });
+  assert.equal(denied.ok, false);
+  assert.equal(denied.code, 'cloudflare_intelligence_diagnostic_requires_service_principal');
 });
 
 test('event reads return ordered events by sequence cursor', () => {
@@ -7917,12 +8036,18 @@ test('provider tool call can create a Cloudflare Narada task through admitted ta
   const { durableEnv, env } = await canonicalAiWorkerEnv({
     AI: fakeAiBinding([
       {
-        response: 'Creating a task.',
-        tool_calls: [{
-          tool_name: 'cloudflare_carrier_task_create',
-          arguments_summary: JSON.stringify({ title: 'provider created task' }),
-          arguments_ref: null,
-        }],
+        response: {
+          role: 'assistant',
+          content: 'Creating a task.',
+          tool_calls: [{
+            id: 'call_provider_task_create',
+            type: 'function',
+            function: {
+              name: 'cloudflare_carrier_task_create',
+              arguments: JSON.stringify({ title: 'provider created task' }),
+            },
+          }],
+        },
       },
       { response: 'Task created.' },
     ]),
@@ -7957,6 +8082,22 @@ test('provider tool call can create a Cloudflare Narada task through admitted ta
   assert.equal(toolResult.payload.admission_action, 'admit');
   assert.equal(toolResult.payload.capability_ref, 'cloudflare-carrier:capability/task-create:v1');
   assert.equal(toolResult.payload.effect_scope, 'cloudflare-narada-task:write:create');
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools.map((tool) => tool.function.name), [
+    'cloudflare_carrier_task_create',
+    'cloudflare_carrier_task_update',
+    'cloudflare_carrier_task_list',
+  ]);
+  assert.equal(durableEnv.AI.calls[0].request.tools[0].function.description, 'Create a Narada task in the active Cloudflare carrier session task store.');
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools[0].function.parameters, {
+    type: 'object',
+    properties: {
+      title: { type: 'string' },
+      description: { type: 'string' },
+    },
+    required: ['title'],
+    additionalProperties: false,
+  });
+  assert.deepEqual(durableEnv.AI.calls[1].request.tools, durableEnv.AI.calls[0].request.tools);
   const resultSummary = JSON.parse(toolResult.payload.result_summary);
   assert.equal(resultSummary.task.title, 'provider created task');
   assert.equal(resultSummary.site_authority_decision.action, 'admit');
@@ -8000,7 +8141,7 @@ test('worker provider adapter completes turns through Cloudflare AI binding', as
   assert.equal(providerRequest.payload.provider_adapter_kind, 'cloudflare-workers-ai');
   assert.equal(providerRequest.payload.provider_request_status, 'dispatched');
   assert.equal(durableEnv.AI.calls.length, 1);
-  assert.equal(durableEnv.AI.calls[0].model, '@cf/moonshotai/kimi-k2-instruct');
+  assert.equal(durableEnv.AI.calls[0].model, '@cf/moonshotai/kimi-k2.7-code');
   assert.deepEqual(durableEnv.AI.calls[0].request.tools, []);
   const output = body.events.find((event) => event.event_kind === 'provider_text_delta_recorded');
   assert.equal(output.payload.text_delta, 'Cloudflare AI response from test.');
@@ -8060,7 +8201,7 @@ test('provider tool calls are denied when the Cloudflare effect adapter is not c
   assert.equal(toolResult.payload.result_summary, 'tool_effect_adapter_unconfigured');
   assert.equal(durableEnv.AI.calls.length, 2);
   assert.deepEqual(durableEnv.AI.calls[0].request.tools, []);
-  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
+  assert.deepEqual(durableEnv.AI.calls[1].request.tools, []);
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /tool_effect_adapter_unconfigured/);
   const textDeltas = body.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');
   assert.equal(textDeltas.at(-1).payload.text_delta, 'The carrier denied that tool effect.');
@@ -8118,8 +8259,8 @@ test('configured Cloudflare tool adapter admits only runtime metadata read effec
   assert.equal(toolResult.payload.authority_ref, 'principal:admin');
   assert.match(toolResult.payload.result_summary, /cloudflare-workers/);
   assert.equal(durableEnv.AI.calls.length, 2);
-  assert.equal(durableEnv.AI.calls[0].request.tools[0].name, 'cloudflare_carrier_runtime_metadata_read');
-  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
+  assert.equal(durableEnv.AI.calls[0].request.tools[0].function.name, 'cloudflare_carrier_runtime_metadata_read');
+  assert.equal(durableEnv.AI.calls[1].request.tools[0].function.name, 'cloudflare_carrier_runtime_metadata_read');
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /read_only_tool_effect_admitted/);
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /cloudflare-carrier:capability\/runtime-metadata-read:v1/);
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /principal:admin/);
@@ -8177,8 +8318,8 @@ test('configured Cloudflare KV tool adapter admits read-only key gets', async ()
   assert.equal(toolResult.payload.authority_ref, 'principal:admin');
   assert.match(toolResult.payload.result_summary, /value-alpha/);
   assert.equal(durableEnv.AI.calls.length, 2);
-  assert.deepEqual(durableEnv.AI.calls[0].request.tools.map((tool) => tool.name), ['cloudflare_carrier_kv_get']);
-  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools.map((tool) => tool.function.name), ['cloudflare_carrier_kv_get']);
+  assert.equal(durableEnv.AI.calls[1].request.tools[0].function.name, 'cloudflare_carrier_kv_get');
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /cloudflare-carrier:capability\/kv-get:v1/);
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /principal:admin/);
   const textDeltas = body.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');
@@ -8234,7 +8375,7 @@ test('configured Cloudflare KV write tool requires write flag and principal auth
   assert.equal(toolResult.payload.effect_scope, 'cloudflare-kv:write:put');
   assert.equal(toolResult.payload.authority_ref, 'principal:admin');
   assert.deepEqual(kv.dump(), { beta: 'value-beta' });
-  assert.deepEqual(durableEnv.AI.calls[0].request.tools.map((tool) => tool.name), ['cloudflare_carrier_kv_put']);
+  assert.deepEqual(durableEnv.AI.calls[0].request.tools.map((tool) => tool.function.name), ['cloudflare_carrier_kv_put']);
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /write_tool_effect_admitted/);
   assert.match(durableEnv.AI.calls[1].request.messages.at(-1).content, /cloudflare-carrier:capability\/kv-put:v1/);
   assertValidEvents(body);
@@ -8323,8 +8464,8 @@ test('provider follow-up tool calls are processed in bounded batches', async () 
   assert.match(toolResults[0].payload.result_summary, /one/);
   assert.match(toolResults[1].payload.result_summary, /two/);
   assert.equal(durableEnv.AI.calls.length, 3);
-  assert.equal(durableEnv.AI.calls[1].request.tools, undefined);
-  assert.equal(durableEnv.AI.calls[2].request.tools, undefined);
+  assert.equal(durableEnv.AI.calls[1].request.tools[0].function.name, 'cloudflare_carrier_kv_get');
+  assert.equal(durableEnv.AI.calls[2].request.tools[0].function.name, 'cloudflare_carrier_kv_get');
   const providerToolCalls = body.events.filter((event) => event.event_kind === 'provider_tool_call_requested');
   assert.deepEqual(providerToolCalls.map((event) => event.payload.sequence), [2, 3]);
   const textDeltas = body.events.filter((event) => event.event_kind === 'provider_text_delta_recorded');

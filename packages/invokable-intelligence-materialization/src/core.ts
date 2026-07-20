@@ -46,8 +46,13 @@ const projectionParams = (projection: MaterializedProjection): unknown[] => [
   projection.materialized_at,
 ];
 
-function auditId(operation: MaterializationAuditEvent["operation"], envelopeId: string, evidenceId: string): string {
-  return `materialization-audit:${operation}:${envelopeId}:${evidenceId}`;
+function auditId(
+  operation: MaterializationAuditEvent["operation"],
+  envelopeId: string,
+  evidenceId: string,
+  outcome: MaterializationAuditEvent["outcome"] = "applied",
+): string {
+  return `materialization-audit:${operation}:${outcome}:${envelopeId}:${evidenceId}`;
 }
 
 function auditEvent(input: {
@@ -64,7 +69,7 @@ function auditEvent(input: {
   const projectionKey = materializationProjectionKey(input.envelope);
   return {
     schema: MATERIALIZATION_AUDIT_EVENT_SCHEMA,
-    id: auditId(input.operation, input.envelope.id, input.evidenceId),
+    id: auditId(input.operation, input.envelope.id, input.evidenceId, input.outcome),
     projection_key: projectionKey,
     envelope_id: input.envelope.id,
     operation: input.operation,
@@ -206,7 +211,7 @@ export class MaterializationStoreCore implements IntelligenceMaterializationStor
         status: "idempotent",
         projection: result.projection,
         diagnostics: [],
-        audit_event_ref: existing?.id ?? auditId(operation, envelope.id, admission.id),
+        audit_event_ref: existing?.id ?? auditId(operation, envelope.id, admission.id, "applied"),
       };
     }
     const projection = result.projection!;
@@ -247,7 +252,7 @@ export class MaterializationStoreCore implements IntelligenceMaterializationStor
       const params = projectionParams(projection);
       const mutation = await this.executor.transact([
         { sql: "UPDATE intelligence_materializations SET envelope_id = ?, origin_site_id = ?, origin_locus = ?, destination_site_id = ?, destination_resolver = ?, statement_id = ?, statement_kind = ?, source_revision = ?, payload_digest = ?, envelope_json = ?, admission_json = ?, projection_json = ?, status = ?, materialized_at = ? WHERE projection_key = ? AND envelope_id = ?", params: [...params.slice(1), key, current.envelope.id] },
-        auditStatement(event, envelope.id),
+        auditStatement(event),
       ]);
       if ((mutation[0]?.changes ?? 0) !== 1) {
         const raced = await this.getProjection(key);
@@ -282,7 +287,7 @@ export class MaterializationStoreCore implements IntelligenceMaterializationStor
     }
     if (current.status === "revoked" && current.revocation?.id === revocation.id) {
       const existing = (await this.listAudit({ projectionKey: current.projection_key, operation: "revoke" })).find(({ revocation_id }) => revocation_id === revocation.id);
-      return { operation: "revoke", status: "idempotent", projection: current, diagnostics: [], audit_event_ref: existing?.id ?? auditId("revoke", current.envelope.id, revocation.id) };
+      return { operation: "revoke", status: "idempotent", projection: current, diagnostics: [], audit_event_ref: existing?.id ?? auditId("revoke", current.envelope.id, revocation.id, "applied") };
     }
     const result = revokeMaterializedProjection(current, revocation);
     if (result.status === "rejected") {

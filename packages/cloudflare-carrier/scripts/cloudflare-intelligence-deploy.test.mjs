@@ -16,10 +16,10 @@ const MANIFEST_PATH = join(CONFIG_DIRECTORY, 'invokable-intelligence.deployment.
 
 test('loads the digest-pinned production deployment bundle', () => {
   const bundle = loadIntelligenceDeploymentBundle();
-  assert.equal(bundle.id, 'deployment:narada-cloudflare:invokable-intelligence:revision-1');
+  assert.equal(bundle.id, 'deployment:narada-cloudflare:invokable-intelligence:revision-4');
   assert.deepEqual(bundle.owning_site, { kind: 'site', id: 'site:narada-cloudflare' });
-  assert.equal(bundle.catalog.records.length, 27);
-  assert.equal(bundle.materializations.length, 2);
+  assert.equal(bundle.catalog.records.length, 31);
+  assert.equal(bundle.materializations.length, 3);
 });
 
 test('refuses a deployment manifest when a pinned input digest does not match', () => {
@@ -66,6 +66,6 @@ test('posts the canonical bundle to the protected management endpoint', async ()
   assert.equal(captured.init.method, 'POST');
   assert.equal(captured.init.headers.authorization, 'Bearer secret');
   const body = JSON.parse(captured.init.body);
-  assert.equal(body.id, 'deployment:narada-cloudflare:invokable-intelligence:revision-1');
-  assert.equal(body.catalog.records.length, 27);
+  assert.equal(body.id, 'deployment:narada-cloudflare:invokable-intelligence:revision-4');
+  assert.equal(body.catalog.records.length, 31);
 });

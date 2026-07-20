@@ -19,6 +19,7 @@ import {
 
 const TARGET_SITE_ID = 'site:narada-cloudflare';
 const PRINCIPAL_ID = 'principal:admin';
+const SERVICE_PRINCIPAL_ID = 'principal:cloudflare-carrier-service';
 const REGISTRY_SITE_ID = 'site_narada_cloudflare';
 const DEPLOYMENT_CONSENT_REF = 'authorization:narada-cloudflare:intelligence-deployment:revision-1';
 const DESTINATION_AUTHORITY_REF = 'authority:site:narada-cloudflare:catalog';
@@ -108,7 +109,7 @@ function productionDeploymentBundle(catalog = PRODUCTION_CATALOG) {
       locus: 'target-site',
       authority_ref: DESTINATION_AUTHORITY_REF,
     },
-    decided_at: '2026-07-19T12:00:00.000Z',
+    decided_at: '2026-07-20T20:30:00.000Z',
     evidence_refs: [
       DEPLOYMENT_CONSENT_REF,
       DESTINATION_AUTHORITY_REF,
@@ -129,8 +130,8 @@ async function seedRegistry(binding, catalog = PRODUCTION_CATALOG) {
       owningSite: { kind: 'site', id: TARGET_SITE_ID },
     }, productionDeploymentBundle(catalog));
     assert.equal(result.diagnostics.length, 0);
-    assert.equal(result.admitted_record_ids.length, 24);
-    assert.equal(result.materialized_envelope_ids.length, 2);
+    assert.equal(result.admitted_record_ids.length, 27);
+    assert.equal(result.materialized_envelope_ids.length, 3);
   } finally {
     await materialization.close();
     await store.close();
@@ -160,7 +161,7 @@ test('D1 catalog selects the exact offering key; model environment variables hav
 
   assert.equal(result.text, 'cf-ok');
   assert.equal(env.AI.calls.length, 1);
-  assert.equal(env.AI.calls[0].model, '@cf/moonshotai/kimi-k2-instruct');
+  assert.equal(env.AI.calls[0].model, '@cf/moonshotai/kimi-k2.7-code');
   assert.equal(result.intelligence.selection.adapter.id, 'adapter:workers-ai-binding');
   assert.equal(result.intelligence.offering_id, 'model-offering:kimi-via-workers-ai');
 
@@ -171,6 +172,54 @@ test('D1 catalog selects the exact offering key; model environment variables hav
   assert.equal(attempts.length, 1);
   const outcome = await store.getTerminalOutcomeByAttempt(attempts[0].id);
   assert.equal(outcome.kind, 'success');
+  await store.close();
+});
+
+test('Cloudflare AI receives canonical tools through the provider transport schema', async () => {
+  const env = configuredEnv({ CLOUDFLARE_CARRIER_ENABLE_RUNTIME_TOOL_READS: '1' });
+  await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
+
+  const adapter = createCloudflareAiProviderAdapter(env);
+  await adapter.run(invocation());
+
+  assert.deepEqual(env.AI.calls[0].request.tools, [{
+    type: 'function',
+    function: {
+      name: 'cloudflare_carrier_runtime_metadata_read',
+      description: 'Read non-secret Narada Cloudflare carrier runtime metadata for the active session.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        additionalProperties: false,
+      },
+    },
+  }]);
+});
+
+test('service bearer resolves through its dedicated workload principal scope', async () => {
+  const env = configuredEnv();
+  await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
+  const adapter = createCloudflareAiProviderAdapter(env);
+  const result = await adapter.run(invocation({
+    carrier_context: carrierContext({
+      authenticated_actor: { principal_id: 'service', auth_type: 'service' },
+      site_membership: {
+        registry: 'narada.cloudflare-site-registry.v1',
+        site_id: REGISTRY_SITE_ID,
+        role: 'owner',
+        evidence_ref: 'site-binding:service-workload',
+      },
+    }),
+    operation_id: 'operation:test:service-workload',
+    turn_id: 'turn:test:service-workload',
+  }));
+
+  const store = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB);
+  const plan = await store.getPlan(result.intelligence.plan_id);
+  const intent = await store.getIntent(plan.intent_id);
+  assert.equal(intent.principal, SERVICE_PRINCIPAL_ID);
+  assert.equal(plan.access.grant_id, 'grant:cloudflare-carrier-service-workers-ai');
+  assert.equal(plan.access.budget_id, 'budget:cloudflare-carrier-service-workers-ai');
   await store.close();
 });
 
@@ -199,6 +248,70 @@ test('provider timeout persists acknowledgment uncertainty rather than provider 
   await store.close();
 });
 
+test('live diagnostic modes preserve canonical refusal, provider failure, and acknowledgment uncertainty', async () => {
+  const env = configuredEnv();
+  await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
+  const adapter = createCloudflareAiProviderAdapter(env);
+
+  let refusal;
+  await assert.rejects(adapter.run(invocation({
+    intelligence_invocation: {
+      schema: 'narada.invokable-intelligence.invocation-control.v1',
+      intent_id: 'intent:test:live-diagnostic-refusal',
+      operation_id: 'operation:test:live-diagnostic-refusal',
+      mode: 'immediate',
+      allow_replan: true,
+    },
+    intelligence_diagnostic: 'resolver-refusal',
+  })), (error) => {
+    assert.equal(error.code, 'intelligence_resolver_no_candidates');
+    assert.equal(error.intelligence.outcome_kind, 'pre-invocation-refusal');
+    refusal = error.intelligence;
+    return true;
+  });
+
+  let failure;
+  await assert.rejects(adapter.run(invocation({
+    intelligence_invocation: {
+      schema: 'narada.invokable-intelligence.invocation-control.v1',
+      intent_id: 'intent:test:live-diagnostic-failure',
+      operation_id: 'operation:test:live-diagnostic-failure',
+      mode: 'immediate',
+      allow_replan: true,
+    },
+    intelligence_diagnostic: 'provider-failure',
+  })), (error) => {
+    assert.equal(error.code, 'cloudflare_workers_ai_provider_failed');
+    assert.equal(error.intelligence.outcome_kind, 'provider-failure');
+    failure = error.intelligence;
+    return true;
+  });
+
+  let uncertain;
+  await assert.rejects(adapter.run(invocation({
+    intelligence_invocation: {
+      schema: 'narada.invokable-intelligence.invocation-control.v1',
+      intent_id: 'intent:test:live-diagnostic-uncertain',
+      operation_id: 'operation:test:live-diagnostic-uncertain',
+      mode: 'immediate',
+      allow_replan: true,
+    },
+    intelligence_diagnostic: 'acknowledgment-uncertain',
+  })), (error) => {
+    assert.equal(error.code, 'cloudflare_workers_ai_timeout');
+    assert.equal(error.intelligence.outcome_kind, 'admission-unknown');
+    uncertain = error.intelligence;
+    return true;
+  });
+
+  const store = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB);
+  assert.equal((await store.getTerminalOutcome(refusal.outcome_id)).kind, 'pre-invocation-refusal');
+  assert.equal((await store.getTerminalOutcome(failure.outcome_id)).kind, 'provider-failure');
+  assert.equal((await store.getTerminalOutcome(uncertain.outcome_id)).kind, 'admission-unknown');
+  assert.equal(env.AI.calls.length, 0);
+  await store.close();
+});
+
 test('explicit retry appends lineage and preserves the failed predecessor', async () => {
   const env = configuredEnv({ AI: makeSequenceAi([new Error('upstream 500'), { response: 'recovered' }]) });
   await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
@@ -209,8 +322,9 @@ test('explicit retry appends lineage and preserves the failed predecessor', asyn
   await assert.rejects(adapter.run({
     ...base,
     intelligence_invocation: {
+      schema: 'narada.invokable-intelligence.invocation-control.v1',
       intent_id: 'intent:test:cloudflare-retry',
-      operation_id: 'invocation-operation:test:retry:1',
+      operation_id: 'operation:test:retry:1',
       mode: 'immediate',
     },
   }), (error) => {
@@ -221,8 +335,9 @@ test('explicit retry appends lineage and preserves the failed predecessor', asyn
   const recovered = await adapter.run({
     ...base,
     intelligence_invocation: {
+      schema: 'narada.invokable-intelligence.invocation-control.v1',
       intent_id: 'intent:test:cloudflare-retry',
-      operation_id: 'invocation-operation:test:retry:2',
+      operation_id: 'operation:test:retry:2',
       mode: 'retry',
     },
   });
@@ -247,13 +362,46 @@ test('Cloudflare route factorizes runtime topology from provider account access'
   );
   const route = PRODUCTION_CATALOG.records.find(({ record_kind }) => record_kind === 'route').document;
   assert.equal(route.access.account_ref, 'account:cloudflare-workers-ai');
-  assert.deepEqual(route.access.grant_refs, ['grant:andrey-cloudflare-workers-ai']);
+  assert.deepEqual(route.access.grant_refs, [
+    'grant:andrey-cloudflare-workers-ai',
+    'grant:cloudflare-carrier-service-workers-ai',
+  ]);
   assert.equal(route.access.credential.id, 'credential-locator:cloudflare-worker-binding');
   assert.deepEqual(PRODUCTION_TOPOLOGY.edges.find(({ id }) => id === 'c2').boundary.kinds, [
     'network', 'trust', 'site', 'account',
   ]);
   assert.equal(PRODUCTION_TOPOLOGY.edges.find(({ id }) => id === 'c5').kind, 'binding-call');
   assert.deepEqual(PRODUCTION_TOPOLOGY.edges.find(({ id }) => id === 'c5').boundary.kinds, ['account', 'trust']);
+});
+
+test('generated Cloudflare boundary admissions remain valid after the deployment day', () => {
+  const now = Date.parse('2026-07-20T20:30:00.000Z');
+  for (const edgeId of ['c2', 'c5']) {
+    const admission = PRODUCTION_TOPOLOGY.edges.find(({ id }) => id === edgeId).boundary.admission;
+    assert.equal(admission.schema, 'narada.invokable-intelligence.topology-boundary-admission.v1');
+    assert.ok(Date.parse(admission.validity.valid_from) <= now);
+    assert.ok(Date.parse(admission.validity.valid_until) > now);
+    assert.ok(Date.parse(admission.validity.fresh_as_of) <= now);
+  }
+});
+
+test('Cloudflare resolution refuses when the Workers AI binding is absent', async () => {
+  const env = configuredEnv({ AI: {} });
+  await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
+  const { gateway, store } = await createCarrierIntelligenceGateway(env, () => ({
+    async invoke() {
+      throw new Error('must_not_dispatch_without_binding');
+    },
+  }));
+  const result = await gateway.invoke({
+    purpose: 'carrier-turn',
+    operationId: 'operation:test:missing-ai-binding',
+    messages: { input: { content: 'hello' }, tool_results: [] },
+    carrierContext: carrierContext(),
+  });
+  assert.equal(result.kind, 'refusal');
+  assert.equal(result.refusal.reason_code, 'topology-infeasible');
+  await store.close();
 });
 
 test('same delivery identity is not redispatched and reports governed payload unavailability', async () => {

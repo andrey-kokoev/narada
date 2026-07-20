@@ -1,5 +1,6 @@
 import { CloudflareCarrierSession } from './cloudflare-carrier.mjs';
 import { classifyCarrierInputAdmission, classifyToolEffectAdmission } from '@narada2/carrier-protocol';
+import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
 import { createCloudflareSiteRegistryAdapter } from '@narada2/cloudflare-site-registry';
 import {
   SITE_AUTHORITY_ACTIONS,
@@ -14390,19 +14391,63 @@ function validateOperatorCaptureReturnTo(value) {
 export function createCloudflareAiProviderAdapter(env = {}) {
   if (!env.AI || typeof env.AI.run !== 'function') return null;
   const toolEffectConfig = cloudflareToolEffectConfig(env);
+  const workersAiTools = toolEffectConfig.tool_definitions.map((tool) => ({
+    type: 'function',
+    function: {
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+    },
+  }));
   const workersAiRequest = (input, tool_results) => tool_results.length > 0
-    ? { messages: createWorkersAiToolResultMessages(input, tool_results) }
+    ? {
+        messages: createWorkersAiToolResultMessages(input, tool_results),
+        tools: workersAiTools,
+      }
     : {
         messages: createWorkersAiInitialMessages(input),
-        tools: toolEffectConfig.tool_definitions.map((tool) => ({ ...tool })),
+        tools: workersAiTools,
       };
   let gatewayPromise = null;
   const ensureGateway = () => {
     gatewayPromise ??= createCarrierIntelligenceGateway(env, (store) => ({
-      async invoke({ plan, offering, messages }) {
+      async invoke({ plan, offering, messages, invocationScope }) {
         const modelSlug = offering.invocation_model_key;
         const timeoutMs = clampInteger(plan.options.timeout_ms, 1000, 30000, 15000);
         const { input, tool_results = [] } = messages ?? {};
+        const intelligenceDiagnostic = invocationScope?.intelligence_diagnostic ?? null;
+        if (intelligenceDiagnostic === 'provider-failure') {
+          return {
+            error: {
+              code: 'cloudflare_workers_ai_provider_failed',
+              message: 'cloudflare_live_diagnostic_provider_failure',
+              retryable: true,
+            },
+            admission: 'acknowledged',
+            transportSubmitted: true,
+          };
+        }
+        if (intelligenceDiagnostic === 'provider-recovery') {
+          return {
+            response: {
+              text: 'cloudflare_live_diagnostic_provider_recovered',
+              tool_calls: [],
+            },
+            admission: 'acknowledged',
+            transportSubmitted: true,
+          };
+        }
+        if (intelligenceDiagnostic === 'acknowledgment-uncertain') {
+          return {
+            error: {
+              code: 'cloudflare_workers_ai_timeout',
+              message: 'cloudflare_live_diagnostic_acknowledgment_uncertain',
+              retryable: true,
+            },
+            admission: 'uncertain',
+            transportSubmitted: true,
+          };
+        }
         try {
           const result = await withTimeout(env.AI.run(modelSlug, workersAiRequest(input, tool_results)), timeoutMs);
           return {
@@ -14445,27 +14490,45 @@ export function createCloudflareAiProviderAdapter(env = {}) {
       operation_id = null,
       carrier_context = null,
       intelligence_invocation = null,
+      intelligence_diagnostic = null,
     }) {
       const { gateway } = await ensureGateway();
-      const invocationOperationId = intelligence_invocation?.operation_id
+      const normalizedIntelligenceInvocation = intelligence_invocation === null
+        ? null
+        : normalizeIntelligenceInvocationControl(intelligence_invocation);
+      const invocationOperationId = normalizedIntelligenceInvocation?.operation_id
         ?? `${carrier_session_id ?? 'unbound'}:${turn_id ?? input?.event_id ?? 'turn'}:${tool_results.length > 0 ? 'tool-results' : 'initial'}`;
       const result = await gateway.invoke({
         purpose: 'carrier-turn',
-        ...(intelligence_invocation?.intent_id ? { intentId: intelligence_invocation.intent_id } : {}),
+        ...(normalizedIntelligenceInvocation?.intent_id ? { intentId: normalizedIntelligenceInvocation.intent_id } : {}),
+        ...(intelligence_diagnostic === 'resolver-refusal'
+          ? { requestedModel: { kind: 'model', id: 'model:cloudflare-live-diagnostic-missing' } }
+          : {}),
         operationId: invocationOperationId,
-        mode: intelligence_invocation?.mode ?? 'immediate',
-        allowReplan: intelligence_invocation?.allow_replan !== false,
+        mode: normalizedIntelligenceInvocation?.mode ?? 'immediate',
+        allowReplan: normalizedIntelligenceInvocation?.allow_replan !== false,
         messages: { input, tool_results },
         turnId: turn_id ?? undefined,
         inputEventId: input?.event_id ?? undefined,
         requestId: input?.event_id ?? undefined,
-        invocationScope: { carrier_session_id, site_id, operation_id },
+        invocationScope: {
+          carrier_session_id,
+          site_id,
+          operation_id,
+          ...(intelligence_diagnostic ? { intelligence_diagnostic } : {}),
+        },
         carrierContext: carrier_context,
       });
       if (result.kind === 'refusal') {
         const error = new Error('intelligence_resolution_refused:' + result.refusal.reason_code + ':' + result.refusal.explanation);
         error.code = `intelligence_resolver_${result.refusal.reason_code.replaceAll('-', '_')}`;
         error.refusal = result.refusal;
+        error.intelligence = {
+          intent_id: result.intent.id,
+          outcome_id: result.outcome.id,
+          outcome_kind: result.outcome.kind,
+          audit_evidence_ids: result.auditEvidence.map(({ id }) => id),
+        };
         throw error;
       }
       const intelligence = {
@@ -22338,6 +22401,10 @@ function extractWorkersAiText(result) {
   if (typeof result === 'string') return result;
   if (typeof result?.response === 'string') return result.response;
   if (typeof result?.result?.response === 'string') return result.result.response;
+  if (typeof result?.response?.content === 'string') return result.response.content;
+  if (typeof result?.result?.response?.content === 'string') return result.result.response.content;
+  if (typeof result?.choices?.[0]?.message?.content === 'string') return result.choices[0].message.content;
+  if (typeof result?.result?.choices?.[0]?.message?.content === 'string') return result.result.choices[0].message.content;
   if (Array.isArray(result?.response)) return result.response.map(String).join('\n');
   return JSON.stringify(result);
 }
@@ -22345,6 +22412,11 @@ function extractWorkersAiText(result) {
 function extractWorkersAiToolCalls(result) {
   if (Array.isArray(result?.tool_calls)) return result.tool_calls;
   if (Array.isArray(result?.toolCalls)) return result.toolCalls;
+  if (Array.isArray(result?.response?.tool_calls)) return result.response.tool_calls;
+  if (Array.isArray(result?.response?.toolCalls)) return result.response.toolCalls;
   if (Array.isArray(result?.result?.tool_calls)) return result.result.tool_calls;
+  if (Array.isArray(result?.result?.response?.tool_calls)) return result.result.response.tool_calls;
+  if (Array.isArray(result?.choices?.[0]?.message?.tool_calls)) return result.choices[0].message.tool_calls;
+  if (Array.isArray(result?.result?.choices?.[0]?.message?.tool_calls)) return result.result.choices[0].message.tool_calls;
   return [];
 }

@@ -7,7 +7,7 @@
  * promotes environment values into intelligence authority.
  */
 
-import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization';
+import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization/d1';
 import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
 import {
   resolveInvocationPrincipalAdmission,
@@ -41,6 +41,18 @@ function latestRecords(records) {
     if (!current || record.revision > current.revision) latest.set(record.record_id, record);
   }
   return [...latest.values()];
+}
+
+function catalogEvidenceReference(records) {
+  const references = latestRecords(records)
+    .flatMap((record) => record.validation?.evidence ?? [])
+    .map(({ ref }) => ref)
+    .filter((ref) => /^site-config:narada-cloudflare:invokable-intelligence:revision-\\d+$/u.test(ref));
+  return references.sort((left, right) => {
+    const leftRevision = Number(left.match(/revision-(\\d+)$/u)?.[1] ?? 0);
+    const rightRevision = Number(right.match(/revision-(\\d+)$/u)?.[1] ?? 0);
+    return rightRevision - leftRevision || right.localeCompare(left);
+  })[0] ?? 'site-config:narada-cloudflare:invokable-intelligence:unavailable';
 }
 
 function requireCarrierContext(value) {
@@ -87,7 +99,77 @@ function runtimeAccessContext() {
   };
 }
 
-function topologyObservations(records, clock, evidenceRef) {
+function topologyRequirementEvidence(subject, requirement, runtimeEvidence) {
+  const requestPathRequirements = new Set([
+    'client-supported',
+    'launcher-available',
+    'network-reachable',
+  ]);
+  const bindingRequirements = new Set([
+    'adapter-supported',
+    'service-available',
+    'endpoint-available',
+  ]);
+  let available = false;
+  let reasonCode = 'cloudflare-carrier-topology-evidence-missing';
+  let runRef = runtimeEvidence.runtime_evidence_ref;
+  let artifactRef = runtimeEvidence.runtime_artifact_ref;
+  if (requestPathRequirements.has(requirement)) {
+    available = runtimeEvidence.request_admitted === true;
+    reasonCode = available
+      ? 'cloudflare-carrier-request-path-admitted'
+      : 'cloudflare-carrier-request-path-not-admitted';
+    runRef = runtimeEvidence.request_evidence_ref;
+    artifactRef = runtimeEvidence.request_artifact_ref;
+  } else if (bindingRequirements.has(requirement)) {
+    available = runtimeEvidence.ai_binding_available === true;
+    reasonCode = available
+      ? 'cloudflare-workers-ai-binding-available'
+      : 'cloudflare-workers-ai-binding-missing';
+    runRef = runtimeEvidence.binding_evidence_ref;
+    artifactRef = runtimeEvidence.binding_artifact_ref;
+  } else if (requirement === 'carrier-deployed' || requirement === 'runtime-available') {
+    available = runtimeEvidence.worker_runtime === true;
+    reasonCode = available
+      ? 'cloudflare-carrier-worker-runtime-executing'
+      : 'cloudflare-carrier-worker-runtime-not-observed';
+  } else if (requirement === 'boundary-admitted') {
+    const requestBoundary = subject.id === 'c1' || subject.id === 'c2';
+    const bindingBoundary = subject.id === 'c5';
+    const runtimeBoundary = subject.id === 'c3';
+    if (requestBoundary) {
+      available = runtimeEvidence.request_admitted === true;
+      reasonCode = available
+        ? 'cloudflare-carrier-request-boundary-admitted'
+        : 'cloudflare-carrier-request-boundary-not-admitted';
+      runRef = runtimeEvidence.request_evidence_ref;
+      artifactRef = runtimeEvidence.request_artifact_ref;
+    } else if (bindingBoundary) {
+      available = runtimeEvidence.ai_binding_available === true;
+      reasonCode = available
+        ? 'cloudflare-workers-ai-binding-boundary-admitted'
+        : 'cloudflare-workers-ai-binding-boundary-not-admitted';
+      runRef = runtimeEvidence.binding_evidence_ref;
+      artifactRef = runtimeEvidence.binding_artifact_ref;
+    } else if (runtimeBoundary) {
+      available = runtimeEvidence.worker_runtime === true;
+      reasonCode = available
+        ? 'cloudflare-carrier-runtime-boundary-admitted'
+        : 'cloudflare-carrier-runtime-boundary-not-admitted';
+    }
+  }
+  return {
+    status: available ? 'feasible' : 'infeasible',
+    reason_code: reasonCode,
+    evidence: [
+      { kind: 'run', ref: runRef },
+      { kind: 'artifact', ref: artifactRef },
+      { kind: 'document', ref: runtimeEvidence.site_admission_evidence_ref },
+    ],
+  };
+}
+
+function topologyObservations(records, clock, runtimeEvidence) {
   const validityWindowMs = 5 * 60 * 1000;
   const observedMs = Math.floor(Date.parse(clock.instant) / validityWindowMs) * validityWindowMs;
   const observedAt = new Date(observedMs).toISOString();
@@ -102,21 +184,19 @@ function topologyObservations(records, clock, evidenceRef) {
     ];
     for (const { subject, component } of components) {
       for (const requirement of component.required_feasibility) {
+        const assessment = topologyRequirementEvidence(subject, requirement, runtimeEvidence);
         observations.push({
           schema: 'narada.invokable-intelligence.topology-feasibility.v1',
           id: `topology-observation:${route.topology.id}:${subject.kind}:${subject.id}:${requirement}:${observedAt}`,
           topology_id: route.topology.id,
           subject,
           requirement,
-          status: 'feasible',
+          status: assessment.status,
           owner: { ...component.feasibility_authority },
           validity: { valid_from: observedAt, valid_until: validUntil, fresh_as_of: observedAt },
           observed_at: observedAt,
-          evidence: [
-            { kind: 'run', ref: evidenceRef },
-            { kind: 'artifact', ref: 'cloudflare-worker-binding:AI' },
-          ],
-          reason_code: 'cloudflare-carrier-runtime-and-binding-observed',
+          evidence: assessment.evidence,
+          reason_code: assessment.reason_code,
         });
       }
     }
@@ -272,6 +352,19 @@ export async function createCarrierIntelligenceGateway(
   }
 
   const invocationAdapter = adapterFactory(store);
+  const siteAdmissionEvidenceRef = catalogEvidenceReference(await store.listCatalogRecords());
+  const runtimeEvidence = {
+    request_admitted: true,
+    worker_runtime: true,
+    ai_binding_available: typeof env.AI?.run === 'function',
+    request_evidence_ref: auditAuthority.admissionRef,
+    request_artifact_ref: 'cloudflare-carrier:authenticated-request',
+    binding_evidence_ref: auditAuthority.admissionRef,
+    binding_artifact_ref: 'cloudflare-worker-binding:AI',
+    runtime_evidence_ref: auditAuthority.admissionRef,
+    runtime_artifact_ref: 'cloudflare-worker:runtime',
+    site_admission_evidence_ref: siteAdmissionEvidenceRef,
+  };
   const canonicalGateway = createLocalInvocationGateway({
     store,
     adapterFor: (adapter) => adapter.id === CARRIER_INTELLIGENCE_ADAPTER_ID
@@ -291,7 +384,7 @@ export async function createCarrierIntelligenceGateway(
         topologyObservations: topologyObservations(
           context.catalogRecords,
           decisionClock,
-          context.membershipEvidenceRef,
+          runtimeEvidence,
         ),
       });
     },
