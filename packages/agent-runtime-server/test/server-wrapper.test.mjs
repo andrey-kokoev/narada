@@ -2070,6 +2070,181 @@ test('spawned runtime proves the live local topology success matrix across suppo
   }
 });
 
+test('one spawned runtime preserves intent lineage across provider failure, retry, replay, and immediate topology refusal', async () => {
+  const siteRoot = mkdtempSync(join(tmpdir(), 'narada-canonical-intelligence-journey-e2e-'));
+  const sessionId = 'canonical-intelligence-journey-e2e';
+  const intentId = 'intent:canonical-intelligence-journey';
+  let providerMode = 'failure';
+  let providerCalls = 0;
+  const provider = createServer((_request, response) => {
+    providerCalls += 1;
+    response.setHeader('content-type', 'application/json');
+    if (providerMode === 'failure') {
+      response.statusCode = 500;
+      response.end(JSON.stringify({ error: { message: 'fixture failure' } }));
+      return;
+    }
+    response.end(JSON.stringify({
+      id: `provider-response-${providerCalls}`,
+      choices: [{ message: { role: 'assistant', content: `fixture success ${providerCalls}` } }],
+    }));
+  });
+  await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
+  const address = provider.address();
+  await seedIntelligenceRegistry(siteRoot, {
+    providerId: 'openai-api',
+    endpointBaseUrl: `http://127.0.0.1:${address.port}`,
+    credentialReference: 'OPENAI_API_KEY',
+  });
+  let child = null;
+  try {
+    const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
+    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', sessionId], {
+      env: {
+        ...process.env,
+        NARADA_SITE_ROOT: siteRoot,
+        OPENAI_API_KEY: 'canonical-journey-key',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    let stdout = '';
+    let stderr = '';
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk) => { stdout += chunk; });
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr += chunk; });
+    await waitForCapturedOutput(
+      child,
+      () => stdout,
+      (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'),
+    );
+
+    const submit = async ({ id, operationId, mode }, terminalEvent) => {
+      child.stdin.write(`${JSON.stringify({
+        id,
+        method: 'session.submit',
+        params: {
+          content: 'same canonical payload',
+          intelligence_invocation: {
+            schema: 'narada.invokable-intelligence.invocation-control.v1',
+            intent_id: intentId,
+            operation_id: operationId,
+            mode,
+            allow_replan: true,
+          },
+        },
+      })}\n`);
+      await waitForCapturedOutput(
+        child,
+        () => stdout,
+        (text) => hasCapturedJsonEvent(text, (event) =>
+          event.event === terminalEvent && event.request_id === id),
+        10_000,
+      );
+    };
+
+    await submit({
+      id: 'journey-failure',
+      operationId: 'operation:canonical-intelligence-journey:failure',
+      mode: 'immediate',
+    }, 'session_control_rejected');
+    assert.equal(providerCalls, 1);
+
+    providerMode = 'success';
+    await submit({
+      id: 'journey-retry',
+      operationId: 'operation:canonical-intelligence-journey:retry',
+      mode: 'retry',
+    }, 'session_control_response');
+    await submit({
+      id: 'journey-replay',
+      operationId: 'operation:canonical-intelligence-journey:replay',
+      mode: 'replay',
+    }, 'session_control_response');
+    assert.equal(providerCalls, 3);
+
+    provider.closeAllConnections?.();
+    await new Promise((resolve) => provider.close(resolve));
+    child.stdin.write(`${JSON.stringify({
+      id: 'journey-topology-refusal',
+      method: 'session.submit',
+      params: { content: 'new intent must fail before provider transport' },
+    })}\n`);
+    await waitForCapturedOutput(
+      child,
+      () => stdout,
+      (text) => hasCapturedJsonEvent(text, (event) =>
+        event.event === 'session_control_rejected'
+        && event.request_id === 'journey-topology-refusal'),
+      10_000,
+    );
+    assert.equal(providerCalls, 3, 'fresh topology refusal occurs without a provider request or cache wait');
+
+    child.stdin.end(`${JSON.stringify({ id: 'journey-close', method: 'session.close' })}\n`);
+    assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0, stderr);
+    const events = readJsonlFileFromText(stdout);
+    const terminals = events.filter((event) =>
+      event.event === 'invokable_intelligence_terminal' && event.intent_id === intentId);
+    assert.equal(terminals.length, 3, stderr);
+    assert.deepEqual(terminals.map(({ outcome_kind }) => outcome_kind), [
+      'provider-failure',
+      'success',
+      'success',
+    ]);
+    const refusal = events.find((event) =>
+      event.event === 'invokable_intelligence_refused' && event.intent_id !== intentId);
+    assert.ok(refusal?.intent_id && refusal?.refusal_id && refusal?.outcome_id, stderr);
+    assert.equal(refusal.reason_code, 'topology-infeasible');
+
+    const verificationStore = await SqliteRegistryStore.open(join(siteRoot, '.ai', 'intelligence-registry.db'));
+    try {
+      const attempts = await Promise.all(terminals.map(({ attempt_id }) =>
+        verificationStore.getExecutionAttempt(attempt_id)));
+      const plans = await Promise.all(terminals.map(({ plan_id }) =>
+        verificationStore.getPlan(plan_id)));
+      const outcomes = await Promise.all(terminals.map(({ outcome_id }) =>
+        verificationStore.getTerminalOutcome(outcome_id)));
+      const results = await Promise.all(terminals.map(({ attempt_id }) =>
+        verificationStore.listResultEnvelopes(attempt_id)));
+      const observations = await Promise.all(terminals.map(({ attempt_id }) =>
+        verificationStore.listInvocationObservations(attempt_id)));
+      const audit = await Promise.all(terminals.map(({ attempt_id }) =>
+        verificationStore.listInvocationAuditEvidence(attempt_id)));
+      assert.equal((await verificationStore.getIntent(intentId))?.id, intentId);
+      assert.equal(new Set(attempts.map(({ id }) => id)).size, 3);
+      assert.deepEqual(attempts.map(({ lineage }) => lineage), [
+        { relation: 'initial' },
+        { relation: 'retry-of', predecessor_attempt_id: attempts[0].id },
+        { relation: 'replay-of', predecessor_attempt_id: attempts[1].id },
+      ]);
+      assert.equal(plans.every((plan) =>
+        plan?.intent_id === intentId
+        && plan.snapshot.referenced_revisions.some(({ kind }) => kind === 'topology')), true);
+      assert.deepEqual(outcomes.map(({ kind }) => kind), ['provider-failure', 'success', 'success']);
+      assert.deepEqual(results.map(({ length }) => length), [0, 1, 1]);
+      assert.equal(observations.every((entries) =>
+        entries.some(({ kind }) => kind === 'transport-submitted')), true);
+      assert.equal(audit.every((entries) =>
+        entries.some(({ evidence_type }) => evidence_type === 'terminal-outcome')), true);
+      assert.equal((await verificationStore.getRefusal(refusal.refusal_id))?.id, refusal.refusal_id);
+      assert.equal((await verificationStore.getTerminalOutcome(refusal.outcome_id))?.kind, 'pre-invocation-refusal');
+    } finally {
+      await verificationStore.close();
+    }
+  } finally {
+    if (child && child.exitCode === null) {
+      const exited = once(child, 'exit');
+      child.kill();
+      await exited;
+    }
+    if (provider.listening) {
+      provider.closeAllConnections?.();
+      await new Promise((resolve) => provider.close(resolve));
+    }
+    rmSync(siteRoot, { recursive: true, force: true });
+  }
+});
+
 test('spawned runtime cancels an in-flight provider request through JSONL control', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-cancel-e2e-'));
   let requestReceived;
