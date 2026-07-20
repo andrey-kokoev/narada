@@ -153,6 +153,41 @@ test('capability gateway dispatches admitted tools through the complete attempt 
   assert.equal(gateway.state().active_execution_count, 0);
 });
 
+test('capability gateway exposes canonical reader names while dispatching runtime aliases', async () => {
+  const servers = {
+    filesystem: {
+      tools: [{
+        name: 'mcp_output_show',
+        runtime_tool_name: 'agent_context_output_show',
+        inputSchema: { type: 'object' },
+      }],
+    },
+  };
+  let admittedToolName;
+  const { gateway, requests } = createGateway({
+    servers,
+    admit: async ({ toolName }) => {
+      admittedToolName = toolName;
+      return { admitted: true };
+    },
+    aggregateToolBindings: (items) => [{
+      serverName: 'filesystem',
+      server: { ...items.filesystem, name: 'filesystem' },
+      tool: items.filesystem.tools[0],
+      providerToolName: 'mcp_output_show',
+    }],
+    findToolBinding: () => ({
+      server: { ...servers.filesystem, name: 'filesystem' },
+      tool: servers.filesystem.tools[0],
+    }),
+  });
+
+  await gateway.invoke({ toolName: 'mcp_output_show', arguments: { ref: 'mcp_output:o_test' } });
+
+  assert.equal(admittedToolName, 'mcp_output_show');
+  assert.equal(requests[0].params.name, 'agent_context_output_show');
+});
+
 test('capability gateway refuses tools before dispatch when admission rejects', async () => {
   const { gateway, evidence, requests } = createGateway({
     admit: async () => ({ admitted: false, reason: 'approval_required' }),

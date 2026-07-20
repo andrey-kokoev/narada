@@ -34,6 +34,25 @@ test('session supervisor owns queue, journal, lifecycle, and carrier turn invoca
   assert.ok(records.some((record) => record.event === 'provider_response'));
 });
 
+test('session supervisor preserves a failed terminal result returned by the carrier', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'nars-session-returned-failure-'));
+  const supervisor = createNarsSessionSupervisor({
+    sessionCoreOptions: { sessionId: 'returned-failure-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl') },
+    carrier: { runTurn: async () => ({ terminal_state: 'failed', error: 'provider_follow_up_round_limit_exceeded:8' }) },
+  });
+
+  supervisor.start();
+  await supervisor.submit({ event_id: 'input_returned_failure', content: 'loop forever' });
+
+  assert.equal(supervisor.core.turn('input_returned_failure').turn_state, 'failed');
+  assert.equal(supervisor.health().operational_posture, 'request_runtime_failures');
+  assert.equal(supervisor.health().operator_input_queue.pending_count, 0);
+  const events = readFileSync(join(root, 'events.jsonl'), 'utf8');
+  assert.match(events, /"event":"turn_failed"/);
+  assert.match(events, /"event":"input_event_completed"/);
+  await supervisor.close();
+});
+
 test('session close waits for provider termination and abandons the admitted input', async () => {
   const root = mkdtempSync(join(tmpdir(), 'nars-session-close-barrier-'));
   let markStarted;

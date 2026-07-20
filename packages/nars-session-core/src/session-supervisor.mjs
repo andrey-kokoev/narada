@@ -6,6 +6,8 @@ function eventRecord(event) {
   return { event: kind ?? 'session_supervisor_event', ...payload };
 }
 
+const TERMINAL_TURN_STATES = new Set(['completed', 'blocked', 'interrupted', 'failed', 'refused']);
+
 export function createNarsSessionSupervisor({
   sessionCore,
   sessionCoreOptions,
@@ -118,24 +120,42 @@ export function createNarsSessionSupervisor({
       };
       const result = await carrier.runTurn(context, eventSink, toolGateway);
       const current = core.turn(turnId);
-      if (current && !['completed', 'blocked', 'interrupted', 'failed', 'refused'].includes(current.turn_state)) {
-        core.transitionTurn(turnId, 'reconciling', { reason: 'carrier_returned' });
-        core.transitionTurn(turnId, 'completed', { terminal_status: 'completed' });
+      const returnedTerminalState = TERMINAL_TURN_STATES.has(result?.terminal_state)
+        ? result.terminal_state
+        : null;
+      if (current && !TERMINAL_TURN_STATES.has(current.turn_state)) {
+        if (returnedTerminalState && returnedTerminalState !== 'completed') {
+          core.transitionTurn(turnId, returnedTerminalState, {
+            ...(result?.error ? { error: result.error } : {}),
+            terminal_status: returnedTerminalState,
+            reason: 'carrier_returned_terminal_result',
+          });
+        } else {
+          core.transitionTurn(turnId, 'reconciling', { reason: 'carrier_returned' });
+          core.transitionTurn(turnId, 'completed', { terminal_status: 'completed' });
+        }
       }
       const finalTurn = core.turn(turnId);
       if (recoveryAttempt) {
-        core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'reconciled', {
-          reason: 'carrier_replay_returned',
-          terminal_state: finalTurn?.terminal_state ?? null,
-        });
-        core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'completed', { reason: 'recovery_replay_completed' });
+        if (['failed', 'interrupted'].includes(finalTurn?.terminal_state)) {
+          core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, finalTurn.terminal_state, {
+            reason: `recovery_replay_${finalTurn.terminal_state}`,
+            ...(result?.error ? { error: result.error } : {}),
+          });
+        } else {
+          core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'reconciled', {
+            reason: 'carrier_replay_returned',
+            terminal_state: finalTurn?.terminal_state ?? null,
+          });
+          core.transitionRecoveryAttempt(recoveryAttempt.attempt_id, 'completed', { reason: 'recovery_replay_completed' });
+        }
       }
-      return { terminal_state: finalTurn?.terminal_state ?? 'completed', result };
+      return { terminal_state: finalTurn?.terminal_state ?? returnedTerminalState ?? 'completed', result };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       const interrupted = controller.signal.aborted || /abort|cancel|interrupt/i.test(message);
       const current = core.turn(turnId);
-      if (current && !['completed', 'blocked', 'interrupted', 'failed', 'refused'].includes(current.turn_state)) {
+      if (current && !TERMINAL_TURN_STATES.has(current.turn_state)) {
         core.transitionTurn(turnId, interrupted ? 'interrupted' : 'failed', {
           error: message,
           terminal_status: interrupted ? 'interrupted' : 'failed',
@@ -184,7 +204,14 @@ export function createNarsSessionSupervisor({
     const content = typeof request === 'string'
       ? request
       : request.content ?? request.params?.content ?? request.params?.message ?? null;
-    if (content != null) return submit({ ...request, content });
+    if (content != null) {
+      const submitted = await submit({ ...request, content });
+      const turnId = submitted?.event_id ?? request.event_id ?? null;
+      return {
+        ...submitted,
+        terminal_state: core.turn(turnId)?.terminal_state ?? submitted?.terminal_state ?? 'completed',
+      };
+    }
     if (typeof handleControlRequest !== 'function') {
       throw new Error('nars_session_control_handler_required');
     }

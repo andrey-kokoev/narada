@@ -665,7 +665,11 @@ function requestOutcomeForEvent(event = {}) {
       ? 'invalid_request'
       : null;
   }
-  if (event.event === 'session_control_response') return 'completed';
+  if (event.event === 'session_control_response') {
+    return event.request_outcome === 'completed' || event.terminal_state === 'completed'
+      ? 'completed'
+      : null;
+  }
   return null;
 }
 

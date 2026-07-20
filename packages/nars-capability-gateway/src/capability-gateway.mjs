@@ -206,7 +206,10 @@ export function createNarsCapabilityGateway({
         jsonrpc: '2.0',
         id: requestId,
         method: 'tools/call',
-        params: { name: binding.tool.name, arguments: args },
+        params: {
+          name: binding.tool.runtime_tool_name ?? binding.tool.name,
+          arguments: args,
+        },
       }, abortSignal);
     } catch (error) {
       const interrupted = Boolean(abortSignal?.aborted) || /abort|cancel|interrupt/i.test(errorMessage(error));

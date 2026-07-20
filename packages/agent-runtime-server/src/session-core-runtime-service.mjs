@@ -24,6 +24,12 @@ const SESSION_CONTROL_METHODS = new Set([
 ]);
 let heartbeatWriteSequence = 0;
 
+function requestOutcomeForTurnResult(terminalState) {
+  if (terminalState === 'completed') return 'completed';
+  if (['blocked', 'failed', 'interrupted', 'refused'].includes(terminalState)) return `turn_${terminalState}`;
+  return 'completed';
+}
+
 function buildLocalRuntimeSurfaceContract(runtimeContext, generatedAt = new Date().toISOString()) {
   const sessionId = runtimeContext?.session ?? runtimeContext?.launchSessionId ?? 'runtime';
   return buildNarsRuntimeSurfaceContract({
@@ -527,14 +533,18 @@ export function createSessionCoreRuntimeService({
         transport: 'jsonl_stdio',
       });
       const result = await supervisor.dispatch(request);
+      const terminalState = result?.terminal_state ?? 'completed';
+      const requestOutcome = requestOutcomeForTurnResult(terminalState);
       supervisor.core.appendEvent({
         event: 'session_control_response',
         request_id: requestId,
         method,
         idempotency_key: idempotencyKey,
-        terminal_state: result?.terminal_state ?? 'completed',
+        terminal_state: terminalState,
+        request_outcome: requestOutcome,
       });
-      requestState.transition('completed', { terminal_state: result?.terminal_state ?? 'completed' });
+      // The control request was handled even when the turn itself reached a failed terminal state.
+      requestState.transition('completed', { turn_terminal_state: terminalState, request_outcome: requestOutcome });
       return false;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);

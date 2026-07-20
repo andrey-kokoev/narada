@@ -69,6 +69,9 @@ test('runtime session binding contains provider follow-up exhaustion as a failed
   assert.equal(providerCalls, 8);
   assert.equal(binding.health().lifecycle_state, 'ready');
   assert.equal(binding.health().operator_input_queue.pending_count, 0);
+  assert.equal(binding.core.turn('input_round_limit').turn_state, 'failed');
+  assert.equal(binding.core.turn('input_round_limit').terminal_state, 'failed');
+  assert.equal(binding.health().operational_posture, 'request_runtime_failures');
   const events = readFileSync(join(root, 'events.jsonl'), 'utf8');
   assert.match(events, /carrier_turn_failed/);
   assert.match(events, /carrier_turn_tool_round_limit_exceeded:8/);
@@ -146,6 +149,46 @@ test('JSONL runtime acknowledges a submit before its provider turn settles', asy
   assert.ok(closeAcceptedIndex >= 0);
   assert.ok(closeResponseIndex > closeAcceptedIndex);
   assert.ok(closeTerminalIndex > closeResponseIndex);
+});
+
+test('JSONL runtime distinguishes a handled request from a failed turn outcome', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-core-failed-turn-outcome-'));
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let rendered = '';
+  output.on('data', (chunk) => { rendered += String(chunk); });
+  const service = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'failed-turn-outcome-1',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+    },
+    invokeIntelligenceFn: async () => {
+      throw new Error('provider_follow_up_round_limit_exceeded:8');
+    },
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+  });
+
+  const run = service.run({ input, output });
+  input.end([
+    JSON.stringify({ id: 'turn-failed', method: 'session.submit', params: { content: 'exhaust the provider loop' } }),
+    JSON.stringify({ id: 'close-failed', method: 'session.close' }),
+  ].join('\n') + '\n');
+  await run;
+
+  const events = rendered.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  const response = events.find((event) => event.event === 'session_control_response' && event.request_id === 'turn-failed');
+  const requestTransition = events.find((event) => event.event === 'runtime_request_state_transition'
+    && event.request_id === 'turn-failed'
+    && event.request_state === 'completed');
+  assert.equal(response?.terminal_state, 'failed');
+  assert.equal(response?.request_outcome, 'turn_failed');
+  assert.equal(requestTransition?.terminal_state, 'completed');
+  assert.equal(requestTransition?.turn_terminal_state, 'failed');
+  assert.equal(requestTransition?.request_outcome, 'turn_failed');
+  assert.ok(events.some((event) => event.event === 'turn_failed'));
 });
 
 test('session cancel interrupts an active intelligence turn while close waits for settlement', async () => {

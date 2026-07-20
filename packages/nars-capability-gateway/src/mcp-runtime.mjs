@@ -64,6 +64,9 @@ const CHILD_PROCESS_ENV_ALLOWLIST = Object.freeze([
 ]);
 const MCP_STARTUP_FAILURES_KEY = '__mcp_startup_failures';
 const MCP_RUNTIME_DIAGNOSTICS_KEY = '__mcp_runtime_diagnostics';
+const MCP_TOOL_NAME_ALIASES = Object.freeze({
+  agent_context_output_show: 'mcp_output_show',
+});
 
 const WORKER_MCP_STARTUP_TOOL_NAMES = Object.freeze([
   'agent_context_startup_sequence',
@@ -76,6 +79,7 @@ const WORKER_MCP_OUTPUT_READBACK_TOOL_NAMES = Object.freeze([
   'fs_read_file',
   'fs_read_file_range',
   'fs_grep_search',
+  'mcp_output_show',
 ]);
 
 function buildChildProcessEnv(extra = {}, baseEnv = process.env) {
@@ -512,7 +516,7 @@ async function hydrateRuntimeMcpServer(runtime, { siteRoot, serverName, serverCo
     ownershipContext,
     pid: runtime.process?.child?.pid ?? runtime.process?.pid ?? null,
   });
-  runtime.tools = toolsResult.result?.tools ?? [];
+  runtime.tools = normalizeRuntimeMcpTools(toolsResult.result?.tools ?? []);
   runtime.send = async (req, timeoutMs = requestTimeoutMs, timeoutCode = 'mcp_request_timeout', abortSignal = null) => {
     if (!disconnectedError) return sendDirect(req, timeoutMs, timeoutCode, abortSignal);
     await restartRuntimeMcpServer(runtime, { siteRoot, serverName, serverConfig, ownershipContext: runtime.ownership_context, reason: `disconnected_before_request:${disconnectedError.message}` });
@@ -780,6 +784,24 @@ function aggregateToolBindings(mcpServers) {
   return all;
 }
 
+function canonicalMcpToolName(name) {
+  return MCP_TOOL_NAME_ALIASES[String(name ?? '')] ?? String(name ?? '');
+}
+
+function normalizeRuntimeMcpTools(tools) {
+  const byCanonicalName = new Map();
+  for (const tool of tools ?? []) {
+    if (!tool?.name) continue;
+    const canonicalName = canonicalMcpToolName(tool.name);
+    const existing = byCanonicalName.get(canonicalName);
+    if (existing && tool.name !== canonicalName) continue;
+    byCanonicalName.set(canonicalName, tool.name === canonicalName
+      ? tool
+      : { ...tool, name: canonicalName, runtime_tool_name: tool.name });
+  }
+  return [...byCanonicalName.values()];
+}
+
 function providerSafeToolName(toolName, seenProviderNames = new Set()) {
   const raw = String(toolName ?? '');
   let name = raw.replace(/[^A-Za-z0-9_-]/g, '_');
@@ -838,7 +860,31 @@ async function sendMcpRequest(server, request, abortSignal = null) {
     response = await server.send(request, undefined, undefined, abortSignal);
   }
   if (response.error) throw new Error(response.error.message);
-  return response.result;
+  return normalizeMcpOutputReader(response.result);
+}
+
+function normalizeMcpOutputReader(value, key = null) {
+  if (Array.isArray(value)) return value.map((item) => normalizeMcpOutputReader(item));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([entryKey, entryValue]) => [
+      entryKey,
+      normalizeMcpOutputReader(entryValue, entryKey),
+    ]));
+  }
+  if (typeof value !== 'string') return value;
+  if (key === 'reader_tool' || key === 'readerTool') return canonicalMcpToolName(value);
+  if (key === 'read_command' || key === 'remediation') {
+    return value.replaceAll('agent_context_output_show', 'mcp_output_show');
+  }
+  if (key === 'text') {
+    try {
+      const parsed = JSON.parse(value);
+      return JSON.stringify(normalizeMcpOutputReader(parsed));
+    } catch {
+      return value;
+    }
+  }
+  return value;
 }
 
 function randomId() {
@@ -866,6 +912,9 @@ export {
   shouldSuppressMcpStderr,
   aggregateTools,
   aggregateToolBindings,
+  canonicalMcpToolName,
+  normalizeRuntimeMcpTools,
+  normalizeMcpOutputReader,
   workerMcpProjectionFromEnv,
   parseWorkerMcpProjectionConfig,
   applyWorkerMcpProjection,
