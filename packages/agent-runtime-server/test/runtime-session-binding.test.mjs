@@ -31,6 +31,76 @@ test('runtime session binding delegates session state to session core and turns 
   assert.equal(binding.health().lifecycle_state, 'closed');
 });
 
+test('runtime session binding contains provider follow-up exhaustion as a failed turn', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-round-limit-'));
+  let providerCalls = 0;
+  const binding = createRuntimeSessionBinding({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'session-round-limit',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+    },
+    invokeIntelligenceFn: async () => {
+      providerCalls += 1;
+      return {
+        choices: [{
+          message: {
+            role: 'assistant',
+            tool_calls: [{
+              id: `call-${providerCalls}`,
+              function: { name: 'loop', arguments: '{}' },
+            }],
+          },
+        }],
+      };
+    },
+    toolGateway: {
+      toolCatalog: () => [{ type: 'function', function: { name: 'loop', parameters: { type: 'object' } } }],
+      invoke: async () => ({ status: 'completed', content: 'looped' }),
+      operationalState: () => 'healthy',
+    },
+  });
+
+  binding.start();
+  await binding.submit({ event_id: 'input_round_limit', content: 'loop forever' });
+
+  assert.equal(providerCalls, 8);
+  assert.equal(binding.health().lifecycle_state, 'ready');
+  assert.equal(binding.health().operator_input_queue.pending_count, 0);
+  const events = readFileSync(join(root, 'events.jsonl'), 'utf8');
+  assert.match(events, /carrier_turn_failed/);
+  assert.match(events, /carrier_turn_tool_round_limit_exceeded:8/);
+  assert.match(events, /"event_kind":"input_completed"/);
+  await binding.close();
+});
+
+test('runtime session binding contains provider-named follow-up exhaustion', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-provider-limit-'));
+  const binding = createRuntimeSessionBinding({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'session-provider-limit',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+    },
+    invokeIntelligenceFn: async () => {
+      throw new Error('provider_follow_up_round_limit_exceeded:8');
+    },
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+  });
+
+  binding.start();
+  await binding.submit({ event_id: 'input_provider_limit', content: 'startup' });
+
+  assert.equal(binding.health().lifecycle_state, 'ready');
+  assert.equal(binding.health().operator_input_queue.pending_count, 0);
+  assert.match(readFileSync(join(root, 'events.jsonl'), 'utf8'), /provider_follow_up_round_limit_exceeded:8/);
+  await binding.close();
+});
+
 test('JSONL runtime acknowledges a submit before its provider turn settles', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-core-early-ack-'));
   const input = new PassThrough();
