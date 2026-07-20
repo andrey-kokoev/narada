@@ -56,14 +56,24 @@ export const CLOUDFLARE_INTELLIGENCE_DIAGNOSTIC_MODES = Object.freeze([
   'provider-recovery',
   'acknowledgment-uncertain',
 ]);
+export const CLOUDFLARE_INTELLIGENCE_DIAGNOSTIC_ENABLE_BINDING = 'CLOUDFLARE_CARRIER_ENABLE_INTELLIGENCE_DIAGNOSTICS';
+
+export function cloudflareIntelligenceDiagnosticsEnabled(value) {
+  return value === true || value === '1';
+}
 
 /**
  * Explicit service-only fault injection for the authenticated live intelligence
  * matrix. It never selects a model or changes catalog authority; it only asks
  * the deployed adapter to exercise a governed refusal/failure posture.
  */
-export function normalizeCloudflareIntelligenceDiagnostic(value, principal = null) {
+export function normalizeCloudflareIntelligenceDiagnostic(value, principal = null, { enabled = false } = {}) {
   if (value === undefined || value === null) return null;
+  if (!enabled) {
+    const error = new Error('cloudflare_intelligence_diagnostic_disabled');
+    error.code = 'cloudflare_intelligence_diagnostic_disabled';
+    throw error;
+  }
   if (principal?.auth_type !== 'service') {
     const error = new Error('cloudflare_intelligence_diagnostic_requires_service_principal');
     error.code = 'cloudflare_intelligence_diagnostic_requires_service_principal';
@@ -78,12 +88,13 @@ export function normalizeCloudflareIntelligenceDiagnostic(value, principal = nul
 }
 
 export class CloudflareCarrierRouter {
-  constructor({ now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null, taskStoreAdapter = null } = {}) {
+  constructor({ now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null, taskStoreAdapter = null, intelligenceDiagnosticsEnabled = false } = {}) {
     this.sessions = new Map();
     this.now = now;
     this.providerAdapter = providerAdapter;
     this.toolEffectAdapter = toolEffectAdapter;
     this.taskStoreAdapter = taskStoreAdapter;
+    this.intelligenceDiagnosticsEnabled = intelligenceDiagnosticsEnabled === true;
   }
 
   handle(request) {
@@ -117,6 +128,7 @@ export class CloudflareCarrierRouter {
       providerAdapter: this.providerAdapter,
       toolEffectAdapter: this.toolEffectAdapter,
       taskStoreAdapter: this.taskStoreAdapter,
+      intelligenceDiagnosticsEnabled: this.intelligenceDiagnosticsEnabled,
     });
     this.sessions.set(carrierSessionId, session);
     return session.handle(request);
@@ -135,6 +147,7 @@ export class CloudflareCarrierSession {
     providerAdapter = null,
     toolEffectAdapter = null,
     taskStoreAdapter = null,
+    intelligenceDiagnosticsEnabled = false,
   }) {
     if (!carrier_session_id) throw new Error('cloudflare_carrier_session_requires_id');
     if (!agent_id) throw new Error('cloudflare_carrier_session_requires_agent_id');
@@ -142,6 +155,7 @@ export class CloudflareCarrierSession {
     this.providerAdapter = providerAdapter;
     this.toolEffectAdapter = toolEffectAdapter;
     this.taskStoreAdapter = taskStoreAdapter;
+    this.intelligenceDiagnosticsEnabled = intelligenceDiagnosticsEnabled === true;
     this.toolEffectPosture = toolEffectPosture(toolEffectAdapter);
     this.state = {
       carrier_session_id,
@@ -288,7 +302,7 @@ export class CloudflareCarrierSession {
     };
   }
 
-  static fromSnapshot(snapshot, { now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null, taskStoreAdapter = null } = {}) {
+  static fromSnapshot(snapshot, { now = () => new Date().toISOString(), providerAdapter = null, toolEffectAdapter = null, taskStoreAdapter = null, intelligenceDiagnosticsEnabled = false } = {}) {
     const session = new CloudflareCarrierSession({
       carrier_session_id: snapshot.state.carrier_session_id,
       agent_id: snapshot.state.agent_id,
@@ -300,6 +314,7 @@ export class CloudflareCarrierSession {
       providerAdapter,
       toolEffectAdapter,
       taskStoreAdapter,
+      intelligenceDiagnosticsEnabled,
     });
     session.state = {
       ...clone(snapshot.state),
@@ -512,6 +527,7 @@ export class CloudflareCarrierSession {
       intelligenceDiagnostic = normalizeCloudflareIntelligenceDiagnostic(
         request?.params?.intelligence_diagnostic,
         this.currentPrincipal,
+        { enabled: this.intelligenceDiagnosticsEnabled },
       );
     } catch (error) {
       return {
@@ -593,16 +609,25 @@ export class CloudflareCarrierSession {
 
   async #recordProviderExecution(input, events, intelligenceInvocation = undefined, intelligenceDiagnostic = null) {
     const turnId = `turn_${input.event_id}`;
+    const diagnosticInjection = intelligenceDiagnostic !== null;
+    const providerRequestPosture = {
+      provider_request_status: diagnosticInjection ? 'diagnostic-injected' : 'dispatched',
+      provider_execution_enabled: !diagnosticInjection,
+      provider_runtime_status: diagnosticInjection ? 'synthetic-diagnostic' : 'available',
+      provider_adapter_admission_status: diagnosticInjection ? 'diagnostic-injected' : 'admitted',
+      provider_execution_mode: diagnosticInjection ? 'synthetic-diagnostic' : 'provider',
+      provider_transport_submitted: !diagnosticInjection,
+      provider_adapter_refusal_reason: diagnosticInjection
+        ? `intelligence_diagnostic:${intelligenceDiagnostic}`
+        : null,
+    };
     this.state.active_turn = { turn_id: turnId, input_event_id: input.event_id, state: 'active' };
     events.push(this.#appendEvent('turn_started', { turn_id: turnId, input_event_id: input.event_id }));
     events.push(this.#appendEvent('provider_request_recorded', {
       schema: 'narada.agent_tui.provider_request_payload.v0',
       turn_id: turnId,
       input_event_id: input.event_id,
-      provider_request_status: 'dispatched',
-      provider_execution_enabled: true,
-      provider_runtime_status: 'available',
-      provider_adapter_admission_status: 'admitted',
+      ...providerRequestPosture,
       provider_adapter_kind: this.providerAdapter.adapter_kind,
       provider: this.providerAdapter.provider,
       model: this.providerAdapter.model,
@@ -610,7 +635,6 @@ export class CloudflareCarrierSession {
       thinking: null,
       stream: false,
       provider_streaming_contract: 'none',
-      provider_adapter_refusal_reason: null,
       content_preview: input.content,
     }));
     try {
@@ -653,10 +677,7 @@ export class CloudflareCarrierSession {
           schema: 'narada.agent_tui.provider_request_payload.v0',
           turn_id: turnId,
           input_event_id: input.event_id,
-          provider_request_status: 'dispatched',
-          provider_execution_enabled: true,
-          provider_runtime_status: 'available',
-          provider_adapter_admission_status: 'admitted',
+          ...providerRequestPosture,
           provider_adapter_kind: this.providerAdapter.adapter_kind,
           provider: this.providerAdapter.provider,
           model: this.providerAdapter.model,
@@ -664,7 +685,6 @@ export class CloudflareCarrierSession {
           thinking: null,
           stream: false,
           provider_streaming_contract: 'none',
-          provider_adapter_refusal_reason: null,
           content_preview: 'tool_results',
           tool_result_count: recorded.toolResults.length,
         }));
@@ -687,7 +707,10 @@ export class CloudflareCarrierSession {
         input_event_id: input.event_id,
         provider_request_status: 'completed',
         terminal_status: 'completed',
-        provider_execution_enabled: true,
+        provider_execution_enabled: !diagnosticInjection,
+        provider_execution_mode: diagnosticInjection ? 'synthetic-diagnostic' : 'provider',
+        provider_transport_submitted: !diagnosticInjection,
+        ...(intelligenceDiagnostic ? { intelligence_diagnostic: intelligenceDiagnostic } : {}),
         intelligence: result.intelligence ?? null,
       }));
       events.push(this.#appendEvent('input_completed', {
@@ -703,7 +726,10 @@ export class CloudflareCarrierSession {
         input_event_id: input.event_id,
         provider_request_status: 'failed',
         terminal_status: 'failed',
-        provider_execution_enabled: true,
+        provider_execution_enabled: !diagnosticInjection,
+        provider_execution_mode: diagnosticInjection ? 'synthetic-diagnostic' : 'provider',
+        provider_transport_submitted: !diagnosticInjection,
+        ...(intelligenceDiagnostic ? { intelligence_diagnostic: intelligenceDiagnostic } : {}),
         error_summary: providerErrorSummary(error),
         error_code: typeof error?.code === 'string' ? error.code : null,
         intelligence: error?.intelligence ?? null,

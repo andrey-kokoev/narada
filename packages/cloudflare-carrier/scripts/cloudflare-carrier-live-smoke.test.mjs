@@ -25,6 +25,18 @@ test('parseLiveSmokeArgs accepts bearer auth and text format', () => {
   assert.equal(config.operationId, 'operation_example');
   assert.equal(config.expectedGoal, 'prove live carrier');
   assert.equal(config.auth.kind, 'bearer');
+  assert.equal(config.intelligenceDiagnosticsEnabled, false);
+});
+
+test('parseLiveSmokeArgs can explicitly request the diagnostic deployment lane', () => {
+  const config = parseLiveSmokeArgs([
+    '--url', 'https://carrier.example',
+    '--intelligence-diagnostics', 'enabled',
+  ], {
+    CLOUDFLARE_CARRIER_TOKEN: 'token-live-smoke',
+  });
+
+  assert.equal(config.intelligenceDiagnosticsEnabled, true);
 });
 
 test('formatLiveSmokeText emits direct downstream reads', () => {
@@ -44,6 +56,12 @@ test('formatLiveSmokeText emits direct downstream reads', () => {
     task_create_status: 'ok',
     task_update_status: 'ok',
     persisted_tasks: [{ task_id: 'task-1' }],
+    intelligence_live_diagnostics: {
+      enabled: false,
+      evidence_posture: 'diagnostic-disabled-by-runtime-configuration',
+      provider_transport_exercised: false,
+      disabled_reason_code: 'cloudflare_intelligence_diagnostic_disabled',
+    },
   });
 
   assert.match(output, /Live Smoke: ok/);
@@ -56,6 +74,7 @@ test('formatLiveSmokeText emits direct downstream reads', () => {
   assert.match(output, /Task Workflow:/);
   assert.match(output, /Operation Review:/);
   assert.match(output, /Operation Next Workflow:/);
+  assert.match(output, /Intelligence Diagnostics: enabled=false posture=diagnostic-disabled-by-runtime-configuration/);
 });
 
 test('formatLiveSmokeText suppresses guarded links without concrete ids', () => {

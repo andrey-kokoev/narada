@@ -12,9 +12,15 @@ export function parseLiveSmokeArgs(argv = [], env = process.env) {
   const args = [...argv];
   const workerUrl = option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '';
   const format = option(args, '--format') ?? env.CLOUDFLARE_CARRIER_LIVE_SMOKE_FORMAT ?? 'json';
+  const intelligenceDiagnostics = option(args, '--intelligence-diagnostics')
+    ?? env.CLOUDFLARE_CARRIER_LIVE_SMOKE_INTELLIGENCE_DIAGNOSTICS
+    ?? 'disabled';
   const auth = resolveAuth(args, env) ?? resolveBearerToken(args, env);
   if (!workerUrl) throw new Error('live_smoke_requires_--url_or_CLOUDFLARE_CARRIER_URL');
   if (!['json', 'text'].includes(format)) throw new Error(`live_smoke_unknown_format:${format}`);
+  if (!['enabled', 'disabled'].includes(intelligenceDiagnostics)) {
+    throw new Error(`live_smoke_unknown_intelligence_diagnostics_mode:${intelligenceDiagnostics}`);
+  }
   if (!auth) throw new Error('live_smoke_requires_bearer_token_or_operator_session');
 
   const sessionSuffix = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
@@ -24,6 +30,7 @@ export function parseLiveSmokeArgs(argv = [], env = process.env) {
   return {
     workerUrl,
     format,
+    intelligenceDiagnosticsEnabled: intelligenceDiagnostics === 'enabled',
     auth,
     carrierSessionId: option(args, '--session') ?? `carrier_session_live_smoke_${sessionSuffix}`,
     agentId: option(args, '--agent') ?? 'narada.live.smoke',
@@ -89,7 +96,7 @@ export function formatLiveSmokeText(result) {
     `Goal: ${result.goal?.text ?? 'unknown'} state=${result.goal?.state ?? 'unknown'}`,
     `Provider: posture=${result.provider_adapter_posture ?? 'unknown'} request=${result.provider_request_status ?? 'unknown'} execution=${String(result.provider_execution_enabled)}`,
     `Intelligence: attempt=${result.intelligence_attempt_id ?? 'none'} outcome=${result.intelligence_outcome_kind ?? 'unknown'} evidence_readback=${String(result.intelligence_evidence_readback)}`,
-    `Intelligence Diagnostics: ${Object.entries(result.intelligence_live_diagnostics ?? {}).map(([name, value]) => `${name}=${value?.outcome_kind ?? (value?.checked ? 'checked' : 'unknown')}`).join(' ') || 'none'}`,
+    `Intelligence Diagnostics: enabled=${String(result.intelligence_live_diagnostics?.enabled ?? false)} posture=${result.intelligence_live_diagnostics?.evidence_posture ?? 'none'} ${Object.entries(result.intelligence_live_diagnostics ?? {}).filter(([name]) => !['enabled', 'evidence_posture', 'provider_transport_exercised', 'disabled_reason_code'].includes(name)).map(([name, value]) => `${name}=${value === true ? 'checked' : value?.outcome_kind ?? (value?.checked ? 'checked' : 'unknown')}`).join(' ')}`.trim(),
     `Tool Effect: posture=${result.tool_effect_posture ?? 'unknown'} adapter=${result.tool_effect_adapter_kind ?? 'none'}`,
     `Task Mutation: create=${result.task_create_status ?? 'unknown'} update=${result.task_update_status ?? 'unknown'} persisted=${Array.isArray(result.persisted_tasks) ? result.persisted_tasks.length : 0}`,
   ];
@@ -219,6 +226,8 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
   assert.equal(inputCompleted.payload.input_event_id, successInput.event_id);
   assert.equal(inputCompleted.payload.terminal_state, 'completed');
 
+  const intelligenceLiveDiagnostics = config.intelligenceDiagnosticsEnabled
+    ? await (async () => {
   const resolverRefusalInput = {
     ...successInput,
     event_id: `input_live_smoke_resolver_refusal_${config.sessionSuffix}`,
@@ -354,6 +363,65 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
   const replayExecutionRead = await readExecution(config, replayCompleted.payload.intelligence.attempt_id, fetchImpl);
   assert.equal(replayExecutionRead.body.result.data.attempt.lineage.relation, 'replay-of');
 
+      return {
+        enabled: true,
+        evidence_posture: 'synthetic-diagnostic-after-canonical-admission',
+        provider_transport_exercised: false,
+        resolver_refusal: {
+          checked: true,
+          outcome_kind: resolverRefusalFailure.payload.intelligence.outcome_kind,
+          error_code: resolverRefusalFailure.payload.error_code,
+        },
+        provider_failure: {
+          checked: true,
+          outcome_kind: retryFailureEvent.payload.intelligence.outcome_kind,
+          error_code: retryFailureEvent.payload.error_code,
+        },
+        acknowledgment_uncertain: {
+          checked: true,
+          outcome_kind: uncertainFailure.payload.intelligence.outcome_kind,
+          error_code: uncertainFailure.payload.error_code,
+        },
+        retry: {
+          checked: true,
+          predecessor_attempt_id: retryFailureEvent.payload.intelligence.attempt_id,
+          attempt_id: retrySuccessCompleted.payload.intelligence.attempt_id,
+          lineage: retryExecutionRead.body.result.data.attempt.lineage.relation,
+        },
+        replay: {
+          checked: true,
+          attempt_id: replayCompleted.payload.intelligence.attempt_id,
+          lineage: replayExecutionRead.body.result.data.attempt.lineage.relation,
+          idempotent_duplicate_checked: true,
+        },
+      };
+    })()
+    : await (async () => {
+        const diagnosticDisabledProbe = await post(config, {
+          operation: 'carrier.input.deliver',
+          request_id: `live_smoke_diagnostic_disabled_${config.sessionSuffix}`,
+          carrier_session_id: config.carrierSessionId,
+          params: {
+            input: {
+              ...successInput,
+              event_id: `input_live_smoke_diagnostic_disabled_${config.sessionSuffix}`,
+              content: 'Live smoke diagnostic-disabled gate probe.',
+            },
+            intelligence_diagnostic: 'resolver-refusal',
+          },
+        }, fetchImpl);
+        assert.equal(diagnosticDisabledProbe.http_status, 400);
+        assert.equal(diagnosticDisabledProbe.body.ok, false);
+        assert.equal(diagnosticDisabledProbe.body.code, 'cloudflare_intelligence_diagnostic_disabled');
+        return {
+          enabled: false,
+          evidence_posture: 'diagnostic-disabled-by-runtime-configuration',
+          provider_transport_exercised: false,
+          disabled_reason_code: 'cloudflare_intelligence_diagnostic_disabled',
+          disabled_probe_checked: true,
+        };
+      })();
+
   const taskCreate = await post(config, {
     operation: 'carrier.command.execute',
     request_id: `live_smoke_task_create_${config.sessionSuffix}`,
@@ -456,41 +524,14 @@ export async function runLiveSmoke(config, { fetchImpl = fetch } = {}) {
     intelligence_attempt_id: intelligence.attempt_id,
     intelligence_outcome_id: intelligence.outcome_id,
     intelligence_outcome_kind: intelligence.outcome_kind,
+    intelligence_provider_transport_exercised: providerRequest.payload.provider_transport_submitted === true,
     intelligence_evidence_readback: true,
     intelligence_transition_states: executionRead.body.result.data.transitions.map(({ state }) => state),
     intelligence_observation_count: executionRead.body.result.data.observations.length,
     intelligence_audit_evidence_count: executionRead.body.result.data.audit_evidence.length,
     intelligence_telemetry_count: executionRead.body.result.data.telemetry.length,
     intelligence_materialization_count: executionRead.body.result.data.provenance.materializations.length,
-    intelligence_live_diagnostics: {
-      resolver_refusal: {
-        checked: true,
-        outcome_kind: resolverRefusalFailure.payload.intelligence.outcome_kind,
-        error_code: resolverRefusalFailure.payload.error_code,
-      },
-      provider_failure: {
-        checked: true,
-        outcome_kind: retryFailureEvent.payload.intelligence.outcome_kind,
-        error_code: retryFailureEvent.payload.error_code,
-      },
-      acknowledgment_uncertain: {
-        checked: true,
-        outcome_kind: uncertainFailure.payload.intelligence.outcome_kind,
-        error_code: uncertainFailure.payload.error_code,
-      },
-      retry: {
-        checked: true,
-        predecessor_attempt_id: retryFailureEvent.payload.intelligence.attempt_id,
-        attempt_id: retrySuccessCompleted.payload.intelligence.attempt_id,
-        lineage: retryExecutionRead.body.result.data.attempt.lineage.relation,
-      },
-      replay: {
-        checked: true,
-        attempt_id: replayCompleted.payload.intelligence.attempt_id,
-        lineage: replayExecutionRead.body.result.data.attempt.lineage.relation,
-        idempotent_duplicate_checked: true,
-      },
-    },
+    intelligence_live_diagnostics: intelligenceLiveDiagnostics,
     provider_text_preview: providerOutput.payload.text_delta.slice(0, 120),
     turn_terminal_status: turnCompleted.payload.terminal_status,
     task_create_status: taskCreateResult.payload.status,

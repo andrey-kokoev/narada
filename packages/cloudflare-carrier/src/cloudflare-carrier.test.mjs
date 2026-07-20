@@ -956,12 +956,16 @@ test('carrier forwards canonical invocation control through the provider tool lo
 
 test('intelligence diagnostics are service-only and forwarded as explicit adapter fault modes', async () => {
   assert.equal(
-    normalizeCloudflareIntelligenceDiagnostic('provider-failure', { auth_type: 'service' }),
+    normalizeCloudflareIntelligenceDiagnostic('provider-failure', { auth_type: 'service' }, { enabled: true }),
     'provider-failure',
   );
   assert.throws(
-    () => normalizeCloudflareIntelligenceDiagnostic('provider-failure', { auth_type: 'user' }),
+    () => normalizeCloudflareIntelligenceDiagnostic('provider-failure', { auth_type: 'user' }, { enabled: true }),
     (error) => error.code === 'cloudflare_intelligence_diagnostic_requires_service_principal',
+  );
+  assert.throws(
+    () => normalizeCloudflareIntelligenceDiagnostic('provider-failure', { auth_type: 'service' }),
+    (error) => error.code === 'cloudflare_intelligence_diagnostic_disabled',
   );
 
   const calls = [];
@@ -969,6 +973,7 @@ test('intelligence diagnostics are service-only and forwarded as explicit adapte
     carrier_session_id: 'carrier_session_intelligence_diagnostic',
     agent_id: 'narada.fixture.agent',
     site_id: 'site_fixture',
+    intelligenceDiagnosticsEnabled: true,
     providerAdapter: {
       posture: 'fixture',
       adapter_kind: 'fixture-provider',
@@ -996,6 +1001,10 @@ test('intelligence diagnostics are service-only and forwarded as explicit adapte
     response.events.find((event) => event.event_kind === 'provider_request_recorded').payload.intelligence_diagnostic,
     'provider-failure',
   );
+  const diagnosticProviderEvent = response.events.find((event) => event.event_kind === 'provider_request_recorded');
+  assert.equal(diagnosticProviderEvent.payload.provider_execution_mode, 'synthetic-diagnostic');
+  assert.equal(diagnosticProviderEvent.payload.provider_transport_submitted, false);
+  assert.equal(diagnosticProviderEvent.payload.provider_execution_enabled, false);
 
   const denied = await session.handle({
     operation: 'carrier.input.deliver',
@@ -1008,6 +1017,24 @@ test('intelligence diagnostics are service-only and forwarded as explicit adapte
   });
   assert.equal(denied.ok, false);
   assert.equal(denied.code, 'cloudflare_intelligence_diagnostic_requires_service_principal');
+
+  const disabledSession = new CloudflareCarrierSession({
+    carrier_session_id: 'carrier_session_intelligence_diagnostic_disabled',
+    agent_id: 'narada.fixture.agent',
+    site_id: 'site_fixture',
+    providerAdapter: { posture: 'fixture', adapter_kind: 'fixture', provider: 'fixture', model: 'fixture', async run() { return { text: 'not-called' }; } },
+  });
+  const disabled = await disabledSession.handle({
+    operation: 'carrier.input.deliver',
+    request_id: 'request_intelligence_diagnostic_disabled',
+    principal: { principal_id: 'service', auth_type: 'service' },
+    params: {
+      input: { ...input, event_id: 'input_intelligence_diagnostic_disabled' },
+      intelligence_diagnostic: 'provider-failure',
+    },
+  });
+  assert.equal(disabled.ok, false);
+  assert.equal(disabled.code, 'cloudflare_intelligence_diagnostic_disabled');
 });
 
 test('event reads return ordered events by sequence cursor', () => {

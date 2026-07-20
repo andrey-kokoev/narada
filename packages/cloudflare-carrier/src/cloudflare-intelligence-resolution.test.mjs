@@ -249,7 +249,7 @@ test('provider timeout persists acknowledgment uncertainty rather than provider 
 });
 
 test('live diagnostic modes preserve canonical refusal, provider failure, and acknowledgment uncertainty', async () => {
-  const env = configuredEnv();
+  const env = configuredEnv({ CLOUDFLARE_CARRIER_ENABLE_INTELLIGENCE_DIAGNOSTICS: '1' });
   await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
   const adapter = createCloudflareAiProviderAdapter(env);
 

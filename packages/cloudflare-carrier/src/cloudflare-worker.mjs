@@ -1,4 +1,7 @@
-import { CloudflareCarrierSession } from './cloudflare-carrier.mjs';
+import {
+  CloudflareCarrierSession,
+  cloudflareIntelligenceDiagnosticsEnabled,
+} from './cloudflare-carrier.mjs';
 import { classifyCarrierInputAdmission, classifyToolEffectAdmission } from '@narada2/carrier-protocol';
 import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
 import { createCloudflareSiteRegistryAdapter } from '@narada2/cloudflare-site-registry';
@@ -302,7 +305,14 @@ export class CloudflareCarrierDurableObject {
     const toolEffectAdapter = createCloudflareToolEffectAdapter(this.env);
     const taskStoreAdapter = createCloudflareD1TaskStoreAdapter(this.env);
     if (snapshot) {
-      this.session = CloudflareCarrierSession.fromSnapshot(snapshot, { providerAdapter, toolEffectAdapter, taskStoreAdapter });
+      this.session = CloudflareCarrierSession.fromSnapshot(snapshot, {
+        providerAdapter,
+        toolEffectAdapter,
+        taskStoreAdapter,
+        intelligenceDiagnosticsEnabled: cloudflareIntelligenceDiagnosticsEnabled(
+          this.env.CLOUDFLARE_CARRIER_ENABLE_INTELLIGENCE_DIAGNOSTICS,
+        ),
+      });
       return this.session;
     }
     if (request.operation !== 'session.start') return null;
@@ -317,6 +327,9 @@ export class CloudflareCarrierDurableObject {
       providerAdapter,
       toolEffectAdapter,
       taskStoreAdapter,
+      intelligenceDiagnosticsEnabled: cloudflareIntelligenceDiagnosticsEnabled(
+        this.env.CLOUDFLARE_CARRIER_ENABLE_INTELLIGENCE_DIAGNOSTICS,
+      ),
     });
     return this.session;
   }
@@ -14390,6 +14403,9 @@ function validateOperatorCaptureReturnTo(value) {
 
 export function createCloudflareAiProviderAdapter(env = {}) {
   if (!env.AI || typeof env.AI.run !== 'function') return null;
+  const intelligenceDiagnosticsEnabled = cloudflareIntelligenceDiagnosticsEnabled(
+    env.CLOUDFLARE_CARRIER_ENABLE_INTELLIGENCE_DIAGNOSTICS,
+  );
   const toolEffectConfig = cloudflareToolEffectConfig(env);
   const workersAiTools = toolEffectConfig.tool_definitions.map((tool) => ({
     type: 'function',
@@ -14492,6 +14508,11 @@ export function createCloudflareAiProviderAdapter(env = {}) {
       intelligence_invocation = null,
       intelligence_diagnostic = null,
     }) {
+      if (intelligence_diagnostic && !intelligenceDiagnosticsEnabled) {
+        const error = new Error('cloudflare_intelligence_diagnostic_disabled');
+        error.code = 'cloudflare_intelligence_diagnostic_disabled';
+        throw error;
+      }
       const { gateway } = await ensureGateway();
       const normalizedIntelligenceInvocation = intelligence_invocation === null
         ? null
