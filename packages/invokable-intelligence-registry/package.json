@@ -37,5 +37,6 @@
     "@types/node": "^22.5.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
-  }
+  },
+  "description": "Portable persistence for the invokable-intelligence ontology"
 }

@@ -294,6 +294,58 @@
       "posture": "intent_admission_contracts"
     },
     {
+      "package": "@narada2/invokable-intelligence-contract",
+      "path": "packages/invokable-intelligence-contract",
+      "roles": [
+        "descriptor_contract",
+        "domain_model"
+      ],
+      "posture": "invokable_intelligence_ontology_contract"
+    },
+    {
+      "package": "@narada2/invokable-intelligence-management",
+      "path": "packages/invokable-intelligence-management",
+      "roles": [
+        "cli_exposure",
+        "runtime_authority"
+      ],
+      "posture": "invokable_intelligence_catalog_policy_management"
+    },
+    {
+      "package": "@narada2/invokable-intelligence-registry",
+      "path": "packages/invokable-intelligence-registry",
+      "roles": [
+        "runtime_authority",
+        "descriptor_contract"
+      ],
+      "posture": "invokable_intelligence_portable_registry_storage"
+    },
+    {
+      "package": "@narada2/invokable-intelligence-resolver",
+      "path": "packages/invokable-intelligence-resolver",
+      "roles": [
+        "descriptor_contract",
+        "domain_model"
+      ],
+      "posture": "invokable_intelligence_deterministic_resolver"
+    },
+    {
+      "package": "@narada2/invokable-intelligence-runtime",
+      "path": "packages/invokable-intelligence-runtime",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "invokable_intelligence_local_runtime_gateway"
+    },
+    {
+      "package": "@narada2/launch-process-ownership",
+      "path": "packages/launch-process-ownership",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "launch_process_ownership_contract"
+    },
+    {
       "package": "@narada2/linux-site",
       "path": "packages/sites/linux",
       "roles": [
@@ -301,6 +353,14 @@
         "runtime_authority"
       ],
       "posture": "linux_site_runtime"
+    },
+    {
+      "package": "@narada2/local-history",
+      "path": "packages/local-history",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "site_local_history_runtime"
     },
     {
       "package": "@narada2/macos-site",
@@ -374,12 +434,72 @@
       "posture": "target_local_agent_facing_mcp_surface"
     },
     {
+      "package": "@narada2/nars-capability-gateway",
+      "path": "packages/nars-capability-gateway",
+      "roles": [
+        "runtime_authority",
+        "mcp_boundary"
+      ],
+      "posture": "nars_capability_gateway_runtime"
+    },
+    {
       "package": "@narada2/nars-client-projection-contract",
       "path": "packages/nars-client-projection-contract",
       "roles": [
         "descriptor_contract"
       ],
       "posture": "nars_client_projection_capability_contracts"
+    },
+    {
+      "package": "@narada2/nars-provider-runtime",
+      "path": "packages/nars-provider-runtime",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "nars_provider_runtime"
+    },
+    {
+      "package": "@narada2/nars-runtime-contract",
+      "path": "packages/nars-runtime-contract",
+      "roles": [
+        "descriptor_contract",
+        "domain_model"
+      ],
+      "posture": "nars_runtime_contracts"
+    },
+    {
+      "package": "@narada2/nars-session-core",
+      "path": "packages/nars-session-core",
+      "roles": [
+        "runtime_authority",
+        "domain_model"
+      ],
+      "posture": "nars_session_core_runtime"
+    },
+    {
+      "package": "@narada2/operator-console-contract",
+      "path": "packages/operator-console-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "operator_console_contracts"
+    },
+    {
+      "package": "@narada2/operator-console-ui",
+      "path": "packages/operator-console-ui",
+      "roles": [
+        "cli_exposure",
+        "descriptor_contract"
+      ],
+      "posture": "operator_console_presentation_ui"
+    },
+    {
+      "package": "@narada2/operator-router",
+      "path": "packages/operator-router",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "operator_router_runtime"
     },
     {
       "package": "@narada2/operator-surface-carriers",
@@ -389,6 +509,14 @@
         "descriptor_contract"
       ],
       "posture": "operator_surface_carrier_templates"
+    },
+    {
+      "package": "@narada2/operator-surface-runtime-contract",
+      "path": "packages/operator-surface-runtime-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "operator_surface_runtime_contracts"
     },
     {
       "package": "@narada2/ops-kit",
@@ -500,6 +628,14 @@
       "posture": "cloudflare_site_registry_runtime"
     },
     {
+      "package": "@narada2/site-registry-contract",
+      "path": "packages/site-registry-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "site_registry_contracts"
+    },
+    {
       "package": "@narada2/site-task-lifecycle",
       "path": "packages/site-task-lifecycle",
       "roles": [
@@ -550,6 +686,22 @@
         "descriptor_contract"
       ],
       "posture": "typed_mcp_surface_contracts"
+    },
+    {
+      "package": "@narada2/ui",
+      "path": "packages/ui",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "renderer_neutral_ui_foundation"
+    },
+    {
+      "package": "@narada2/ui-vue",
+      "path": "packages/ui-vue",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "vue_renderer_adapter_primitives"
     },
     {
       "package": "@narada2/window-surface-overlay",

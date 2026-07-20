@@ -12,5 +12,6 @@
   },
   "scripts": {
     "test": "node --test src/window-surface-overlay.test.mjs"
-  }
+  },
+  "description": "Window surface overlay runtime"
 }

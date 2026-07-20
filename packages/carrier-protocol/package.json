@@ -9,5 +9,6 @@
   },
   "scripts": {
     "test": "node --test src/carrier-protocol.test.mjs"
-  }
+  },
+  "description": "Shared protocol types, constructors, fixtures, and validators for Narada interactive carriers"
 }

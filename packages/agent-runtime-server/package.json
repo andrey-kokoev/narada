@@ -56,6 +56,7 @@
     "@narada2/carrier-runtime": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-terminal-projection": "workspace:*",
+    "@narada2/invokable-intelligence-materialization": "workspace:*",
     "@narada2/invokable-intelligence-registry": "workspace:*",
     "@narada2/invokable-intelligence-resolver": "workspace:*",
     "@narada2/invokable-intelligence-runtime": "workspace:*",
@@ -70,5 +71,6 @@
   "devDependencies": {
     "@narada2/invokable-intelligence-contract": "workspace:*",
     "node-pty": "^1.1.0"
-  }
+  },
+  "description": "NARS runtime server for session and carrier handoff"
 }

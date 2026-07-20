@@ -10,5 +10,6 @@
   "scripts": {
     "test": "node --test src/carrier-protocol-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-protocol-contract.mjs"
-  }
+  },
+  "description": "Carrier protocol contracts"
 }

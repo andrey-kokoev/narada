@@ -2,10 +2,11 @@
 
 `@narada2/cloudflare-site-registry` owns the Cloudflare D1-backed site coordinate for Narada.
 
-It is intentionally separate from `@narada2/cloudflare-carrier`:
+It is intentionally separate from `@narada2/cloudflare-carrier` and `@narada2/site-registry-cloudflare`:
 
 - the carrier preserves Narada runtime/session semantics on Cloudflare;
-- the site registry owns site identity, membership authority, settings, and carrier-session binding evidence.
+- this package owns the carrier-embedded D1 site registry: site identity, membership authority, settings, and carrier-session binding evidence;
+- `@narada2/site-registry-cloudflare` is the hosted Cloudflare Worker read-model surface for Site Registry and operational telemetry projections.
 
 ## Package Boundary
 

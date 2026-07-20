@@ -20,5 +20,6 @@
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"
-  }
+  },
+  "description": "Typed MCP surface contracts"
 }

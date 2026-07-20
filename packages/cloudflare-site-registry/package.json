@@ -1,6 +1,7 @@
 {
   "name": "@narada2/cloudflare-site-registry",
   "version": "0.1.0",
+  "description": "Carrier-embedded Cloudflare D1 site registry runtime for site identity, membership, settings, and carrier-session binding",
   "private": true,
   "type": "module",
   "exports": {

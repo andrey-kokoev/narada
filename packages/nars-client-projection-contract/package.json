@@ -34,5 +34,6 @@
   "scripts": {
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/nars-client-projection-contract.mjs"
-  }
+  },
+  "description": "NARS client projection capability contracts"
 }

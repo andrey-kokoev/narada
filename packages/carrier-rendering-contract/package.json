@@ -10,5 +10,6 @@
   "scripts": {
     "test": "node --test src/carrier-rendering-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-rendering-contract.mjs"
-  }
+  },
+  "description": "Carrier rendering contracts"
 }

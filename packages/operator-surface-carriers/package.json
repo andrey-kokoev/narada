@@ -8,5 +8,6 @@
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"
-  }
+  },
+  "description": "Operator surface carrier templates"
 }

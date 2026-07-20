@@ -1,6 +1,7 @@
 {
   "name": "@narada2/nars-capability-gateway",
   "version": "0.1.0",
+  "description": "NARS capability gateway",
   "private": true,
   "type": "module",
   "narada": {

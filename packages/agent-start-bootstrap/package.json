@@ -11,5 +11,6 @@
   "scripts": {
     "test": "node --test src/synthesize-bootstrap.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/synthesize-bootstrap.mjs"
-  }
+  },
+  "description": "Bootstrap generator for Narada agent startup"
 }

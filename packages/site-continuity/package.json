@@ -13,5 +13,6 @@
   },
   "scripts": {
     "test": "node --test src/site-continuity.test.mjs"
-  }
+  },
+  "description": "Shared v1 vocabulary and pure classifier for continuity between embodiments of the same Narada Site"
 }

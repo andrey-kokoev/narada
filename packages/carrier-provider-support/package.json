@@ -1,6 +1,7 @@
 {
   "name": "@narada2/carrier-provider-support",
   "version": "0.1.0",
+  "description": "Provider command resolution support for carrier surfaces",
   "private": true,
   "type": "module",
   "narada": {

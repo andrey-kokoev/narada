@@ -81,6 +81,17 @@ The workspace is declared in [`pnpm-workspace.yaml`](pnpm-workspace.yaml). It in
 - `packages/verticals/*`
 - `packages/domains/*`
 - `packages/sites/*`
+
+### Grouping Convention
+
+Packages are grouped when they fit one canonical slice:
+
+- `packages/layers/*` — kernel, CLI, and daemon layers
+- `packages/domains/*` — charter, policy, and domain models
+- `packages/verticals/*` — vertical implementations (e.g., mailbox, search)
+- `packages/sites/*` — per-substrate Site materialization templates
+
+Cross-cutting runtime, contract, MCP, carrier, NARS, agent, operator, and UI packages live flat under `packages/*` because they span multiple layers or substrates. Each package's `description` and `.narada/capabilities/package-role-catalog.json` entry are the authoritative sources of its responsibility and authority role.
 - External sibling repositories (when present):
   - `../narada-core/packages/*`
   - `../mcp-surfaces/packages/*`
@@ -106,7 +117,9 @@ The workspace is declared in [`pnpm-workspace.yaml`](pnpm-workspace.yaml). It in
 | `@narada2/narada-proper-mcp` | `packages/narada-proper-mcp` | Target-local Narada MCP facade |
 | `@narada2/mcp-fabric` / `@narada2/typed-mcp-surface` | `packages/mcp-fabric`, `packages/typed-mcp-surface` | MCP surface plumbing |
 | `@narada2/windows-site` / `@narada2/macos-site` / `@narada2/linux-site` / `@narada2/cloudflare-site` | `packages/sites/*` | Per-substrate Site materialization |
-| `@narada2/cloudflare-site-registry` / `@narada2/cloudflare-carrier` | `packages/cloudflare-site-registry`, `packages/cloudflare-carrier` | Cloudflare carrier/registry support |
+| `@narada2/cloudflare-carrier` | `packages/cloudflare-carrier` | Cloudflare carrier runtime |
+| `@narada2/cloudflare-site-registry` | `packages/cloudflare-site-registry` | Carrier-embedded Cloudflare D1 site registry runtime |
+| `@narada2/site-registry-cloudflare` | `packages/site-registry-cloudflare` | Hosted Cloudflare Worker read-model surface for Site Registry and telemetry |
 | `@narada2/operator-surface-carriers` / `@narada2/window-surface-overlay` / `@narada2/windows-operator-surface` | `packages/operator-surface-carriers`, `packages/window-surface-overlay`, `packages/windows-operator-surface` | Windows operator-surface machinery |
 | `@narada2/mcp-shell-windows` | `packages/mcp-shell-windows` | Packaged shell MCP server |
 | `@narada2/invokable-intelligence-contract` | `packages/invokable-intelligence-contract` | Versioned invokable-intelligence ontology: typed resources, qualified capability assertions, typed policies, invocation Intent→Plan→Attempt→Evidence contracts (#2180) |
@@ -119,13 +132,15 @@ Operator-facing browser UI stack:
 
 | Package | Path | Responsibility |
 |---------|------|----------------|
+| `@narada2/ui` | `packages/ui` | Renderer-neutral design tokens and compiled UI foundation |
+| `@narada2/ui-vue` | `packages/ui-vue` | Vue renderer primitives built on `@narada2/ui` |
 | `@narada2/operator-console-ui` | `packages/operator-console-ui` | Browser Operator Console UI (`/console/registry` and related pages); presentation-only |
 | `@narada2/operator-console-contract` | `packages/operator-console-contract` | Shared operator surface catalog, v3 route directory, redacted session wire records |
 | `@narada2/agent-web-ui` | `packages/agent-web-ui` | Production per-session browser UI for one NARS session |
 
 The workspace landing page (`/`) and console HTTP server live in `@narada2/cli` (`packages/layers/cli/src/commands/operator-workspace-page.ts`, `console-server.ts`, `console-server-routes.ts`, `console-register.ts`).
 
-Archived, contract, and carrier packages live under `packages/_archive/`, `packages/carrier-*`, `packages/mcp-*`, etc. Treat each as a focused package with its own `package.json`, `tsconfig.json`, and `vitest.config.ts` where present.
+Archived packages live under `packages/_archive/`. Contract, carrier, MCP, NARS, agent, operator, and UI packages live flat under `packages/*`. Treat each as a focused package with its own `package.json`, `tsconfig.json`, and `vitest.config.ts` where present; use its `description` and role-catalog entry to determine responsibility and authority.
 
 ### Key Directories
 

@@ -13,5 +13,6 @@
   "scripts": {
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
-  }
+  },
+  "description": "Process launch posture contracts"
 }

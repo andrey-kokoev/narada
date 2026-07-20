@@ -13,5 +13,6 @@
     "@narada2/agent-start-bootstrap": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/task-lifecycle-mcp": "workspace:*"
-  }
+  },
+  "description": "Agent session materialization helpers and the agent-context MCP server implementation"
 }

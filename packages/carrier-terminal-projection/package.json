@@ -33,5 +33,6 @@
   "scripts": {
     "test": "node --test src/*.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/projected-input.mjs src/projected-terminal.mjs src/terminal-event-rendering.mjs src/terminal-markdown.mjs src/terminal-style.mjs src/terminal-text.mjs"
-  }
+  },
+  "description": "Runtime-neutral terminal projection without session execution"
 }

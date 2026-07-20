@@ -13,5 +13,6 @@
   },
   "scripts": {
     "test": "node --test src/task-lifecycle-tools.test.mjs"
-  }
+  },
+  "description": "Task lifecycle tool surface"
 }

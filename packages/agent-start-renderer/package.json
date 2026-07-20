@@ -13,5 +13,6 @@
   "scripts": {
     "test": "node --test src/agent-start-renderer.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/agent-start-renderer.mjs"
-  }
+  },
+  "description": "Shared renderer for Narada agent-start pre-carrier launch output"
 }

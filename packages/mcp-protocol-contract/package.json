@@ -10,5 +10,6 @@
   "scripts": {
     "test": "node --test src/mcp-protocol-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-protocol-contract.mjs"
-  }
+  },
+  "description": "MCP protocol contracts"
 }

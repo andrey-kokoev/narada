@@ -33,5 +33,6 @@
   },
   "dependencies": {
     "@narada2/carrier-protocol": "workspace:*"
-  }
+  },
+  "description": "NARS runtime contracts"
 }

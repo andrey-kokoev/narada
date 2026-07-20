@@ -66,5 +66,6 @@
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/site-paths": "workspace:*"
-  }
+  },
+  "description": "NARS session core"
 }

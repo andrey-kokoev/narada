@@ -6,9 +6,11 @@ Operational Telemetry, and Site Communication Candidate Exchange. The
 Site Registry grid is the primary public read model, not the whole authority
 object and not the owning Site.
 
-This package is not `@narada2/cloudflare-site`. It does not run Cycles, mutate
-Site state, admit inbox envelopes, change task lifecycle rows, certify identity,
-or grant capabilities. It hosts bounded projection inputs and read models.
+This package is not `@narada2/cloudflare-site` and it is not `@narada2/cloudflare-site-registry`.
+`@narada2/cloudflare-site-registry` is the carrier-embedded D1 site registry runtime;
+this package is the hosted Cloudflare Worker read-model surface. It does not run
+Cycles, mutate Site state, admit inbox envelopes, change task lifecycle rows,
+certify identity, or grant capabilities. It hosts bounded projection inputs and read models.
 
 Compatibility posture: the package name, route names, environment bindings, and
 existing import paths remain `site-registry-cloudflare` / `NARADA_SITE_REGISTRY_*`

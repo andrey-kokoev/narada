@@ -10,5 +10,6 @@
   "scripts": {
     "test": "node --test src/carrier-command-contract.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-command-contract.mjs"
-  }
+  },
+  "description": "Shared carrier command vocabulary and semantic effect contract"
 }

@@ -29,5 +29,6 @@
   "devDependencies": {
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
-  }
+  },
+  "description": "Canonical, browser-safe types and boundary parsers for the User Site registry"
 }

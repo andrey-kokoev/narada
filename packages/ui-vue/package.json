@@ -1,6 +1,7 @@
 {
   "name": "@narada2/ui-vue",
   "version": "0.1.0",
+  "description": "Narada-owned Vue renderer primitives built on the renderer-neutral @narada2/ui foundation",
   "type": "module",
   "private": true,
   "narada": {

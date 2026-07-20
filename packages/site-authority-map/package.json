@@ -9,5 +9,6 @@
   },
   "scripts": {
     "test": "node --test src/site-authority-map.test.mjs"
-  }
+  },
+  "description": "Shared v1 vocabulary and pure classifier for Narada Site authority routing"
 }

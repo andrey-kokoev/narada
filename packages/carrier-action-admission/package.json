@@ -12,5 +12,6 @@
   "scripts": {
     "test": "node --test src/carrier-action-admission.test.mjs",
     "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-action-admission.mjs src/tool-metadata.mjs src/evidence-reader.mjs"
-  }
+  },
+  "description": "Carrier-neutral v0 implementation of the Carrier Action Admission Boundary"
 }
