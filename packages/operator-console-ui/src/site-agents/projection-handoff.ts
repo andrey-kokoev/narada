@@ -1,4 +1,7 @@
-import { OPERATOR_CONSOLE_AGENTS_API_PATH } from '@narada2/operator-console-contract';
+import {
+  OPERATOR_CONSOLE_AGENTS_API_PATH,
+  type OperatorSiteAgentLaunchFailureWireRecord,
+} from '@narada2/operator-console-contract';
 
 export interface PendingProjectionDocumentOptions {
   siteId: string;
@@ -11,6 +14,13 @@ export interface PendingProjectionDocumentOptions {
 
 export const PENDING_PROJECTION_POLL_INTERVAL_MS = 2_000;
 export const PENDING_PROJECTION_BUDGET_MS = 300_000;
+
+export interface FailureProjectionDocumentOptions {
+  siteId: string;
+  agentId: string;
+  requestId?: string;
+  failure: OperatorSiteAgentLaunchFailureWireRecord;
+}
 
 export function scopedAgentSessionsPath(siteId: string, agentId: string): string {
   return `/console/sessions?site=${encodeURIComponent(siteId)}&agent=${encodeURIComponent(agentId)}`;
@@ -146,6 +156,44 @@ a { color: #0b5bd3; }
   poll();
 })();
 </script>
+</body>
+</html>`;
+}
+
+export function buildFailureProjectionDocument(options: FailureProjectionDocumentOptions): string {
+  const sessionsPath = scopedAgentSessionsPath(options.siteId, options.agentId);
+  const requestId = options.requestId ?? 'not available';
+  const diagnosticRef = options.failure.diagnostic_ref ?? 'not persisted';
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Could not start ${escapeHtml(options.agentId)}</title>
+<style>
+body { margin: 0; font: 14px/1.5 system-ui, sans-serif; color: #1c1c1e; background: #fff7f6; }
+main { max-width: 620px; margin: 12vh auto 0; padding: 28px 32px; background: #fff; border: 1px solid #e2b8b3; border-radius: 10px; }
+h1 { margin: 0 0 10px; font-size: 18px; }
+p { margin: 0 0 12px; color: #4d5560; }
+dl { margin: 20px 0; display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 16px; }
+dt { color: #6a3030; font-weight: 650; }
+dd { margin: 0; overflow-wrap: anywhere; }
+code { font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
+a { color: #0b5bd3; }
+</style>
+</head>
+<body>
+<main>
+<h1>Could not start ${escapeHtml(options.agentId)}</h1>
+<p>${escapeHtml(options.failure.message)}</p>
+<dl>
+<dt>Phase</dt><dd><code>${escapeHtml(options.failure.phase)}</code></dd>
+<dt>Code</dt><dd><code>${escapeHtml(options.failure.code)}</code></dd>
+<dt>Request</dt><dd><code>${escapeHtml(requestId)}</code></dd>
+<dt>Diagnostics</dt><dd><code>${escapeHtml(diagnosticRef)}</code></dd>
+</dl>
+<p><a href="${escapeHtml(sessionsPath)}">Open scoped sessions</a></p>
+</main>
 </body>
 </html>`;
 }

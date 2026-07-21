@@ -237,6 +237,19 @@ export interface OperatorSiteAgentOverviewWireResponse {
   refusals: string[];
 }
 
+export type OperatorSiteAgentLaunchFailurePhase =
+  | 'overview_read'
+  | 'launch_record_read'
+  | 'workspace_launch'
+  | 'admission';
+
+export interface OperatorSiteAgentLaunchFailureWireRecord {
+  phase: OperatorSiteAgentLaunchFailurePhase;
+  code: string;
+  message: string;
+  diagnostic_ref: string | null;
+}
+
 export interface OperatorSiteAgentLaunchWireResponse {
   schema: 'narada.operator_console.agent_launch.v1';
   status: 'launched' | 'reused' | 'refused' | 'failed';
@@ -244,6 +257,8 @@ export interface OperatorSiteAgentLaunchWireResponse {
   agent_id: string;
   session_id: string | null;
   reason: string | null;
+  request_id?: string;
+  failure?: OperatorSiteAgentLaunchFailureWireRecord | null;
 }
 
 export interface OperatorSiteAgentInvariantViolation {

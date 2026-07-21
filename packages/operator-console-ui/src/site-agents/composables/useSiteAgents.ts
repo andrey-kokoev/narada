@@ -3,7 +3,13 @@ import type {
   OperatorSiteAgentGroupWireRecord,
   OperatorSiteAgentLaunchWireResponse,
 } from '@narada2/operator-console-contract';
-import { createSiteAgentsAdapter, type SiteAgentsClient, type SiteAgentsPendingEntry } from '../adapter';
+import {
+  createSiteAgentsAdapter,
+  parseOperatorSiteAgentLaunchWireResponse,
+  type SiteAgentsClient,
+  type SiteAgentsPendingEntry,
+} from '../adapter';
+import { SiteAgentsTransportError } from '../transport';
 
 export interface UseSiteAgentsState {
   groups: Ref<OperatorSiteAgentGroupWireRecord[]>;
@@ -12,6 +18,7 @@ export interface UseSiteAgentsState {
   pending: Ref<SiteAgentsPendingEntry[]>;
   loading: Ref<boolean>;
   error: Ref<string | null>;
+  launchFailure: Ref<OperatorSiteAgentLaunchWireResponse | null>;
   load(): Promise<void>;
   launch(siteId: string, agentId: string): Promise<OperatorSiteAgentLaunchWireResponse>;
 }
@@ -23,6 +30,7 @@ export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter
   const pending = ref<SiteAgentsPendingEntry[]>([]);
   const loading = ref(false);
   const error = ref<string | null>(null);
+  const launchFailure = ref<OperatorSiteAgentLaunchWireResponse | null>(null);
   let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   async function load(): Promise<void> {
@@ -48,7 +56,18 @@ export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter
   }
 
   async function launch(siteId: string, agentId: string): Promise<OperatorSiteAgentLaunchWireResponse> {
-    return client.launch(siteId, agentId);
+    launchFailure.value = null;
+    try {
+      const result = await client.launch(siteId, agentId);
+      if (result.status === 'failed') launchFailure.value = result;
+      return result;
+    } catch (cause) {
+      if (cause instanceof SiteAgentsTransportError) {
+        const result = parseOperatorSiteAgentLaunchWireResponse(cause.payload);
+        if (result?.status === 'failed') launchFailure.value = result;
+      }
+      throw cause;
+    }
   }
 
   onMounted(() => {
@@ -59,5 +78,5 @@ export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter
     if (refreshTimer) clearInterval(refreshTimer);
   });
 
-  return { groups, refusals, generatedAt, pending, loading, error, load, launch };
+  return { groups, refusals, generatedAt, pending, loading, error, launchFailure, load, launch };
 }

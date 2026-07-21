@@ -9,10 +9,24 @@ export interface SiteAgentsTransport {
 }
 
 export class SiteAgentsTransportError extends Error {
-  constructor(readonly status: number, message: string) {
+  constructor(readonly status: number, message: string, readonly payload: unknown = null) {
     super(message);
     this.name = 'SiteAgentsTransportError';
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function launchFailureMessage(payload: unknown, status: number): string {
+  if (isRecord(payload) && isRecord(payload.failure) && typeof payload.failure.message === 'string') {
+    return `Agent launch failed: ${payload.failure.message}`;
+  }
+  if (isRecord(payload) && typeof payload.reason === 'string') {
+    return `Agent launch failed: ${payload.reason}.`;
+  }
+  return `Agent launch failed with HTTP ${status}.`;
 }
 
 async function readJson(response: Response): Promise<unknown> {
@@ -42,7 +56,7 @@ export function createSiteAgentsTransport(
       });
       const payload = await readJson(response);
       if (!response.ok && response.status !== 409) {
-        throw new SiteAgentsTransportError(response.status, `Agent launch failed with HTTP ${response.status}.`);
+        throw new SiteAgentsTransportError(response.status, launchFailureMessage(payload, response.status), payload);
       }
       return payload;
     },

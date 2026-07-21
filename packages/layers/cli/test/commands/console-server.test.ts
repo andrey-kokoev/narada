@@ -965,14 +965,30 @@ describe('console server', () => {
         })),
       };
       const siteAgentLaunch = {
-        launch: vi.fn(async ({ siteId, agentId }: { siteId: string; agentId: string }) => ({
-          schema: 'narada.operator_console.agent_launch.v1' as const,
-          status: 'launched' as const,
-          site_id: siteId,
-          agent_id: agentId,
-          session_id: 'session-new',
-          reason: null,
-        })),
+        launch: vi.fn()
+          .mockResolvedValueOnce({
+            schema: 'narada.operator_console.agent_launch.v1' as const,
+            status: 'launched' as const,
+            site_id: 'sonar',
+            agent_id: 'sonar.resident',
+            session_id: 'session-new',
+            reason: null,
+          })
+          .mockResolvedValueOnce({
+            schema: 'narada.operator_console.agent_launch.v1' as const,
+            status: 'failed' as const,
+            site_id: 'sonar',
+            agent_id: 'sonar.resident',
+            session_id: null,
+            reason: 'workspace_launch_exit',
+            request_id: 'request-1',
+            failure: {
+              phase: 'workspace_launch' as const,
+              code: 'workspace_launch_exit',
+              message: 'provider unavailable',
+              diagnostic_ref: 'D:/runtime/failure.json',
+            },
+          }),
       };
       const server = await createConsoleServer({
         port: 0,
@@ -1054,6 +1070,21 @@ describe('console server', () => {
       expect(agentLaunch.status).toBe(200);
       expect((agentLaunch.body as { session_id: string }).session_id).toBe('session-new');
       expect(siteAgentLaunch.launch).toHaveBeenCalledWith({ siteId: 'sonar', agentId: 'sonar.resident' });
+
+      const failedAgentLaunch = await httpPost(`${url}/console/agents/api/launch`, {
+        site_id: 'sonar',
+        agent_id: 'sonar.resident',
+      });
+      expect(failedAgentLaunch.status).toBe(500);
+      expect(failedAgentLaunch.body).toMatchObject({
+        status: 'failed',
+        request_id: 'request-1',
+        failure: {
+          phase: 'workspace_launch',
+          code: 'workspace_launch_exit',
+          diagnostic_ref: 'D:/runtime/failure.json',
+        },
+      });
 
       const unknownRoute = await fetch(`${url}/console/not-found`);
       expect(unknownRoute.status).toBe(404);

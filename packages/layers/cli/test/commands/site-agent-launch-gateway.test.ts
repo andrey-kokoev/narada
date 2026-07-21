@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { mkdtempSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { buildAgentIdentityRefV2 } from '@narada2/agent-identity';
 import { createSiteAgentLaunchAdmission } from '../../src/commands/site-agent-launch-admission.js';
+import { createSiteAgentLaunchDiagnostics } from '../../src/commands/site-agent-launch-diagnostics.js';
 import { createSiteAgentLaunchGateway } from '../../src/commands/site-agent-launch-gateway.js';
 
 function overview(state: 'running' | 'stopped' | 'degraded', sessionId: string | null = null) {
@@ -69,6 +71,13 @@ function testAdmission() {
   return createSiteAgentLaunchAdmission({ root: mkdtempSync(join(tmpdir(), 'site-agent-gateway-')), pollMs: 1 });
 }
 
+function testDiagnostics() {
+  return createSiteAgentLaunchDiagnostics({
+    root: mkdtempSync(join(tmpdir(), 'site-agent-failures-')),
+    log: vi.fn(),
+  });
+}
+
 describe('site-agent launch gateway', () => {
   it('reuses one healthy session without launching', async () => {
     const launchCommand = vi.fn();
@@ -76,6 +85,7 @@ describe('site-agent launch gateway', () => {
       overview: overview('running', 'session-1'),
       launchCommand,
       launchAdmission: testAdmission(),
+      diagnostics: testDiagnostics(),
     });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
       status: 'reused',
@@ -93,10 +103,13 @@ describe('site-agent launch gateway', () => {
       overview: overview('stopped'),
       readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
       launchCommand: launchCommand as never,
+      diagnostics: testDiagnostics(),
+      diagnostics: testDiagnostics(),
       launchAdmission: testAdmission(),
       launchAdmission: testAdmission(),
       launchAdmission: testAdmission(),
       launchAdmission: testAdmission(),
+      diagnostics: testDiagnostics(),
     });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
       status: 'launched',
@@ -107,7 +120,12 @@ describe('site-agent launch gateway', () => {
 
   it('refuses degraded or unadmitted agents before mutation', async () => {
     const launchCommand = vi.fn();
-    const gateway = createSiteAgentLaunchGateway({ overview: overview('degraded'), launchCommand, launchAdmission: testAdmission() });
+    const gateway = createSiteAgentLaunchGateway({
+      overview: overview('degraded'),
+      launchCommand,
+      launchAdmission: testAdmission(),
+      diagnostics: testDiagnostics(),
+    });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
       status: 'refused',
       reason: 'agent_runtime_degraded',
@@ -162,16 +180,92 @@ describe('site-agent launch gateway', () => {
 
   it('releases the admission after a failed launch so a retry can succeed', async () => {
     const launchCommand = vi.fn()
-      .mockResolvedValueOnce({ exitCode: 1, result: null })
+      .mockResolvedValueOnce({
+        exitCode: 1,
+        result: {
+          failure: { reason_code: 'workspace_launch_exit', message: 'startup failed api_key=secret' },
+          result_path: 'D:/runtime/workspace-launch-result.json',
+        },
+      })
       .mockResolvedValueOnce({ exitCode: 0, result: { attachment: { sessions: [{ session_id: 'session-3' }] } } });
+    const diagnostics = testDiagnostics();
     const gateway = createSiteAgentLaunchGateway({
       overview: overview('stopped'),
       readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
       launchCommand: launchCommand as never,
+      diagnostics,
     });
     const request = { siteId: 'sonar', agentId: 'sonar.resident' };
-    expect(await gateway.launch(request)).toMatchObject({ status: 'failed', reason: 'workspace_launch_failed' });
+    const failure = await gateway.launch(request);
+    expect(failure).toMatchObject({
+      status: 'failed',
+      reason: 'workspace_launch_exit',
+      request_id: expect.any(String),
+      failure: {
+        phase: 'workspace_launch',
+        code: 'workspace_launch_exit',
+        message: 'startup failed api_key=<redacted>',
+        diagnostic_ref: expect.any(String),
+      },
+    });
+    const artifactPath = failure.failure?.diagnostic_ref;
+    if (!artifactPath) throw new Error('expected persisted launch failure artifact');
+    const artifact = JSON.parse(await readFile(artifactPath, 'utf8')) as Record<string, unknown>;
+    expect(artifact).toMatchObject({
+      schema: 'narada.operator_console.agent_launch_failure.v1',
+      request_id: failure.request_id,
+      site_id: 'sonar',
+      agent_id: 'sonar.resident',
+      failure: { code: 'workspace_launch_exit' },
+    });
+    expect(JSON.stringify(artifact)).not.toContain('secret');
     expect(await gateway.launch(request)).toMatchObject({ status: 'launched', session_id: 'session-3' });
     expect(launchCommand).toHaveBeenCalledTimes(2);
+  });
+
+  it('records the phase when an internal launch boundary throws', async () => {
+    const request = { siteId: 'sonar', agentId: 'sonar.resident' };
+    const cases = [
+      {
+        gateway: createSiteAgentLaunchGateway({
+          overview: { read: async () => { throw new Error('overview unavailable'); } },
+          diagnostics: testDiagnostics(),
+        }),
+        phase: 'overview_read',
+      },
+      {
+        gateway: createSiteAgentLaunchGateway({
+          overview: overview('stopped'),
+          readLaunchRecords: async () => { throw new Error('launch record unavailable'); },
+          diagnostics: testDiagnostics(),
+        }),
+        phase: 'launch_record_read',
+      },
+      {
+        gateway: createSiteAgentLaunchGateway({
+          overview: overview('stopped'),
+          readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
+          launchCommand: async () => { throw new Error('workspace launch unavailable'); },
+          diagnostics: testDiagnostics(),
+        }),
+        phase: 'workspace_launch',
+      },
+      {
+        gateway: createSiteAgentLaunchGateway({
+          overview: overview('stopped'),
+          launchAdmission: { run: async () => { throw new Error('admission unavailable'); } },
+          diagnostics: testDiagnostics(),
+        }),
+        phase: 'admission',
+      },
+    ] as const;
+
+    for (const entry of cases) {
+      const result = await entry.gateway.launch(request);
+      expect(result).toMatchObject({
+        status: 'failed',
+        failure: { phase: entry.phase, diagnostic_ref: expect.any(String) },
+      });
+    }
   });
 });

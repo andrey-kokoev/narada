@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  buildFailureProjectionDocument,
   buildPendingProjectionDocument,
   PENDING_PROJECTION_BUDGET_MS,
   PENDING_PROJECTION_POLL_INTERVAL_MS,
@@ -49,4 +50,23 @@ test('pending projection document cannot be broken out of its script block', () 
   const document = buildPendingProjectionDocument({ siteId: 'sonar', agentId: 'x</script><script>alert(1)</script>', sessionId: null });
   assert.ok(!document.includes('x</script>'));
   assert.ok(document.includes('&lt;/script&gt;') || document.includes('x<\\/script>'));
+});
+
+test('failure projection document presents cause and correlation without executable injection', () => {
+  const document = buildFailureProjectionDocument({
+    siteId: 'sonar',
+    agentId: 'sonar.resident',
+    requestId: 'request-1',
+    failure: {
+      phase: 'workspace_launch',
+      code: 'workspace_launch_exit',
+      message: 'provider unavailable <script>alert(1)</script>',
+      diagnostic_ref: 'D:/runtime/failure.json',
+    },
+  });
+  assert.ok(document.includes('provider unavailable &lt;script&gt;alert(1)&lt;/script&gt;'));
+  assert.ok(document.includes('workspace_launch_exit'));
+  assert.ok(document.includes('request-1'));
+  assert.ok(document.includes('D:/runtime/failure.json'));
+  assert.ok(!document.includes('<script>alert(1)</script>'));
 });

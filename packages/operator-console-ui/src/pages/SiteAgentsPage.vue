@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { ref, type Component } from 'vue';
-import type { OperatorSiteAgentWireRecord } from '@narada2/operator-console-contract';
+import type {
+  OperatorSiteAgentLaunchFailureWireRecord,
+  OperatorSiteAgentWireRecord,
+} from '@narada2/operator-console-contract';
 import {
   Bot,
   Compass,
@@ -14,7 +17,11 @@ import { findOperatorRouteTarget } from '../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 import { useSiteAgents } from '../site-agents/composables/useSiteAgents';
 import { decideAgentInspection, decideAgentPrimaryAction } from '../site-agents/interactions';
-import { buildPendingProjectionDocument, scopedAgentSessionsPath } from '../site-agents/projection-handoff';
+import {
+  buildFailureProjectionDocument,
+  buildPendingProjectionDocument,
+  scopedAgentSessionsPath,
+} from '../site-agents/projection-handoff';
 
 const siteAgents = useSiteAgents();
 const routeDirectory = useOperatorWorkspaceRouteDirectory();
@@ -65,6 +72,19 @@ function drivePendingWindow(target: Window | null, siteId: string, agent: Operat
   target.document.close();
 }
 
+function driveFailureWindow(
+  target: Window | null,
+  siteId: string,
+  agentId: string,
+  requestId: string | undefined,
+  failure: OperatorSiteAgentLaunchFailureWireRecord,
+): void {
+  if (!target || target.closed) return;
+  target.document.open();
+  target.document.write(buildFailureProjectionDocument({ siteId, agentId, requestId, failure }));
+  target.document.close();
+}
+
 function isStarting(siteId: string, agent: OperatorSiteAgentWireRecord): boolean {
   if (agent.runtime.state === 'running') return false;
   if (busyAgentId.value === agent.agent_id) return true;
@@ -86,8 +106,19 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
   try {
     const result = await siteAgents.launch(siteId, agent.agent_id);
     if (result.status === 'refused' || result.status === 'failed') {
-      target?.close();
-      actionMessage.value = result.reason ?? `Could not start ${agent.agent_id}.`;
+      if (result.status === 'failed') {
+        const failure = result.failure ?? {
+          phase: 'workspace_launch' as const,
+          code: result.reason ?? 'workspace_launch_failed',
+          message: result.reason ?? `Could not start ${agent.agent_id}.`,
+          diagnostic_ref: null,
+        };
+        driveFailureWindow(target, siteId, agent.agent_id, result.request_id, failure);
+        actionMessage.value = failure.message;
+      } else {
+        target?.close();
+        actionMessage.value = result.reason ?? `Could not start ${agent.agent_id}.`;
+      }
       return;
     }
     if (result.status === 'reused' && result.session_id && await openSession(result.session_id, target)) {
@@ -97,8 +128,14 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
     drivePendingWindow(target, siteId, agent, result.session_id);
     actionMessage.value = `${agent.agent_id} started. Its Web UI opens when the route is ready.`;
   } catch (cause) {
-    target?.close();
-    actionMessage.value = cause instanceof Error ? cause.message : `Could not start ${agent.agent_id}.`;
+    const failed = siteAgents.launchFailure.value;
+    if (failed?.failure) {
+      driveFailureWindow(target, siteId, agent.agent_id, failed.request_id, failed.failure);
+      actionMessage.value = failed.failure.message;
+    } else {
+      target?.close();
+      actionMessage.value = cause instanceof Error ? cause.message : `Could not start ${agent.agent_id}.`;
+    }
   } finally {
     busyAgentId.value = null;
     await siteAgents.load();
@@ -157,7 +194,19 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
         </button>
       </header>
 
-      <p v-if="actionMessage" class="action-message" role="status" aria-live="polite">{{ actionMessage }}</p>
+      <div v-if="siteAgents.launchFailure.value?.failure" class="action-message error" role="alert" aria-live="assertive">
+        <p class="action-message-text">{{ actionMessage }}</p>
+        <details class="launch-diagnostics">
+          <summary>Launch diagnostics</summary>
+          <dl>
+            <div><dt>Phase</dt><dd><code>{{ siteAgents.launchFailure.value.failure.phase }}</code></dd></div>
+            <div><dt>Code</dt><dd><code>{{ siteAgents.launchFailure.value.failure.code }}</code></dd></div>
+            <div><dt>Request</dt><dd><code>{{ siteAgents.launchFailure.value.request_id ?? 'not available' }}</code></dd></div>
+            <div><dt>Artifact</dt><dd><code>{{ siteAgents.launchFailure.value.failure.diagnostic_ref ?? 'not persisted' }}</code></dd></div>
+          </dl>
+        </details>
+      </div>
+      <p v-else-if="actionMessage" class="action-message" role="status" aria-live="polite">{{ actionMessage }}</p>
       <p v-if="siteAgents.error.value" class="notice error" role="alert">{{ siteAgents.error.value }}</p>
       <p v-if="siteAgents.refusals.value.length" class="notice warning">Some authority projections are unavailable: {{ siteAgents.refusals.value.join(', ') }}</p>
       <p v-if="siteAgents.loading.value && !siteAgents.groups.value.length" class="notice">Reading Sites and agents...</p>
@@ -221,6 +270,15 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
 .icon-button:disabled { cursor: wait; opacity: .6; }
 .action-message, .notice, .empty { margin: 0 0 14px; color: var(--muted); font-size: 12px; line-height: 1.45; }
 .action-message, .notice { padding: 9px 11px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.action-message.error { color: var(--danger); }
+.action-message-text { margin: 0; }
+.launch-diagnostics { margin-top: 9px; color: var(--muted); }
+.launch-diagnostics summary { cursor: pointer; font-weight: 650; }
+.launch-diagnostics dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 5px 12px; margin: 9px 0 0; }
+.launch-diagnostics dl div { display: contents; }
+.launch-diagnostics dt { font-weight: 650; }
+.launch-diagnostics dd { margin: 0; overflow-wrap: anywhere; }
+.launch-diagnostics code { font: 11px/1.35 var(--mono); }
 .notice.error { color: var(--danger); }
 .notice.warning { background: var(--surface-muted); }
 .site-group { margin-top: 24px; }
