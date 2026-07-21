@@ -282,7 +282,12 @@ export interface ManagementResult<T = unknown> {
 
 export interface ManagementErrorResult {
   schema: typeof MANAGEMENT_ERROR_SCHEMA;
-  error: { code: string; message: string; evidence_refs: string[] };
+  error: {
+    code: string;
+    message: string;
+    evidence_refs: string[];
+    diagnostics?: Array<{ subject?: string; code: string; message: string }>;
+  };
 }
 
 export type ManagementDiagnostic = ContractError | CatalogDiagnostic | MaterializationDiagnostic;
@@ -446,14 +451,37 @@ function explainPlan(value: InvocationPlan | InvocationRefusal): string[] {
 }
 
 export function managementErrorResult(error: unknown): ManagementErrorResult {
+  const candidate = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const rawDiagnostics = Array.isArray(candidate.diagnostics) ? candidate.diagnostics : [];
+  const diagnostics = rawDiagnostics.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return [];
+    const value = entry as Record<string, unknown>;
+    const code = typeof value.code === "string" ? value.code : "contract_validation_failed";
+    const message = typeof value.message === "string" ? value.message : code;
+    return [{
+      ...(typeof value.subject === "string" ? { subject: value.subject } : {}),
+      code,
+      message,
+    }];
+  });
   const managed = error instanceof ManagementError
     ? error
     : error instanceof RegistryError
       ? new ManagementError(error.code, "The canonical registry refused the management operation.")
-    : new ManagementError("internal", "The management operation failed without an admissible diagnostic.");
+      : diagnostics.length > 0
+        ? new ManagementError(
+          typeof candidate.code === "string" ? candidate.code : "internal",
+          error instanceof Error ? error.message : String(error),
+        )
+        : new ManagementError("internal", "The management operation failed without an admissible diagnostic.");
   return {
     schema: MANAGEMENT_ERROR_SCHEMA,
-    error: { code: managed.code, message: managed.message, evidence_refs: managed.evidence_refs },
+    error: {
+      code: managed.code,
+      message: managed.message,
+      evidence_refs: managed.evidence_refs,
+      ...(diagnostics.length > 0 ? { diagnostics } : {}),
+    },
   };
 }
 

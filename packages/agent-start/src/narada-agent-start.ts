@@ -349,6 +349,8 @@ const intelligenceSelectionAuthority = createIntelligenceSelectionAuthority({
 
 if (preflightOnly) {
   let store;
+  const userSiteRoot = resolve(process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
+  const isUserSite = resolve(sessionSiteRoot).toLowerCase() === userSiteRoot.toLowerCase();
   try {
     store = await openLocalIntelligenceRegistry({
       siteRoot: sessionSiteRoot,
@@ -358,6 +360,9 @@ if (preflightOnly) {
       store.listCatalogRecords(),
       store.listResources(),
     ]);
+    if (catalogRecords.length === 0 || resources.length === 0) {
+      throw new Error('intelligence_catalog_empty');
+    }
     await printResult({
       schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
       status: 'ready',
@@ -376,14 +381,31 @@ if (preflightOnly) {
       schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
       status: 'blocked',
       mutation_performed: false,
-      reason_code: 'intelligence_catalog_not_ready',
+      reason_code: !existsSync(intelligenceRegistryDbPath)
+        ? 'intelligence_catalog_missing'
+        : error instanceof Error && error.message === 'intelligence_catalog_empty'
+          ? 'intelligence_catalog_empty'
+          : 'intelligence_catalog_invalid',
       reason: error instanceof Error ? error.message : String(error),
       site_root: sessionSiteRoot,
       agent: identity,
       operator_surface_kind: carrier,
       runtime_host_kind: runtime,
       intelligence_selection_authority: intelligenceSelectionAuthority,
-      required_next_step: 'Initialize and validate the Site intelligence catalog before launching NARS.',
+      required_next_step: isUserSite
+        ? 'Run `narada onboarding start --platform windows --scope user-site` to initialize and validate the User Site intelligence catalog, then retry the launch.'
+        : 'Initialize and validate the Site intelligence catalog through its owning Site management path, then retry the launch.',
+      recovery: isUserSite
+        ? {
+          kind: 'user_site_intelligence_catalog_bootstrap',
+          primary_command: 'narada onboarding start --platform windows --scope user-site',
+          followup_command: 'Retry the workspace launch.',
+        }
+        : {
+          kind: 'site_intelligence_catalog_management',
+          primary_command: 'Use the owning Site intelligence management path to migrate and validate its catalog.',
+          followup_command: 'Retry the workspace launch.',
+        },
     });
     process.exit(1);
   } finally {

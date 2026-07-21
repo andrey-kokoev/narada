@@ -11,6 +11,7 @@ import {
   CATALOG_TEMPORAL_INPUT_SCHEMA,
   INTELLIGENCE_AUTHORITY_STATEMENT_SCHEMA,
   INVOCATION_ROUTE_CANDIDATE_SCHEMA,
+  TOPOLOGY_BOUNDARY_ADMISSION_SCHEMA,
   validateAssertion,
   validateCanonicalCatalogRecord,
   validateIntelligenceAuthorityStatement,
@@ -44,6 +45,7 @@ import type {
   Resource,
   ResourceRef,
   ServiceAccount,
+  TopologyBoundaryAdmission,
 } from "@narada2/invokable-intelligence-contract";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 
@@ -54,6 +56,25 @@ export interface MigrationLoci {
   targetSite: ResourceRef;
   userSite: ResourceRef;
   hostSite: ResourceRef;
+}
+
+export interface MigrationValidationDiagnostic {
+  subject: string;
+  code: string;
+  message: string;
+}
+
+export class MigrationValidationError extends Error {
+  readonly code = "migration_validation_failed";
+  readonly diagnostics: MigrationValidationDiagnostic[];
+
+  constructor(subject: string, diagnostic: { code?: unknown; message?: unknown }) {
+    const code = typeof diagnostic.code === "string" ? diagnostic.code : "contract_validation_failed";
+    const message = typeof diagnostic.message === "string" ? diagnostic.message : code;
+    super(`${subject}: ${message}`);
+    this.name = "MigrationValidationError";
+    this.diagnostics = [{ subject, code, message }];
+  }
 }
 
 export interface MigrationPlan {
@@ -172,6 +193,8 @@ function buildLocalTopology(
   adapterId: string,
   endpointId: string,
   loci: MigrationLoci,
+  plannedAt: string,
+  validUntil: string,
 ): ExecutionTopology {
   const prefix = `legacy-${slug(legacyId)}`;
   const localExecution = { kind: "execution-locus" as const, id: "execution-locus:host-local" };
@@ -183,6 +206,38 @@ function buildLocalTopology(
   const nodeIds = ["client", "launcher", "carrier", "runtime", "adapter", "service", "endpoint"].map((name) => `${prefix}-${name}`);
   const edgeIds = Array.from({ length: 6 }, (_, index) => `${prefix}-edge-${index + 1}`);
   const serviceSiteId = `site:legacy-inference-${slug(legacyId)}`;
+  const boundaryAdmission = (
+    edgeId: string,
+    trustPolicyRef: string,
+    networkPathRef: string,
+    authorityRef: string,
+  ): TopologyBoundaryAdmission => ({
+    schema: TOPOLOGY_BOUNDARY_ADMISSION_SCHEMA,
+    edge_id: edgeId,
+    trust_policy: {
+      ref: trustPolicyRef,
+      status: "admitted",
+      authority_ref: authorityRef,
+      evidence: [
+        { kind: "document", ref: trustPolicyRef },
+        { kind: "document", ref: `migration:${legacyId}` },
+      ],
+    },
+    network_path: {
+      ref: networkPathRef,
+      status: "reachable",
+      authority_ref: authorityRef,
+      evidence: [
+        { kind: "document", ref: networkPathRef },
+        { kind: "document", ref: `migration:${legacyId}` },
+      ],
+    },
+    validity: {
+      valid_from: plannedAt,
+      valid_until: validUntil,
+      fresh_as_of: plannedAt,
+    },
+  });
   return {
     schema: "narada.invokable-intelligence.execution-topology.v1",
     id: `topology:${prefix}`,
@@ -200,7 +255,7 @@ function buildLocalTopology(
       { id: edgeIds[1], from: nodeIds[1], to: nodeIds[2], kind: "process-handoff", boundary: { kinds: ["process"] }, feasibility_authority: auth(loci.hostSite.id, "launcher-site"), required_feasibility: [] },
       { id: edgeIds[2], from: nodeIds[2], to: nodeIds[3], kind: "runtime-call", boundary: { kinds: ["process"] }, feasibility_authority: auth(loci.hostSite.id, "carrier-site"), required_feasibility: [] },
       { id: edgeIds[3], from: nodeIds[3], to: nodeIds[4], kind: "runtime-call", boundary: { kinds: ["none"] }, feasibility_authority: auth(loci.hostSite.id, "execution-site"), required_feasibility: [] },
-      { id: edgeIds[4], from: nodeIds[4], to: nodeIds[5], kind: "network-call", boundary: { kinds: ["network", "trust", "site"], trust_policy_ref: `trust:${legacyId}`, network_path_ref: `network:${legacyId}` }, feasibility_authority: auth(loci.hostSite.id, "execution-site"), required_feasibility: [] },
+      { id: edgeIds[4], from: nodeIds[4], to: nodeIds[5], kind: "network-call", boundary: { kinds: ["network", "trust", "site"], trust_policy_ref: `trust:${legacyId}`, network_path_ref: `network:${legacyId}`, admission: boundaryAdmission(edgeIds[4], `trust:${legacyId}`, `network:${legacyId}`, auth(loci.hostSite.id, "execution-site").authority_ref) }, feasibility_authority: auth(loci.hostSite.id, "execution-site"), required_feasibility: [] },
       { id: edgeIds[5], from: nodeIds[5], to: nodeIds[6], kind: "provider-call", boundary: { kinds: ["none"] }, feasibility_authority: auth(serviceSiteId, "service-site"), required_feasibility: [] },
     ],
     route: { node_ids: nodeIds, edge_ids: edgeIds },
@@ -300,36 +355,36 @@ function wrapRecord(
     document,
   };
   const diagnostics = validateCanonicalCatalogRecord(record);
-  if (diagnostics.length > 0) throw new Error(`${recordId}: ${diagnostics[0].message}`);
+  if (diagnostics.length > 0) throw new MigrationValidationError(recordId, diagnostics[0]);
   return record;
 }
 
 function validatePlanDocuments(plan: Omit<MigrationPlan, "seed">): void {
   for (const resource of plan.resources) {
     const errors = validateResource(resource);
-    if (errors.length > 0) throw new Error(`${resource.id}: ${errors[0].code}`);
+    if (errors.length > 0) throw new MigrationValidationError(resource.id, errors[0]);
     if (resource.schema === "narada.invokable-intelligence.model-offering.v1") {
       const diagnostics = validateModelOfferingGraph(resource, plan.resources);
-      if (diagnostics.length > 0) throw new Error(`${resource.id}: ${diagnostics[0].message}`);
+      if (diagnostics.length > 0) throw new MigrationValidationError(resource.id, diagnostics[0]);
     }
   }
   for (const assertion of plan.assertions) {
     const errors = validateAssertion(assertion);
-    if (errors.length > 0) throw new Error(`${assertion.id}: ${errors[0].code}`);
+    if (errors.length > 0) throw new MigrationValidationError(assertion.id, errors[0]);
   }
   for (const policy of plan.policies) {
     const errors = validatePolicy(policy);
-    if (errors.length > 0) throw new Error(`${policy.id}: ${errors[0].code}`);
+    if (errors.length > 0) throw new MigrationValidationError(policy.id, errors[0]);
   }
   for (const route of plan.routes) {
     const offering = plan.resources.find(({ id }) => id === route.offering.id) as ModelOffering | undefined;
     if (!offering) throw new Error(`${route.id}: missing offering`);
     const diagnostics = validateInvocationRouteCandidate(route, offering, plan.resources);
-    if (diagnostics.length > 0) throw new Error(`${route.id}: ${diagnostics[0].message}`);
+    if (diagnostics.length > 0) throw new MigrationValidationError(route.id, diagnostics[0]);
   }
   for (const statement of plan.authorityStatements) {
     const diagnostics = validateIntelligenceAuthorityStatement(statement);
-    if (diagnostics.length > 0) throw new Error(`${statement.id}: ${diagnostics[0].message}`);
+    if (diagnostics.length > 0) throw new MigrationValidationError(statement.id, diagnostics[0]);
   }
 }
 
@@ -462,7 +517,7 @@ export function buildMigrationPlan(
     accessRecords.push(account);
     residuals.push(createResidual(options.reference, `${legacyId}-access-grant`, `${sourcePath}.credential_requirement`, "authority-escalation", "rejected", `legacy provider metadata cannot grant principal access; route remains ineligible until an authorized ${ACCESS_GRANT_SCHEMA} is admitted`));
 
-    const topology = buildLocalTopology(legacyId, adapterId, endpointId, loci);
+    const topology = buildLocalTopology(legacyId, adapterId, endpointId, loci, options.plannedAt, validUntil);
     for (const modelName of providerModels) {
       const modelId = legacyModelResourceId(legacyId, modelName);
       const modelProvider = providerByModel.get(modelName)!;

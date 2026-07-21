@@ -542,6 +542,11 @@ describe('launcher workspace planning', () => {
         status: 'failed',
         reason_code: 'intelligence_catalog_not_ready',
         reason: 'Site intelligence catalog is not initialized.',
+        recovery: {
+          kind: 'user_site_intelligence_catalog_bootstrap',
+          primary_command: 'narada onboarding start --platform windows --scope user-site',
+          followup_command: 'retry the launch',
+        },
       },
     });
 
@@ -554,7 +559,7 @@ describe('launcher workspace planning', () => {
       resultPath,
       format: 'json',
     }, createMockContext())).rejects.toThrow(
-      'workspace_launch_catalog_preflight_failed: sonar.resident: intelligence_catalog_not_ready: Site intelligence catalog is not initialized.',
+      'workspace_launch_catalog_preflight_failed: sonar.resident: intelligence_catalog_not_ready: Site intelligence catalog is not initialized. Recovery: narada onboarding start --platform windows --scope user-site; then retry the launch',
     );
     const failure = JSON.parse(await readFile(resultPath, 'utf8')) as {
       schema: string;

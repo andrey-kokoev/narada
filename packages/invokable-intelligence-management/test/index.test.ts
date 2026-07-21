@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
-import { readFile, rm } from "node:fs/promises";
+import { access, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import test from "node:test";
 
 import { createFakeD1, D1RegistryStore, SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 
 import { parseLegacyRegistry } from "../src/legacy.js";
+import { ensureIntelligenceCatalog } from "../src/bootstrap.js";
 import type { MigrationLoci } from "../src/migrate.js";
 import { applyMigration, buildMigrationPlan, dryRunMigration } from "../src/migrate.js";
 import { main } from "../src/cli.js";
@@ -18,7 +21,7 @@ const LOCI: MigrationLoci = {
   hostSite: { kind: "site", id: "site:andrey-pc" },
 };
 const PLANNED_AT = "2026-07-19T00:00:00Z";
-const REAL_REGISTRY = new URL("./provider-registry.legacy-fixture.json", import.meta.url);
+const REAL_REGISTRY = new URL("../assets/provider-registry.bootstrap.json", import.meta.url);
 
 async function realLegacy() {
   return parseLegacyRegistry(JSON.parse(await readFile(REAL_REGISTRY, "utf8")));
@@ -41,6 +44,40 @@ test("dry-run migration is deterministic and does not mutate", async () => {
   assert.equal(dry.counts.unchanged, 0);
   assert.equal((await store.listResources()).length, 0, "dry-run must not mutate");
   await store.close();
+});
+
+test("User Site intelligence bootstrap is idempotent and creates a validated catalog from an empty root", async () => {
+  const root = await (await import("node:fs/promises")).mkdtemp(join(tmpdir(), "narada-intelligence-bootstrap-"));
+  const dbPath = join(root, ".ai", "intelligence-registry.db");
+  try {
+    await assert.rejects(access(dbPath));
+    const first = await ensureIntelligenceCatalog({
+      siteRoot: root,
+      targetSiteId: "site:bootstrap-test",
+      userSiteId: "site:bootstrap-test",
+      hostSiteId: "site:bootstrap-host",
+      sourceRegistryPath: fileURLToPath(REAL_REGISTRY),
+    });
+    assert.equal(first.status, "initialized");
+    assert.equal(first.mutation_performed, true);
+    assert.ok(first.catalog_record_count > 0);
+    assert.ok(first.resource_count > 0);
+
+    const second = await ensureIntelligenceCatalog({
+      siteRoot: root,
+      targetSiteId: "site:bootstrap-test",
+      userSiteId: "site:bootstrap-test",
+      hostSiteId: "site:bootstrap-host",
+      sourceRegistryPath: fileURLToPath(REAL_REGISTRY),
+    });
+    assert.equal(second.status, "already_ready");
+    assert.equal(second.mutation_performed, false);
+    assert.equal(second.counts.add, 0);
+    assert.equal(second.counts.update, 0);
+    assert.ok(second.counts.unchanged > 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("applied migration is idempotent and records provenance", async () => {

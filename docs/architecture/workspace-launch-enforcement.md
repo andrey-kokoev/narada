@@ -153,7 +153,7 @@ Use focused checks first:
 
 ```powershell
 pnpm --dir packages/layers/cli exec tsc -p tsconfig.json --noEmit
-pnpm --dir packages/layers/cli exec vitest run --silent test/lib/command-wrapper.test.ts test/commands/workspace-launch-admission.test.ts test/commands/workspace-launch-execution-boundaries.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/carrier-launcher.test.ts
+pnpm --dir packages/layers/cli exec vitest run --silent=true test/lib/command-wrapper.test.ts test/commands/workspace-launch-admission.test.ts test/commands/workspace-launch-execution-boundaries.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/carrier-launcher.test.ts
 pnpm --dir packages/agent-start exec node test/launcher-registry-contract.test.mjs
 pnpm --dir packages/agent-start exec node test/option-contract.test.mjs
 pnpm --dir packages/agent-runtime-server exec node --test test/server-wrapper.test.mjs

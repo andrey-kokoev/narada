@@ -137,7 +137,7 @@ The SOP is complete only when the live authority and every active projection agr
 | Browser projection tests | `pnpm --filter @narada2/agent-web-ui test` |
 | Runtime wrapper tests | `pnpm --filter @narada2/agent-runtime-server test` |
 | Context startup/whoami MCP tests | `pnpm --filter @narada2/agent-context-tools test`; proves default startup summary and whoami both expose canonical `agent_identity_ref`. |
-| CLI attach/session tests | `node scripts/run-vitest-quiet.mjs run --silent test/commands/nars.test.ts` from `packages/layers/cli` |
+| CLI attach/session tests | `node scripts/run-vitest-quiet.mjs run --silent=true test/commands/nars.test.ts` from `packages/layers/cli` |
 | Registered fleet dry-run | `node D:/code/narada/packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --jobs 4 --progress` |
 
 ## Anti-Regression Search

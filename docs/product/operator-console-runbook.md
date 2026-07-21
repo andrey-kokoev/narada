@@ -117,7 +117,7 @@ Run the focused checks from `D:\code\narada`:
 pnpm --filter @narada2/operator-console-ui test
 pnpm --filter @narada2/cloudflare-nars-projection test
 pnpm --filter @narada2/cloudflare-nars-projection typecheck
-pnpm --filter @narada2/cli exec vitest run --silent test/commands/console-server.test.ts
+pnpm --filter @narada2/cli exec vitest run --silent=true test/commands/console-server.test.ts
 pnpm --filter @narada2/cli build
 ```
 

@@ -1,3 +1,6 @@
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
+import { ensureIntelligenceCatalog } from '@narada2/invokable-intelligence-management';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { WorkspaceLaunchContractError, advanceWorkspaceLaunchTransaction, createWorkspaceLaunchTransaction, failWorkspaceLaunchTransaction } from './workspace-launch-contracts.js';
@@ -87,7 +90,7 @@ export async function executeWorkspaceLaunchPlan(
     }
 
     stage = 'catalog_preflight';
-    runWorkspaceLaunchCatalogPreflight(selectedAgents);
+    await runWorkspaceLaunchCatalogPreflight(selectedAgents);
     transaction = advanceWorkspaceLaunchTransaction(transaction, 'preflighted');
 
     if (canUseHiddenRuntimeStart) {
@@ -468,9 +471,18 @@ function visibleHandoffAttachment(plans: WorkspaceLaunchAgentPlan[]): WorkspaceL
   };
 }
 
-function runWorkspaceLaunchCatalogPreflight(selectedAgents: WorkspaceLaunchPlanResult['selected_agents']): void {
+async function runWorkspaceLaunchCatalogPreflight(selectedAgents: WorkspaceLaunchPlanResult['selected_agents']): Promise<void> {
+  const userSiteRoot = resolve(process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
   for (const agent of selectedAgents) {
     if (agent.runtime_host_kind !== NARADA_AGENT_RUNTIME_SERVER_KIND) continue;
+    if (resolve(agent.site_root).toLowerCase() === userSiteRoot.toLowerCase()) {
+      await ensureIntelligenceCatalog({
+        siteRoot: agent.site_root,
+        targetSiteId: agent.site,
+        userSiteId: agent.site,
+        hostSiteId: process.env.NARADA_HOST_SITE_ID ?? agent.site,
+      });
+    }
     const preflight = runAgentStartCommand({
       siteRoot: agent.site_root,
       targetSiteId: agent.site,
@@ -498,10 +510,22 @@ function runWorkspaceLaunchCatalogPreflight(selectedAgents: WorkspaceLaunchPlanR
 function describeAgentStartPreflightFailure(preflight: ReturnType<typeof runAgentStartCommand>): string {
   if (typeof preflight.error === 'string' && preflight.error.trim()) return redactWorkspaceLaunchText(preflight.error.trim());
   if (preflight.parsed_result && typeof preflight.parsed_result === 'object' && !Array.isArray(preflight.parsed_result)) {
-    const result = preflight.parsed_result as { reason_code?: unknown; reason?: unknown; required_next_step?: unknown };
+    const result = preflight.parsed_result as {
+      reason_code?: unknown;
+      reason?: unknown;
+      required_next_step?: unknown;
+      recovery?: { primary_command?: unknown; followup_command?: unknown };
+    };
     const reasonCode = typeof result.reason_code === 'string' ? result.reason_code.trim() : '';
     const reason = typeof result.reason === 'string' ? result.reason.trim() : '';
     const nextStep = typeof result.required_next_step === 'string' ? result.required_next_step.trim() : '';
+    const recovery = result.recovery;
+    const recoveryCommand = typeof recovery?.primary_command === 'string' ? recovery.primary_command.trim() : '';
+    const followupCommand = typeof recovery?.followup_command === 'string' ? recovery.followup_command.trim() : '';
+    if (reasonCode && reason && recoveryCommand) {
+      const normalizedReason = reason.replace(/[.!?]+\s*$/, '');
+      return redactWorkspaceLaunchText(`${reasonCode}: ${normalizedReason}. Recovery: ${recoveryCommand}${followupCommand ? `; then ${followupCommand}` : ''}`);
+    }
     if (reasonCode && reason) return redactWorkspaceLaunchText(`${reasonCode}: ${reason}`);
     if (reasonCode) return redactWorkspaceLaunchText(reasonCode);
     if (reason) return redactWorkspaceLaunchText(reason);

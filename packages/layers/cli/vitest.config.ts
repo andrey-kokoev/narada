@@ -3,6 +3,9 @@ import { defineConfig } from 'vitest/config';
 const sqliteFocused = process.env.NARADA_CLI_SQLITE_FOCUSED === '1';
 
 export default defineConfig({
+  ssr: {
+    external: ['node:sqlite'],
+  },
   test: {
     globals: true,
     environment: 'node',

@@ -43,12 +43,14 @@ import type { ManagementDeploymentBundle } from "../src/deployment.js";
 import { parseLegacyRegistry } from "../src/legacy.js";
 import { createManagementTools } from "../src/mcp-tools.js";
 import { buildMigrationPlan } from "../src/migrate.js";
+import { MigrationValidationError } from "../src/migrate.js";
 import {
   MANAGEMENT_ERROR_SCHEMA,
   MANAGEMENT_MUTATION_CONTEXT_SCHEMA,
   MANAGEMENT_RESULT_SCHEMA,
   IntelligenceManagementService,
   ManagementError,
+  managementErrorResult,
 } from "../src/service.js";
 import type {
   ManagementErrorResult,
@@ -65,7 +67,22 @@ const ACTOR = "operator:destination-admission";
 const AUTHORITY_REF = "evidence:destination-management-authority";
 const CONSENT_REF = "evidence:principal-consent";
 const DECIDED_AT = "2026-07-19T00:00:01Z";
-const REAL_REGISTRY = new URL("./provider-registry.legacy-fixture.json", import.meta.url);
+const REAL_REGISTRY = new URL("../assets/provider-registry.bootstrap.json", import.meta.url);
+
+test("management error output preserves migration validator diagnostics", () => {
+  const error = new MigrationValidationError("route:legacy-route", {
+    code: "topology_boundary_admission_missing",
+    message: "Edge legacy-edge requires validated trust-policy and network-path admission evidence.",
+  });
+  const result = managementErrorResult(error);
+  assert.equal(result.error.code, "migration_validation_failed");
+  assert.match(result.error.message, /Edge legacy-edge requires validated trust-policy/);
+  assert.deepEqual(result.error.diagnostics, [{
+    subject: "route:legacy-route",
+    code: "topology_boundary_admission_missing",
+    message: "Edge legacy-edge requires validated trust-policy and network-path admission evidence.",
+  }]);
+});
 
 function resolverContext(instant = DECIDED_AT): ResolverContext {
   return {

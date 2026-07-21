@@ -1,4 +1,5 @@
 export * from "./legacy.js";
+export * from "./bootstrap.js";
 export * from "./migrate.js";
 export * from "./operations.js";
 export * from "./service.js";

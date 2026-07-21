@@ -74,6 +74,7 @@
     "@narada2/control-plane",
     "@narada2/intent-zones",
     "@narada2/invokable-intelligence-contract",
+    "@narada2/invokable-intelligence-management",
     "@narada2/launch-process-ownership",
     "@narada2/linux-site",
     "@narada2/local-history",
@@ -143,6 +144,7 @@
     "@narada2/control-plane": "workspace:*",
     "@narada2/intent-zones": "workspace:*",
     "@narada2/invokable-intelligence-contract": "workspace:*",
+    "@narada2/invokable-intelligence-management": "workspace:*",
     "@narada2/linux-site": "workspace:*",
     "@narada2/local-history": "workspace:*",
     "@narada2/launch-process-ownership": "workspace:*",
@@ -182,12 +184,13 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",
+    "@narada2/invokable-intelligence-registry": "workspace:*",
     "@types/cli-progress": "^3.11.6",
     "@types/node": "^20.10.0",
-    "@vitest/coverage-v8": "^1.0.0",
+    "@vitest/coverage-v8": "^4.1.10",
     "memfs": "^4.6.0",
     "typescript": "^5.3.0",
-    "vitest": "^1.0.0"
+    "vitest": "^4.1.10"
   },
   "homepage": "https://github.com/andrey-kokoev/narada",
   "bugs": {

@@ -3,6 +3,7 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import * as prompts from '@clack/prompts';
+import { ensureIntelligenceCatalog } from '@narada2/invokable-intelligence-management';
 import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
 import { readNarsEventLogTail } from '@narada2/nars-session-core/event-log';
 import { defaultLaunchRegistryPath } from '../lib/site-root-resolver.js';
@@ -179,6 +180,7 @@ interface OnboardingResult {
   role_expansion: OnboardingRoleExpansionRecommendation;
   readiness: OnboardingReadiness;
   launch: unknown | null;
+  intelligence_catalog?: unknown;
   state_path: string | null;
   reason_code?: string;
   message?: string;
@@ -469,7 +471,11 @@ export async function ensureUserSiteProvisioned(
   root: string,
   registryPath: string,
   context: CommandContext,
-): Promise<{ site_created: boolean; launch_registry_created: boolean }> {
+): Promise<{
+  site_created: boolean;
+  launch_registry_created: boolean;
+  intelligence_catalog: Awaited<ReturnType<typeof ensureIntelligenceCatalog>>;
+}> {
   let siteCreated = false;
   // The install target may already exist as an empty directory. The Site
   // contract is established by config.json, not by directory existence.
@@ -499,7 +505,17 @@ export async function ensureUserSiteProvisioned(
     );
     registryCreated = true;
   }
-  return { site_created: siteCreated, launch_registry_created: registryCreated };
+  const intelligenceCatalog = await ensureIntelligenceCatalog({
+    siteRoot: root,
+    targetSiteId: defaultUserSiteId(root),
+    userSiteId: defaultUserSiteId(root),
+    hostSiteId: process.env.NARADA_HOST_SITE_ID ?? defaultUserSiteId(root),
+  });
+  return {
+    site_created: siteCreated,
+    launch_registry_created: registryCreated,
+    intelligence_catalog: intelligenceCatalog,
+  };
 }
 
 async function refreshRoleExpansionRecommendation(
@@ -1495,6 +1511,11 @@ export async function onboardingStartCommand(
       return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
     }
 
+    let provisioned: Awaited<ReturnType<typeof ensureUserSiteProvisioned>> | null = null;
+    if (!options.noExec) {
+      provisioned = await ensureUserSiteProvisioned(root, registryPath, context);
+    }
+
     if (!existsSync(root) || !existsSync(registryPath)) {
       if (options.noExec) {
         const result: OnboardingResult = {
@@ -1506,7 +1527,6 @@ export async function onboardingStartCommand(
         };
         return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
       }
-      await ensureUserSiteProvisioned(root, registryPath, context);
     }
 
     if (!existsSync(root) || !existsSync(registryPath)) {
@@ -1523,6 +1543,7 @@ export async function onboardingStartCommand(
     const loaded = await readWorkspaceLaunchRecords({ registryPath });
     const resident = findResidentRecord(loaded.records, root);
     const result = baseResult(root, registryPath, resident, loaded.records);
+    if (provisioned) result.intelligence_catalog = provisioned.intelligence_catalog;
 
     if (!resident) {
       result.status = 'blocked';

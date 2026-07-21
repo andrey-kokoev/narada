@@ -1,6 +1,6 @@
 {
   "schema": "narada.carrier.provider_registry.v1",
-  "description": "Frozen legacy provider-registry migration fixture; never runtime or selection authority.",
+  "description": "Non-secret bootstrap input for first-time User Site catalog migration; never runtime or selection authority.",
   "default_provider": "kimi-code-api",
   "support_states": [
     "declared",
