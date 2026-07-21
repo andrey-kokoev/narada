@@ -162,9 +162,9 @@ function topologyRequirementEvidence(subject, requirement, runtimeEvidence) {
     status: available ? 'feasible' : 'infeasible',
     reason_code: reasonCode,
     evidence: [
-      { kind: 'run', ref: runRef },
-      { kind: 'artifact', ref: artifactRef },
-      { kind: 'document', ref: runtimeEvidence.site_admission_evidence_ref },
+      { kind: 'run', ref: runRef, evidence_class: 'observed' },
+      { kind: 'artifact', ref: artifactRef, evidence_class: 'observed' },
+      { kind: 'document', ref: runtimeEvidence.site_admission_evidence_ref, evidence_class: 'durable' },
     ],
   };
 }
@@ -206,6 +206,19 @@ function topologyObservations(records, clock, runtimeEvidence) {
 
 async function admitCarrierInvocationRequest(store, request) {
   const carrier = requireCarrierContext(request.carrierContext);
+  const requestSiteIds = [request.site_id, request.invocationScope?.site_id]
+    .filter((value) => value !== undefined && value !== null);
+  if (requestSiteIds.some((siteId) => siteId !== carrier.targetRegistrySite.subject_id)
+    || new Set(requestSiteIds).size > 1) {
+    throw intelligenceError(
+      'intelligence_request_site_binding_mismatch',
+      'The request Site identity does not match the carrier-admitted target Site.',
+      {
+        request_site_ids: requestSiteIds,
+        admitted_site_id: carrier.targetRegistrySite.subject_id,
+      },
+    );
+  }
   const [resources, catalogRecords] = await Promise.all([
     store.listResources(),
     store.listCatalogRecords(),
@@ -343,93 +356,96 @@ export async function createCarrierIntelligenceGateway(
   }
 
   const store = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB);
-  const materialization = await D1MaterializationStore.open(env.INTELLIGENCE_REGISTRY_DB);
+  let materialization = null;
   try {
+    materialization = await D1MaterializationStore.open(env.INTELLIGENCE_REGISTRY_DB);
     await assertInitializedCatalog(store);
+    const invocationAdapter = adapterFactory(store);
+    const siteAdmissionEvidenceRef = catalogEvidenceReference(await store.listCatalogRecords());
+    const runtimeEvidence = {
+      request_admitted: true,
+      worker_runtime: true,
+      ai_binding_available: typeof env.AI?.run === 'function',
+      request_evidence_ref: auditAuthority.admissionRef,
+      request_artifact_ref: 'cloudflare-carrier:authenticated-request',
+      binding_evidence_ref: auditAuthority.admissionRef,
+      binding_artifact_ref: 'cloudflare-worker-binding:AI',
+      runtime_evidence_ref: auditAuthority.admissionRef,
+      runtime_artifact_ref: 'cloudflare-worker:runtime',
+      site_admission_evidence_ref: siteAdmissionEvidenceRef,
+    };
+    const canonicalGateway = createLocalInvocationGateway({
+      store,
+      adapterFor: (adapter) => adapter.id === CARRIER_INTELLIGENCE_ADAPTER_ID
+        ? invocationAdapter
+        : null,
+      clock,
+      contextFor: async ({ request, clock: decisionClock }) => {
+        const context = request.resolutionContext;
+        return buildResolverContext({
+          targetSite: context.targetSite,
+          userSite: context.userSite,
+          hostSite: context.hostSite,
+        }, {
+          clock: decisionClock,
+          runtime: 'workers',
+          access: context.access,
+          topologyObservations: topologyObservations(
+            context.catalogRecords,
+            decisionClock,
+            runtimeEvidence,
+          ),
+        });
+      },
+      materializationFor: ({ intent, context }) => materialization.acquire({
+        destination_site_id: context.targetSite.id,
+        resolver: 'cloudflare',
+        target_site_id: context.targetSite.id,
+        purpose: intent.purpose,
+        ...(intent.principal ? { principal_id: intent.principal } : {}),
+        now: context.clock.instant,
+      }),
+      auditAuthority,
+      resultPayloadPolicy: ({ request, intent, plan, producedAt }) => {
+        const context = request.resolutionContext;
+        return {
+          media_type: 'application/json',
+          classification: context.access.data_classification,
+          retention: {
+            mode: 'never-retain',
+            policy_ref: plan.access.governance_requirement_ids[0],
+            residency: context.hostSite.id,
+          },
+          access: {
+            allowed_principals: intent.principal ? [intent.principal] : [],
+            capability_refs: ['capability:invocation-result-read'],
+          },
+          disposition: 'never-retained',
+          tombstone: {
+            disposed_at: producedAt,
+            reason_code: 'runtime-result-never-retain',
+            evidence_ref: auditAuthority.admissionRef,
+          },
+        };
+      },
+    });
+    const gateway = {
+      async invoke(request) {
+        const admitted = await admitCarrierInvocationRequest(store, request);
+        return canonicalGateway.invoke({
+          ...request,
+          principal: admitted.principalId,
+          authorityBinding: admitted.authorityBinding,
+          resolutionContext: admitted,
+        });
+      },
+    };
+    return { gateway, store, materialization };
   } catch (error) {
-    await Promise.all([materialization.close(), store.close()]);
+    await Promise.allSettled([
+      ...(materialization ? [materialization.close()] : []),
+      store.close(),
+    ]);
     throw error;
   }
-
-  const invocationAdapter = adapterFactory(store);
-  const siteAdmissionEvidenceRef = catalogEvidenceReference(await store.listCatalogRecords());
-  const runtimeEvidence = {
-    request_admitted: true,
-    worker_runtime: true,
-    ai_binding_available: typeof env.AI?.run === 'function',
-    request_evidence_ref: auditAuthority.admissionRef,
-    request_artifact_ref: 'cloudflare-carrier:authenticated-request',
-    binding_evidence_ref: auditAuthority.admissionRef,
-    binding_artifact_ref: 'cloudflare-worker-binding:AI',
-    runtime_evidence_ref: auditAuthority.admissionRef,
-    runtime_artifact_ref: 'cloudflare-worker:runtime',
-    site_admission_evidence_ref: siteAdmissionEvidenceRef,
-  };
-  const canonicalGateway = createLocalInvocationGateway({
-    store,
-    adapterFor: (adapter) => adapter.id === CARRIER_INTELLIGENCE_ADAPTER_ID
-      ? invocationAdapter
-      : null,
-    clock,
-    contextFor: async ({ request, clock: decisionClock }) => {
-      const context = request.resolutionContext;
-      return buildResolverContext({
-        targetSite: context.targetSite,
-        userSite: context.userSite,
-        hostSite: context.hostSite,
-      }, {
-        clock: decisionClock,
-        runtime: 'workers',
-        access: context.access,
-        topologyObservations: topologyObservations(
-          context.catalogRecords,
-          decisionClock,
-          runtimeEvidence,
-        ),
-      });
-    },
-    materializationFor: ({ intent, context }) => materialization.acquire({
-      destination_site_id: context.targetSite.id,
-      resolver: 'cloudflare',
-      target_site_id: context.targetSite.id,
-      purpose: intent.purpose,
-      ...(intent.principal ? { principal_id: intent.principal } : {}),
-      now: context.clock.instant,
-    }),
-    auditAuthority,
-    resultPayloadPolicy: ({ request, intent, plan, producedAt }) => {
-      const context = request.resolutionContext;
-      return {
-        media_type: 'application/json',
-        classification: context.access.data_classification,
-        retention: {
-          mode: 'never-retain',
-          policy_ref: plan.access.governance_requirement_ids[0],
-          residency: context.hostSite.id,
-        },
-        access: {
-          allowed_principals: intent.principal ? [intent.principal] : [],
-          capability_refs: ['capability:invocation-result-read'],
-        },
-        disposition: 'never-retained',
-        tombstone: {
-          disposed_at: producedAt,
-          reason_code: 'runtime-result-never-retain',
-          evidence_ref: auditAuthority.admissionRef,
-        },
-      };
-    },
-  });
-  const gateway = {
-    async invoke(request) {
-      const admitted = await admitCarrierInvocationRequest(store, request);
-      return canonicalGateway.invoke({
-        ...request,
-        principal: admitted.principalId,
-        authorityBinding: admitted.authorityBinding,
-        resolutionContext: admitted,
-      });
-    },
-  };
-  return { gateway, store, materialization };
 }

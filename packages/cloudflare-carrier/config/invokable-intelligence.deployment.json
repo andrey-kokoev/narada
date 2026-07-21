@@ -21,7 +21,7 @@
   ],
   "catalog": {
     "path": "invokable-intelligence.catalog.json",
-    "sha256": "6ca2194236345bb207210d13f430c25527430d2ffda5afab67315ffc57f110d0"
+    "sha256": "f6503a045536e732b0dcebb7dec11a6975c1924d03bcb249cc8053259d38c693"
   },
   "materializations": {
     "path": "invokable-intelligence.materializations.json",

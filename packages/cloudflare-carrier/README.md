@@ -6,6 +6,23 @@ The implementation preserves the shared carrier runtime contract while making Cl
 
 See [`docs/architecture/cloudflare-carrier/target.md`](../../docs/architecture/cloudflare-carrier/target.md) for the architecture target.
 
+## Command and Test Organization
+
+The script directory has explicit ownership surfaces:
+
+- `scripts/commands/` owns canonical operator command clients.
+- `scripts/read-models/` owns authenticated product reads and projections.
+- `scripts/workflows/` owns live smoke and multi-step workflows.
+- `scripts/shared/` owns shared auth/HTTP transport and the surface registry.
+- `scripts/contracts/` owns suite loaders for unit, contract, and live checks.
+- `src/contracts/` owns focused carrier contract suites for session protocol,
+  intelligence, adapters, persistence, and boundary contracts.
+
+Existing flat script paths remain compatibility entrypoints, so package script
+names and operator command invocations do not change. The package test posture
+is explicit: `pnpm test:unit`, `pnpm test:contract`, `pnpm test:live`, or the
+combined `pnpm test`.
+
 ## Public Surface
 
 Package exports:

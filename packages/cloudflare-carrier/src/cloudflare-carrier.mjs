@@ -1131,3 +1131,7 @@ export function observerEvidencePayload(input, suppression_reason = null) {
 export function isTerminalState(value) {
   return TERMINAL_STATES.has(value);
 }
+
+export function cloudflareCarrierSessionMutates(operation) {
+  return MUTATING_OPERATIONS.has(operation);
+}

@@ -172,6 +172,11 @@ test('D1 catalog selects the exact offering key; model environment variables hav
   assert.equal(attempts.length, 1);
   const outcome = await store.getTerminalOutcomeByAttempt(attempts[0].id);
   assert.equal(outcome.kind, 'success');
+  const observations = await store.listInvocationObservations(attempts[0].id);
+  assert.ok(observations.length > 0);
+  assert.ok(observations.flatMap(({ evidence }) => evidence ?? []).every(({ evidence_class }) => (
+    ['durable', 'observed', 'synthetic-correlation'].includes(evidence_class)
+  )));
   await store.close();
 });
 
@@ -304,10 +309,29 @@ test('live diagnostic modes preserve canonical refusal, provider failure, and ac
     return true;
   });
 
+  const recovery = await adapter.run(invocation({
+    intelligence_invocation: {
+      schema: 'narada.invokable-intelligence.invocation-control.v1',
+      intent_id: 'intent:test:live-diagnostic-recovery',
+      operation_id: 'operation:test:live-diagnostic-recovery',
+      mode: 'immediate',
+      allow_replan: true,
+    },
+    intelligence_diagnostic: 'provider-recovery',
+  }));
+  assert.equal(recovery.text, 'cloudflare_live_diagnostic_provider_recovered');
+
   const store = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB);
   assert.equal((await store.getTerminalOutcome(refusal.outcome_id)).kind, 'pre-invocation-refusal');
   assert.equal((await store.getTerminalOutcome(failure.outcome_id)).kind, 'provider-failure');
   assert.equal((await store.getTerminalOutcome(uncertain.outcome_id)).kind, 'admission-unknown');
+  for (const attemptId of [failure.attempt_id, uncertain.attempt_id, recovery.intelligence.attempt_id]) {
+    assert.equal(
+      (await store.listInvocationObservations(attemptId))
+        .find(({ kind }) => kind === 'transport-submitted')?.status,
+      'not-observed',
+    );
+  }
   assert.equal(env.AI.calls.length, 0);
   await store.close();
 });
@@ -404,16 +428,17 @@ test('Cloudflare resolution refuses when the Workers AI binding is absent', asyn
   await store.close();
 });
 
-test('same delivery identity is not redispatched and reports governed payload unavailability', async () => {
+test('same delivery identity is not redispatched and reports metadata-only replay', async () => {
   const env = configuredEnv();
   await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
   const adapter = createCloudflareAiProviderAdapter(env);
 
   const first = await adapter.run(invocation());
-  await assert.rejects(adapter.run(invocation()), (error) => {
-    assert.equal(error.code, 'intelligence_result_payload_not_available_on_replay');
-    return true;
-  });
+  const replay = await adapter.run(invocation());
+  assert.equal(replay.response_available, false);
+  assert.equal(replay.intelligence.schema, 'narada.invokable-intelligence.metadata-only-result.v1');
+  assert.equal(replay.intelligence.replayed, true);
+  assert.equal(replay.intelligence.result_id, first.intelligence.result_id);
   assert.equal(env.AI.calls.length, 1);
 
   const store = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB);
@@ -442,6 +467,25 @@ test('an actor without a governed principal binding refuses before inference', a
     })),
     (error) => {
       assert.equal(error.code, 'intelligence_principal_binding_missing');
+      assert.equal(env.AI.calls.length, 0);
+      return true;
+    },
+  );
+});
+
+test('a request cannot override the carrier-admitted target Site identity', async () => {
+  const env = configuredEnv();
+  await seedRegistry(env.INTELLIGENCE_REGISTRY_DB);
+  const adapter = createCloudflareAiProviderAdapter(env);
+
+  await assert.rejects(
+    adapter.run(invocation({
+      site_id: 'site_narada_other',
+      operation_id: 'operation:test:site-mismatch',
+      turn_id: 'turn:test:site-mismatch',
+    })),
+    (error) => {
+      assert.equal(error.code, 'intelligence_request_site_binding_mismatch');
       assert.equal(env.AI.calls.length, 0);
       return true;
     },

@@ -418,7 +418,7 @@
         "schema": "narada.site.invokable-intelligence.catalog-source.v1",
         "reference": "site-config:narada-cloudflare:invokable-intelligence:revision-4",
         "revision": "4",
-        "digest": "sha256:24ab7db2482d2f1eedab549ed27f09714a864cd70510fd61848594e4c7688a39"
+        "digest": "sha256:44ed82117854326669da7138727f5235367845d35cdb2495f13018a9b661919d"
       },
       "authority": {
         "kind": "catalog-definition",
@@ -636,36 +636,40 @@
                 "admission": {
                   "schema": "narada.invokable-intelligence.topology-boundary-admission.v1",
                   "edge_id": "c2",
-                  "trust_policy": {
-                    "ref": "trust:cloudflare-operator-session",
-                    "status": "admitted",
-                    "authority_ref": "site-governance:site:pc:launcher-site",
-                    "evidence": [
-                      {
-                        "kind": "document",
-                        "ref": "trust:cloudflare-operator-session"
-                      },
-                      {
-                        "kind": "site-configuration",
-                        "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-4"
-                      }
-                    ]
-                  },
-                  "network_path": {
-                    "ref": "network:pc-to-cloudflare",
-                    "status": "reachable",
-                    "authority_ref": "site-governance:site:pc:launcher-site",
-                    "evidence": [
-                      {
-                        "kind": "document",
-                        "ref": "network:pc-to-cloudflare"
-                      },
-                      {
-                        "kind": "site-configuration",
-                        "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-4"
-                      }
-                    ]
-                  },
+                   "trust_policy": {
+                     "ref": "trust:cloudflare-operator-session",
+                     "status": "admitted",
+                     "authority_ref": "site-governance:site:pc:launcher-site",
+                     "evidence": [
+                       {
+                         "kind": "document",
+                         "ref": "trust:cloudflare-operator-session",
+                         "evidence_class": "durable"
+                       },
+                       {
+                         "kind": "site-configuration",
+                         "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-4",
+                         "evidence_class": "durable"
+                       }
+                     ]
+                   },
+                   "network_path": {
+                     "ref": "network:pc-to-cloudflare",
+                     "status": "reachable",
+                     "authority_ref": "site-governance:site:pc:launcher-site",
+                     "evidence": [
+                       {
+                         "kind": "document",
+                         "ref": "network:pc-to-cloudflare",
+                         "evidence_class": "durable"
+                       },
+                       {
+                         "kind": "site-configuration",
+                         "ref": "site-config:narada-cloudflare:invokable-intelligence:revision-4",
+                         "evidence_class": "durable"
+                       }
+                     ]
+                   },
                   "validity": {
                     "valid_from": "2026-07-20T20:25:00.000Z",
                     "valid_until": "2036-07-20T20:25:00.000Z",
