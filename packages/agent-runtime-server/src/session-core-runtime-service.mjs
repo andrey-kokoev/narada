@@ -15,6 +15,7 @@ import { isNarsRuntimeServerMethod } from './runtime-control-contract.mjs';
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 10_000;
 const HEARTBEAT_FRESH_MS = 30_000;
 const NARS_HEARTBEAT_SCHEMA = 'narada.nars.heartbeat.v1';
+const ADMITTED_RUNTIME_MCP_SCOPES = new Set(['all', 'host', 'user-site', 'local-site', 'site', 'none']);
 const SESSION_CONTROL_METHODS = new Set([
   'session.submit',
   'session.command.execute',
@@ -23,6 +24,12 @@ const SESSION_CONTROL_METHODS = new Set([
   'session.recovery',
   'session.close',
 ]);
+
+/** Unknown or malformed runtime scope input is inert; only launcher-admitted scopes can expose tools. */
+export function normalizeRuntimeMcpScope(value) {
+  const normalized = String(value ?? 'none').trim().toLowerCase();
+  return ADMITTED_RUNTIME_MCP_SCOPES.has(normalized) ? normalized : 'none';
+}
 let heartbeatWriteSequence = 0;
 
 function requestOutcomeForTurnResult(terminalState) {
@@ -66,6 +73,46 @@ export function sessionCommandResult(command, value, supervisor, runtimeContext,
     ...(resolved.name === 'status'
       ? { health: projectRuntimeHealth(supervisor.health(), runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime) }
       : {}),
+  };
+}
+
+export function createDisabledIntelligenceToolGateway(reason = 'mcp_scope_none') {
+  return Object.freeze({
+    toolCatalog: async () => [],
+    invoke: async () => ({
+      schema: 'narada.nars.mcp-admission.v1',
+      status: 'denied',
+      admission_action: 'deny',
+      admission_reason: reason,
+      error: reason,
+    }),
+    operationalState: () => 'disabled',
+    close: async () => {},
+  });
+}
+
+export function createScopedIntelligenceToolGateway({ mcpScope = 'none', gateway = null, toolGateway = null } = {}) {
+  const normalizedScope = normalizeRuntimeMcpScope(mcpScope);
+  if (normalizedScope === 'none') return createDisabledIntelligenceToolGateway();
+  if (toolGateway) return toolGateway;
+  if (!gateway) throw new Error('mcp_capability_gateway_required');
+  return {
+    toolCatalog: async () => (await gateway.start()).map((tool) => ({
+      type: 'function',
+      function: {
+        name: tool.provider_tool_name ?? tool.tool_name,
+        parameters: tool.input_schema ?? { type: 'object', properties: {} },
+      },
+    })),
+    invoke: ({ toolName, arguments: args, abortSignal, turnId, inputEventId }) => gateway.invoke({
+      toolName,
+      arguments: args,
+      abortSignal,
+      turnId,
+      inputEventId,
+    }),
+    operationalState: () => gateway.operationalState?.() ?? 'unknown',
+    close: () => gateway.close(),
   };
 }
 
@@ -255,7 +302,7 @@ export function sessionSubmitInvocationControl(request) {
 export function buildProviderTurnContext({ eventsPath, input } = {}) {
   const control = input?.metadata?.intelligence_invocation ?? null;
   const content = String(input?.content ?? '').trim();
-  const messages = control && CURRENT_INPUT_ONLY_MODES.has(control.mode)
+  const messages = control && (control.intent_id || CURRENT_INPUT_ONLY_MODES.has(control.mode))
     ? (content ? [{ role: 'user', content }] : [])
     : providerConversationMessages({ eventsPath, currentInput: input });
   return {
@@ -289,7 +336,7 @@ function parseRequest(line) {
 function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLifecycle = null, intelligenceRuntime = null) {
   // MCP authority is opt-in. A runtime that did not receive an explicit scope
   // must report disabled rather than silently projecting the composed fabric.
-  const mcpScope = runtimeContext.mcpScope ?? 'none';
+  const mcpScope = normalizeRuntimeMcpScope(runtimeContext?.mcpScope);
   const mcpOperationalState = mcpScope === 'none'
     ? 'disabled'
     : snapshot.mcp_operational_state
@@ -330,7 +377,7 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
     mcp: {
       operational_state: mcpOperationalState,
       scope: mcpScope,
-      server_count: null,
+      server_count: mcpScope === 'none' ? 0 : null,
       startup_failure_count: 0,
       runtime_fault_count: 0,
     },
@@ -396,6 +443,7 @@ export function createSessionCoreRuntimeService({
   heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
   now = () => new Date().toISOString(),
 } = {}) {
+  const mcpScope = normalizeRuntimeMcpScope(runtimeContext?.mcpScope);
   const heartbeatCadenceMs = Number.isFinite(heartbeatIntervalMs) && heartbeatIntervalMs > 0
     ? heartbeatIntervalMs
     : 0;
@@ -406,7 +454,7 @@ export function createSessionCoreRuntimeService({
       if (shouldPersistNarsRuntimeRequestTransition(record)) supervisor?.core.appendEvent(record);
     },
   });
-  const gateway = toolGateway ? null : createNarsCapabilityGateway({
+  const gateway = mcpScope === 'none' || toolGateway ? null : createNarsCapabilityGateway({
     siteRoot: runtimeContext.siteRoot,
     ownershipContext: {
       launch_session_id: runtimeContext.launchSessionId,
@@ -417,24 +465,11 @@ export function createSessionCoreRuntimeService({
     ...(admitCapability ? { admit: admitCapability } : {}),
     recordEvidence: async (event) => supervisor?.core.appendEvent({ event: event.kind, ...event }),
   });
-  const intelligenceToolGateway = toolGateway ?? {
-    toolCatalog: async () => (await gateway.start()).map((tool) => ({
-      type: 'function',
-      function: {
-        name: tool.provider_tool_name ?? tool.tool_name,
-        parameters: tool.input_schema ?? { type: 'object', properties: {} },
-      },
-    })),
-    invoke: ({ toolName, arguments: args, abortSignal, turnId, inputEventId }) => gateway.invoke({
-      toolName,
-      arguments: args,
-      abortSignal,
-      turnId,
-      inputEventId,
-    }),
-    operationalState: () => gateway.operationalState?.() ?? 'unknown',
-    close: () => gateway.close(),
-  };
+  const intelligenceToolGateway = createScopedIntelligenceToolGateway({
+    mcpScope,
+    gateway,
+    toolGateway,
+  });
   const runtimeCall = intelligenceRuntime?.callIntelligence ?? invokeIntelligenceFn;
   supervisor = createRuntimeSessionBinding({
     runtimeContext,
@@ -642,9 +677,9 @@ export function createSessionCoreRuntimeService({
       operator_surface_kind: runtimeContext.operatorSurfaceKind ?? null,
       provider: initialIntelligence.latest_plan?.inference_provider?.id?.replace(/^inference-provider:/, '') ?? null,
       intelligence: initialIntelligence,
-      mcp_scope: runtimeContext.mcpScope ?? 'none',
-      mcp_server_count: runtimeContext.mcpScope === 'none' ? 0 : null,
-      mcp_operational_state: runtimeContext.mcpScope === 'none' ? 'disabled' : 'starting',
+      mcp_scope: mcpScope,
+      mcp_server_count: mcpScope === 'none' ? 0 : null,
+      mcp_operational_state: mcpScope === 'none' ? 'disabled' : 'starting',
       delegated_authority_handoff: runtimeContext.narsDelegatedAuthorityHandoff ?? null,
       delegated_authority_ref: runtimeContext.narsDelegatedAuthorityHandoff?.authority_ref ?? null,
       health_endpoint: runtimeContext.healthUrl ?? null,

@@ -1,4 +1,4 @@
-import { sha256Digest } from '@narada2/invokable-intelligence-resolver';
+import { canonicalInvocationInput, sha256Digest } from '@narada2/invokable-intelligence-resolver';
 import { createNarsIntelligenceRuntimeReconfigurationStateMachine } from './intelligence-runtime-reconfiguration-state.mjs';
 
 function nonEmpty(value) {
@@ -36,6 +36,20 @@ function targetFromParams(params) {
   return {
     requestedModel: hasModel ? modelRef(modelInput) : null,
     requestedOptions: requestedOptions(params.requested_options),
+  };
+}
+
+function publicMetadataOnlyResult(result) {
+  return {
+    schema: 'narada.invokable-intelligence.metadata-only-result.v1',
+    response_available: false,
+    replayed: Boolean(result?.replayed),
+    intent_id: result?.intent?.id ?? null,
+    plan_id: result?.plan?.id ?? null,
+    attempt_id: result?.attempt?.id ?? null,
+    result_id: result?.result?.id ?? null,
+    outcome_id: result?.outcome?.id ?? null,
+    outcome_kind: result?.outcome?.kind ?? null,
   };
 }
 
@@ -118,7 +132,10 @@ export function createNarsIntelligenceRuntimeController({
   }
 
   async function callIntelligence(messages, tools, overrides = {}) {
-    const inputDigest = await sha256Digest({ messages: messages ?? null, tools: tools ?? null });
+    // Tool declarations are part of provider request semantics. Binding them
+    // into the input digest makes a changed catalog fail closed against an
+    // existing explicit intent instead of silently reusing its identity.
+    const inputDigest = await sha256Digest(canonicalInvocationInput(messages, tools));
     const deliveryRef = nonEmpty(overrides.inputEventId)
       ?? nonEmpty(overrides.turnId)
       ?? 'unscoped-turn';
@@ -175,6 +192,12 @@ export function createNarsIntelligenceRuntimeController({
       throw new NarsIntelligenceInvocationError(code, `canonical intelligence invocation ended as ${result.outcome.kind}`, result);
     }
     if (!result.adapterOutcome || result.adapterOutcome.response === undefined) {
+      if (result.replayed) {
+        return {
+          response_available: false,
+          intelligence: publicMetadataOnlyResult(result),
+        };
+      }
       throw new NarsIntelligenceInvocationError(
         'intelligence_result_payload_unavailable',
         'the canonical outcome is durable but its governed response payload is unavailable for delivery',

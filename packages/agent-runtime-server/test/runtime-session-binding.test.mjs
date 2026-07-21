@@ -7,6 +7,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { createRuntimeSessionBinding } from '../src/runtime-session-binding.mjs';
 import { createSessionCoreRuntimeService } from '../src/session-core-runtime-service.mjs';
+import { NarsIntelligenceInvocationError } from '../src/intelligence-runtime-controller.mjs';
 
 test('runtime session binding delegates session state to session core and turns to carrier adapter', async () => {
   const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-'));
@@ -29,6 +30,42 @@ test('runtime session binding delegates session state to session core and turns 
   assert.equal(binding.health().lifecycle_state, 'ready');
   await binding.close();
   assert.equal(binding.health().lifecycle_state, 'closed');
+});
+
+test('an explicitly controlled canonical failure settles its queue item for a later retry', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-explicit-failure-'));
+  const failureResult = {
+    kind: 'plan',
+    outcome: { kind: 'provider-failure' },
+  };
+  const binding = createRuntimeSessionBinding({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'session-explicit-failure',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+    },
+    invokeIntelligenceFn: async () => {
+      throw new NarsIntelligenceInvocationError(
+        'provider-response-error',
+        'canonical intelligence invocation ended as provider-failure',
+        failureResult,
+      );
+    },
+    buildTurnContext: (input) => ({
+      turnId: input.event_id,
+      messages: [{ role: 'user', content: input.content }],
+      settings: { intentId: 'intent:controlled', mode: 'immediate' },
+    }),
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+  });
+
+  binding.start();
+  await binding.submit({ event_id: 'input_controlled_failure', content: 'fail once' });
+  assert.equal(binding.health().operator_input_queue.pending_count, 0);
+  assert.equal(binding.core.turn('input_controlled_failure').terminal_state, 'failed');
+  await binding.close();
 });
 
 test('runtime session binding contains provider follow-up exhaustion as a failed turn', async () => {
@@ -310,7 +347,7 @@ test('session-core turn persists carrier and gateway evidence for a provider too
   let providerCalls = 0;
   const invoked = [];
   const service = createSessionCoreRuntimeService({
-    runtimeContext: { identity: 'agent-1', session: 'session-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
+    runtimeContext: { identity: 'agent-1', session: 'session-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root, mcpScope: 'site' },
     invokeIntelligenceFn: async () => {
       providerCalls += 1;
       return providerCalls === 1
@@ -405,7 +442,7 @@ test('JSONL output preserves order under backpressure and propagates stream fail
 test('session close propagates capability-gateway shutdown failure', async () => {
   const root = mkdtempSync(join(tmpdir(), 'session-core-close-failure-'));
   const service = createSessionCoreRuntimeService({
-    runtimeContext: { identity: 'agent-1', session: 'close-failure-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root },
+    runtimeContext: { identity: 'agent-1', session: 'close-failure-1', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root, mcpScope: 'site' },
     invokeIntelligenceFn: async () => ({ content: 'unused' }),
     toolGateway: {
       toolCatalog: () => [],

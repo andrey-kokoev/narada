@@ -55,6 +55,27 @@ test('carrier turn adapter emits failure without converting provider errors into
   assert.equal(events.at(-1).kind, 'carrier_turn_failed');
 });
 
+test('carrier tool-catalog failure is inside the turn lifecycle and cannot dispatch intelligence', async () => {
+  const events = [];
+  let invocations = 0;
+  const adapter = createCarrierTurnAdapter({
+    invokeIntelligence: async () => {
+      invocations += 1;
+      return { choices: [{ message: { role: 'assistant', content: 'must not run' } }] };
+    },
+  });
+  await assert.rejects(() => adapter.runTurn(
+    { turnId: 'turn-catalog-failure' },
+    async (event) => events.push(event),
+    { toolCatalog: async () => { throw new Error('catalog_unavailable'); } },
+  ), /catalog_unavailable/);
+  assert.equal(invocations, 0);
+  assert.deepEqual(events.map((event) => event.kind), [
+    'carrier_turn_started',
+    'carrier_turn_failed',
+  ]);
+});
+
 test('carrier turn adapter completes provider-requested tools through the injected gateway', async () => {
   const events = [];
   let calls = 0;

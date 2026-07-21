@@ -1,4 +1,6 @@
 import { connect as netConnect } from 'node:net';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import {
   canonicalJson,
   validateCanonicalCatalogRecord,
@@ -11,6 +13,7 @@ const ADAPTER_SCHEMA = 'narada.invokable-intelligence.adapter.v1';
 const EXECUTION_LOCUS_SCHEMA = 'narada.invokable-intelligence.execution-locus.v1';
 const OBSERVATION_SCHEMA = 'narada.invokable-intelligence.topology-feasibility.v1';
 const RUNTIME_SERVICE_EVIDENCE_SCHEMA = 'narada.invokable-intelligence.local-runtime-service-evidence.v1';
+const EXECUTION_EVIDENCE_SCHEMA = 'narada.invokable-intelligence.local-execution-evidence.v1';
 
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -61,6 +64,69 @@ function uniqueRefs(values, label) {
   return refs;
 }
 
+const EVIDENCE_KINDS = new Set(['artifact', 'run', 'document', 'test', 'site-configuration']);
+
+function hasBoundaryEvidence(evidence, expectedRef) {
+  return Array.isArray(evidence)
+    && evidence.length > 0
+    && evidence.every((entry) => EVIDENCE_KINDS.has(entry?.kind) && nonEmpty(entry?.ref))
+    && evidence.some((entry) => entry.kind === 'document' && entry.ref === expectedRef);
+}
+
+function boundaryAdmissionError(edge, observedAt = null) {
+  const boundary = edge?.boundary;
+  const admission = boundary?.admission;
+  const requiresAdmission = boundary?.kinds?.some((kind) => ['trust', 'network', 'account', 'site'].includes(kind));
+  if (!requiresAdmission) return null;
+  if (!admission
+    || admission.schema !== 'narada.invokable-intelligence.topology-boundary-admission.v1'
+    || admission.edge_id !== edge.id
+    || !nonEmpty(boundary.trust_policy_ref)
+    || !nonEmpty(boundary.network_path_ref)
+    || admission.trust_policy?.ref !== boundary.trust_policy_ref
+    || admission.network_path?.ref !== boundary.network_path_ref
+    || admission.trust_policy?.status !== 'admitted'
+    || admission.network_path?.status !== 'reachable'
+    || !nonEmpty(admission.trust_policy?.authority_ref)
+    || !nonEmpty(admission.network_path?.authority_ref)
+    || admission.trust_policy?.authority_ref !== edge.feasibility_authority?.authority_ref
+    || admission.network_path?.authority_ref !== edge.feasibility_authority?.authority_ref
+    || !hasBoundaryEvidence(admission.trust_policy?.evidence, boundary.trust_policy_ref)
+    || !hasBoundaryEvidence(admission.network_path?.evidence, boundary.network_path_ref)
+    || !nonEmpty(admission.validity?.valid_from)
+    || !nonEmpty(admission.validity?.valid_until)
+    || !nonEmpty(admission.validity?.fresh_as_of)) {
+    return `local_topology_boundary_admission_invalid:${edge.id}`;
+  }
+  const validFrom = Date.parse(admission.validity.valid_from);
+  const validUntil = Date.parse(admission.validity.valid_until);
+  const freshAsOf = Date.parse(admission.validity.fresh_as_of);
+  if (![validFrom, validUntil, freshAsOf].every(Number.isFinite)
+    || validFrom >= validUntil
+    || freshAsOf < validFrom
+    || freshAsOf > validUntil) {
+    return `local_topology_boundary_admission_validity_invalid:${edge.id}`;
+  }
+  if (observedAt) {
+    const observed = Date.parse(observedAt);
+    if (!Number.isFinite(observed) || observed < validFrom || observed >= validUntil || freshAsOf > observed) {
+      return `local_topology_boundary_admission_stale:${edge.id}`;
+    }
+  }
+  return null;
+}
+
+function boundaryAdmissionEvidence(edge, routeRecord) {
+  const admission = edge.boundary.admission;
+  return [
+    ...routeAdmissionEvidence(routeRecord),
+    { kind: 'document', ref: admission.trust_policy.ref },
+    { kind: 'document', ref: admission.network_path.ref },
+    ...admission.trust_policy.evidence.map((entry) => ({ ...entry })),
+    ...admission.network_path.evidence.map((entry) => ({ ...entry })),
+  ];
+}
+
 function validatedRouteEntry(entry) {
   const diagnostics = validateCanonicalCatalogRecord(entry.record);
   if (diagnostics.length) {
@@ -88,6 +154,8 @@ function validatedRouteEntry(entry) {
     if (!nodes.has(edge.from) || !nodes.has(edge.to)) {
       throw new Error(`local_topology_edge_node_not_found:${topology.id}:${edge.id}`);
     }
+    const boundaryError = boundaryAdmissionError(edge);
+    if (boundaryError) throw new Error(boundaryError);
   }
   return {
     record: entry.record,
@@ -150,10 +218,137 @@ export function probeTcpEndpoint(address, { timeoutMs = 1500 } = {}) {
     }));
     socket.once('connect', () => finish({
       status: 'feasible',
-      reason_code: null,
+      reason_code: 'endpoint-tcp-connected',
       evidence_ref: `local-runtime-tcp-probe:${coordinate.protocol}:${coordinate.host}:${coordinate.port}`,
     }));
   });
+}
+
+export function probeHttpEndpoint(address, { timeoutMs = 1500 } = {}) {
+  const coordinate = socketCoordinate(address);
+  const invalid = {
+    status: 'infeasible',
+    reason_code: 'endpoint-url-invalid-or-unsupported',
+    evidence_ref: 'local-runtime-http-probe:invalid-url',
+  };
+  if (!coordinate) {
+    return Promise.resolve({
+      transport: invalid,
+      endpoint: invalid,
+      service: invalid,
+    });
+  }
+  const evidenceRef = `local-runtime-http-probe:${coordinate.protocol}:${coordinate.host}:${coordinate.port}`;
+  const requestFn = coordinate.protocol === 'https' ? httpsRequest : httpRequest;
+  return new Promise((resolve) => {
+    let settled = false;
+    let connected = false;
+    const finish = (result) => {
+      if (settled) return;
+      settled = true;
+      resolve(Object.freeze(result));
+    };
+    const failure = (reasonCode) => {
+      const transport = {
+        status: connected ? 'feasible' : 'infeasible',
+        reason_code: connected ? 'endpoint-tcp-connected' : `endpoint-tcp-${reasonCode}`,
+        evidence_ref: evidenceRef,
+      };
+      return {
+        transport,
+        endpoint: {
+          status: 'infeasible',
+          reason_code: `endpoint-http-${reasonCode}`,
+          evidence_ref: evidenceRef,
+        },
+        service: {
+          status: 'infeasible',
+          reason_code: `endpoint-http-${reasonCode}`,
+          evidence_ref: evidenceRef,
+        },
+      };
+    };
+    let request;
+    try {
+      request = requestFn(address.url, {
+        method: 'HEAD',
+        headers: { accept: '*/*' },
+      }, (response) => {
+        const statusCode = Number(response.statusCode ?? 0);
+        response.resume();
+        const responseReceived = statusCode > 0;
+        const authenticationFailure = statusCode === 401
+          ? 'endpoint-http-authentication-required'
+          : statusCode === 403
+            ? 'endpoint-http-authentication-forbidden'
+            : null;
+        const serviceAvailable = statusCode >= 200 && statusCode < 500 && !authenticationFailure;
+        const statusReason = `endpoint-http-status-${statusCode || 'unknown'}`;
+        finish({
+          transport: {
+            // A received HTTP status necessarily traversed the TCP connection;
+            // the socket event ordering is not an authority boundary.
+            status: responseReceived ? 'feasible' : connected ? 'feasible' : 'unknown',
+            reason_code: responseReceived ? 'endpoint-tcp-connected' : connected ? 'endpoint-tcp-connected' : 'endpoint-tcp-connect-unobserved',
+            evidence_ref: evidenceRef,
+          },
+          endpoint: {
+            status: responseReceived ? 'feasible' : 'infeasible',
+            reason_code: statusReason,
+            evidence_ref: evidenceRef,
+          },
+          service: {
+            status: serviceAvailable ? 'feasible' : 'infeasible',
+            reason_code: authenticationFailure ?? (serviceAvailable ? 'endpoint-http-service-responded' : statusReason),
+            evidence_ref: evidenceRef,
+          },
+        });
+      });
+    } catch (error) {
+      finish(failure(nonEmpty(error?.code)?.toLowerCase() ?? 'request-construction-failed'));
+      return;
+    }
+    request.once('socket', (socket) => {
+      socket.once('connect', () => { connected = true; });
+      socket.once('secureConnect', () => { connected = true; });
+    });
+    request.setTimeout(timeoutMs, () => {
+      request.destroy();
+      finish(failure('timeout'));
+    });
+    request.once('error', (error) => {
+      finish(failure(nonEmpty(error?.code)?.toLowerCase() ?? 'unreachable'));
+    });
+    request.end();
+  });
+}
+
+function runtimeServiceEvidenceState(runtimeServices, {
+  service,
+  runtimeFamily,
+  protocolFamily,
+  session,
+  authorityRef,
+  observedAt,
+  validityMs,
+}) {
+  const candidate = runtimeServices.find((entry) => (
+    entry?.schema === RUNTIME_SERVICE_EVIDENCE_SCHEMA
+      && entry.service === service
+      && entry.runtime_family === runtimeFamily
+      && entry.protocol_family === protocolFamily
+      && entry.observed_for_session === session
+      && entry.authority_ref === authorityRef
+      && nonEmpty(entry.evidence_ref)
+  ));
+  if (!candidate) return { evidence: null, stale: false };
+  const evidenceAt = Date.parse(candidate.observed_at ?? '');
+  const observed = Date.parse(observedAt ?? '');
+  const fresh = Number.isFinite(evidenceAt)
+    && Number.isFinite(observed)
+    && evidenceAt <= observed
+    && observed - evidenceAt <= validityMs;
+  return { evidence: fresh ? candidate : null, stale: !fresh };
 }
 
 function observationId(topologyId, kind, componentId, requirement, observedAt) {
@@ -184,12 +379,17 @@ function observationFor({
       fresh_as_of: observedAt,
     }),
     observed_at: observedAt,
-    evidence: Object.freeze(assessment.evidence.map((entry) => Object.freeze({ ...entry }))),
+    evidence: Object.freeze(assessment.evidence.map((entry) => Object.freeze({
+      ...entry,
+      evidence_class: entry.evidence_class === 'synthetic-correlation'
+        ? 'synthetic-correlation'
+        : entry.evidence_class ? 'observed' : entry.kind === 'document' ? 'durable' : 'observed',
+    }))),
     ...(assessment.reason_code ? { reason_code: assessment.reason_code } : {}),
   });
 }
 
-function endpointAssessment(endpoint, adapter, probeResult, runtimeServices, runtimeSession) {
+function endpointAssessment(endpoint, adapter, probeResult, runtimeServices, runtimeSession, runtimeEvidenceContext) {
   if (!endpoint || endpoint.schema !== ENDPOINT_SCHEMA) {
     return {
       status: 'unknown',
@@ -198,56 +398,131 @@ function endpointAssessment(endpoint, adapter, probeResult, runtimeServices, run
     };
   }
   if (endpoint.address?.kind === 'url') {
-    return {
+    const evidenceRef = probeResult?.evidence_ref ?? probeResult?.transport?.evidence_ref ?? 'local-runtime-endpoint-probe:not-run';
+    const transport = probeResult?.transport ?? {
       status: probeResult?.status ?? 'unknown',
-      reason_code: probeResult?.reason_code ?? 'endpoint-probe-not-run',
-      evidence: [{ kind: 'run', ref: probeResult?.evidence_ref ?? 'local-runtime-tcp-probe:not-run' }],
+      reason_code: probeResult?.reason_code ?? 'endpoint-transport-probe-not-run',
+      evidence_ref: evidenceRef,
+    };
+    const endpointResult = probeResult?.endpoint ?? {
+      status: 'infeasible',
+      reason_code: 'endpoint-protocol-probe-not-run',
+      evidence_ref: evidenceRef,
+    };
+    const service = probeResult?.service ?? {
+      status: 'infeasible',
+      reason_code: 'endpoint-service-probe-not-run',
+      evidence_ref: evidenceRef,
+    };
+    return {
+      forRequirement(requirement) {
+        const assessment = requirement === 'network-reachable'
+          ? transport
+          : requirement === 'endpoint-available'
+            ? endpointResult
+            : service;
+        return {
+          status: assessment.status,
+          reason_code: assessment.reason_code,
+          evidence: [{ kind: 'run', ref: assessment.evidence_ref }],
+        };
+      },
     };
   }
   if (endpoint.address?.kind === 'runtime-service') {
-    const runtimeEvidence = runtimeServices.find((entry) =>
-      entry?.schema === RUNTIME_SERVICE_EVIDENCE_SCHEMA
-      && entry.status === 'available'
-      && entry.service === endpoint.address.service
-      && entry.runtime_family === adapter?.runtime_family
-      && entry.protocol_family === adapter?.protocol?.family
-      && entry.observed_for_session === runtimeSession
-      && nonEmpty(entry.evidence_ref));
+    const runtimeEvidenceState = runtimeServiceEvidenceState(runtimeServices, {
+      service: endpoint.address.service,
+      runtimeFamily: adapter?.runtime_family,
+      protocolFamily: adapter?.protocol?.family,
+      session: runtimeSession,
+      authorityRef: runtimeEvidenceContext?.authorityRef,
+      observedAt: runtimeEvidenceContext?.observedAt,
+      validityMs: runtimeEvidenceContext?.validityMs ?? 1000,
+    });
+    const runtimeEvidence = runtimeEvidenceState.evidence;
     const supported = Boolean(runtimeEvidence)
+      && runtimeEvidence.status === 'ready'
       && endpoint.address.service === 'codex-subscription'
       && adapter?.schema === ADAPTER_SCHEMA
       && adapter.runtime_family === 'node'
       && adapter.protocol?.family === 'codex-subscription';
-    return {
+    const assessment = {
       status: supported ? 'feasible' : 'infeasible',
-      reason_code: supported ? null : 'runtime-service-not-observed',
+      reason_code: supported
+        ? null
+        : runtimeEvidenceState.stale
+          ? 'runtime-service-evidence-stale'
+          : runtimeEvidence?.status === 'executable-present'
+          ? 'runtime-service-readiness-not-proven'
+          : 'runtime-service-not-observed',
       evidence: [{
         kind: 'run',
         ref: runtimeEvidence?.evidence_ref
           ?? `local-runtime-service:not-observed:${endpoint.address.service ?? 'unknown'}`,
       }],
     };
+    return {
+      forRequirement() {
+        return assessment;
+      },
+    };
   }
   return {
-    status: 'infeasible',
-    reason_code: 'endpoint-address-not-supported-by-node-runtime',
-    evidence: [{ kind: 'document', ref: `canonical-endpoint-address:${endpoint.address?.kind ?? 'unknown'}` }],
+    forRequirement() {
+      return {
+        status: 'infeasible',
+        reason_code: 'endpoint-address-not-supported-by-node-runtime',
+        evidence: [{ kind: 'document', ref: `canonical-endpoint-address:${endpoint.address?.kind ?? 'unknown'}` }],
+      };
+    },
   };
+}
+
+function processIsAlive(processId) {
+  const numeric = Number.parseInt(String(processId ?? ''), 10);
+  if (!Number.isInteger(numeric) || numeric <= 0) return false;
+  try {
+    process.kill(numeric, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function localExecutionAssessment(component, resources, runtimeContext, expectedKind) {
   const executionLocus = component.locus?.execution_locus;
   const locusResource = executionLocus ? resources.get(executionLocus.id) : null;
+  const evidence = Array.isArray(runtimeContext?.executionEvidence)
+    ? runtimeContext.executionEvidence.find((entry) => (
+      entry?.schema === EXECUTION_EVIDENCE_SCHEMA
+      && entry.component_kind === expectedKind
+      && entry.execution_locus_id === executionLocus?.id
+      && entry.observed_for_session === runtimeContext?.session
+    ))
+    : null;
+  const evidenceMatchesResource = !component.resource || evidence?.resource_id === component.resource.id;
+  const evidenceHasLiveProcess = processIsAlive(evidence?.process_id);
+  const evidenceHasDeployment = nonEmpty(evidence?.deployment_ref);
   const present = component.kind === expectedKind
     && component.locus?.kind === 'local-machine'
     && locusResource?.schema === EXECUTION_LOCUS_SCHEMA
     && locusResource.kind === 'local'
     && nonEmpty(runtimeContext?.session)
     && nonEmpty(runtimeContext?.identity);
+  const admitted = present
+    && evidence
+    && evidence.status === 'ready'
+    && nonEmpty(evidence.evidence_ref)
+    && evidenceMatchesResource
+    && (evidenceHasLiveProcess || evidenceHasDeployment);
   return {
-    status: present ? 'feasible' : 'infeasible',
-    reason_code: present ? null : `${expectedKind}-not-present-in-local-runtime`,
-    evidence: [{ kind: 'run', ref: `local-runtime-process:${runtimeContext?.session ?? 'unknown'}:${process.pid}` }],
+    status: admitted ? 'feasible' : 'infeasible',
+    reason_code: admitted ? null : `${expectedKind}-runtime-evidence-not-admitted`,
+    evidence: [{
+      kind: 'run',
+      ref: evidence?.evidence_ref ?? `local-execution-check:${runtimeContext?.session ?? 'unknown'}:${expectedKind}`,
+      evidence_class: admitted ? 'observed-process' : 'synthetic-correlation',
+    }],
   };
 }
 
@@ -258,7 +533,11 @@ function assessNode({ node, route, endpoint, adapter, resources, runtimeContext,
       return {
         status: present ? 'feasible' : 'infeasible',
         reason_code: present ? null : 'client-session-not-admitted',
-        evidence: [{ kind: 'run', ref: `local-runtime-session:${runtimeContext?.session ?? 'unknown'}` }],
+        evidence: [{
+          kind: 'run',
+          ref: `local-runtime-session:${runtimeContext?.session ?? 'unknown'}`,
+          evidence_class: present ? 'observed-session' : 'synthetic-correlation',
+        }],
       };
     }
     if (requirement === 'launcher-available') {
@@ -279,11 +558,11 @@ function assessNode({ node, route, endpoint, adapter, resources, runtimeContext,
       return {
         status: supported ? 'feasible' : 'infeasible',
         reason_code: supported ? null : 'adapter-not-supported-by-node-runtime',
-        evidence: [{ kind: 'run', ref: `local-runtime-adapter:${adapter?.id ?? 'missing'}` }],
+        evidence: local.evidence,
       };
     }
     if (requirement === 'service-available' || requirement === 'endpoint-available') {
-      return endpointStatus;
+      return endpointStatus.forRequirement(requirement);
     }
     return {
       status: 'unknown',
@@ -302,27 +581,54 @@ function routeAdmissionEvidence(routeRecord) {
 
 function assessEdge({ edge, route, routeRecord, nodes, resources, runtimeContext, endpointStatus }) {
   return (requirement) => {
-    if (requirement === 'network-reachable') return endpointStatus;
+    if (requirement === 'network-reachable') return endpointStatus.forRequirement(requirement);
     if (requirement === 'boundary-admitted') {
       if (edge.boundary?.kinds?.includes('network')) {
-        const admitted = Boolean(nonEmpty(edge.boundary.trust_policy_ref))
-          && Boolean(nonEmpty(edge.boundary.network_path_ref));
+        const admitted = !boundaryAdmissionError(edge);
         return {
           status: admitted ? 'feasible' : 'infeasible',
           reason_code: admitted ? null : 'network-boundary-policy-incomplete',
-          evidence: routeAdmissionEvidence(routeRecord),
+          evidence: admitted ? boundaryAdmissionEvidence(edge, routeRecord) : routeAdmissionEvidence(routeRecord),
+        };
+      }
+      if (edge.boundary?.kinds?.some((kind) => ['trust', 'account', 'site'].includes(kind))) {
+        const admitted = !boundaryAdmissionError(edge);
+        return {
+          status: admitted ? 'feasible' : 'infeasible',
+          reason_code: admitted ? null : 'boundary-admission-evidence-incomplete',
+          evidence: admitted ? boundaryAdmissionEvidence(edge, routeRecord) : routeAdmissionEvidence(routeRecord),
         };
       }
       if (edge.boundary?.kinds?.includes('process')) {
         const from = nodes.get(edge.from);
         const to = nodes.get(edge.to);
-        const localOrClient = (node) => node?.kind === 'client'
-          || localExecutionAssessment(node, resources, runtimeContext, node?.kind).status === 'feasible';
-        const admitted = localOrClient(from) && localOrClient(to);
+        const assessProcessEndpoint = (node) => node?.kind === 'client'
+          ? {
+              status: nonEmpty(runtimeContext?.session) && nonEmpty(runtimeContext?.identity)
+                ? 'feasible'
+                : 'infeasible',
+              evidence: [{
+                kind: 'run',
+                ref: `local-runtime-session:${runtimeContext?.session ?? 'unknown'}`,
+                evidence_class: 'observed-session',
+              }],
+            }
+          : localExecutionAssessment(node, resources, runtimeContext, node?.kind);
+        const fromAssessment = assessProcessEndpoint(from);
+        const toAssessment = assessProcessEndpoint(to);
+        const admitted = fromAssessment.status === 'feasible' && toAssessment.status === 'feasible';
         return {
           status: admitted ? 'feasible' : 'infeasible',
           reason_code: admitted ? null : 'process-boundary-not-present',
-          evidence: [{ kind: 'run', ref: `local-runtime-process-boundary:${runtimeContext?.session ?? 'unknown'}:${edge.id}` }],
+          evidence: [
+            ...fromAssessment.evidence,
+            ...toAssessment.evidence,
+            {
+              kind: 'run',
+              ref: `local-runtime-process-boundary:${runtimeContext?.session ?? 'unknown'}:${edge.id}`,
+              evidence_class: admitted ? 'observed-process-boundary' : 'synthetic-correlation',
+            },
+          ],
         };
       }
       return {
@@ -343,7 +649,7 @@ export function createLocalTopologyObserver({
   store,
   runtimeContext,
   source,
-  probeEndpoint = probeTcpEndpoint,
+  probeEndpoint = probeHttpEndpoint,
   runtimeServices = [],
   now = () => Date.now(),
 } = {}) {
@@ -355,6 +661,7 @@ export function createLocalTopologyObserver({
   }
   const timeoutMs = boundedInteger(source.probe_timeout_ms, 1500, 50, 10000);
   const observationValidityMs = boundedInteger(source.observation_validity_ms, 1000, 100, 10000);
+  const runtimeServiceValidityMs = boundedInteger(source.runtime_service_validity_ms, 10000, 1000, 60000);
 
   const probeFor = async (endpoint) => {
     if (endpoint?.address?.kind !== 'url') return null;
@@ -384,11 +691,26 @@ export function createLocalTopologyObserver({
       const resources = uniqueMap(resourceList, 'resource');
       const observations = [];
       for (const entry of routeByTopology.values()) {
+        for (const edge of entry.edges.values()) {
+          const boundaryError = boundaryAdmissionError(edge, observedAt);
+          if (boundaryError) throw new Error(boundaryError);
+        }
         const { route, record: routeRecord, topology, nodes, edges, nodeIds, edgeIds } = entry;
         const endpoint = resources.get(route.endpoint?.id);
         const adapter = resources.get(route.adapter?.id);
         const probeResult = await probeFor(endpoint);
-        const endpointStatus = endpointAssessment(endpoint, adapter, probeResult, runtimeServices, runtimeContext?.session);
+        const endpointStatus = endpointAssessment(
+          endpoint,
+          adapter,
+          probeResult,
+          runtimeServices,
+          runtimeContext?.session,
+          {
+            authorityRef: source.authority_ref,
+            observedAt,
+            validityMs: runtimeServiceValidityMs,
+          },
+        );
         for (const nodeId of nodeIds) {
           const node = nodes.get(nodeId);
           const assess = assessNode({ node, route, endpoint, adapter, resources, runtimeContext, endpointStatus });
@@ -427,3 +749,4 @@ export function createLocalTopologyObserver({
 
 export const LOCAL_TOPOLOGY_OBSERVATION_SOURCE_SCHEMA = SOURCE_SCHEMA;
 export const LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA = RUNTIME_SERVICE_EVIDENCE_SCHEMA;
+export const LOCAL_EXECUTION_EVIDENCE_SCHEMA = EXECUTION_EVIDENCE_SCHEMA;

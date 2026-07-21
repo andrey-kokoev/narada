@@ -33,6 +33,25 @@ test("routes missing execution loci or connected edges are rejected", () => {
   assert.ok(validateExecutionTopology(disconnected).some(({ code }) => code === "disconnected-route"));
 });
 
+test("boundary admission requires evidence bound to declared policy and path references", () => {
+  const topology = clone(LOCAL_EXECUTION_TOPOLOGY);
+  const edge = topology.edges.find(({ id }) => id === "l5")!;
+  edge.boundary.admission!.trust_policy.evidence = [{ kind: "test", ref: "test:unrelated" }];
+  assert.ok(validateExecutionTopology(topology).some(({ code, component_id }) => (
+    code === "invalid-boundary-admission" && component_id === "l5"
+  )));
+});
+
+test("malformed nested boundary admission is rejected without throwing", () => {
+  const topology = clone(LOCAL_EXECUTION_TOPOLOGY);
+  const edge = topology.edges.find(({ id }) => id === "l5")!;
+  delete (edge.boundary.admission as unknown as { trust_policy?: unknown }).trust_policy;
+  assert.doesNotThrow(() => validateExecutionTopology(topology));
+  assert.ok(validateExecutionTopology(topology).some(({ code, component_id }) => (
+    code === "invalid-boundary-admission" && component_id === "l5"
+  )));
+});
+
 test("feasibility explanations identify the exact infeasible boundary", () => {
   const topology = CLOUDFLARE_EXECUTION_TOPOLOGY;
   const observations: TopologyFeasibilityObservation[] = [];
@@ -48,7 +67,7 @@ test("feasibility explanations identify the exact infeasible boundary", () => {
         owner: node.feasibility_authority,
         validity: { fresh_as_of: "2026-07-19T00:00:00Z" },
         observed_at: "2026-07-19T00:00:00Z",
-        evidence: [{ kind: "test", ref: "test:topology" }],
+        evidence: [{ kind: "test", ref: "test:topology", evidence_class: "observed" }],
       });
     }
   }
@@ -64,7 +83,7 @@ test("feasibility explanations identify the exact infeasible boundary", () => {
         owner: edge.feasibility_authority,
         validity: { fresh_as_of: "2026-07-19T00:00:00Z" },
         observed_at: "2026-07-19T00:00:00Z",
-        evidence: [{ kind: "test", ref: "test:topology" }],
+        evidence: [{ kind: "test", ref: "test:topology", evidence_class: "observed" }],
         reason_code: edge.id === "c2" ? "cloudflare-network-unreachable" : undefined,
       });
     }
@@ -90,8 +109,68 @@ test("foreign feasibility observations cannot speak for another Site", () => {
     owner: { site_id: "site:foreign", locus: "execution-site", authority_ref: "authority:foreign" },
     validity: {},
     observed_at: "2026-07-19T00:00:00Z",
-    evidence: [],
+    evidence: [{ kind: "test", ref: "test:foreign", evidence_class: "synthetic-correlation" }],
   }]);
   assert.ok(result.diagnostics.some(({ code }) => code === "feasibility-authority-mismatch"));
+  assert.ok(result.failures.some(({ reason_code }) => reason_code === "invalid-observation"));
+});
+
+test("topology diagnostics are admission failures even when observations look feasible", () => {
+  const topology = clone(LOCAL_EXECUTION_TOPOLOGY);
+  topology.route.edge_ids[0] = "edge:missing";
+  const observations = topology.nodes.flatMap((node) => node.required_feasibility.map((requirement) => ({
+    schema: TOPOLOGY_FEASIBILITY_SCHEMA,
+    id: `observation:${node.id}:${requirement}`,
+    topology_id: topology.id,
+    subject: { kind: "node" as const, id: node.id },
+    requirement,
+    status: "feasible" as const,
+    owner: node.feasibility_authority,
+    validity: { fresh_as_of: "2026-07-19T00:00:00Z" },
+    observed_at: "2026-07-19T00:00:00Z",
+    evidence: [{ kind: "test" as const, ref: "test:topology", evidence_class: "observed" as const }],
+  })));
+  const result = evaluateExecutionTopologyFeasibility(topology, observations);
+  assert.equal(result.status, "infeasible");
+  assert.ok(result.diagnostics.some(({ code }) => code === "disconnected-route"));
+});
+
+test("synthetic correlation is explicit and cannot satisfy a feasible component", () => {
+  const topology = clone(LOCAL_EXECUTION_TOPOLOGY);
+  const node = topology.nodes[0];
+  const result = evaluateExecutionTopologyFeasibility(topology, [{
+    schema: TOPOLOGY_FEASIBILITY_SCHEMA,
+    id: "observation:synthetic-only",
+    topology_id: topology.id,
+    subject: { kind: "node", id: node.id },
+    requirement: node.required_feasibility[0],
+    status: "feasible",
+    owner: node.feasibility_authority,
+    validity: { fresh_as_of: "2026-07-19T00:00:00Z" },
+    observed_at: "2026-07-19T00:00:00Z",
+    evidence: [{ kind: "run", ref: "correlation:synthetic", evidence_class: "synthetic-correlation" }],
+  }]);
+  assert.equal(result.status, "infeasible");
+  assert.ok(result.diagnostics.some(({ code }) => code === "invalid-feasibility-evidence"));
+  assert.ok(result.failures.some(({ reason_code }) => reason_code === "invalid-observation"));
+});
+
+test("malformed feasibility observations fail closed", () => {
+  const topology = clone(LOCAL_EXECUTION_TOPOLOGY);
+  const node = topology.nodes[0];
+  const result = evaluateExecutionTopologyFeasibility(topology, [{
+    schema: "wrong-schema" as never,
+    id: "observation:malformed",
+    topology_id: topology.id,
+    subject: { kind: "node", id: node.id },
+    requirement: node.required_feasibility[0],
+    status: "not-a-status" as never,
+    owner: node.feasibility_authority,
+    validity: {},
+    observed_at: "not-a-timestamp",
+    evidence: [{ kind: "test", ref: "test:topology", evidence_class: "observed" }],
+  }]);
+  assert.equal(result.status, "infeasible");
+  assert.ok(result.diagnostics.some(({ code }) => code === "invalid-feasibility-observation"));
   assert.ok(result.failures.some(({ reason_code }) => reason_code === "invalid-observation"));
 });

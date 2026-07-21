@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import { createControlInputBridge } from './control-input-bridge.mjs';
-import { createSessionCoreRuntimeService } from './session-core-runtime-service.mjs';
+import { createSessionCoreRuntimeService, normalizeRuntimeMcpScope } from './session-core-runtime-service.mjs';
 import { createNarsIntelligenceRuntimeController } from './intelligence-runtime-controller.mjs';
 import { createNarsRuntimeContext } from './runtime-context.mjs';
 import { createLocalIntelligenceRuntime } from './local-intelligence-runtime.mjs';
@@ -66,6 +66,28 @@ function agentIdentitySiteId(agentIdentityRef) {
   return typeof identityScopeSiteId === 'string' && identityScopeSiteId.trim() ? identityScopeSiteId.trim() : null;
 }
 
+function localExecutionEvidence({ lifecycleBinding, launchProcessContext }) {
+  const session = lifecycleBinding.session_id;
+  const executionLocusId = 'execution-locus:operator-pc';
+  const processEvidence = (componentKind, processId, resourceId = null) => ({
+    schema: 'narada.invokable-intelligence.local-execution-evidence.v1',
+    component_kind: componentKind,
+    execution_locus_id: executionLocusId,
+    ...(resourceId ? { resource_id: resourceId } : {}),
+    status: processId ? 'ready' : 'unknown',
+    observed_for_session: session,
+    ...(processId ? { process_id: String(processId) } : {}),
+    evidence_ref: `local-execution:${session}:${componentKind}:${processId ?? 'missing'}`,
+    evidence_class: 'observed-process',
+  });
+  return [
+    processEvidence('launcher', launchProcessContext.createdByPid),
+    processEvidence('carrier', process.pid),
+    processEvidence('runtime', process.pid),
+    processEvidence('adapter', process.pid, process.env.NARADA_INTELLIGENCE_ADAPTER_ID ?? 'adapter:openai-compatible-http'),
+  ];
+}
+
 function baseRuntimeContextOptions({ lifecycleBinding, operatorSurfaceKind, launchProcessContext, runtimeHost }) {
   return {
     identity: lifecycleBinding.agent_id,
@@ -75,7 +97,8 @@ function baseRuntimeContextOptions({ lifecycleBinding, operatorSurfaceKind, laun
     siteId: agentIdentitySiteId(lifecycleBinding.agent_identity_ref) ?? process.env.NARADA_SITE_ID ?? null,
     siteConfig: parseSiteConfigEnv(process.env.NARADA_SITE_CONFIG),
     operatorSurfaceKind,
-    mcpScope: process.env.NARADA_MCP_SCOPE?.trim() || 'none',
+    mcpScope: normalizeRuntimeMcpScope(process.env.NARADA_MCP_SCOPE),
+    executionEvidence: localExecutionEvidence({ lifecycleBinding, launchProcessContext }),
     runtimeHostState: () => runtimeHost.snapshot(),
     ...launchProcessContext,
   };
@@ -340,7 +363,11 @@ async function main() {
     launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
     processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
     processRole: process.env.NARADA_PROCESS_ROLE ?? null,
-    createdByPid: process.env.NARADA_CREATED_BY_PID ?? null,
+    // Direct launches still have a real launcher boundary: the operating
+    // system parent is the creator when no governed launcher supplied an
+    // explicit PID. Keep the evidence observed rather than inventing a
+    // catalog-side launcher resource.
+    createdByPid: process.env.NARADA_CREATED_BY_PID ?? (process.ppid > 0 ? String(process.ppid) : null),
   };
   const eventHub = createEventHub();
   const runtimeHost = createNarsRuntimeHostStateMachine({

@@ -57,6 +57,20 @@ export function canonicalTestClock(instant = NOW): AuthoritativeDecisionClock {
   };
 }
 
+function topologyWithBoundaryValidity(topology: typeof LOCAL_EXECUTION_TOPOLOGY, now: string, validUntil: string) {
+  const copy = structuredClone(topology);
+  for (const edge of copy.edges) {
+    if (!edge.boundary.admission) continue;
+    edge.boundary.admission.validity = {
+      ...edge.boundary.admission.validity,
+      valid_from: now,
+      valid_until: validUntil,
+      fresh_as_of: now,
+    };
+  }
+  return copy;
+}
+
 export interface CanonicalCloudflareTestSeedOptions {
   invocationModelKey?: string;
   now?: string;
@@ -73,6 +87,8 @@ export interface CanonicalCloudflareTestSeedOptions {
 export function buildCanonicalCloudflareTestSeed(
   options: CanonicalCloudflareTestSeedOptions = {},
 ): CanonicalCatalogSeed {
+  const now = options.now ?? NOW;
+  const validUntil = options.validUntil ?? VALID_UNTIL;
   const replacements = new Map<string, string>([
     [CANONICAL_LOCAL_TEST_IDS.targetSite, options.targetSiteId ?? CANONICAL_LOCAL_TEST_IDS.targetSite],
     [CANONICAL_LOCAL_TEST_IDS.principal, options.principalId ?? CANONICAL_LOCAL_TEST_IDS.principal],
@@ -138,7 +154,7 @@ export function buildCanonicalCloudflareTestSeed(
       document.kind = "cloudflare";
     }
     if (document.schema === "narada.invokable-intelligence.invocation-route-candidate.v1") {
-      document.topology = structuredClone(CLOUDFLARE_EXECUTION_TOPOLOGY);
+      document.topology = topologyWithBoundaryValidity(CLOUDFLARE_EXECUTION_TOPOLOGY, now, validUntil);
       document.execution_loci = [{ kind: "execution-locus", id: "execution-locus:cloudflare-carrier" }];
     }
     record.source.digest = canonicalSha256(document);
@@ -164,7 +180,7 @@ export function feasibleTopologyObservations(
         owner: node.feasibility_authority,
         validity: { valid_from: VALID_FROM, valid_until: validUntil, fresh_as_of: observedAt },
         observed_at: observedAt,
-        evidence: [{ kind: "test", ref: "canonical-local-fixture" }],
+        evidence: [{ kind: "test", ref: "canonical-local-fixture", evidence_class: "durable" }],
       });
     }
   }
@@ -180,7 +196,7 @@ export function feasibleTopologyObservations(
         owner: edge.feasibility_authority,
         validity: { valid_from: VALID_FROM, valid_until: validUntil, fresh_as_of: observedAt },
         observed_at: observedAt,
-        evidence: [{ kind: "test", ref: "canonical-local-fixture" }],
+        evidence: [{ kind: "test", ref: "canonical-local-fixture", evidence_class: "durable" }],
       });
     }
   }
@@ -277,6 +293,7 @@ export function buildCanonicalLocalTestSeed(options: CanonicalLocalTestSeedOptio
   const endpointRef = { kind: "inference-endpoint" as const, id: ids.endpoint };
   const adapterRef = { kind: "adapter" as const, id: ids.adapter };
   const credentialRef = { kind: "credential-locator" as const, id: "credential-locator:local-api" };
+  const topology = topologyWithBoundaryValidity(LOCAL_EXECUTION_TOPOLOGY, now, validUntil);
   const resources: Resource[] = [
     { schema: "narada.invokable-intelligence.site.v1", id: ids.targetSite },
     { schema: "narada.invokable-intelligence.site.v1", id: ids.userSite },
@@ -325,7 +342,7 @@ export function buildCanonicalLocalTestSeed(options: CanonicalLocalTestSeedOptio
     offering: offeringRef,
     endpoint: endpointRef,
     adapter: adapterRef,
-    topology: LOCAL_EXECUTION_TOPOLOGY,
+    topology,
     execution_loci: [{ kind: "execution-locus", id: "execution-locus:operator-pc" }],
     access: { account_ref: ids.account, grant_refs: [ids.grant], credential: credentialRef },
     composition_digest: digest(240),
@@ -425,4 +442,3 @@ export function buildCanonicalLocalTestSeed(options: CanonicalLocalTestSeedOptio
     residuals: [],
   };
 }
-

@@ -29,6 +29,18 @@ const result = await gateway.invoke({
   verbatim (decision provenance preserved); attempts upsert by id, so
   retries never duplicate. Plans are byte-stable for identical inputs,
   so restart resolution is idempotent.
+- **Result retention:** the policy decision is durable even when the provider
+  payload is not. A `never-retain` result stores its digest, disposition, and
+  tombstone/reference metadata, never the response body. Immediate delivery
+  may use the adapter response; replay or restart returns the stable
+  `narada.invokable-intelligence.metadata-only-result.v1` envelope with
+  `response_available: false` and never redispatches the provider. Retained
+  payloads, when a policy explicitly permits them, remain governed by their
+  access, classification, redaction, and validity metadata.
+- **Concurrent delivery:** duplicate in-process deliveries with the same
+  operation and canonical input share one in-flight durable attempt. A changed
+  message or tool catalog produces a different input identity and must resolve
+  independently.
 
 ## Runtime plan boundary
 

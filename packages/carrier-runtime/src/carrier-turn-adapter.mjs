@@ -7,14 +7,14 @@ export async function runTurn(context = {}, eventSink = () => {}, toolGateway = 
   if (typeof invokeIntelligence !== 'function') throw new Error('carrier_turn_invoke_intelligence_required');
   const maxToolRounds = normalizeMaxToolRounds(context.maxToolRounds ?? context.settings?.maxToolRounds);
 
-  const tools = typeof toolGateway.toolCatalog === 'function'
-    ? await toolGateway.toolCatalog()
-    : Array.isArray(context.tools) ? context.tools : [];
   const turn = {
     turn_id: context.turnId ?? null,
   };
   await eventSink({ kind: 'carrier_turn_started', ...turn });
   try {
+    const tools = typeof toolGateway.toolCatalog === 'function'
+      ? await toolGateway.toolCatalog()
+      : Array.isArray(context.tools) ? context.tools : [];
     const messages = [...(Array.isArray(context.messages) ? context.messages : [])];
     let result = null;
     for (let round = 0; round < maxToolRounds; round += 1) {

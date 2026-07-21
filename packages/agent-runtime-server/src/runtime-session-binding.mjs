@@ -1,5 +1,6 @@
 import { createCarrierTurnAdapter } from '@narada2/carrier-runtime/carrier-turn-adapter';
 import { createNarsSessionSupervisor } from '@narada2/nars-session-core/session-supervisor';
+import { NarsIntelligenceInvocationError } from './intelligence-runtime-controller.mjs';
 
 function isProviderFollowUpRoundLimitError(error) {
   const message = error instanceof Error ? error.message : String(error);
@@ -30,6 +31,17 @@ export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelli
       try {
         return await carrier.runTurn(...args);
       } catch (error) {
+        // An explicitly controlled canonical attempt owns its retry/replay
+        // semantics above the session queue. Its provider/refusal outcome is a
+        // terminal turn result, so the admitted input must not remain at the
+        // head of the recovery queue and replay itself before the caller's
+        // next explicit attempt.
+        if (error instanceof NarsIntelligenceInvocationError && args[0]?.settings?.intentId) {
+          return {
+            terminal_state: error.result?.kind === 'refusal' ? 'refused' : 'failed',
+            error: error.message,
+          };
+        }
         // A bounded provider loop is a terminal turn outcome, not a runtime process failure.
         if (!isProviderFollowUpRoundLimitError(error)) throw error;
         return {

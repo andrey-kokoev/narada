@@ -70,6 +70,41 @@ test('controller invokes the canonical gateway with stable delivery identity and
   assert.equal('provider' in fixture.controller.snapshot(), false);
 });
 
+test('tool-catalog changes cannot reuse the same intent payload identity', async () => {
+  const fixture = createFixture();
+  await fixture.controller.callIntelligence(
+    [{ role: 'user', content: 'same payload' }],
+    [{ name: 'tool-before' }],
+    { intentId: 'intent:stable-tools', operationId: 'operation:stable-tools:1' },
+  );
+  await fixture.controller.callIntelligence(
+    [{ role: 'user', content: 'same payload' }],
+    [{ name: 'tool-after' }],
+    { intentId: 'intent:stable-tools', operationId: 'operation:stable-tools:2', mode: 'retry' },
+  );
+  assert.notEqual(fixture.calls[0].inputDigest, fixture.calls[1].inputDigest);
+});
+
+test('equivalent reordered tool catalogs retain one canonical payload identity', async () => {
+  const fixture = createFixture();
+  const firstTools = [
+    { type: 'function', function: { name: 'zeta', parameters: { type: 'object' } } },
+    { type: 'function', function: { name: 'alpha', parameters: { type: 'object' } } },
+  ];
+  const reorderedTools = [firstTools[1], firstTools[0]];
+  await fixture.controller.callIntelligence(
+    [{ role: 'user', content: 'same payload' }],
+    firstTools,
+    { intentId: 'intent:equivalent-tools', operationId: 'operation:equivalent-tools:1' },
+  );
+  await fixture.controller.callIntelligence(
+    [{ role: 'user', content: 'same payload' }],
+    reorderedTools,
+    { intentId: 'intent:equivalent-tools', operationId: 'operation:equivalent-tools:2', mode: 'retry' },
+  );
+  assert.equal(fixture.calls[0].inputDigest, fixture.calls[1].inputDigest);
+});
+
 test('controller forwards explicit intent and operation identities for transport-level retry and replay', async () => {
   const fixture = createFixture();
   await fixture.controller.callIntelligence(
@@ -138,11 +173,12 @@ test('controller activates canonical model/options constraints only at a clean t
   assert.deepEqual(fixture.calls[0].requestedOptions, { thinking: 'high', batch: false });
 });
 
-test('a durable replay without retained payload is not redispatched or misreported as a fresh response', async () => {
+test('a durable replay without retained payload is not redispatched and is explicit metadata-only', async () => {
   const fixture = createFixture({ result: planResult({ adapterOutcome: null, replayed: true }) });
-  await assert.rejects(
-    fixture.controller.callIntelligence([], [], { inputEventId: 'input-replay' }),
-    (error) => error instanceof NarsIntelligenceInvocationError
-      && error.code === 'intelligence_result_payload_unavailable',
-  );
+  const response = await fixture.controller.callIntelligence([], [], { inputEventId: 'input-replay' });
+  assert.equal(response.response_available, false);
+  assert.equal(response.intelligence.schema, 'narada.invokable-intelligence.metadata-only-result.v1');
+  assert.equal(response.intelligence.replayed, true);
+  assert.equal(response.intelligence.result_id, null);
+  assert.equal(fixture.calls.length, 1);
 });

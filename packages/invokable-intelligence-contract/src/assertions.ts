@@ -45,8 +45,10 @@ export interface AssertionValidity {
 }
 
 export interface EvidenceRef {
-  kind: "artifact" | "run" | "document" | "test";
+  kind: "artifact" | "run" | "document" | "test" | "site-configuration";
   ref: string;
+  /** Provenance class; synthetic correlation is explicit and never implies durable observation. */
+  evidence_class?: "durable" | "observed" | "synthetic-correlation";
 }
 
 export interface CapabilityAssertion {

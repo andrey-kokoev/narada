@@ -35,6 +35,7 @@ import type {
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 import {
   canonicalJson,
+  canonicalInvocationInput,
   computeResolverStateDigests,
   deterministicId,
   resolveInvocation,
@@ -102,7 +103,7 @@ export interface InvokeRequest {
   tools?: unknown;
   /** Ephemeral cancellation signal; never persisted into intent or evidence records. */
   abortSignal?: AbortSignal;
-  /** Caller-supplied digest may avoid hashing a large payload twice. */
+  /** Caller-supplied digest is checked against the canonical messages/tools input. */
   inputDigest?: string;
   mode?: PlanAttemptMode;
   /** False turns stale state into a typed refusal instead of an implicit replacement plan. */
@@ -145,7 +146,7 @@ export type GatewayPlanResult = {
   observations: InvocationObservation[];
   auditEvidence: InvocationAuditEvidence[];
   telemetry: InvocationOperationalTelemetry[];
-  /** Null on idempotent readback because response payloads are governed separately. */
+  /** Null on idempotent readback when the governed response payload is not retained. */
   adapterOutcome: AdapterOutcome | null;
   replayed: boolean;
 };
@@ -555,13 +556,45 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
     };
   }
 
-  return {
-    async invoke(request: InvokeRequest): Promise<GatewayResult> {
+  const inFlight = new Map<string, Promise<GatewayResult>>();
+
+  async function invoke(request: InvokeRequest): Promise<GatewayResult> {
+    const computedInputDigest = await sha256Digest(
+      canonicalInvocationInput(request.messages, request.tools),
+    );
+    if (request.inputDigest && request.inputDigest !== computedInputDigest) {
+      throw new Error('invocation-input-digest-mismatch');
+    }
+    const inputDigest = computedInputDigest;
+    const inFlightKey = request.operationId
+      ? canonicalJson({
+          operationId: request.operationId,
+          intentId: request.intentId ?? null,
+          purpose: request.purpose,
+          principal: request.principal ?? null,
+          authorityBinding: request.authorityBinding ?? null,
+          inputDigest,
+          requiredCapabilities: request.requiredCapabilities ?? [],
+          requestedModel: request.requestedModel ?? null,
+          requestedOptions: request.requestedOptions ?? {},
+          mode: request.mode ?? "immediate",
+          allowReplan: request.allowReplan !== false,
+          invocationScope: request.invocationScope ?? null,
+        })
+      : null;
+    const existing = inFlightKey ? inFlight.get(inFlightKey) : undefined;
+    if (existing) return existing;
+    const operation = invokeWithDigest(request, inputDigest);
+    if (inFlightKey) inFlight.set(inFlightKey, operation);
+    try {
+      return await operation;
+    } finally {
+      if (inFlightKey && inFlight.get(inFlightKey) === operation) inFlight.delete(inFlightKey);
+    }
+  }
+
+  async function invokeWithDigest(request: InvokeRequest, inputDigest: string): Promise<GatewayResult> {
       const startedClock = options.clock();
-      const inputDigest = request.inputDigest ?? await sha256Digest({
-        messages: request.messages ?? null,
-        tools: request.tools ?? null,
-      });
       const requiredCapabilities = [...(request.requiredCapabilities ?? [])]
         .sort((a, b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name));
       const intentId = request.intentId ?? deterministicId("intent", {
@@ -843,7 +876,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
 
       const transportStatus: InvocationObservation["status"] = !adapterInvoked
         ? "not-observed"
-        : adapterOutcome.transportSubmitted === true || admission === "acknowledged"
+        : adapterOutcome.transportSubmitted === true
           ? "observed"
           : adapterOutcome.transportSubmitted === false
             ? "not-observed"
@@ -950,6 +983,6 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
         adapterOutcome,
         replayed: false,
       };
-    },
-  };
+    }
+  return { invoke };
 }

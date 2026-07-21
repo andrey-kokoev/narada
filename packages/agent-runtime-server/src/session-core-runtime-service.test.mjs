@@ -7,6 +7,8 @@ import {
   sessionSubmitInvocationControl,
   sessionCommandResult,
   shouldPersistNarsRuntimeRequestTransition,
+  createDisabledIntelligenceToolGateway,
+  createScopedIntelligenceToolGateway,
 } from './session-core-runtime-service.mjs';
 
 test('session.submit normalizes explicit retry and replay controls at the public boundary', () => {
@@ -114,6 +116,52 @@ test('failed health transitions remain durable diagnostics', () => {
     request_state: 'rejected',
     terminal_state: 'rejected',
   }), true);
+});
+
+test('mcp scope none exposes a disabled, non-dispatching capability gateway', async () => {
+  const gateway = createDisabledIntelligenceToolGateway();
+  assert.deepEqual(await gateway.toolCatalog(), []);
+  assert.equal(gateway.operationalState(), 'disabled');
+  assert.deepEqual(await gateway.invoke({ toolName: 'shell.exec' }), {
+    schema: 'narada.nars.mcp-admission.v1',
+    status: 'denied',
+    admission_action: 'deny',
+    admission_reason: 'mcp_scope_none',
+    error: 'mcp_scope_none',
+  });
+  await gateway.close();
+});
+
+test('mcp scope none ignores an injected capability gateway', async () => {
+  let catalogCalls = 0;
+  let invokeCalls = 0;
+  const injected = {
+    toolCatalog: async () => { catalogCalls += 1; return [{ name: 'should-not-leak' }]; },
+    invoke: async () => { invokeCalls += 1; return { status: 'ok' }; },
+    operationalState: () => 'healthy',
+    close: async () => {},
+  };
+  const scoped = createScopedIntelligenceToolGateway({ mcpScope: 'none', toolGateway: injected });
+  assert.deepEqual(await scoped.toolCatalog(), []);
+  assert.equal(scoped.operationalState(), 'disabled');
+  assert.equal(catalogCalls, 0);
+  assert.equal(invokeCalls, 0);
+  await scoped.invoke({ toolName: 'should-not-leak' });
+  assert.equal(invokeCalls, 0);
+});
+
+test('unadmitted mcp scope is fail-closed as disabled', async () => {
+  let catalogCalls = 0;
+  const injected = {
+    toolCatalog: async () => { catalogCalls += 1; return [{ name: 'should-not-leak' }]; },
+    invoke: async () => ({ status: 'ok' }),
+    operationalState: () => 'healthy',
+    close: async () => {},
+  };
+  const scoped = createScopedIntelligenceToolGateway({ mcpScope: 'ambient-host', toolGateway: injected });
+  assert.equal(scoped.operationalState(), 'disabled');
+  assert.deepEqual(await scoped.toolCatalog(), []);
+  assert.equal(catalogCalls, 0);
 });
 
 test('non-health request transitions remain durable', () => {

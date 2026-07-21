@@ -77,6 +77,27 @@ export type ExecutionTopologyEdgeKind =
 
 export type TopologyBoundaryKind = "none" | "process" | "trust" | "network" | "account" | "site";
 
+export const TOPOLOGY_BOUNDARY_ADMISSION_SCHEMA =
+  "narada.invokable-intelligence.topology-boundary-admission.v1" as const;
+
+export interface TopologyBoundaryAdmission {
+  schema: typeof TOPOLOGY_BOUNDARY_ADMISSION_SCHEMA;
+  edge_id: string;
+  trust_policy: {
+    ref: string;
+    status: "admitted";
+    authority_ref: string;
+    evidence: EvidenceRef[];
+  };
+  network_path: {
+    ref: string;
+    status: "reachable";
+    authority_ref: string;
+    evidence: EvidenceRef[];
+  };
+  validity: AssertionValidity;
+}
+
 export interface ExecutionTopologyEdge {
   id: string;
   from: string;
@@ -86,6 +107,8 @@ export interface ExecutionTopologyEdge {
     kinds: TopologyBoundaryKind[];
     trust_policy_ref?: string;
     network_path_ref?: string;
+    /** Immutable, time-bounded proof for non-process boundary admission. */
+    admission?: TopologyBoundaryAdmission;
   };
   feasibility_authority: TopologyAuthorityRef;
   required_feasibility: TopologyFeasibilityRequirement[];
@@ -131,10 +154,13 @@ export type TopologyDiagnosticCode =
   | "dangling-edge"
   | "disconnected-route"
   | "missing-boundary"
+  | "invalid-boundary-admission"
   | "missing-feasibility-authority"
   | "unknown-feasibility-subject"
   | "feasibility-authority-mismatch"
-  | "undeclared-feasibility-requirement";
+  | "undeclared-feasibility-requirement"
+  | "invalid-feasibility-observation"
+  | "invalid-feasibility-evidence";
 
 export interface TopologyDiagnostic {
   code: TopologyDiagnosticCode;
@@ -167,8 +193,107 @@ const RESOURCE_KIND_BY_NODE_KIND: Partial<Record<ExecutionTopologyNodeKind, Reso
   endpoint: "inference-endpoint",
 };
 
+const TOPOLOGY_AUTHORITY_LOCI: readonly TopologyAuthorityLocus[] = [
+  "client-site",
+  "launcher-site",
+  "carrier-site",
+  "execution-site",
+  "service-site",
+  "target-site",
+];
+
+const TOPOLOGY_FEASIBILITY_REQUIREMENTS: readonly TopologyFeasibilityRequirement[] = [
+  "client-supported",
+  "launcher-available",
+  "carrier-deployed",
+  "runtime-available",
+  "adapter-supported",
+  "boundary-admitted",
+  "network-reachable",
+  "service-available",
+  "endpoint-available",
+];
+
+const TOPOLOGY_FEASIBILITY_STATUSES = ["feasible", "infeasible", "unknown"] as const;
+
+const isRecord = (value: unknown): value is Record<string, unknown> => (
+  typeof value === "object" && value !== null
+);
+
+const isNonEmptyString = (value: unknown): value is string => (
+  typeof value === "string" && value.trim().length > 0
+);
+
+const parseTimestamp = (value: unknown): number | null => {
+  if (typeof value !== "string") return null;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const isAuthorityRef = (value: unknown): value is TopologyAuthorityRef => (
+  isRecord(value)
+  && isNonEmptyString(value.site_id)
+  && TOPOLOGY_AUTHORITY_LOCI.includes(value.locus as TopologyAuthorityLocus)
+  && isNonEmptyString(value.authority_ref)
+);
+
 const sameAuthority = (a: TopologyAuthorityRef, b: TopologyAuthorityRef) =>
   a.site_id === b.site_id && a.locus === b.locus && a.authority_ref === b.authority_ref;
+
+const TOPOLOGY_BOUNDARY_EVIDENCE_KINDS = new Set<EvidenceRef["kind"]>([
+  "artifact",
+  "run",
+  "document",
+  "test",
+  "site-configuration",
+]);
+
+const hasValidatedBoundaryEvidence = (evidence: unknown, expectedRef: unknown): evidence is EvidenceRef[] => {
+  if (!Array.isArray(evidence) || evidence.length === 0 || typeof expectedRef !== "string" || !expectedRef.trim()) return false;
+  return evidence.every((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    const candidate = entry as Partial<EvidenceRef>;
+    return TOPOLOGY_BOUNDARY_EVIDENCE_KINDS.has(candidate.kind as EvidenceRef["kind"])
+      && typeof candidate.ref === "string"
+      && Boolean(candidate.ref.trim());
+  }) && evidence.some((entry) => entry.kind === "document" && entry.ref === expectedRef);
+};
+
+const hasValidBoundaryValidity = (validity: unknown): validity is AssertionValidity => {
+  if (!validity || typeof validity !== "object") return false;
+  const candidate = validity as AssertionValidity;
+  const validFrom = parseTimestamp(candidate.valid_from);
+  const validUntil = parseTimestamp(candidate.valid_until);
+  const freshAsOf = parseTimestamp(candidate.fresh_as_of);
+  return validFrom !== null
+    && validUntil !== null
+    && freshAsOf !== null
+    && validFrom < validUntil
+    && freshAsOf >= validFrom
+    && freshAsOf <= validUntil;
+};
+
+const hasValidObservationValidity = (validity: unknown, observedAt: unknown): validity is AssertionValidity => {
+  if (!isRecord(validity)) return false;
+  const freshAsOf = parseTimestamp(validity.fresh_as_of);
+  const observed = parseTimestamp(observedAt);
+  if (freshAsOf === null || observed === null || freshAsOf > observed) return false;
+
+  const hasValidFrom = validity.valid_from !== undefined;
+  const hasValidUntil = validity.valid_until !== undefined;
+  if (hasValidFrom !== hasValidUntil) return false;
+  if (!hasValidFrom) return true;
+
+  const validFrom = parseTimestamp(validity.valid_from);
+  const validUntil = parseTimestamp(validity.valid_until);
+  return validFrom !== null
+    && validUntil !== null
+    && validFrom < validUntil
+    && freshAsOf >= validFrom
+    && freshAsOf <= validUntil
+    && observed >= validFrom
+    && observed < validUntil;
+};
 
 export function validateExecutionTopology(topology: ExecutionTopology): TopologyDiagnostic[] {
   const diagnostics: TopologyDiagnostic[] = [];
@@ -234,6 +359,29 @@ export function validateExecutionTopology(topology: ExecutionTopology): Topology
     if (!edge.boundary.kinds.length) {
       diagnostics.push({ code: "missing-boundary", component_id: edge.id, message: `Edge ${edge.id} must declare its boundary posture.` });
     }
+    const requiresAdmission = edge.boundary.kinds.some((kind) => ["trust", "network", "account", "site"].includes(kind));
+    const admission = edge.boundary.admission;
+    const admissionRecord = isRecord(admission) ? admission : undefined;
+    const trustPolicy = isRecord(admissionRecord?.trust_policy) ? admissionRecord.trust_policy : undefined;
+    const networkPath = isRecord(admissionRecord?.network_path) ? admissionRecord.network_path : undefined;
+    if (requiresAdmission && (!admissionRecord
+      || admissionRecord.schema !== TOPOLOGY_BOUNDARY_ADMISSION_SCHEMA
+      || admissionRecord.edge_id !== edge.id
+      || trustPolicy?.ref !== edge.boundary.trust_policy_ref
+      || networkPath?.ref !== edge.boundary.network_path_ref
+      || trustPolicy?.status !== "admitted"
+      || networkPath?.status !== "reachable"
+      || trustPolicy?.authority_ref !== edge.feasibility_authority.authority_ref
+      || networkPath?.authority_ref !== edge.feasibility_authority.authority_ref
+      || !hasValidatedBoundaryEvidence(trustPolicy?.evidence, edge.boundary.trust_policy_ref)
+      || !hasValidatedBoundaryEvidence(networkPath?.evidence, edge.boundary.network_path_ref)
+      || !hasValidBoundaryValidity(admissionRecord?.validity))) {
+      diagnostics.push({
+        code: "invalid-boundary-admission",
+        component_id: edge.id,
+        message: `Edge ${edge.id} requires validated trust-policy and network-path admission evidence.`,
+      });
+    }
     if (!edge.feasibility_authority.site_id || !edge.feasibility_authority.authority_ref) {
       diagnostics.push({
         code: "missing-feasibility-authority",
@@ -271,33 +419,82 @@ export function validateTopologyFeasibilityObservation(
   topology: ExecutionTopology,
   observation: TopologyFeasibilityObservation,
 ): TopologyDiagnostic[] {
-  const component = observation.subject.kind === "node"
-    ? topology.nodes.find(({ id }) => id === observation.subject.id)
-    : topology.edges.find(({ id }) => id === observation.subject.id);
-  if (!component || observation.topology_id !== topology.id) {
-    return [{
-      code: "unknown-feasibility-subject",
-      component_id: observation.subject.id,
-      message: `Feasibility observation ${observation.id} does not address a component in topology ${topology.id}.`,
-    }];
-  }
+  const record = isRecord(observation) ? observation : undefined;
+  const subject = record?.subject;
+  const subjectKind = isRecord(subject) ? subject.kind : undefined;
+  const subjectId = isRecord(subject) ? subject.id : undefined;
+  const observationId = isNonEmptyString(record?.id) ? record.id : "<unknown>";
+  const structureValid = Boolean(
+    record
+    && record.schema === TOPOLOGY_FEASIBILITY_SCHEMA
+    && isNonEmptyString(record.id)
+    && record.topology_id === topology.id
+    && (subjectKind === "node" || subjectKind === "edge")
+    && isNonEmptyString(subjectId)
+    && TOPOLOGY_FEASIBILITY_REQUIREMENTS.includes(record.requirement as TopologyFeasibilityRequirement)
+    && TOPOLOGY_FEASIBILITY_STATUSES.includes(record.status as typeof TOPOLOGY_FEASIBILITY_STATUSES[number])
+    && isAuthorityRef(record.owner)
+    && isNonEmptyString(record.observed_at)
+    && hasValidObservationValidity(record.validity, record.observed_at),
+  );
   const diagnostics: TopologyDiagnostic[] = [];
-  if (!sameAuthority(component.feasibility_authority, observation.owner)) {
+  if (!structureValid) {
+    diagnostics.push({
+      code: "invalid-feasibility-observation",
+      component_id: isNonEmptyString(subjectId) ? subjectId : undefined,
+      actual: observation,
+      message: `Feasibility observation ${observationId} does not satisfy the v1 observation contract.`,
+    });
+  }
+
+  const component = subjectKind === "node"
+    ? topology.nodes.find(({ id }) => id === subjectId)
+    : subjectKind === "edge"
+      ? topology.edges.find(({ id }) => id === subjectId)
+      : undefined;
+  if (!record || !component || record.topology_id !== topology.id || !isNonEmptyString(subjectId)) {
+    diagnostics.push({
+      code: "unknown-feasibility-subject",
+      component_id: isNonEmptyString(subjectId) ? subjectId : undefined,
+      message: `Feasibility observation ${observationId} does not address a component in topology ${topology.id}.`,
+    });
+    return diagnostics;
+  }
+  if (isAuthorityRef(record.owner) && !sameAuthority(component.feasibility_authority, record.owner)) {
     diagnostics.push({
       code: "feasibility-authority-mismatch",
       component_id: component.id,
       expected: component.feasibility_authority,
-      actual: observation.owner,
-      message: `Observation ${observation.id} was not issued by the component's declared feasibility authority.`,
+      actual: record.owner,
+      message: `Observation ${observationId} was not issued by the component's declared feasibility authority.`,
     });
   }
-  if (!component.required_feasibility.includes(observation.requirement)) {
+  if (!component.required_feasibility.includes(record.requirement as TopologyFeasibilityRequirement)) {
     diagnostics.push({
       code: "undeclared-feasibility-requirement",
       component_id: component.id,
       expected: component.required_feasibility,
-      actual: observation.requirement,
-      message: `Observation ${observation.id} addresses a requirement not declared by ${component.id}.`,
+      actual: record.requirement,
+      message: `Observation ${observationId} addresses a requirement not declared by ${component.id}.`,
+    });
+  }
+  const evidenceValid = Array.isArray(record.evidence)
+    && record.evidence.length > 0
+    && record.evidence.every((entry) => (
+      isRecord(entry)
+      && ["artifact", "run", "document", "test", "site-configuration"].includes(entry.kind as string)
+      && isNonEmptyString(entry.ref)
+      && ["durable", "observed", "synthetic-correlation"].includes(entry.evidence_class as string)
+    ));
+  const hasAdmissibleEvidence = evidenceValid
+    && record.evidence.some((entry) => isRecord(entry) && entry.evidence_class !== "synthetic-correlation");
+  if (!evidenceValid || (record.status === "feasible" && !hasAdmissibleEvidence)) {
+    diagnostics.push({
+      code: "invalid-feasibility-evidence",
+      component_id: component.id,
+      expected: "feasible observations require durable or observed evidence; non-durable evidence must be explicit",
+      actual: record.evidence,
+      message: `Observation ${observationId} does not carry admissible feasibility evidence.`,
     });
   }
   return diagnostics;
@@ -371,7 +568,12 @@ export function evaluateExecutionTopologyFeasibility(
       }
     }
   }
-  const hasInfeasible = failures.some(({ reason_code }) => reason_code === "infeasible-component" || reason_code === "invalid-observation");
+  // Diagnostics are authority failures, not explanatory metadata. A route
+  // with malformed topology or an observation that failed validation must
+  // never become eligible merely because every required component happened to
+  // have a positive-looking status.
+  const hasInfeasible = diagnostics.length > 0
+    || failures.some(({ reason_code }) => reason_code === "infeasible-component" || reason_code === "invalid-observation");
   return {
     status: hasInfeasible ? "infeasible" : failures.length ? "unknown" : "feasible",
     failures,
@@ -383,6 +585,39 @@ const authority = (site_id: string, locus: TopologyAuthorityLocus): TopologyAuth
   site_id,
   locus,
   authority_ref: `site-governance:${site_id}:${locus}`,
+});
+
+const boundaryAdmission = (
+  edge_id: string,
+  trust_policy_ref: string,
+  network_path_ref: string,
+  authority_ref: string,
+): TopologyBoundaryAdmission => ({
+  schema: TOPOLOGY_BOUNDARY_ADMISSION_SCHEMA,
+  edge_id,
+  trust_policy: {
+    ref: trust_policy_ref,
+    status: "admitted",
+    authority_ref,
+    evidence: [
+      { kind: "document", ref: trust_policy_ref },
+      { kind: "test", ref: "canonical-topology-fixture" },
+    ],
+  },
+  network_path: {
+    ref: network_path_ref,
+    status: "reachable",
+    authority_ref,
+    evidence: [
+      { kind: "document", ref: network_path_ref },
+      { kind: "test", ref: "canonical-topology-fixture" },
+    ],
+  },
+  validity: {
+    valid_from: "2026-07-19T00:00:00.000Z",
+    valid_until: "2026-07-20T00:00:00.000Z",
+    fresh_as_of: "2026-07-19T12:00:00.000Z",
+  },
 });
 
 const executionLocus = (id: string): ResourceRef => ({ kind: "execution-locus", id: `execution-locus:${id}` });
@@ -405,7 +640,7 @@ export const LOCAL_EXECUTION_TOPOLOGY: ExecutionTopology = {
     { id: "l2", from: "local-launcher", to: "local-carrier", kind: "process-handoff", boundary: { kinds: ["process"] }, feasibility_authority: authority("site:pc", "launcher-site"), required_feasibility: ["boundary-admitted"] },
     { id: "l3", from: "local-carrier", to: "local-runtime", kind: "runtime-call", boundary: { kinds: ["process"] }, feasibility_authority: authority("site:pc", "carrier-site"), required_feasibility: ["boundary-admitted"] },
     { id: "l4", from: "local-runtime", to: "local-adapter", kind: "runtime-call", boundary: { kinds: ["none"] }, feasibility_authority: authority("site:pc", "execution-site"), required_feasibility: [] },
-    { id: "l5", from: "local-adapter", to: "remote-service", kind: "network-call", boundary: { kinds: ["network", "trust", "site"], trust_policy_ref: "trust:remote-api", network_path_ref: "network:pc-to-remote" }, feasibility_authority: authority("site:pc", "execution-site"), required_feasibility: ["network-reachable", "boundary-admitted"] },
+    { id: "l5", from: "local-adapter", to: "remote-service", kind: "network-call", boundary: { kinds: ["network", "trust", "site"], trust_policy_ref: "trust:remote-api", network_path_ref: "network:pc-to-remote", admission: boundaryAdmission("l5", "trust:remote-api", "network:pc-to-remote", "site-governance:site:pc:execution-site") }, feasibility_authority: authority("site:pc", "execution-site"), required_feasibility: ["network-reachable", "boundary-admitted"] },
     { id: "l6", from: "remote-service", to: "remote-endpoint", kind: "provider-call", boundary: { kinds: ["none"] }, feasibility_authority: authority("site:inference-service", "service-site"), required_feasibility: [] },
   ],
   route: { node_ids: ["local-client", "local-launcher", "local-carrier", "local-runtime", "local-adapter", "remote-service", "remote-endpoint"], edge_ids: ["l1", "l2", "l3", "l4", "l5", "l6"] },
@@ -426,10 +661,10 @@ export const CLOUDFLARE_EXECUTION_TOPOLOGY: ExecutionTopology = {
   ],
   edges: [
     { id: "c1", from: "cf-client", to: "cf-launcher", kind: "operator-handoff", boundary: { kinds: ["process"] }, feasibility_authority: authority("site:user", "client-site"), required_feasibility: ["boundary-admitted"] },
-    { id: "c2", from: "cf-launcher", to: "cf-carrier", kind: "network-call", boundary: { kinds: ["network", "trust", "site", "account"], trust_policy_ref: "trust:cloudflare-operator-session", network_path_ref: "network:pc-to-cloudflare" }, feasibility_authority: authority("site:pc", "launcher-site"), required_feasibility: ["network-reachable", "boundary-admitted"] },
+    { id: "c2", from: "cf-launcher", to: "cf-carrier", kind: "network-call", boundary: { kinds: ["network", "trust", "site", "account"], trust_policy_ref: "trust:cloudflare-operator-session", network_path_ref: "network:pc-to-cloudflare", admission: boundaryAdmission("c2", "trust:cloudflare-operator-session", "network:pc-to-cloudflare", "site-governance:site:pc:launcher-site") }, feasibility_authority: authority("site:pc", "launcher-site"), required_feasibility: ["network-reachable", "boundary-admitted"] },
     { id: "c3", from: "cf-carrier", to: "cf-runtime", kind: "runtime-call", boundary: { kinds: ["process"] }, feasibility_authority: authority("site:cloudflare-account", "carrier-site"), required_feasibility: ["boundary-admitted"] },
     { id: "c4", from: "cf-runtime", to: "cf-adapter", kind: "runtime-call", boundary: { kinds: ["none"] }, feasibility_authority: authority("site:cloudflare-account", "execution-site"), required_feasibility: [] },
-    { id: "c5", from: "cf-adapter", to: "cf-service", kind: "binding-call", boundary: { kinds: ["account", "trust"] }, feasibility_authority: authority("site:cloudflare-account", "execution-site"), required_feasibility: ["boundary-admitted"] },
+    { id: "c5", from: "cf-adapter", to: "cf-service", kind: "binding-call", boundary: { kinds: ["account", "trust"], trust_policy_ref: "trust:cloudflare-binding", network_path_ref: "network:cloudflare-binding", admission: boundaryAdmission("c5", "trust:cloudflare-binding", "network:cloudflare-binding", "site-governance:site:cloudflare-account:execution-site") }, feasibility_authority: authority("site:cloudflare-account", "execution-site"), required_feasibility: ["boundary-admitted"] },
     { id: "c6", from: "cf-service", to: "cf-endpoint", kind: "provider-call", boundary: { kinds: ["none"] }, feasibility_authority: authority("site:cloudflare-account", "service-site"), required_feasibility: [] },
   ],
   route: { node_ids: ["cf-client", "cf-launcher", "cf-carrier", "cf-runtime", "cf-adapter", "cf-service", "cf-endpoint"], edge_ids: ["c1", "c2", "c3", "c4", "c5", "c6"] },

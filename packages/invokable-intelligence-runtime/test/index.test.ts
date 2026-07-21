@@ -564,6 +564,74 @@ test("one operation is idempotent while explicit retry and replay append lineage
   await store.close();
 });
 
+test("concurrent duplicate deliveries share one durable attempt and one provider dispatch", async () => {
+  const store = await openCanonical();
+  const time = { instant: AT };
+  const adapter = fakeAdapter(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    return { admission: "acknowledged", response: { text: "one-dispatch" } };
+  });
+  const gateway = createLocalInvocationGateway(gatewayOptions(store, adapter, time));
+  const [first, second] = await Promise.all([gateway.invoke(request()), gateway.invoke(request())]);
+  assert.equal(first.kind, "plan");
+  assert.equal(second.kind, "plan");
+  if (first.kind !== "plan" || second.kind !== "plan") return;
+  assert.equal(adapter.calls.length, 1);
+  assert.equal(second.attempt.id, first.attempt.id);
+  assert.equal(first.outcome.id, second.outcome.id);
+  assert.equal((await store.listExecutionAttempts(first.plan.id)).length, 1);
+
+  const [retryFirst, retryDuplicate] = await Promise.all([
+    gateway.invoke(request({ mode: "retry", operationId: "operation:runtime-canonical-test:retry" })),
+    gateway.invoke(request({ mode: "retry", operationId: "operation:runtime-canonical-test:retry" })),
+  ]);
+  assert.equal(retryFirst.kind, "plan");
+  assert.equal(retryDuplicate.kind, "plan");
+  if (retryFirst.kind !== "plan" || retryDuplicate.kind !== "plan") return;
+  assert.equal(retryDuplicate.attempt.id, retryFirst.attempt.id);
+  assert.equal(adapter.calls.length, 2);
+  assert.equal((await store.listExecutionAttempts(first.plan.id)).length, 2);
+  await store.close();
+});
+
+test("gateway treats reordered tool catalogs as the same invocation input", async () => {
+  const store = await openCanonical();
+  const time = { instant: AT };
+  const adapter = fakeAdapter({ admission: "acknowledged", response: { text: "same-input" } });
+  const gateway = createLocalInvocationGateway(gatewayOptions(store, adapter, time));
+  const tools = [
+    { type: "function", function: { name: "zeta", parameters: { type: "object" } } },
+    { type: "function", function: { name: "alpha", parameters: { type: "object" } } },
+  ];
+  const first = await gateway.invoke(request({ tools, operationId: "operation:tool-order" }));
+  const second = await gateway.invoke(request({
+    tools: [tools[1], tools[0]],
+    operationId: "operation:tool-order",
+  }));
+  assert.equal(first.kind, "plan");
+  assert.equal(second.kind, "plan");
+  if (first.kind !== "plan" || second.kind !== "plan") return;
+  assert.equal(second.replayed, true);
+  assert.equal(second.attempt.id, first.attempt.id);
+  assert.equal(adapter.calls.length, 1);
+  await store.close();
+});
+
+test("gateway rejects a caller-supplied digest that omits the tool catalog", async () => {
+  const store = await openCanonical();
+  const adapter = fakeAdapter({ admission: "acknowledged", response: { text: "must-not-dispatch" } });
+  const gateway = createLocalInvocationGateway(gatewayOptions(store, adapter, { instant: AT }));
+  await assert.rejects(
+    gateway.invoke(request({
+      tools: [{ type: "function", function: { name: "search" } }],
+      inputDigest: `sha256:${"0".repeat(64)}`,
+    })),
+    /invocation-input-digest-mismatch/,
+  );
+  assert.equal(adapter.calls.length, 0);
+  await store.close();
+});
+
 test("catalog mutation forces an immutable replacement plan before retry", async () => {
   const store = await openCanonical();
   const time = { instant: AT };

@@ -94,10 +94,10 @@ function checkEvidenceRefs(value: unknown, path: string, errors: ContractError[]
     err(errors, path, "invalid-evidence", "evidence must be an array");
     return;
   }
-  const kinds = new Set(["artifact", "run", "document", "test"]);
+  const kinds = new Set(["artifact", "run", "document", "test", "site-configuration"]);
   value.forEach((entry, i) => {
     if (!isPlainObject(entry) || !kinds.has(String(entry.kind)) || !isNonEmptyString(entry.ref)) {
-      err(errors, `${path}[${i}]`, "invalid-evidence", "evidence entry must be { kind: artifact|run|document|test, ref }");
+      err(errors, `${path}[${i}]`, "invalid-evidence", "evidence entry must be { kind: artifact|run|document|test|site-configuration, ref }");
     }
   });
 }

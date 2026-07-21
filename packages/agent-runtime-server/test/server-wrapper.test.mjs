@@ -44,6 +44,13 @@ function waitForOutput(child, predicate, timeoutMs = 5000) {
   });
 }
 
+function respondToTopologyProbe(request, response) {
+  if (request?.method !== 'HEAD') return false;
+  response.statusCode = 204;
+  response.end();
+  return true;
+}
+
 function readRawUpgradeResponse(endpoint, requestPath) {
   const target = new URL(endpoint);
   return new Promise((resolve, reject) => {
@@ -224,6 +231,7 @@ async function seedIntelligenceRegistry(siteRoot, {
   endpointUrl = null,
   credentialStore = providerId === 'codex-subscription' ? 'none' : 'env',
   credentialReference = providerId === 'codex-subscription' ? null : canonicalCredentialReference(providerId),
+  disableTopologyRequirements = false,
 } = {}) {
   // This fixture is intentionally complete and explicit. The production
   // bootstrap preserves migration residuals and never invents principal
@@ -247,6 +255,11 @@ async function seedIntelligenceRegistry(siteRoot, {
   for (const record of seed.records) {
     record.record_id = record.document.id;
     record.source.digest = canonicalSha256(record.document);
+    if (disableTopologyRequirements && record.document?.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1') {
+      record.document.topology.nodes = record.document.topology.nodes.map((node) => ({ ...node, required_feasibility: [] }));
+      record.document.topology.edges = record.document.topology.edges.map((edge) => ({ ...edge, required_feasibility: [] }));
+      record.source.digest = canonicalSha256(record.document);
+    }
   }
   const store = await SqliteRegistryStore.open(dbPath);
   try {
@@ -463,6 +476,7 @@ test('wrapper diagnostics surface runtime output failures and require a real ter
 test('spawned non-raw runtime uses the interactive terminal projection for a TTY pair', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-tty-e2e-'));
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     request.resume();
     request.on('end', () => {
       response.setHeader('content-type', 'application/json');
@@ -535,7 +549,7 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
 
 test('spawned event projection rejects plain HTTP and malformed WebSocket upgrades', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-event-admission-e2e-'));
-  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   const sessionId = 'event-admission-e2e';
   const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
   let child = null;
@@ -754,7 +768,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
     await new Promise((resolve) => occupied.listen(0, '127.0.0.1', resolve));
     const occupiedPort = occupied.address().port;
     const projectionFailureSiteRoot = createSiteRoot('projection-failure');
-    await seedIntelligenceRegistry(projectionFailureSiteRoot, { providerId: 'codex-subscription' });
+    await seedIntelligenceRegistry(projectionFailureSiteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
     const projectionStartupFailure = await runStartupFailure(
       projectionFailureSiteRoot,
       [
@@ -774,7 +788,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
     assert.match(projectionStartupFailure.stderr, /EADDRINUSE|address already in use/i);
 
     const disabledSiteRoot = createSiteRoot('disabled');
-    await seedIntelligenceRegistry(disabledSiteRoot, { providerId: 'codex-subscription' });
+    await seedIntelligenceRegistry(disabledSiteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
     const disabledChild = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -811,7 +825,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
     }
 
     const wrapperSiteRoot = createSiteRoot('wrapper-events');
-    await seedIntelligenceRegistry(wrapperSiteRoot, { providerId: 'codex-subscription' });
+    await seedIntelligenceRegistry(wrapperSiteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
     const wrapperChild = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -859,7 +873,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
 
 test('spawned runtime loads a lifecycle hook module and dispatches hooks through the canonical entrypoint', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-lifecycle-hook-e2e-'));
-  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   const hookModulePath = join(siteRoot, 'lifecycle-hooks.mjs');
   const hookLogPath = join(siteRoot, 'lifecycle-hook-events.jsonl');
   writeFileSync(hookModulePath, [
@@ -924,6 +938,7 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
   let requestReceived;
   const providerRequest = new Promise((resolve) => { requestReceived = resolve; });
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     request.resume();
     request.on('end', () => {
       heldResponse = response;
@@ -1052,6 +1067,7 @@ test('spawned runtime reconfigures canonical invocation constraints and binds th
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-switch-e2e-'));
   const observedModels = [];
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     let body = '';
     request.setEncoding('utf8');
     request.on('data', (chunk) => { body += chunk; });
@@ -1163,6 +1179,7 @@ test('spawned runtime refuses canonical intelligence reconfiguration across a bu
   let requestReceived;
   const providerRequest = new Promise((resolve) => { requestReceived = resolve; });
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     request.resume();
     request.on('end', () => {
       heldResponse = response;
@@ -1256,6 +1273,7 @@ test('spawned runtime serves the complete session-scoped artifact HTTP surface',
   writeFileSync(outsidePath, '<!doctype html><h1>Outside</h1>', 'utf8');
   const providerBodies = [];
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     let body = '';
     request.setEncoding('utf8');
     request.on('data', (chunk) => { body += chunk; });
@@ -1411,6 +1429,7 @@ test('spawned runtime consumes the detached control sideband without raw JSONL',
   let providerCalls = 0;
   let providerBody = null;
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     let body = '';
     request.setEncoding('utf8');
     request.on('data', (chunk) => { body += chunk; });
@@ -1509,6 +1528,7 @@ test('spawned runtime handles WebSocket reads, controls, errors, and isolated su
   const sessionId = 'websocket-control-e2e';
   let providerCalls = 0;
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     request.resume();
     request.on('end', () => {
       providerCalls += 1;
@@ -1673,6 +1693,7 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
   const providerOrder = [];
   let providerCalls = 0;
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     let body = '';
     request.setEncoding('utf8');
     request.on('data', (chunk) => { body += chunk; });
@@ -1757,6 +1778,7 @@ test('spawned runtime keeps close request waiting until active request is settle
   let releaseProvider;
   const requestReceived = new Promise((resolve) => { markRequestReceived = resolve; });
   const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     request.resume();
     markRequestReceived();
     releaseProvider = () => {
@@ -1823,7 +1845,8 @@ test('spawned runtime keeps close request waiting until active request is settle
 
 test('spawned runtime exposes failed input as recoverable', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-failed-health-e2e-'));
-  const provider = createServer((_request, response) => {
+  const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     response.statusCode = 500;
     response.end('provider fixture failure');
   });
@@ -1873,7 +1896,8 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
     let providerCalls = 0;
     let markSecondRequest;
     const secondRequest = new Promise((resolve) => { markSecondRequest = resolve; });
-    const provider = createServer((_request, response) => {
+    const provider = createServer((request, response) => {
+      if (respondToTopologyProbe(request, response)) return;
       providerCalls += 1;
       if (providerCalls === 1) {
         response.setHeader('content-type', 'application/json');
@@ -1893,7 +1917,7 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
       const signalRelay = process.platform === 'win32';
       const entrypoint = fileURLToPath(new URL(signalRelay ? './fixtures/signal-relay-runtime.mjs' : '../bin/narada-agent-runtime-server.mjs', import.meta.url));
       const child = spawnTestChild(process.execPath, [entrypoint, '--raw-jsonl', '--identity', 'narada.test', '--session', `signal-${signal.toLowerCase()}`], {
-        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'signal-fixture-key' },
+        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'signal-fixture-key', NARADA_MCP_SCOPE: 'site' },
         stdio: signalRelay ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
       });
       let stdout = '';
@@ -1909,7 +1933,7 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
       assert.equal(exitCode, 0, `${signal}: ${stderr}`);
       const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
       assert.ok(events.some((event) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo'), signal);
-      assert.ok(events.some((event) => event.event === 'session_turn_cancel_requested'), `${signal}: ${events.map((event) => event.event).join(',')}`);
+      assert.ok(events.some((event) => event.event === 'session_turn_cancel_requested'), `${signal}: ${events.map((event) => `${event.event}:${event.error ?? ''}`).join(',')}`);
       assert.ok(events.some((event) => event.event === 'carrier_turn_interrupted' && /abort/i.test(event.error)), `${signal}: ${events.map((event) => `${event.event}:${event.error ?? ''}`).join(',')}`);
       assert.ok(events.some((event) => event.event === 'session_closed' && event.request_id === `signal-close-${signal.toLowerCase()}`), signal);
     } finally {
@@ -1923,7 +1947,7 @@ test('spawned runtime handles Codex subprocess success, malformed JSONL, and non
   const fixturePath = fileURLToPath(new URL('./fixtures/codex-exec-fixture.mjs', import.meta.url));
   for (const mode of ['success', 'malformed', 'exit']) {
     const siteRoot = mkdtempSync(join(tmpdir(), `narada-codex-${mode}-e2e-`));
-    await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
+    await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
     try {
       const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
       const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `codex-${mode}`], {
@@ -1943,7 +1967,7 @@ test('spawned runtime handles Codex subprocess success, malformed JSONL, and non
 
 test('spawned runtime cancels a hanging Codex subprocess', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-codex-cancel-e2e-'));
-  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   const fixturePath = fileURLToPath(new URL('./fixtures/codex-exec-fixture.mjs', import.meta.url));
   let child = null;
   try {
@@ -1978,6 +2002,11 @@ test('spawned runtime proves the live local topology success matrix across suppo
   let expectedCredentialHeader = null;
   let expectedCredentialValue = null;
   const provider = createServer((request, response) => {
+    if (request.method === 'HEAD') {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     assert.equal(request.headers[expectedCredentialHeader], expectedCredentialValue);
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify(request.url === '/v1/messages'
@@ -2074,12 +2103,16 @@ test('one spawned runtime preserves intent lineage across provider failure, retr
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-canonical-intelligence-journey-e2e-'));
   const sessionId = 'canonical-intelligence-journey-e2e';
   const intentId = 'intent:canonical-intelligence-journey';
-  let providerMode = 'failure';
   let providerCalls = 0;
-  const provider = createServer((_request, response) => {
+  const provider = createServer((request, response) => {
+    if (request.method === 'HEAD') {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     providerCalls += 1;
     response.setHeader('content-type', 'application/json');
-    if (providerMode === 'failure') {
+    if (providerCalls === 1) {
       response.statusCode = 500;
       response.end(JSON.stringify({ error: { message: 'fixture failure' } }));
       return;
@@ -2119,7 +2152,7 @@ test('one spawned runtime preserves intent lineage across provider failure, retr
       (text) => hasCapturedJsonEvent(text, (event) => event.event === 'session_started'),
     );
 
-    const submit = async ({ id, operationId, mode }, terminalEvent) => {
+    const submit = async ({ id, operationId, mode }) => {
       child.stdin.write(`${JSON.stringify({
         id,
         method: 'session.submit',
@@ -2138,29 +2171,36 @@ test('one spawned runtime preserves intent lineage across provider failure, retr
         child,
         () => stdout,
         (text) => hasCapturedJsonEvent(text, (event) =>
-          event.event === terminalEvent && event.request_id === id),
+          ['session_control_response', 'session_control_rejected'].includes(event.event)
+          && event.request_id === id),
         10_000,
       );
+      return readJsonlFileFromText(stdout).findLast((event) =>
+        ['session_control_response', 'session_control_rejected'].includes(event.event)
+        && event.request_id === id);
     };
 
-    await submit({
+    const failureControl = await submit({
       id: 'journey-failure',
       operationId: 'operation:canonical-intelligence-journey:failure',
       mode: 'immediate',
-    }, 'session_control_rejected');
+    });
+    assert.equal(failureControl.event, 'session_control_response');
+    assert.equal(failureControl.terminal_state, 'failed');
     assert.equal(providerCalls, 1);
 
-    providerMode = 'success';
-    await submit({
+    const retryControl = await submit({
       id: 'journey-retry',
       operationId: 'operation:canonical-intelligence-journey:retry',
       mode: 'retry',
-    }, 'session_control_response');
-    await submit({
+    });
+    assert.equal(retryControl.event, 'session_control_response', `provider_calls=${providerCalls}\n${stdout.slice(-5000)}`);
+    const replayControl = await submit({
       id: 'journey-replay',
       operationId: 'operation:canonical-intelligence-journey:replay',
       mode: 'replay',
-    }, 'session_control_response');
+    });
+    assert.equal(replayControl.event, 'session_control_response', `provider_calls=${providerCalls}\n${stdout.slice(-5000)}`);
     assert.equal(providerCalls, 3);
 
     provider.closeAllConnections?.();
@@ -2249,7 +2289,10 @@ test('spawned runtime cancels an in-flight provider request through JSONL contro
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-cancel-e2e-'));
   let requestReceived;
   const received = new Promise((resolve) => { requestReceived = resolve; });
-  const provider = createServer(() => { requestReceived(); });
+  const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
+    requestReceived();
+  });
   await new Promise((resolve) => provider.listen(0, '127.0.0.1', resolve));
   const address = provider.address();
   await seedIntelligenceRegistry(siteRoot, {
@@ -2291,7 +2334,8 @@ test('spawned runtime refuses to redispatch an admission-unknown turn after forc
   let providerCalls = 0;
   let firstRequestReceived;
   const firstRequest = new Promise((resolve) => { firstRequestReceived = resolve; });
-  const provider = createServer((_request, response) => {
+  const provider = createServer((request, response) => {
+    if (respondToTopologyProbe(request, response)) return;
     providerCalls += 1;
     if (!recover) {
       firstRequestReceived();
@@ -2367,14 +2411,14 @@ test('spawned runtime refuses to redispatch an admission-unknown turn after forc
 });
 test('spawned runtime records required MCP startup failure without calling the provider', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-failure-'));
-  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   const fixturePath = fileURLToPath(new URL('./fixtures/mcp-exit-server.mjs', import.meta.url));
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { broken: { command: process.execPath, args: [fixturePath], surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'mcp-failure'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: 'http://127.0.0.1:1/', OPENAI_API_KEY: 'unused', NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC: '1' }, stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: 'http://127.0.0.1:1/', OPENAI_API_KEY: 'unused', NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC: '1', NARADA_MCP_SCOPE: 'site' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
     let stderr = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk) => { stderr += chunk; });
@@ -2382,7 +2426,9 @@ test('spawned runtime records required MCP startup failure without calling the p
     assert.equal(await new Promise((resolve) => child.on('exit', resolve)), 0);
     const events = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     assert.ok(events.some((event) => event.event === 'session_control_rejected' && event.request_id === 'turn-1' && /MCP|mcp/i.test(event.error)));
-    assert.equal(events.some((event) => event.event === 'carrier_turn_started'), false);
+    assert.equal(events.filter((event) => event.event === 'carrier_turn_started').length, 1);
+    assert.equal(events.filter((event) => ['carrier_turn_failed', 'carrier_turn_interrupted', 'carrier_turn_completed'].includes(event.event)).length, 1);
+    assert.equal(events.some((event) => event.event === 'carrier_turn_completed'), false);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
   }
@@ -2396,7 +2442,12 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
   const generatedArtifactPath = join(siteRoot, 'generated-by-mcp.html');
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [fixturePath, disconnectMarker], surface_id: 'fixture.surface' } } }), 'utf8');
   let providerCalls = 0;
-  const provider = createServer((_request, response) => {
+  const provider = createServer((request, response) => {
+    if (request.method === 'HEAD') {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     providerCalls += 1;
     response.setHeader('content-type', 'application/json');
     response.end(JSON.stringify(providerCalls === 1
@@ -2417,7 +2468,7 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     const child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--health-port', '0', '--identity', 'narada.test', '--session', 'mcp-e2e'], {
-      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key', NARADA_DENIED_CAPABILITY_TOOLS: 'fixture_denied' }, stdio: ['pipe', 'pipe', 'pipe'],
+      env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key', NARADA_DENIED_CAPABILITY_TOOLS: 'fixture_denied', NARADA_MCP_SCOPE: 'site' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
     let stdout = '';
     child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk) => { stdout += chunk; });
@@ -2493,6 +2544,11 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
 test('spawned runtime submits a turn through the configured local provider endpoint', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-provider-e2e-'));
   const provider = createServer((request, response) => {
+    if (request.method === 'HEAD') {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     assert.equal(request.url, '/v1/chat/completions');
     assert.equal(request.headers.authorization, 'Bearer fixture-key');
     response.setHeader('content-type', 'application/json');
@@ -3684,7 +3740,7 @@ test('HTTP artifact mutations refuse before session-core authority binding', asy
 test('narada-owned entrypoint runs the session-core control runtime in process', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-runtime-server-package-'));
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   try {
     const binPath = fileURLToPath(new URL('../bin/narada-agent-runtime-server.mjs', import.meta.url));
     const child = spawnTestChild(process.execPath, [
@@ -3741,7 +3797,7 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
 
 test('spawned runtime serves health and durable/live events through advertised projections', { timeout: 15000 }, async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-projection-e2e-'));
-  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription' });
+  await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   const sessionId = 'projection-e2e';
   let child = null;
   let client = null;
@@ -3878,6 +3934,11 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-runtime-request-retention-e2e-'));
   let holdResponse = null;
   const provider = createServer((request, response) => {
+    if (request.method === 'HEAD') {
+      response.statusCode = 204;
+      response.end();
+      return;
+    }
     let body = '';
     request.setEncoding('utf8');
     request.on('data', (chunk) => { body += chunk; });
