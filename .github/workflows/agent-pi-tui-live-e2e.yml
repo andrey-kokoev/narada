@@ -1,0 +1,32 @@
+name: agent-pi-tui live E2E
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_live_e2e:
+        description: Run the opt-in real-process agent-pi-tui live suite
+        required: true
+        type: boolean
+        default: false
+
+jobs:
+  live-e2e:
+    if: ${{ inputs.run_live_e2e == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run guarded agent-pi-tui fixture live suite
+        run: pnpm test:agent-pi-tui:live:fixture

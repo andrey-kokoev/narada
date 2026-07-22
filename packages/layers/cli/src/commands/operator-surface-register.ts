@@ -44,6 +44,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--reuse-existing-session', 'Attach launch binding to an already-running matching session instead of starting a fresh one', false)
     .option('--launch-binding <path>', 'Write an exact operator projection launch binding for sibling surfaces')
     .option('--launch-session-id <id>', 'Launch session id for process ownership evidence when no launch binding is used')
+    .option('--resume-session <id>', 'Explicitly recover an abandoned runtime session by reusing its durable session id')
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .action(directCommandAction<[string | undefined, CommanderOptionValues]>({
       command: 'operator-surface runtime start',
@@ -67,6 +68,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         reuseExistingSession: opts.reuseExistingSession as boolean | undefined,
         launchBindingPath: opts.launchBinding as string | undefined,
         launchSessionId: opts.launchSessionId as string | undefined,
+        resumeSessionId: opts.resumeSession as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));

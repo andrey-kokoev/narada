@@ -31,7 +31,7 @@ describe('workspace launch admission policy', () => {
   it('centralizes runtime, surface, and role admission without launcher intelligence selection', () => {
     const admission = createWorkspaceLaunchAdmissionPolicy();
 
-    expect(admission.narsOperatorSurfaceKinds).toEqual(['agent-cli', 'agent-web-ui', 'agent-tui']);
+    expect(admission.narsOperatorSurfaceKinds).toEqual(['agent-cli', 'agent-web-ui', 'agent-tui', 'agent-pi-tui']);
     expect(admission.resolveOperatorSurfaceRuntimeSelection('agent-web-ui', 'narada-agent-runtime-server')).toMatchObject({
       operator_surface_kind: 'agent-web-ui',
       runtime_host_kind: 'narada-agent-runtime-server',

@@ -18,6 +18,12 @@ function projectCarrierCommand(command) {
   }
   return command;
 }
+function projectServerTimeouts(server) {
+  return {
+    ...(Number.isFinite(Number(server.startup_timeout_sec)) ? { startup_timeout_sec: Number(server.startup_timeout_sec) } : {}),
+    ...(Number.isFinite(Number(server.request_timeout_ms)) ? { request_timeout_ms: Number(server.request_timeout_ms) } : {}),
+  };
+}
 
 export function projectFabricForCodex(fabric) {
   const envVars = codexMcpEnvVarNames();
@@ -26,7 +32,7 @@ export function projectFabricForCodex(fabric) {
     command: projectCarrierCommand(server.command),
     args: server.args,
     env_vars: mergeUnique([...(server.env_vars ?? []), ...envVars]),
-    ...(server.startup_timeout_sec ? { startup_timeout_sec: server.startup_timeout_sec } : {}),
+    ...projectServerTimeouts(server),
   }));
 }
 
@@ -39,6 +45,7 @@ export function projectFabricForAgentTui(fabric, envValues) {
       command: projectCarrierCommand(server.command),
       args: server.args,
       ...(server.target_site_root ? { target_site_root: server.target_site_root } : {}),
+      ...projectServerTimeouts(server),
       env: {
         ...projectServerEnvironment(server),
         ...envValues,
@@ -55,6 +62,7 @@ export function projectFabricForClaudeCode(fabric, envValues) {
     mcpServers[name] = {
       command: projectCarrierCommand(server.command),
       args: server.args,
+      ...projectServerTimeouts(server),
       env: {
         ...projectServerEnvironment(server),
         ...envValues,

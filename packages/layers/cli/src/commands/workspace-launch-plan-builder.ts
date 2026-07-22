@@ -67,6 +67,30 @@ function agentTuiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper: 
   };
 }
 
+function agentPiTuiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper: string, launchBindingPath: string | null): WorkspaceLaunchTerminalTab {
+  const agentDisplay = workspaceLaunchQualifiedAgentId(record);
+  if (!launchBindingPath) throw new Error(`workspace_launch_agent_pi_tui_launch_binding_required: ${agentDisplay}`);
+  const piTuiRoot = resolve(join(naradaProper, 'packages', 'agent-pi-tui'));
+  const attachCommand = [
+    'pnpm',
+    '--dir',
+    piTuiRoot,
+    'exec',
+    'narada-agent-pi-tui',
+    '--',
+    '--launch-binding',
+    launchBindingPath,
+  ];
+  return {
+    title: `${agentDisplay} agent-pi-tui`,
+    cwd: piTuiRoot,
+    keepOpen: true,
+    command: `${workspaceLaunchPowerShellHostMessage(`agent-pi-tui: waiting for ${agentDisplay} NARS event endpoint`)}\n${workspaceLaunchPowerShellCommand(attachCommand)}`,
+    command_argv: attachCommand,
+    command_authority: 'projection_only',
+  };
+}
+
 function normalizeRuntimeAuthority(value: string | undefined | null): string {
   return normalizeWorkspaceLaunchAuthority(value);
 }
@@ -92,7 +116,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const isNarsRuntimeHost = runtimeHostKind === NARADA_AGENT_RUNTIME_SERVER_KIND;
   const hasAgentTuiOperatorSurface = launchOperatorSurfaces.includes('agent-tui');
   const hasAgentWebUiOperatorSurface = launchOperatorSurfaces.includes('agent-web-ui');
-  const hasProjectionBearingOperatorSurface = hasAgentTuiOperatorSurface || hasAgentWebUiOperatorSurface;
+  const hasAgentPiTuiOperatorSurface = launchOperatorSurfaces.includes('agent-pi-tui');
   const webUiOnly = hasAgentWebUiOperatorSurface
     && !launchOperatorSurfaces.includes('agent-cli')
     && !hasAgentTuiOperatorSurface;
@@ -115,7 +139,10 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
   const launchSessionToken = workspaceLaunchSessionToken(record);
   const launchSessionId = launchSessionIdFromToken(launchSessionToken);
-  const launchBindingPath = hasProjectionBearingOperatorSurface
+  // Every hidden NARS launch gets a durable binding. Web UI/TUI use it for
+  // attachment; CLI-only launches use the same evidence for failure diagnosis
+  // and later surface attachment.
+  const launchBindingPath = isNarsRuntimeHost
     ? operatorProjectionLaunchBindingPath(record, launchSessionToken)
     : null;
   const runtimeWorkspaceRoot = record.workspace_root ?? record.narada_root;
@@ -178,6 +205,9 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   if (hasAgentTuiOperatorSurface) {
     terminalTabs.push(agentTuiAttachTerminalTab(record, naradaProper, launchBindingPath));
   }
+  if (hasAgentPiTuiOperatorSurface) {
+    terminalTabs.push(agentPiTuiAttachTerminalTab(record, naradaProper, launchBindingPath));
+  }
   if (!webUiOnly && launchOperatorSurface === 'agent-web-ui') {
     terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
   }
@@ -186,7 +216,9 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
       terminalTabs.push(agentWebUiAttachTerminalTab(record, naradaProper, cloudflareApiBaseUrl, launchBindingPath, onboarding));
     } else if (extraOperatorSurface === 'agent-tui' && !hasAgentTuiOperatorSurface) {
       terminalTabs.push(agentTuiAttachTerminalTab(record, naradaProper, launchBindingPath));
-    } else if (extraOperatorSurface !== 'agent-tui') {
+    } else if (extraOperatorSurface === 'agent-pi-tui' && !hasAgentPiTuiOperatorSurface) {
+      terminalTabs.push(agentPiTuiAttachTerminalTab(record, naradaProper, launchBindingPath));
+    } else if (extraOperatorSurface !== 'agent-tui' && extraOperatorSurface !== 'agent-pi-tui') {
       throw new Error(`unsupported_multi_operator_surface_projection: ${extraOperatorSurface}`);
     }
   }

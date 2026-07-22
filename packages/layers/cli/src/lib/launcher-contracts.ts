@@ -62,6 +62,7 @@ export interface AgentStartOptions {
   launchSource?: string;
   launchBindingPath?: string;
   launchSessionId?: string;
+  resumeSessionId?: string;
 }
 
 export interface OperatorProjectionLaunchBinding {

@@ -77,6 +77,9 @@ export function assertWorkspaceLaunchAgentPreflight(plan: WorkspaceLaunchAgentPl
   const visibleAgentTuiProjection = plan.launch_operator_surfaces.includes('agent-tui')
     && plan.runtime_start_execution_mode === 'hidden_detached'
     && plan.terminal_tabs.some((tab) => tab.command_argv.includes('--launch-binding'));
+  const visibleAgentPiTuiProjection = plan.launch_operator_surfaces.includes('agent-pi-tui')
+    && plan.runtime_start_execution_mode === 'hidden_detached'
+    && plan.terminal_tabs.some((tab) => tab.command_argv.includes('--launch-binding'));
   const visibleWebUiProjection = plan.launch_operator_surfaces.includes('agent-web-ui')
     && plan.runtime_start_execution_mode === 'hidden_detached'
     && plan.terminal_tabs.some((tab) => tab.command_argv.includes('--launch-binding'));
@@ -87,6 +90,15 @@ export function assertWorkspaceLaunchAgentPreflight(plan: WorkspaceLaunchAgentPl
       'workspace_launch_runtime_start_mode_inconsistent',
       `agent-tui requires an exact visible projection terminal when the NARS host is detached for ${plan.agent}.`,
       'Regenerate the launch plan with an agent-tui attach terminal.',
+    );
+  }
+  if (plan.launch_operator_surfaces.includes('agent-pi-tui')
+    && plan.runtime_start_execution_mode !== 'operator_terminal'
+    && !visibleAgentPiTuiProjection) {
+    throw new WorkspaceLaunchContractError(
+      'workspace_launch_runtime_start_mode_inconsistent',
+      `agent-pi-tui requires an exact visible projection terminal when the NARS host is detached for ${plan.agent}.`,
+      'Regenerate the launch plan with an agent-pi-tui attach terminal.',
     );
   }
   if (plan.launch_operator_surfaces.includes('agent-web-ui')
@@ -171,6 +183,25 @@ export function assertWorkspaceLaunchAgentPreflight(plan: WorkspaceLaunchAgentPl
     const projectionEvidence = plan.wt_args.join('\n');
     if (!projectionEvidence.includes(binding.path)) {
       throw new Error(`workspace_launch_agent_tui_binding_not_handed_off: ${plan.agent}`);
+    }
+  }
+  if (plan.launch_operator_surfaces.includes('agent-pi-tui')) {
+    const binding = plan.operator_projection_launch_binding;
+    if (!binding
+      || binding.schema !== 'narada.operator_projection_launch_binding_ref.v1'
+      || typeof binding.path !== 'string'
+      || !binding.path
+      || binding.exact_attach_required !== true
+      || !binding.lease
+      || binding.lease.schema !== 'narada.operator_projection_attachment_lease.v1'
+      || binding.lease.binding_path !== binding.path
+      || binding.lease.exact_session !== true
+      || binding.lease.exact_endpoint !== true) {
+      throw new Error(`workspace_launch_agent_pi_tui_binding_invalid: ${plan.agent}`);
+    }
+    const projectionEvidence = plan.wt_args.join('\n');
+    if (!projectionEvidence.includes(binding.path)) {
+      throw new Error(`workspace_launch_agent_pi_tui_binding_not_handed_off: ${plan.agent}`);
     }
   }
 }

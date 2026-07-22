@@ -1,7 +1,14 @@
+import { readFile } from 'node:fs/promises';
 import { discoverNarsSessions, type NarsSessionObservation } from '@narada2/nars-session-core/session-index';
 import type { WorkspaceLaunchAgentPlan, WorkspaceLaunchAttachmentEvidence } from './workspace-launch-types.js';
 
-export const WORKSPACE_LAUNCH_ATTACHMENT_TIMEOUT_MS = 30_000;
+// Runtime dependency and MCP startup is part of the attachment boundary: the
+// runtime can already be launched and serving its health/event listeners while
+// it is still finishing the work that writes its durable session index. Keep
+// the launcher alive long enough for that normal startup path to complete;
+// the exact launch binding and healthy-session checks below still prevent
+// attaching to an unrelated session.
+export const WORKSPACE_LAUNCH_ATTACHMENT_TIMEOUT_MS = 120_000;
 export const WORKSPACE_LAUNCH_ATTACHMENT_POLL_MS = 100;
 
 export class WorkspaceLaunchAttachmentError extends Error {
@@ -12,6 +19,80 @@ export class WorkspaceLaunchAttachmentError extends Error {
     this.name = 'WorkspaceLaunchAttachmentError';
     this.evidence = evidence;
   }
+}
+
+async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<string | null> {
+  const bindingPath = plan.operator_projection_launch_binding?.path;
+  if (!bindingPath) return null;
+  let binding: Record<string, unknown>;
+  try {
+    binding = JSON.parse(await readFile(bindingPath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+  const reason = typeof binding.reason === 'string' && binding.reason.trim()
+    ? binding.reason.trim()
+    : 'agent_start_failed';
+  const resultPath = typeof binding.agent_start_result_file === 'string'
+    ? binding.agent_start_result_file
+    : null;
+  let result: Record<string, unknown> | null = null;
+  try {
+    if (resultPath) result = JSON.parse(await readFile(resultPath, 'utf8')) as Record<string, unknown>;
+  } catch {
+    result = null;
+  }
+
+  const runtimeStderr = result ? await readRuntimeStderr(result) : null;
+  if (runtimeStderr) return `runtime_start_failed:${runtimeStderr}`;
+
+  if (binding.status === 'waiting_for_agent_start') {
+    return `agent_start_handoff_pending:${reason}`;
+  }
+  if (binding.status !== 'failed') return null;
+  if (!resultPath) return `launch_binding_failed:${reason}`;
+  if (!result) return `launch_binding_failed:${reason}`;
+  const resultReason = typeof result.reason_code === 'string' && result.reason_code.trim()
+    ? result.reason_code.trim()
+    : typeof result.reason === 'string' && result.reason.trim()
+      ? result.reason.trim()
+      : typeof result.error === 'string' && result.error.trim()
+        ? result.error.trim()
+        : reason;
+  return `agent_start_failed:${resultReason}`;
+}
+
+async function readRuntimeStderr(result: Record<string, unknown>): Promise<string | null> {
+  const paths: string[] = [];
+  const addPath = (value: unknown) => {
+    if (typeof value === 'string' && value.trim() && !paths.includes(value.trim())) paths.push(value.trim());
+  };
+  const addOutputFiles = (value: unknown) => {
+    if (!value || typeof value !== 'object') return;
+    addPath((value as Record<string, unknown>).stderr_path);
+  };
+  const addContractOutputFiles = (value: unknown) => {
+    addOutputFiles(value);
+    if (value && typeof value === 'object') {
+      addOutputFiles((value as Record<string, unknown>).hidden_runtime_output_files);
+    }
+  };
+  addOutputFiles(result.hidden_runtime_output_files);
+  const contracts = result.launcher_contracts;
+  if (contracts && typeof contracts === 'object') {
+    addContractOutputFiles((contracts as Record<string, unknown>).hidden_runtime_output_files);
+    addContractOutputFiles((contracts as Record<string, unknown>).launch_selection_session);
+    addContractOutputFiles((contracts as Record<string, unknown>).operator_terminal_projection_plan);
+  }
+  for (const path of paths) {
+    try {
+      const text = (await readFile(path, 'utf8')).trim();
+      if (text) return text.length > 2_000 ? text.slice(text.length - 2_000) : text;
+    } catch {
+      // The output file may not exist yet while the detached handoff is still running.
+    }
+  }
+  return null;
 }
 
 function candidatePlanAgentId(plan: WorkspaceLaunchAgentPlan): string | null {
@@ -106,6 +187,7 @@ export async function awaitWorkspaceLaunchSessionAttachments(
       }
 
       if (!candidate) {
+        const launchFailure = await inspectLaunchFailure(plan);
         latest.set(launchSessionId, {
           launch_session_id: launchSessionId,
           session_id: null,
@@ -116,7 +198,7 @@ export async function awaitWorkspaceLaunchSessionAttachments(
           health_endpoint: null,
           health_status: 'unavailable',
           attempts: attempt,
-          reason: discoveryError ?? 'session_not_indexed',
+          reason: launchFailure ?? discoveryError ?? 'session_not_indexed',
         });
         continue;
       }

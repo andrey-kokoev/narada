@@ -403,6 +403,7 @@ writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture-mcp.json'), `${JSON.stringif
       surface_id: 'fixture.surface',
       target_site_root: '{site_root}',
       authority_posture: 'facade_only',
+      request_timeout_ms: 123,
     },
     'narada-empty-authority': {
       command: 'node',
@@ -437,6 +438,7 @@ assert.deepEqual(mcpServerNames(fabric), ['narada-empty-authority', 'narada-fixt
 assert.equal(fabric.registry_validation.status, 'ok');
 assert.equal(fabric.servers['narada-fixture'].command, process.execPath);
 assert.equal(fabric.servers['narada-fixture'].args[0].includes(siteRoot.replaceAll('\\', '/')), true);
+assert.equal(fabric.servers['narada-fixture'].request_timeout_ms, 123);
 assert.equal(fabric.servers['narada-fixture'].target_site_root, siteRoot.replaceAll('\\', '/'));
 assert.deepEqual(projectServerEnvironment(fabric.servers['narada-fixture'], {
   NARADA_AGENT_ID: 'narada.test',
@@ -452,6 +454,7 @@ const agentTuiProjection = projectFabricForAgentTui(fabric, { NARADA_AGENT_ID: '
 assert.deepEqual(Object.keys(agentTuiProjection.mcpServers), ['narada-fixture']);
 assert.deepEqual(agentTuiProjection.mcpServers['narada-fixture'].tools, ['fixture_read', 'task_lifecycle_claim']);
 assert.equal(agentTuiProjection.mcpServers['narada-fixture'].target_site_root, siteRoot.replaceAll('\\', '/'));
+assert.equal(agentTuiProjection.mcpServers['narada-fixture'].request_timeout_ms, 123);
 assert.equal(agentTuiProjection.mcpServers['narada-fixture'].env.NARADA_AGENT_ID, 'narada.test');
 
 rmSync(siteRoot, { recursive: true, force: true });

@@ -1,0 +1,66 @@
+{
+  "name": "@narada2/agent-pi-tui",
+  "version": "0.1.0",
+  "private": true,
+  "files": [
+    "bin",
+    "src",
+    "dist",
+    "README.md",
+    "ARCHITECTURE.md",
+    "LICENSE-PI-TUI-NOTICE.md"
+  ],
+  "type": "module",
+  "bin": {
+    "narada-agent-pi-tui": "./bin/narada-agent-pi-tui.mjs"
+  },
+  "narada": {
+    "package_role": "nars_client_projection",
+    "operator_surface_kind": "agent-pi-tui",
+    "runtime_server_owner": "@narada2/agent-runtime-server",
+    "rendering_substrate": "@earendil-works/pi-tui",
+    "canonical_state_owner": "@narada2/nars-session-core"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./nars-client": "./dist/nars-client/attach-client.js",
+    "./projection": "./dist/projection/projection-adapter.js",
+    "./input": "./dist/input/operator-input.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run --config vitest.config.ts",
+    "test:baseline-live": "pnpm --filter @narada2/cli build && pnpm run build && pnpm --filter @narada2/agent-web-ui build && node test/live-four-surface-acceptance-e2e.mjs --enable-live-e2e && node test/live-four-surface-acceptance-e2e.mjs --enable-live-e2e --pi-rpc",
+    "test:live:guard": "node test/live-suite-guard.mjs",
+    "test:live:local": "pnpm run build && node test/live-p0-durability-cancellation-e2e.mjs --enable-live-e2e && node test/live-p1-authority-negative-e2e.mjs --enable-live-e2e && node test/live-p1-controls-launch-binding-e2e.mjs --enable-live-e2e && node test/live-p1-mcp-faults-e2e.mjs --enable-live-e2e && node test/live-p1-pty-boundary-e2e.mjs --enable-live-e2e && node test/live-p1-transport-idempotency-e2e.mjs --enable-live-e2e && node test/live-p1-uncertain-admission-retry-e2e.mjs --enable-live-e2e && node test/live-p1-ambient-isolation-e2e.mjs --enable-live-e2e && node test/live-p1-provider-auth-faults-e2e.mjs --enable-live-e2e && node test/live-p1-compaction-reconstruction-e2e.mjs --enable-live-e2e && node test/live-p2-determinism-e2e.mjs --enable-live-e2e",
+    "test:live:production-binding": "pnpm --filter @narada2/cli build && pnpm run build && node test/live-four-surface-acceptance-e2e.mjs --enable-live-e2e && node test/live-four-surface-acceptance-e2e.mjs --enable-live-e2e --pi-rpc && node test/live-p0-durability-cancellation-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-authority-negative-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-controls-launch-binding-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-mcp-faults-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-pty-boundary-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-transport-idempotency-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-uncertain-admission-retry-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-ambient-isolation-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-provider-auth-faults-e2e.mjs --enable-live-e2e --production-launch && node test/live-p1-compaction-reconstruction-e2e.mjs --enable-live-e2e --production-launch && node test/live-p2-determinism-e2e.mjs --enable-live-e2e --production-launch",
+    "test:live:e2e": "pnpm run test:live:guard && pnpm run test:baseline-live && pnpm run test:live:local"
+  },
+  "dependencies": {
+    "@earendil-works/pi-tui": "^0.79.3",
+    "@narada2/nars-client-projection-contract": "workspace:*",
+    "@narada2/nars-runtime-contract": "workspace:*"
+  },
+  "devDependencies": {
+    "@narada2/agent-runtime-server": "workspace:*",
+    "@narada2/invokable-intelligence-contract": "workspace:*",
+    "@narada2/invokable-intelligence-registry": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*",
+    "@types/node": "^22.0.0",
+    "node-pty": "^1.1.0",
+    "typescript": "^5.3.0",
+    "vitest": "^4.1.0"
+  },
+  "description": "Pi-style terminal projection client for a Narada Agent Runtime Server session",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/agent-pi-tui"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

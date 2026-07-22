@@ -1280,6 +1280,43 @@ describe('launcher workspace planning', () => {
     expect(result.wt_args.join('\n')).toContain(agent.operator_projection_launch_binding.path);
   });
 
+  it('plans agent-pi-tui as an attach-only projection terminal over hidden NARS', async () => {
+    const registryPath = await tempRegistry();
+    const plan = await workspaceLaunchPlanCommand({
+      registryPath,
+      agent: ['sonar.resident'],
+      operatorSurface: 'agent-pi-tui',
+      runtime: 'narada-agent-runtime-server',
+      format: 'json',
+    }, createMockContext());
+
+    expect(plan.exitCode).toBe(ExitCode.SUCCESS);
+    const result = plan.result as {
+      wt_args: string[];
+      selected_agents: Array<{
+        runtime_start_execution_mode: string;
+        terminal_tabs: Array<{ title: string; command_argv: string[]; command_authority: string }>;
+        operator_projection_launch_binding: { path: string; exact_attach_required: boolean };
+      }>;
+    };
+    const agent = result.selected_agents[0];
+    expect(agent.runtime_start_execution_mode).toBe('hidden_detached');
+    expect(agent.terminal_tabs).toHaveLength(1);
+    expect(agent.terminal_tabs[0]).toMatchObject({
+      title: 'sonar.resident agent-pi-tui',
+      command_authority: 'projection_only',
+    });
+    expect(agent.terminal_tabs[0].command_argv).toEqual(expect.arrayContaining([
+      'pnpm',
+      'exec',
+      'narada-agent-pi-tui',
+      '--launch-binding',
+    ]));
+    expect(agent.terminal_tabs[0].command_argv.some((arg) => /agent-pi-tui$/.test(arg))).toBe(true);
+    expect(agent.operator_projection_launch_binding.exact_attach_required).toBe(true);
+    expect(result.wt_args.join('\n')).toContain(agent.operator_projection_launch_binding.path);
+  });
+
   it('explains runtime MCP fabric as authoritative over capability projections', async () => {
     const siteRoot = await tempSiteWithDivergentMcpAuthority();
     const explanation = await explainMcpCommand({

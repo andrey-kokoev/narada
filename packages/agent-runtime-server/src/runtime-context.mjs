@@ -1,5 +1,6 @@
 import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { normalizeIntelligenceKernelKind } from '@narada2/nars-intelligence-kernel-contract';
 
 function optionalString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -16,6 +17,14 @@ function frozenIntelligenceContext(value) {
       hostSite: value.sites.hostSite ? Object.freeze({ ...value.sites.hostSite }) : null,
     }) : null,
     access: value.access ? Object.freeze({ ...value.access }) : null,
+    principalBinding: value.principalBinding
+      ? Object.freeze({
+        ...value.principalBinding,
+        actor: value.principalBinding.actor ? Object.freeze({ ...value.principalBinding.actor }) : null,
+        memberships: Object.freeze([...(value.principalBinding.memberships ?? [])].map((membership) => Object.freeze({ ...membership }))),
+        evidence_refs: Object.freeze([...(value.principalBinding.evidence_refs ?? [])]),
+      })
+      : null,
     topologyObservations: Object.freeze([...(value.topologyObservations ?? [])]),
     topologyObservationSource: value.topologyObservationSource
       ? Object.freeze({ ...value.topologyObservationSource })
@@ -34,6 +43,7 @@ export function createNarsRuntimeContext({
   sessionPath = null,
   eventsPath = null,
   intelligence = null,
+  intelligenceKernelKind = null,
   invocationSettings = {},
   ...rest
 } = {}) {
@@ -62,6 +72,20 @@ export function createNarsRuntimeContext({
     launch_session_id: optionalString(rest.launchSessionId),
   };
   const maxToolRounds = normalizeMaxToolRounds(invocationSettings.maxToolRounds ?? process.env.NARADA_MAX_TOOL_ROUNDS);
+  const resolvedIntelligenceKernelKind = normalizeIntelligenceKernelKind(
+    intelligenceKernelKind
+      ?? intelligence?.intelligence_kernel_kind
+      ?? intelligence?.kernel_kind
+      ?? intelligence?.kernelKind
+      ?? process.env.NARADA_INTELLIGENCE_KERNEL,
+  );
+  const normalizedIntelligence = intelligence == null
+    ? null
+    : {
+      ...intelligence,
+      intelligence_kernel_kind: resolvedIntelligenceKernelKind,
+      kernel_kind: resolvedIntelligenceKernelKind,
+    };
   return Object.freeze({
     ...rest,
     identity,
@@ -77,7 +101,9 @@ export function createNarsRuntimeContext({
     controlPath: paths.controlPath,
     sessionPath: paths.sessionPath,
     eventsPath: paths.eventsPath,
-    intelligence: frozenIntelligenceContext(intelligence),
+    intelligence: frozenIntelligenceContext(normalizedIntelligence),
+    intelligenceKernelKind: resolvedIntelligenceKernelKind,
+    intelligence_kernel_kind: resolvedIntelligenceKernelKind,
     maxToolRounds,
     launchSessionId: optionalString(rest.launchSessionId),
     processOwnership: optionalString(rest.processOwnership),

@@ -1,22 +1,63 @@
 import { stat } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 
-import { codexCommand } from '@narada2/nars-provider-runtime/runtime-tail-utils';
+import {
+  deriveUserSiteRootFromRegistryPath,
+  probeCodexSubscriptionService as probeCodexSubscriptionReadiness,
+} from '@narada2/carrier-provider-support/codex-subscription-readiness';
+import { resolveInvocationPrincipalAdmission } from '@narada2/invokable-intelligence-contract';
 import { SqliteMaterializationStore } from '@narada2/invokable-intelligence-materialization';
 import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 import { buildResolverContext, createLocalInvocationGateway } from '@narada2/invokable-intelligence-runtime';
 import { deterministicId, resolveInvocation } from '@narada2/invokable-intelligence-resolver';
+import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 import { createCanonicalInvocationAdapter } from '@narada2/nars-provider-runtime/canonical-invocation-adapter';
+import {
+  assertNarsKernelCapabilityGateway,
+  normalizeIntelligenceKernelKind,
+} from '@narada2/nars-intelligence-kernel-contract';
+import { createIntelligenceKernel } from '@narada2/nars-pi-kernel';
 import { createLocalTopologyObserver } from './local-topology-observer.mjs';
 import { LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA } from './local-topology-observer.mjs';
 
 const TOPOLOGY_OBSERVATION_ADMISSION_SCHEMA = 'narada.invokable-intelligence.topology-observation-admission.v1';
 const TOPOLOGY_OBSERVATION_SCHEMA = 'narada.invokable-intelligence.topology-feasibility.v1';
 const EVIDENCE_KINDS = new Set(['artifact', 'run', 'document', 'test', 'site-configuration']);
+const DISABLED_NARS_CAPABILITY_GATEWAY = Object.freeze({
+  toolCatalog: async () => [],
+  invoke: async () => ({
+    status: 'unknown',
+    admission_action: 'deny',
+    execution_outcome: 'unknown',
+    effect_confirmation: 'unknown',
+    reason: 'capability_gateway_disabled',
+  }),
+  close: async () => {},
+});
 
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function runtimePiRpcConfig(env) {
+  const args = nonEmpty(env.NARADA_PI_RPC_ARGS);
+  let parsedArgs = [];
+  if (args) {
+    try {
+      const candidate = JSON.parse(args);
+      if (!Array.isArray(candidate) || !candidate.every((item) => typeof item === 'string')) {
+        throw new Error('args must be a JSON string array');
+      }
+      parsedArgs = candidate;
+    } catch (error) {
+      throw new Error(`pi_rpc_args_invalid:${error instanceof Error ? error.message : String(error)}`);
+    }
+  }
+  return {
+    command: nonEmpty(env.NARADA_PI_RPC_COMMAND),
+    args: parsedArgs,
+    piVersion: nonEmpty(env.NARADA_PI_VERSION),
+  };
 }
 
 function parseTimestamp(value) {
@@ -127,7 +168,7 @@ function validateInjectedRuntimeServices(runtimeServices, session, {
   return valid ? runtimeServices.map((entry) => Object.freeze({ ...entry })) : null;
 }
 
-async function assertCanonicalSiteAdmission(store, sites, principal) {
+async function assertCanonicalSiteAdmission(store, sites, principal, principalBinding) {
   const [resources, records] = await Promise.all([
     store.listResources(),
     store.listCatalogRecords(),
@@ -147,67 +188,50 @@ async function assertCanonicalSiteAdmission(store, sites, principal) {
   if (!principalRecord) {
     throw new Error(`local_intelligence_principal_not_admitted:${principal}`);
   }
+  if (!principalBinding || typeof principalBinding !== 'object') {
+    throw new Error(`local_intelligence_principal_binding_missing:${principal}`);
+  }
+  const principalDocument = principalRecord.document;
+  const admission = resolveInvocationPrincipalAdmission([principalDocument], {
+    actor: principalBinding.actor,
+    memberships: principalBinding.memberships ?? [],
+  });
+  if (!admission.ok) {
+    throw new Error(`local_intelligence_principal_binding_${admission.code}:${principal}`);
+  }
+  if (admission.principal.id !== principal) {
+    throw new Error(`local_intelligence_principal_binding_mismatch:${principal}:${admission.principal.id}`);
+  }
 }
 
-/** Probe only local Codex executable presence; this does not prove subscription readiness. */
+/** Probe the exact local Codex subscription service required by the canonical route. */
 export async function probeCodexSubscriptionService({
   env = process.env,
   session = 'unknown',
   authorityRef = `runtime:${session}`,
-  timeoutMs = 1500,
-  spawnProcess = spawn,
+  timeoutMs = 60000,
+  registryDbPath = null,
+  userSiteRoot = null,
+  sessionSiteRoot = null,
+  siteId = null,
+  agentIdentityRef = null,
+  launchSessionId = null,
+  model = null,
+  thinking = null,
 } = {}) {
-  const command = codexCommand({ processEnv: env });
-  const evidencePrefix = `local-runtime-service-probe:codex-subscription:${session}:${process.pid}`;
-  return new Promise((resolveProbe) => {
-    let settled = false;
-    let timer = null;
-    const finish = (status, details = {}) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      resolveProbe({
-        schema: LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA,
-        service: 'codex-executable',
-        runtime_family: 'node',
-        protocol_family: 'codex-cli',
-        status,
-        observed_for_session: session,
-        authority_ref: authorityRef,
-        observed_at: new Date().toISOString(),
-        evidence_class: 'observed',
-        evidence_ref: `${evidencePrefix}:${status}`,
-        probe: {
-          kind: 'executable-presence',
-          command_source: command.source,
-          ...details,
-        },
-      });
-    };
-    let child;
-    try {
-      // Put the executable probe flag first so Node-based command shims do not
-      // run their configured service arguments while we only test binary
-      // availability.
-      child = spawnProcess(command.command, ['--version', ...command.prefixArgs], {
-        env,
-        stdio: 'ignore',
-        windowsHide: true,
-      });
-    } catch (error) {
-      finish('unavailable', { reason_code: error?.code ?? 'probe-spawn-failed' });
-      return;
-    }
-    timer = setTimeout(() => {
-      child.kill?.();
-      finish('unavailable', { reason_code: 'probe-timeout' });
-    }, timeoutMs);
-    child.once('error', (error) => finish('unavailable', { reason_code: error?.code ?? 'probe-error' }));
-    child.once('close', (code, signal) => finish(code === 0 ? 'executable-present' : 'unavailable', {
-      exit_code: code,
-      signal: signal ?? null,
-      ...(code === 0 ? {} : { reason_code: 'probe-nonzero-exit' }),
-    }));
+  return probeCodexSubscriptionReadiness({
+    env,
+    session,
+    authorityRef,
+    timeoutMs,
+    registryDbPath,
+    userSiteRoot: userSiteRoot ?? deriveUserSiteRootFromRegistryPath(registryDbPath ?? env.NARADA_INTELLIGENCE_REGISTRY_DB),
+    sessionSiteRoot: sessionSiteRoot ?? env.NARADA_SITE_ROOT ?? process.cwd(),
+    siteId: siteId ?? env.NARADA_SITE_ID ?? null,
+    agentIdentityRef,
+    launchSessionId,
+    model,
+    thinking,
   });
 }
 
@@ -272,9 +296,17 @@ export async function createLocalIntelligenceRuntime({
   materialization: inputMaterialization = null,
   clock = () => executionSiteDecisionClock(`runtime:${runtimeContext?.session ?? 'unknown'}`),
   adapter = null,
+  kernel: inputKernel = null,
+  kernelFactory = createIntelligenceKernel,
+  piSdk = null,
+  piSessionFactory = null,
+  piRpc = null,
+  readNarsRecords = null,
+  artifactRegistrar = null,
   topologyObserver: inputTopologyObserver = null,
   runtimeServices: inputRuntimeServices = null,
   runtimeServiceProbe = probeCodexSubscriptionService,
+  capabilityGateway = null,
 } = {}) {
   const intelligence = runtimeContext?.intelligence;
   if (!intelligence || typeof intelligence !== 'object') throw new Error('local_intelligence_context_required');
@@ -301,9 +333,11 @@ export async function createLocalIntelligenceRuntime({
   });
   const ownsMaterialization = !inputMaterialization;
   let materialization;
+  let kernel = null;
+  let ownsKernel = false;
   try {
     materialization = inputMaterialization ?? await SqliteMaterializationStore.open(registryDbPath);
-    await assertCanonicalSiteAdmission(store, sites, principal);
+    await assertCanonicalSiteAdmission(store, sites, principal, intelligence.principalBinding);
     const observationSource = intelligence.topologyObservationSource ?? {
       authority_ref: `runtime:${runtimeContext.session}`,
       observation_validity_ms: 1000,
@@ -330,6 +364,13 @@ export async function createLocalIntelligenceRuntime({
         env,
         session: runtimeContext.session,
         authorityRef: observationAuthorityRef,
+        registryDbPath,
+        sessionSiteRoot: runtimeContext.siteRoot,
+        siteId: runtimeContext.siteId,
+        agentIdentityRef: runtimeContext.agentIdentityRef,
+        launchSessionId: runtimeContext.launchSessionId,
+        model: intelligence.model ?? env.NARADA_AI_MODEL ?? env.CODEX_MODEL ?? null,
+        thinking: intelligence.thinking ?? env.NARADA_AI_THINKING ?? env.CODEX_THINKING ?? null,
       });
       // The probe records its observation when it completes. Re-read the
       // authoritative decision clock after the await so a slow probe is not
@@ -343,12 +384,62 @@ export async function createLocalIntelligenceRuntime({
       ? []
       : runtimeServicesFor(inputRuntimeServices, startupClock.instant)
         ?? await probeRuntimeServices(startupClock.instant);
-    const invocationAdapter = adapter ?? createCanonicalInvocationAdapter({
+    const providerAdapter = adapter ?? createCanonicalInvocationAdapter({
       runtimeContext: {
         ...runtimeContext,
         invocationScope: runtimeContext.invocationSettings?.invocationScope ?? null,
       },
       env,
+    });
+    const kernelKind = normalizeIntelligenceKernelKind(
+      runtimeContext.intelligenceKernelKind
+        ?? intelligence.intelligence_kernel_kind
+        ?? intelligence.kernel_kind
+        ?? env.NARADA_INTELLIGENCE_KERNEL,
+    );
+    ownsKernel = !inputKernel;
+    kernel = inputKernel ?? kernelFactory({
+      kind: kernelKind,
+      providerAdapter,
+      runtimeContext: {
+        ...runtimeContext,
+        provider: intelligence.provider ?? null,
+        model: intelligence.model ?? null,
+        thinking: intelligence.thinking ?? null,
+      },
+      sdk: piSdk,
+      sessionFactory: piSessionFactory,
+      ...(piRpc ? { rpc: piRpc } : {}),
+      ...(kernelKind === 'pi-rpc' && !piRpc ? { rpc: runtimePiRpcConfig(env) } : {}),
+      readNarsRecords: readNarsRecords ?? (runtimeContext.eventsPath
+        ? async () => readNarsEventLog(runtimeContext.eventsPath).events
+        : undefined),
+      ...(artifactRegistrar ? { artifactRegistrar } : {}),
+    });
+    if (!kernel || typeof kernel.start !== 'function' || typeof kernel.invokeAdmitted !== 'function') {
+      throw new Error(`local_intelligence_kernel_invalid:${kernelKind}`);
+    }
+    // A local runtime always binds one canonical gateway to the kernel.  The
+    // disabled form is an inert NARS-owned boundary for unit/native runs with
+    // MCP disabled; it is not a provider or ambient-tool fallback.  A caller
+    // supplied per-turn gateway is never allowed to replace this binding.
+    const startupCapabilityGateway = capabilityGateway
+      ? assertNarsKernelCapabilityGateway(capabilityGateway)
+      : assertNarsKernelCapabilityGateway(DISABLED_NARS_CAPABILITY_GATEWAY);
+    const startupTools = await startupCapabilityGateway.toolCatalog();
+    const kernelStartEvidence = await kernel.start({
+      session_id: runtimeContext.session,
+      agent_id: runtimeContext.identity,
+      runtime_context: runtimeContext,
+      tools: startupTools,
+    });
+    const invocationAdapter = Object.freeze({
+      // This is the private gateway adapter seam. The kernel itself never
+      // exposes an arbitrary public invoke(input) escape hatch.
+      invoke: (admittedInvocation) => kernel.invokeAdmitted({
+        ...admittedInvocation,
+        capabilityGateway: startupCapabilityGateway,
+      }),
     });
     const auditAuthority = Object.freeze({
       admittedBy: `runtime:${runtimeContext.session}`,
@@ -363,10 +454,20 @@ export async function createLocalIntelligenceRuntime({
         runtimeServices,
       });
     const contextForClock = async (decisionClock) => {
+      // A runtime-service probe completes asynchronously. Its observed_at can
+      // legitimately be a few milliseconds newer than the decision clock that
+      // triggered the probe. Carry a refreshed authoritative clock forward so
+      // the topology observer never evaluates fresh evidence as future/stale.
+      // Preserve the gateway's authoritative decision clock. A runtime-service
+      // probe is asynchronous, so its observation clock may advance after the
+      // gateway sampled the decision clock; only the topology observation uses
+      // that refreshed clock.
+      let observationDecisionClock = decisionClock;
       if (!admittedTopologyObservations && !inputTopologyObserver) {
         const freshRuntimeServices = runtimeServicesFor(runtimeServices, decisionClock.instant);
         if (!freshRuntimeServices) {
           runtimeServices = await probeRuntimeServices(decisionClock.instant);
+          observationDecisionClock = clock();
           topologyObserver = createLocalTopologyObserver({
             store,
             runtimeContext,
@@ -381,7 +482,7 @@ export async function createLocalIntelligenceRuntime({
           sites,
           now: decisionClock.instant,
         })
-        : await topologyObserver.observe({ decisionClock });
+        : await topologyObserver.observe({ decisionClock: observationDecisionClock });
       return buildResolverContext(sites, {
         clock: decisionClock,
         runtime: 'node',
@@ -429,6 +530,10 @@ export async function createLocalIntelligenceRuntime({
     let closed = false;
     return Object.freeze({
       gateway,
+      kernel,
+      kernel_kind: kernelKind,
+      kernel_start_evidence: kernelStartEvidence,
+      kernelHealth: () => kernel.health?.() ?? null,
       store,
       async preflightSelection({ requestedModel = null, requestedOptions = {} } = {}) {
         const decisionClock = clock();
@@ -459,6 +564,7 @@ export async function createLocalIntelligenceRuntime({
         if (closed) return;
         closed = true;
         const closers = [];
+        if (ownsKernel) closers.push(kernel.close({ reason: 'runtime_close' }));
         if (ownsMaterialization) closers.push(materialization.close());
         if (ownsStore) closers.push(store.close());
         await Promise.all(closers);
@@ -466,6 +572,7 @@ export async function createLocalIntelligenceRuntime({
     });
   } catch (error) {
     const cleanup = [];
+    if (ownsKernel && kernel) cleanup.push(kernel.close({ reason: 'runtime_start_failed' }));
     if (ownsMaterialization && materialization) cleanup.push(materialization.close());
     if (ownsStore) cleanup.push(store.close());
     await Promise.allSettled(cleanup);

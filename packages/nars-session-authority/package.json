@@ -1,0 +1,25 @@
+{
+  "name": "@narada2/nars-session-authority",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "description": "Authority-owned singleton admission for Narada Agent Runtime Server sessions",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.mts",
+      "import": "./src/index.mjs"
+    },
+    "./node-sqlite": {
+      "types": "./src/index.d.mts",
+      "import": "./src/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "types": "./src/index.d.mts",
+  "scripts": {
+    "test": "node --test src/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

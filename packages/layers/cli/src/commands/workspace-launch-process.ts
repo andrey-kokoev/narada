@@ -166,7 +166,7 @@ export async function workspaceLaunchStartHiddenRuntimeHost(
     agent_id: identity.agent_id ?? null,
     launch_session_id: identity.launch_session_id ?? null,
     nars_session_id: identity.nars_session_id ?? null,
-    launch_binding_path: null,
+    launch_binding_path: identity.launch_binding_path ?? null,
     readiness_path: null,
     readiness: 'spawned',
     readiness_checked_at: new Date().toISOString(),

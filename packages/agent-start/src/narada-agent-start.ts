@@ -60,12 +60,24 @@ import {
 } from './codex-subscription-support.ts';
 import { openLocalIntelligenceRegistry } from '@narada2/agent-runtime-server/local-intelligence-runtime';
 import { createIntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
+import { inspectLocalIntelligenceReadiness } from '@narada2/invokable-intelligence-management/local-readiness';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
+import {
+  buildSessionAuthorityEnvironment,
+  defaultSessionAuthorityDbPath,
+  findLegacySessionConflicts,
+  normalizeSessionPrincipal,
+  openLocalSessionAuthority,
+  SessionAuthorityError,
+  SESSION_AUTHORITY_REFUSAL_CODES,
+} from '@narada2/nars-session-authority';
 import { resolveAgentStartExecutionPosture, spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.ts';
 import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs } from './launcher-cli-contract.ts';
 import { buildLauncherContractsFromAgentStartResult, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.ts';
 import { AgentStartResultContractError, assertAgentStartResultV0 } from './launch-result-v0-contract.mjs';
 import { loadSiteEnvFiles } from './site-env-loader.ts';
+import { IntelligenceLaunchContextError, loadIntelligenceLaunchContext } from './intelligence-launch-context.ts';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRootDir = join(__dirname, '..');
@@ -141,6 +153,26 @@ if (operatorSurfaceInput && legacyCarrierInput && String(operatorSurfaceInput) !
   else console.error(`[FAIL] ${refusal.reason_code}: ${refusal.reason}`);
   process.exit(1);
 }
+
+async function failIntelligenceLaunchContext(error) {
+  const refusal = {
+    schema: 'narada.agent_start.intelligence_launch_context_refusal.v1',
+    status: 'refused',
+    mutation_performed: false,
+    reason_code: error instanceof IntelligenceLaunchContextError
+      ? error.code
+      : 'intelligence_context_invalid',
+    reason: error instanceof Error ? error.message : String(error),
+    details: error instanceof IntelligenceLaunchContextError ? error.details : {},
+    required_next_step: 'Create or repair the User Site .narada/intelligence-launch-context.json with user_site_id, host_site_id, and principal_id, then retry the launch.',
+  };
+  if (jsonOutput) {
+    await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
+  } else {
+    console.error(`[FAIL] ${refusal.reason_code}: ${refusal.reason}`);
+  }
+  process.exit(1);
+}
 const carrierInput = operatorSurfaceInput ?? legacyCarrierInput;
 const execFlag = !!args.exec;
 const preflightOnly = !!args.preflight_only;
@@ -156,6 +188,7 @@ const strictMcpRegistry = !!args.strict_mcp_registry;
 const pcSiteRoot = args.pc_site_root ?? process.env.NARADA_PC_SITE_ROOT ?? 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
 const launchSource = args.launch_source ?? 'agent-start';
 const admitSessionFlag = !!args.admit_session;
+const resumeSessionId = args.resume_session ? String(args.resume_session).trim() : null;
 const showAdmission = args.show_admission ?? null;
 const targetSiteId = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ?? null;
 const targetSiteRoot = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
@@ -175,6 +208,7 @@ const naradaPackages = createNaradaPackageResolver({
 const RUNTIME_SUBSTRATE_KINDS_PACKET = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/operator-surface-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
 const RUNTIME_CONTRACT_SCHEMA = RUNTIME_SUBSTRATE_KINDS_PACKET.schema;
 const AGENT_TUI_CARRIER = 'agent-tui';
+const AGENT_PI_TUI_CARRIER = 'agent-pi-tui';
 const ADMITTED_RUNTIME_SUBSTRATE_KINDS = Object.freeze(RUNTIME_SUBSTRATE_KINDS_PACKET.admitted_runtime_substrate_kinds);
 const TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA = 'narada.tool_fabric_adapter_kind.v1';
 const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
@@ -259,7 +293,8 @@ function resolveRuntimeAuthority(value, carrierName) {
   }
   const narsOperatorSurface = carrierName === AGENT_CLI_OPERATOR_SURFACE_KIND
     || carrierName === 'agent-web-ui'
-    || carrierName === AGENT_TUI_CARRIER;
+    || carrierName === AGENT_TUI_CARRIER
+    || carrierName === AGENT_PI_TUI_CARRIER;
   const effective = normalized === 'auto'
     ? (narsOperatorSurface ? 'write' : 'read')
     : normalized;
@@ -316,6 +351,7 @@ const runtimeResolution = resolveOperatorSurfaceRuntimeSelection({
   runtimeValue: runtimeInput,
   admittedRuntimeSubstrateKinds: ADMITTED_RUNTIME_SUBSTRATE_KINDS,
   runtimeContractSchema: RUNTIME_CONTRACT_SCHEMA,
+  intelligenceKernelValue: process.env.NARADA_INTELLIGENCE_KERNEL ?? null,
 });
 if (runtimeResolution.status === 'refused') {
   await failRuntimeRefusal(runtimeResolution);
@@ -335,12 +371,48 @@ if (Object.hasOwn(args, 'intelligence_provider')) {
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
+  console.error('Usage: node start-agent.mjs <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--resume-session <session-id>] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
   process.exit(1);
 }
 
-const plannedCarrierSessionId = newCarrierSessionId();
-const intelligenceRegistryDbPath = join(sessionSiteRoot, '.ai', 'intelligence-registry.db');
+const plannedCarrierSessionId = resumeSessionId || newCarrierSessionId();
+const defaultIntelligenceRegistryDbPath = join(sessionSiteRoot, '.ai', 'intelligence-registry.db');
+const requiresIntelligenceLaunchContext = carrier === 'agent-cli'
+  || carrier === 'agent-web-ui'
+  || carrier === AGENT_TUI_CARRIER
+  || carrier === AGENT_PI_TUI_CARRIER;
+let intelligenceLaunchContext = null;
+if (requiresIntelligenceLaunchContext) {
+  try {
+    intelligenceLaunchContext = loadIntelligenceLaunchContext({
+      targetSiteId,
+      sessionSiteRoot,
+      userSiteRoot,
+      registryDbPath: defaultIntelligenceRegistryDbPath,
+    });
+  } catch (error) {
+    if (execFlag || preflightOnly) await failIntelligenceLaunchContext(error);
+    intelligenceLaunchContext = {
+      schema: 'narada.intelligence.launch_context.v1',
+      status: 'not_ready',
+      source: 'launch_preflight',
+      context_path: error instanceof IntelligenceLaunchContextError ? error.details.context_path ?? null : null,
+      reason_code: error instanceof IntelligenceLaunchContextError ? error.code : 'intelligence_context_invalid',
+      reason: error instanceof Error ? error.message : String(error),
+      details: error instanceof IntelligenceLaunchContextError ? error.details : {},
+      environment: {},
+    };
+  }
+}
+const intelligenceRegistryDbPath = intelligenceLaunchContext?.registry_db_path ?? defaultIntelligenceRegistryDbPath;
+const intelligenceEnvironment = intelligenceLaunchContext?.environment ?? {};
+// The operator-surface/runtime resolver validates the launch topology; the
+// admitted intelligence launch context is the authority for the cognition
+// kernel when it is present. Keep the projected resolver record aligned with
+// that later, explicit selection instead of reporting a stale native default.
+const intelligenceKernelKind = intelligenceLaunchContext?.intelligence_kernel_kind
+  ?? runtimeResolution.intelligence_kernel_kind
+  ?? 'narada-native';
 const intelligenceSelectionAuthority = createIntelligenceSelectionAuthority({
   siteId: targetSiteId,
   storeKind: 'node:sqlite',
@@ -363,6 +435,38 @@ if (preflightOnly) {
     if (catalogRecords.length === 0 || resources.length === 0) {
       throw new Error('intelligence_catalog_empty');
     }
+    const launchContext = intelligenceLaunchContext;
+    const readiness = await inspectLocalIntelligenceReadiness(store, {
+      target_site_id: launchContext.target_site,
+      user_site_id: launchContext.user_site,
+      host_site_id: launchContext.host_site,
+      principal_id: launchContext.principal_id,
+      ...(launchContext.principal_binding ? { principal_binding: launchContext.principal_binding } : {}),
+    });
+    if (readiness.status !== 'ready') {
+      await printResult({
+        schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
+        status: 'blocked',
+        mutation_performed: false,
+        reason_code: 'intelligence_local_readiness_blocked',
+        reason: `Local intelligence readiness is ${readiness.status}.`,
+        site_root: sessionSiteRoot,
+        agent: identity,
+        operator_surface_kind: carrier,
+        runtime_host_kind: runtime,
+        intelligence_selection_authority: intelligenceSelectionAuthority,
+        catalog_record_count: catalogRecords.length,
+        resource_count: resources.length,
+        readiness,
+        required_next_step: 'Run the read-only narada-intelligence local-readiness doctor, then admit only the explicit canonical records still missing from the User Site catalog and retry the launch.',
+        recovery: {
+          kind: 'user_site_intelligence_principal_admission',
+          primary_command: 'narada-intelligence local-readiness --context <readiness-context.json>',
+          followup_command: 'Admit a complete canonical seed with `narada-intelligence admit-catalog-seed`, then retry the workspace launch.',
+        },
+      });
+      process.exit(1);
+    }
     await printResult({
       schema: 'narada.agent_start.intelligence_catalog_preflight.v1',
       status: 'ready',
@@ -374,6 +478,7 @@ if (preflightOnly) {
       intelligence_selection_authority: intelligenceSelectionAuthority,
       catalog_record_count: catalogRecords.length,
       resource_count: resources.length,
+      readiness,
     });
     process.exit(0);
   } catch (error) {
@@ -414,7 +519,86 @@ if (preflightOnly) {
 }
 
 let startResult;
+let sessionAuthority = null;
+let sessionAuthorityAdmission = null;
+const sessionAuthorityEnforced = runtime === 'narada-agent-runtime-server' && execFlag === true && dryRun !== true;
 try {
+  // Validate roster/role admission without creating a session event before the
+  // singleton authority has admitted the principal. This keeps duplicate
+  // refusal side-effect free while preserving the existing session-start
+  // validation as the source of truth for the role.
+  const validatedStartResult = sessionAuthorityEnforced
+    ? materializeAgentSessionStart({
+      siteRoot: sessionSiteRoot,
+      identity,
+      runtime,
+      dbPath,
+      cwd: workspaceRoot,
+      dryRun: true,
+    })
+    : null;
+  if (sessionAuthorityEnforced) {
+    const principal = normalizeSessionPrincipal({
+      siteId: targetSiteId,
+      localAgentId: identity,
+      identityRef: { legacy_agent_id: identity, role: validatedStartResult?.role ?? null },
+    });
+    const authorityDbPath = defaultSessionAuthorityDbPath(sessionSiteRoot);
+    sessionAuthority = openLocalSessionAuthority({ dbPath: authorityDbPath });
+    const existing = sessionAuthority.inspectSession({ principal });
+    if (!existing || ['failed', 'closed'].includes(existing.state)) {
+      const discovery = discoverNarsSessions({ siteRoot: sessionSiteRoot });
+      const legacyConflicts = findLegacySessionConflicts({
+        principal,
+        sessions: discovery.sessions,
+      });
+      if (legacyConflicts.length > 0) {
+        throw new SessionAuthorityError(
+          SESSION_AUTHORITY_REFUSAL_CODES.LEGACY_DUPLICATE,
+          `Live legacy NARS session(s) already exist for ${principal.principal_key}.`,
+          {
+            schema: 'narada.nars.session_authority_refusal.v1',
+            reason_code: SESSION_AUTHORITY_REFUSAL_CODES.LEGACY_DUPLICATE,
+            principal,
+            session_id: legacyConflicts.length === 1 ? legacyConflicts[0].session_id : null,
+            candidates: legacyConflicts,
+            attach: legacyConflicts.length === 1
+              ? {
+                session_id: legacyConflicts[0].session_id,
+                principal_key: principal.principal_key,
+                command: `narada nars attach-command --session ${legacyConflicts[0].session_id} --agent ${principal.local_agent_id} --surface ${carrier} --site-root "${sessionSiteRoot}"`,
+                web_ui_command: `narada agent-web-ui attach --session ${legacyConflicts[0].session_id} --site-root "${sessionSiteRoot}"`,
+              }
+              : null,
+            required_next_step: 'Close the legacy session(s), or run explicit NARS session reconciliation with a named keep session, then retry.',
+            recovery: {
+              kind: 'explicit_session_reconciliation',
+              primary_command: `narada nars session reconcile --site-root "${sessionSiteRoot}" --agent "${principal.local_agent_id}" --keep-session <session-id>`,
+            },
+          },
+        );
+      }
+    }
+    sessionAuthorityAdmission = sessionAuthority.admitSession({
+      principal,
+      sessionId: plannedCarrierSessionId,
+      launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? plannedCarrierSessionId,
+      runtimeKind: runtime,
+      operatorSurfaceKind: carrier,
+      siteRoot: sessionSiteRoot,
+      pid: process.pid,
+      evidence: {
+        agent_start_event_pending: true,
+        launch_source: launchSource,
+        ...(resumeSessionId ? {
+          explicit_recovery: true,
+          recovery_reason: 'operator_requested_resume_after_process_loss',
+        } : {}),
+      },
+      replaceAbandoned: Boolean(resumeSessionId),
+      recoveryReason: 'operator_requested_resume_after_process_loss',
+    });
+  }
   startResult = materializeAgentSessionStart({
     siteRoot: sessionSiteRoot,
     identity,
@@ -424,7 +608,45 @@ try {
     dryRun,
   });
 } catch (error) {
-  console.error(`[FAIL] ${error.message}`);
+  try {
+    if (sessionAuthorityAdmission && sessionAuthority) {
+      sessionAuthority.failSession({
+        principal: sessionAuthorityAdmission.principal,
+        sessionId: sessionAuthorityAdmission.session_id,
+        ownerToken: sessionAuthorityAdmission.owner_token,
+        authorityEpoch: sessionAuthorityAdmission.authority_epoch,
+        terminalReason: 'agent_start_materialization_failed',
+      });
+    }
+  } catch {
+    // Preserve the original launch refusal; stale reservations are reclaimed
+    // by the authority heartbeat/process lease on the next admission.
+  } finally {
+    sessionAuthority?.close?.();
+  }
+  const refusal = error instanceof SessionAuthorityError
+    ? {
+      schema: 'narada.agent_start.session_authority_refusal.v1',
+      status: 'refused',
+      mutation_performed: Boolean(sessionAuthorityAdmission),
+      reason_code: error.code,
+      reason: error.message,
+      ...(error.details ?? {}),
+    }
+    : null;
+  if (refusal) {
+    if (jsonOutput) await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
+    else {
+      console.error(`[FAIL] ${refusal.reason_code}: ${refusal.reason}`);
+      if (refusal.session_id) console.error(`Existing NARS session: ${refusal.session_id}`);
+      if (refusal.attach?.command) console.error(`Attach: ${refusal.attach.command}`);
+      if (refusal.attach?.web_ui_command) console.error(`Web UI: ${refusal.attach.web_ui_command}`);
+      if (refusal.required_next_step) console.error(`Next step: ${refusal.required_next_step}`);
+      if (refusal.recovery?.primary_command) console.error(`Recovery: ${refusal.recovery.primary_command}`);
+    }
+  } else {
+    console.error(`[FAIL] ${error.message}`);
+  }
   process.exit(1);
 }
 
@@ -1126,6 +1348,7 @@ const hiddenRuntimeOutputFiles = agentStartExecutionPosture.agent_start_executio
 const carrierEnvironment = {
   ...(carrierSessionRegistration.environment ?? {}),
   NARADA_RUNTIME_AUTHORITY: runtimeAuthoritySelection.effective,
+  ...(sessionAuthorityAdmission ? buildSessionAuthorityEnvironment(sessionAuthorityAdmission) : {}),
 };
 const agentTuiEnvironment = agentTuiTerminalEnvironment();
 const codexMcpScope = codexMcpScopeProjection();
@@ -1172,6 +1395,7 @@ const { requiredEnvironment, wouldSetEnvironment } = buildCarrierEnvironmentProj
   dbPath,
   siteConfig,
   mcpScope,
+  intelligenceEnvironment,
   launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
   processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
   processRole: process.env.NARADA_PROCESS_ROLE ?? null,
@@ -1197,6 +1421,7 @@ const spawnEnvironmentDelta = buildCarrierSpawnEnvironmentDelta({
   dbPath,
   siteConfig,
   mcpScope,
+  intelligenceEnvironment,
   launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
   processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
   processRole: process.env.NARADA_PROCESS_ROLE ?? null,
@@ -1213,6 +1438,7 @@ const narsLaunch = buildNarsLaunchPacket(carrier, {
   siteMcpFabricPath: localSiteMcpFabricPath(),
   siteCarrierControlPath,
   siteCarrierSessionPath,
+  intelligenceKernelKind,
 });
 const handoffSessionRef = narsLaunch?.runtime_session_id
   ? { id: narsLaunch.runtime_session_id, kind: 'runtime' }
@@ -1230,6 +1456,7 @@ const output = {
   carrier_kind: carrier,
   launch_selection_kind: runtimeResolution.launch_selection_kind,
   runtime_substrate_kind: runtime,
+  intelligence_kernel_kind: intelligenceKernelKind,
   target_site_id: targetSiteId,
   target_site_root: targetSiteRoot,
   session_site_root: sessionSiteRoot,
@@ -1240,7 +1467,7 @@ const output = {
   wait: waitFlag,
   visible_runtime_terminal: visibleRuntimeTerminalFlag,
   yolo: yoloFlag,
-  runtime_resolution: runtimeResolution,
+  runtime_resolution: { ...runtimeResolution, intelligence_kernel_kind: intelligenceKernelKind },
   tool_fabric_adapter_contract_schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
   admitted_tool_fabric_adapter_kinds: [...ADMITTED_TOOL_FABRIC_ADAPTER_KINDS],
   tool_fabric_adapter: toolFabricAdapter,
@@ -1274,6 +1501,7 @@ const output = {
   },
   runtime_authority_selection: runtimeAuthoritySelection,
   intelligence_selection_authority: intelligenceSelectionAuthority,
+  intelligence_launch_context: intelligenceLaunchContext,
   display_environment: requiredEnvironment,
   required_environment: requiredEnvironment,
   would_set_environment: wouldSetEnvironment,
@@ -1281,6 +1509,24 @@ const output = {
     ? { spawn_environment_delta: spawnEnvironmentDelta }
     : {}),
   carrier_session: carrierSessionRegistration,
+  session_authority: sessionAuthorityAdmission
+    ? {
+      schema: 'narada.nars.session_authority_admission.v1',
+      status: sessionAuthorityAdmission.status,
+      required: true,
+      principal: sessionAuthorityAdmission.principal,
+      session_id: sessionAuthorityAdmission.session_id,
+      authority_epoch: sessionAuthorityAdmission.authority_epoch,
+      db_path: sessionAuthorityAdmission.db_path,
+      lease_expires_at: sessionAuthorityAdmission.lease_expires_at,
+      attach: sessionAuthorityAdmission.attach,
+      recovery_mode: resumeSessionId ? 'explicit_abandoned_session_replacement' : 'new_session',
+    }
+    : {
+      schema: 'narada.nars.session_authority_admission.v1',
+      status: 'not_required',
+      required: false,
+    },
   starting_carrier_input: startingCarrierInputOutput(startingCarrierInput),
   exec: execFlag,
   agent_start_execution_mode: agentStartExecutionPosture.agent_start_execution_mode,
@@ -1293,7 +1539,7 @@ const output = {
   runtime_args: spawnArgs,
   exec_command: execFlag ? execCommand : null,
   context_isolation: carrier === 'codex' ? codexContextIsolationStatus({ exec: execFlag, dryRun }) : { status: 'isolated', carrier, runtime },
-  nars_health: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER ? {
+  nars_health: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER ? {
     schema: 'narada.agent_start.nars_health_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.health',
@@ -1303,7 +1549,7 @@ const output = {
     discovery_field: 'session_started.health_endpoint',
     note: 'The loopback HTTP endpoint is bound by the runtime server after process start; inspect session_started.health_endpoint or session.health for the live URL.',
   } : null,
-  nars_events: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER ? {
+  nars_events: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER ? {
     schema: 'narada.agent_start.nars_event_stream_discovery.v1',
     owner: '@narada2/agent-runtime-server',
     method: 'session.events.subscribe',
@@ -1370,7 +1616,7 @@ if (carrierSessionRegistration.status !== 'registered') {
   process.exit(1);
 }
 
-if (carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER) {
+if (carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER) {
   materializeCarrierLaunchFiles(carrierSessionRegistration.carrier_session_id, startingCarrierInput);
 }
 
@@ -1395,6 +1641,7 @@ const processEnvironment = buildCarrierProcessEnvironment({
   dbPath,
   siteConfig,
   mcpScope,
+  intelligenceEnvironment,
   launchSessionId: process.env.NARADA_LAUNCH_SESSION_ID ?? null,
   processOwnership: process.env.NARADA_PROCESS_OWNERSHIP ?? null,
   processRole: process.env.NARADA_PROCESS_ROLE ?? null,
@@ -1434,4 +1681,35 @@ spawnCarrierProcessAndExit({
   aiProcessInvocation,
   executionMode: agentStartExecutionPosture.agent_start_execution_mode,
   hiddenOutputFiles: hiddenRuntimeOutputFiles,
+  onSpawn: sessionAuthorityAdmission && sessionAuthority
+    ? (pid) => {
+      try {
+        sessionAuthority.heartbeatSession({
+          principal: sessionAuthorityAdmission.principal,
+          sessionId: sessionAuthorityAdmission.session_id,
+          ownerToken: sessionAuthorityAdmission.owner_token,
+          authorityEpoch: sessionAuthorityAdmission.authority_epoch,
+          pid,
+          evidence: {
+            launcher_handoff_complete: true,
+            carrier_process_pid: pid,
+          },
+        });
+      } catch (error) {
+        try {
+          sessionAuthority.failSession({
+            principal: sessionAuthorityAdmission.principal,
+            sessionId: sessionAuthorityAdmission.session_id,
+            ownerToken: sessionAuthorityAdmission.owner_token,
+            authorityEpoch: sessionAuthorityAdmission.authority_epoch,
+            terminalReason: 'launcher_handoff_authority_failed',
+            evidence: { error: error instanceof Error ? error.message : String(error) },
+          });
+        } catch {
+          // Preserve the original handoff failure.
+        }
+        throw error;
+      }
+    }
+    : null,
 });

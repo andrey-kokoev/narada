@@ -40,6 +40,7 @@ export interface OperatorSurfaceRuntimeStartOptions {
   reuseExistingSession?: boolean;
   launchBindingPath?: string;
   launchSessionId?: string;
+  resumeSessionId?: string;
   format?: CliFormat;
 }
 
@@ -143,6 +144,7 @@ export async function operatorSurfaceRuntimeStartCommand(
     launchSource: 'narada operator-surface start',
     launchBindingPath: options.launchBindingPath,
     launchSessionId: options.launchSessionId,
+    resumeSessionId: options.resumeSessionId,
   });
   const parsedAgentStart = start.parsed_result as {
     target_site_id?: unknown;

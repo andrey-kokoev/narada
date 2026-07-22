@@ -18,12 +18,19 @@ export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelli
     throw new Error('runtime_session_binding_context_required');
   }
   const carrier = createCarrierTurnAdapter({
-    invokeIntelligence: ({ messages, tools, settings, abortSignal, turnId, inputEventId, invocationEventSink }) => invokeIntelligenceFn(messages, tools, {
+    invokeIntelligence: ({ messages, tools, settings, abortSignal, turnId, inputEventId, runtimeRequestId, runtime_request_id, idempotencyKey, idempotency_key, turnAttempt, turn_attempt, invocationEventSink, toolGateway }) => invokeIntelligenceFn(messages, tools, {
       ...settings,
       abortSignal,
       turnId,
       inputEventId,
+      runtimeRequestId: runtimeRequestId ?? runtime_request_id,
+      runtime_request_id: runtimeRequestId ?? runtime_request_id,
+      idempotencyKey: idempotencyKey ?? idempotency_key,
+      idempotency_key: idempotencyKey ?? idempotency_key,
+      turnAttempt: turnAttempt ?? turn_attempt,
+      turn_attempt: turnAttempt ?? turn_attempt,
       invocationEventSink,
+      capabilityGateway: toolGateway,
     }),
   });
   const sessionCarrier = {
@@ -31,6 +38,21 @@ export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelli
       try {
         return await carrier.runTurn(...args);
       } catch (error) {
+        // A provider boundary that ended with admission-unknown is terminal
+        // for a live queue item. Keeping it pending would make the queue
+        // silently submit a request that may already have been accepted by
+        // the provider. An explicit retry carries its own invocation
+        // lineage and is admitted separately. Startup recovery is different:
+        // it must retain the pending item until the durable invocation record
+        // can be reconciled, so recovery continues to fail closed here.
+        if (error instanceof NarsIntelligenceInvocationError
+          && error.result?.outcome?.kind === 'admission-unknown'
+          && args[0]?.recoveryReplay !== true) {
+          return {
+            terminal_state: 'failed',
+            error: error.message,
+          };
+        }
         // An explicitly controlled canonical attempt owns its retry/replay
         // semantics above the session queue. Its provider/refusal outcome is a
         // terminal turn result, so the admitted input must not remain at the

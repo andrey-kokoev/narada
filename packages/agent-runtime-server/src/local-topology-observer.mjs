@@ -602,8 +602,9 @@ function assessEdge({ edge, route, routeRecord, nodes, resources, runtimeContext
       if (edge.boundary?.kinds?.includes('process')) {
         const from = nodes.get(edge.from);
         const to = nodes.get(edge.to);
-        const assessProcessEndpoint = (node) => node?.kind === 'client'
-          ? {
+        const assessProcessEndpoint = (node) => {
+          if (node?.kind === 'client') {
+            return {
               status: nonEmpty(runtimeContext?.session) && nonEmpty(runtimeContext?.identity)
                 ? 'feasible'
                 : 'infeasible',
@@ -612,8 +613,17 @@ function assessEdge({ edge, route, routeRecord, nodes, resources, runtimeContext
                 ref: `local-runtime-session:${runtimeContext?.session ?? 'unknown'}`,
                 evidence_class: 'observed-session',
               }],
-            }
-          : localExecutionAssessment(node, resources, runtimeContext, node?.kind);
+            };
+          }
+          // The local inference service is an on-demand provider subprocess,
+          // not a resident runtime process. Its process boundary is admitted
+          // by the authenticated service readiness observation rather than by
+          // pretending that the short-lived preflight child is still alive.
+          if (node?.kind === 'inference-service') {
+            return endpointStatus.forRequirement('service-available');
+          }
+          return localExecutionAssessment(node, resources, runtimeContext, node?.kind);
+        };
         const fromAssessment = assessProcessEndpoint(from);
         const toAssessment = assessProcessEndpoint(to);
         const admitted = fromAssessment.status === 'feasible' && toAssessment.status === 'feasible';

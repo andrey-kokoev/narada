@@ -103,17 +103,75 @@ export function createScopedIntelligenceToolGateway({ mcpScope = 'none', gateway
         name: tool.provider_tool_name ?? tool.tool_name,
         parameters: tool.input_schema ?? { type: 'object', properties: {} },
       },
+      nars_gateway_proxy: true,
+      capability_identity: tool.capability_identity ?? tool.capabilityIdentity ?? null,
     })),
-    invoke: ({ toolName, arguments: args, abortSignal, turnId, inputEventId }) => gateway.invoke({
+    invoke: ({ toolName, tool_name: toolNameAlias, arguments: args, abortSignal, turnId, turn_id: turnIdAlias, inputEventId, input_event_id: inputEventIdAlias, agentId, agent_id: agentIdAlias, sessionId, session_id: sessionIdAlias, inputId, input_id: inputIdAlias, runtimeRequestId, runtime_request_id: runtimeRequestIdAlias, idempotencyKey, idempotency_key: idempotencyKeyAlias, turnAttempt, turn_attempt: turnAttemptAlias, toolCallId, tool_call_id: toolCallIdAlias, piMessageId, pi_message_id: piMessageIdAlias, capabilityIdentity, capability_identity: capabilityIdentityAlias, authorityPosture, authority_posture: authorityPostureAlias, admissionEvidence, admission_evidence: admissionEvidenceAlias, executionEvidence, execution_evidence: executionEvidenceAlias, resultReference, result_reference: resultReferenceAlias, reconciliationState, reconciliation_state: reconciliationStateAlias, correlationKey, correlation_key: correlationKeyAlias }) => gateway.invoke({
       toolName,
+      tool_name: toolNameAlias ?? toolName,
       arguments: args,
       abortSignal,
-      turnId,
-      inputEventId,
+      turnId: turnId ?? turnIdAlias,
+      turn_id: turnId ?? turnIdAlias,
+      inputEventId: inputEventId ?? inputEventIdAlias,
+      input_event_id: inputEventId ?? inputEventIdAlias,
+      agentId: agentId ?? agentIdAlias,
+      agent_id: agentId ?? agentIdAlias,
+      sessionId: sessionId ?? sessionIdAlias,
+      session_id: sessionId ?? sessionIdAlias,
+      inputId: inputId ?? inputIdAlias,
+      input_id: inputId ?? inputIdAlias,
+      runtimeRequestId: runtimeRequestId ?? runtimeRequestIdAlias,
+      runtime_request_id: runtimeRequestId ?? runtimeRequestIdAlias,
+      idempotencyKey: idempotencyKey ?? idempotencyKeyAlias,
+      idempotency_key: idempotencyKey ?? idempotencyKeyAlias,
+      turnAttempt: turnAttempt ?? turnAttemptAlias,
+      turn_attempt: turnAttempt ?? turnAttemptAlias,
+      toolCallId: toolCallId ?? toolCallIdAlias,
+      tool_call_id: toolCallId ?? toolCallIdAlias,
+      piMessageId: piMessageId ?? piMessageIdAlias,
+      pi_message_id: piMessageId ?? piMessageIdAlias,
+      capabilityIdentity: capabilityIdentity ?? capabilityIdentityAlias,
+      capability_identity: capabilityIdentity ?? capabilityIdentityAlias,
+      authorityPosture: authorityPosture ?? authorityPostureAlias,
+      authority_posture: authorityPosture ?? authorityPostureAlias,
+      admissionEvidence: admissionEvidence ?? admissionEvidenceAlias,
+      admission_evidence: admissionEvidence ?? admissionEvidenceAlias,
+      executionEvidence: executionEvidence ?? executionEvidenceAlias,
+      execution_evidence: executionEvidence ?? executionEvidenceAlias,
+      resultReference: resultReference ?? resultReferenceAlias,
+      result_reference: resultReference ?? resultReferenceAlias,
+      reconciliationState: reconciliationState ?? reconciliationStateAlias,
+      reconciliation_state: reconciliationState ?? reconciliationStateAlias,
+      correlationKey: correlationKey ?? correlationKeyAlias,
+      correlation_key: correlationKey ?? correlationKeyAlias,
     }),
     operationalState: () => gateway.operationalState?.() ?? 'unknown',
     close: () => gateway.close(),
   };
+}
+
+/** Build the one runtime-owned capability gateway shared by kernel startup and turns. */
+export function createRuntimeCapabilityGateway({
+  runtimeContext = {},
+  admitCapability = null,
+  recordEvidence = () => {},
+} = {}) {
+  const mcpScope = normalizeRuntimeMcpScope(runtimeContext?.mcpScope);
+  const gateway = mcpScope === 'none'
+    ? null
+    : createNarsCapabilityGateway({
+      siteRoot: runtimeContext.siteRoot,
+      ownershipContext: {
+        launch_session_id: runtimeContext.launchSessionId,
+        ownership: runtimeContext.processOwnership,
+        process_role: runtimeContext.processRole,
+        created_by_pid: runtimeContext.createdByPid,
+      },
+      ...(typeof admitCapability === 'function' ? { admit: admitCapability } : {}),
+      recordEvidence,
+    });
+  return createScopedIntelligenceToolGateway({ mcpScope, gateway });
 }
 
 export function shouldPersistNarsRuntimeRequestTransition(record) {
@@ -169,7 +227,7 @@ function heartbeatPathForRuntimeContext(runtimeContext) {
   return runtimeContext?.sessionPath ? join(dirname(String(runtimeContext.sessionPath)), 'heartbeat.json') : null;
 }
 
-function writeRuntimeHeartbeat(runtimeContext, { reason = 'runtime_heartbeat', now = new Date().toISOString() } = {}) {
+function writeRuntimeHeartbeat(runtimeContext, { reason = 'runtime_heartbeat', status = 'alive', now = new Date().toISOString() } = {}) {
   const path = heartbeatPathForRuntimeContext(runtimeContext);
   if (!path) return null;
   const record = {
@@ -179,6 +237,7 @@ function writeRuntimeHeartbeat(runtimeContext, { reason = 'runtime_heartbeat', n
     site_id: runtimeContext.siteId ?? null,
     runtime: 'narada-agent-runtime-server',
     pid: process.pid,
+    status,
     heartbeat_at: now,
     last_written_at: now,
     reason,
@@ -199,7 +258,7 @@ function writeRuntimeHeartbeat(runtimeContext, { reason = 'runtime_heartbeat', n
 }
 
 function markSessionClosed(runtimeContext, reason, now = new Date().toISOString()) {
-  writeRuntimeHeartbeat(runtimeContext, { reason, now });
+  writeRuntimeHeartbeat(runtimeContext, { reason, status: 'stopped', now });
   markNarsSessionIndexClosed({
     sessionPath: runtimeContext.sessionPath,
     siteRoot: runtimeContext.siteRoot,
@@ -226,7 +285,20 @@ function currentIntelligenceSnapshot(intelligenceRuntime, runtimeContext) {
     latest_attempt_id: null,
     latest_replayed: null,
     reconfiguration: null,
+    intelligence_kernel_kind: runtimeContext.intelligenceKernelKind ?? null,
+    kernel: null,
   };
+}
+
+function canonicalStartupIntelligenceSnapshot(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot;
+  const {
+    intelligence_kernel_kind: _kernelKind,
+    kernel: _kernelHealth,
+    kernel_start_evidence: _kernelStartEvidence,
+    ...canonical
+  } = snapshot;
+  return canonical;
 }
 
 function requestContent(request) {
@@ -307,6 +379,22 @@ export function buildProviderTurnContext({ eventsPath, input } = {}) {
     : providerConversationMessages({ eventsPath, currentInput: input });
   return {
     turnId: input.event_id,
+    runtimeRequestId: input.runtime_request_id
+      ?? input.runtimeRequestId
+      ?? input.metadata?.runtime_request_id
+      ?? input.metadata?.runtimeRequestId
+      ?? input.request_id
+      ?? null,
+    runtime_request_id: input.runtime_request_id
+      ?? input.runtimeRequestId
+      ?? input.metadata?.runtime_request_id
+      ?? input.metadata?.runtimeRequestId
+      ?? input.request_id
+      ?? null,
+    idempotencyKey: input.idempotency_key ?? input.idempotencyKey ?? null,
+    idempotency_key: input.idempotency_key ?? input.idempotencyKey ?? null,
+    turnAttempt: input.turn_attempt ?? input.turnAttempt ?? input.metadata?.turn_attempt ?? 1,
+    turn_attempt: input.turn_attempt ?? input.turnAttempt ?? input.metadata?.turn_attempt ?? 1,
     messages,
     ...(control ? {
       settings: {
@@ -372,6 +460,10 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
     runtime_host_state: runtimeHostSnapshot(runtimeContext),
     heartbeat,
     intelligence,
+    intelligence_kernel_kind: intelligence.intelligence_kernel_kind
+      ?? runtimeContext.intelligenceKernelKind
+      ?? null,
+    kernel: intelligence.kernel ?? null,
     mcp_operational_state: mcpOperationalState,
     mcp_scope: mcpScope,
     mcp: {
@@ -440,6 +532,8 @@ export function createSessionCoreRuntimeService({
   intelligenceRuntime = null,
   toolGateway = null,
   admitCapability = null,
+  onAuthorityHeartbeat = null,
+  onAuthorityClose = null,
   heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS,
   now = () => new Date().toISOString(),
 } = {}) {
@@ -448,29 +542,51 @@ export function createSessionCoreRuntimeService({
     ? heartbeatIntervalMs
     : 0;
   let supervisor = null;
+  let authorityFailureReported = false;
+  const notifyAuthorityHeartbeat = async (reason, at) => {
+    if (typeof onAuthorityHeartbeat !== 'function') return;
+    try {
+      await onAuthorityHeartbeat({
+        pid: process.pid,
+        now: at,
+        evidence: { runtime_heartbeat_reason: reason },
+      });
+    } catch (error) {
+      if (!authorityFailureReported) {
+        authorityFailureReported = true;
+        supervisor?.core.appendEvent({
+          event: 'runtime_session_authority_heartbeat_failed',
+          error: error instanceof Error ? error.message : String(error),
+          reason,
+        });
+      }
+      throw error;
+    }
+  };
   const requestLifecycle = createNarsRuntimeRequestRegistry({
     metadata: { transport: 'jsonl_stdio' },
     onTransition: (record) => {
       if (shouldPersistNarsRuntimeRequestTransition(record)) supervisor?.core.appendEvent(record);
     },
   });
-  const gateway = mcpScope === 'none' || toolGateway ? null : createNarsCapabilityGateway({
-    siteRoot: runtimeContext.siteRoot,
-    ownershipContext: {
-      launch_session_id: runtimeContext.launchSessionId,
-      ownership: runtimeContext.processOwnership,
-      process_role: runtimeContext.processRole,
-      created_by_pid: runtimeContext.createdByPid,
-    },
-    ...(admitCapability ? { admit: admitCapability } : {}),
-    recordEvidence: async (event) => supervisor?.core.appendEvent({ event: event.kind, ...event }),
-  });
-  const intelligenceToolGateway = createScopedIntelligenceToolGateway({
-    mcpScope,
-    gateway,
-    toolGateway,
-  });
-  const runtimeCall = intelligenceRuntime?.callIntelligence ?? invokeIntelligenceFn;
+  const intelligenceToolGateway = toolGateway
+    ? createScopedIntelligenceToolGateway({ mcpScope, toolGateway })
+    : createRuntimeCapabilityGateway({
+      runtimeContext,
+      admitCapability,
+      recordEvidence: async (event) => supervisor?.core.appendEvent({ event: event.kind, ...event }),
+    });
+  // Bind the scoped NARS gateway at the session-core crossing as well as
+  // carrying it through the carrier turn context.  The kernel must never
+  // have to guess whether a capability gateway was supplied; a transport or
+  // carrier that drops the optional override must still fail closed through
+  // this canonical runtime-owned binding.
+  const runtimeCall = intelligenceRuntime?.callIntelligence
+    ? (messages, tools, overrides = {}) => intelligenceRuntime.callIntelligence(messages, tools, {
+      ...overrides,
+      capabilityGateway: overrides.capabilityGateway ?? intelligenceToolGateway,
+    })
+    : invokeIntelligenceFn;
   supervisor = createRuntimeSessionBinding({
     runtimeContext,
     invokeIntelligenceFn: runtimeCall,
@@ -600,15 +716,16 @@ export function createSessionCoreRuntimeService({
         transport: 'jsonl_stdio',
         ...(invocationControl ? { intelligence_invocation: invocationControl } : {}),
       });
-      const dispatchRequest = invocationControl
-        ? {
-            ...request,
-            metadata: {
-              ...(request?.metadata ?? {}),
-              intelligence_invocation: invocationControl,
-            },
-          }
-        : request;
+      const dispatchRequest = {
+        ...request,
+        request_id: request?.request_id ?? request?.id ?? requestId ?? null,
+        ...(idempotencyKey ? { idempotency_key: idempotencyKey } : {}),
+        metadata: {
+          ...(request?.metadata ?? {}),
+          runtime_request_id: requestState.runtimeRequestId,
+          ...(invocationControl ? { intelligence_invocation: invocationControl } : {}),
+        },
+      };
       const result = await supervisor.dispatch(dispatchRequest);
       const terminalState = result?.terminal_state ?? 'completed';
       const requestOutcome = requestOutcomeForTurnResult(terminalState);
@@ -659,7 +776,9 @@ export function createSessionCoreRuntimeService({
       send: (envelope) => writer.write(envelope.payload),
     });
     subscription.markLive({ source: 'jsonl_stdio_ready' });
-    const initialIntelligence = currentIntelligenceSnapshot(intelligenceRuntime, runtimeContext);
+    const initialIntelligence = canonicalStartupIntelligenceSnapshot(
+      currentIntelligenceSnapshot(intelligenceRuntime, runtimeContext),
+    );
     const sessionStartedEvent = supervisor.core.appendEvent({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',
@@ -746,11 +865,15 @@ export function createSessionCoreRuntimeService({
       }
     };
     try {
-      writeRuntimeHeartbeat(runtimeContext, { reason: 'session_started', now: now() });
+      const startedAt = now();
+      writeRuntimeHeartbeat(runtimeContext, { reason: 'session_started', now: startedAt });
+      await notifyAuthorityHeartbeat('session_started', startedAt);
       if (heartbeatCadenceMs > 0) {
         heartbeatTimer = setInterval(() => {
+          const heartbeatAt = now();
           try {
-            writeRuntimeHeartbeat(runtimeContext, { now: now() });
+            writeRuntimeHeartbeat(runtimeContext, { now: heartbeatAt });
+            void notifyAuthorityHeartbeat('runtime_heartbeat', heartbeatAt).catch(() => {});
           } catch (error) {
             supervisor?.core.appendEvent({
               event: 'runtime_heartbeat_write_failed',
@@ -772,6 +895,26 @@ export function createSessionCoreRuntimeService({
       if (!closed && supervisor.core.lifecycleState === 'ready') {
         await supervisor.close({ reason: 'runtime_process_exit' });
         markSessionClosed(runtimeContext, 'runtime_process_exit', now());
+      }
+      try {
+        await onAuthorityClose?.({
+          reason: closed ? 'runtime_closed' : 'runtime_process_exit',
+          now: now(),
+          evidence: { runtime_closed: true },
+        });
+      } catch (error) {
+        supervisor?.core.appendEvent({
+          event: 'runtime_session_authority_close_failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+      try {
+        await intelligenceToolGateway.close?.();
+      } catch (error) {
+        supervisor?.core.appendEvent({
+          event: 'runtime_capability_gateway_close_failed',
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
       try {
         await writer.flush();

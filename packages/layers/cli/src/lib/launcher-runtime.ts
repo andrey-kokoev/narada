@@ -163,23 +163,28 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   if (options.exec) args.push('--exec');
   if (options.wait) args.push('--wait');
   if (options.enableNativeShell) args.push('--enable-native-shell');
+  if (options.resumeSessionId) args.push('--resume-session', options.resumeSessionId);
 
+  // Materialize the result directory before any preflight can fail. The
+  // workspace launcher relies on the result file and binding as the durable
+  // handoff even when agent-start never reaches its entrypoint.
+  mkdirSync(resultDir, { recursive: true });
   const dependencyPreflight = checkWorkspaceDependencyPreflight(dependencyWorkspaceRoot);
   if (dependencyPreflight.status !== 'ready') {
-    return {
-      schema: 'narada.agent_start.command_result.v0',
-      status: 'not_available',
-      mutation_performed: false,
-      site_root: siteRoot,
-      agent: options.agent,
-      carrier: options.carrier,
-      runtime: options.runtime,
+    return failAgentStartBeforeExecution({
+      options,
+      siteRoot,
+      workspaceRoot,
       command: [process.execPath, ...args],
-      error: formatWorkspaceDependencyPreflightFailure(dependencyPreflight),
-    };
+      resultPath,
+      launchSessionId,
+      processOwnership,
+      reasonCode: 'workspace_dependency_preflight_failed',
+      reason: formatWorkspaceDependencyPreflightFailure(dependencyPreflight),
+      diagnostics: { dependency_preflight: dependencyPreflight },
+      status: 'not_available',
+    });
   }
-
-  mkdirSync(resultDir, { recursive: true });
   if (!existsSync(agentStart)) {
     return failAgentStartBeforeExecution({
       options,

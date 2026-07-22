@@ -99,6 +99,9 @@ export function createNarsIntelligenceRuntimeController({
   validateSelection = async () => {},
   now = () => new Date().toISOString(),
   onTransition = () => {},
+  kernelHealth = null,
+  kernelStartEvidence = null,
+  reconfigureKernel = null,
   isBusy = () => false,
   close = async () => {},
 } = {}) {
@@ -117,6 +120,7 @@ export function createNarsIntelligenceRuntimeController({
   let nextRequestNumber = 1;
 
   function snapshot() {
+    const projectedKernelHealth = typeof kernelHealth === 'function' ? kernelHealth() : null;
     return {
       schema: 'narada.nars.intelligence_runtime_snapshot.v1',
       authority: 'invokable-intelligence-gateway',
@@ -128,6 +132,9 @@ export function createNarsIntelligenceRuntimeController({
       latest_attempt_id: latest?.attempt?.id ?? null,
       latest_replayed: latest?.replayed ?? null,
       reconfiguration: lock?.snapshot() ?? lastReconfiguration?.snapshot() ?? null,
+      intelligence_kernel_kind: projectedKernelHealth?.kernel_kind ?? runtimeContext.intelligenceKernelKind ?? null,
+      kernel: projectedKernelHealth,
+      kernel_start_evidence: kernelStartEvidence,
     };
   }
 
@@ -139,7 +146,12 @@ export function createNarsIntelligenceRuntimeController({
     const deliveryRef = nonEmpty(overrides.inputEventId)
       ?? nonEmpty(overrides.turnId)
       ?? 'unscoped-turn';
+    const idempotencyKey = nonEmpty(overrides.idempotencyKey)
+      ?? nonEmpty(overrides.idempotency_key);
     const operationId = nonEmpty(overrides.operationId)
+      ?? (idempotencyKey
+        ? `operation:nars:${runtimeContext.session}:idempotency:${idempotencyKey}`
+        : null)
       ?? `operation:nars:${runtimeContext.session}:${deliveryRef}:${inputDigest.slice('sha256:'.length)}`;
     const result = await gateway.invoke({
       operationId,
@@ -157,10 +169,18 @@ export function createNarsIntelligenceRuntimeController({
       ...(overrides.turnId ? { turnId: overrides.turnId } : {}),
       ...(overrides.inputEventId ? { inputEventId: overrides.inputEventId } : {}),
       ...(overrides.requestId ? { requestId: overrides.requestId } : {}),
+      ...(overrides.runtimeRequestId || overrides.runtime_request_id
+        ? { runtimeRequestId: overrides.runtimeRequestId ?? overrides.runtime_request_id }
+        : {}),
+      ...(idempotencyKey ? { idempotencyKey } : {}),
+      ...(overrides.turnAttempt || overrides.turn_attempt
+        ? { turnAttempt: overrides.turnAttempt ?? overrides.turn_attempt }
+        : {}),
       ...(runtimeContext.invocationSettings?.invocationScope
         ? { invocationScope: runtimeContext.invocationSettings.invocationScope }
         : {}),
       ...(overrides.invocationEventSink ? { invocationEventSink: overrides.invocationEventSink } : {}),
+      ...(overrides.capabilityGateway !== undefined ? { capabilityGateway: overrides.capabilityGateway } : {}),
     });
     latest = result;
     if (result.kind === 'refusal') {
@@ -242,9 +262,20 @@ export function createNarsIntelligenceRuntimeController({
         machine.transition('refused', { reason: 'runtime_not_at_clean_turn_boundary', target });
         return intelligenceControllerResult(machine, { target });
       }
-      await validateSelection(target);
+      // Keep the resolver's admitted plan private to the control transition,
+      // but pass it to the kernel switch so a Pi host consumes the exact NARS
+      // provider/model binding that was validated rather than re-resolving
+      // from a client-facing model reference.
+      const admittedPlan = await validateSelection(target);
       machine.transition('admitted', { target });
       machine.transition('switching', { target });
+      if (typeof reconfigureKernel === 'function') {
+        const kernelResult = await reconfigureKernel(target, admittedPlan);
+        if (kernelResult?.accepted === false) {
+          machine.transition('failed', { reason: kernelResult.reason ?? 'kernel_reconfiguration_refused', kernel: kernelResult });
+          return intelligenceControllerResult(machine, { target });
+        }
+      }
       selection = target;
       machine.transition('active', { active: target });
       return intelligenceControllerResult(machine, { active: target });

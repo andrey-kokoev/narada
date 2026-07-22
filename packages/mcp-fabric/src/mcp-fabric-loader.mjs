@@ -360,6 +360,7 @@ function normalizeServerConfig(serverName, rawServer, siteRoot) {
     ...(selectedRuntimeKind ? { runtime_kind: selectedRuntimeKind } : {}),
     ...surfaceAffordanceFields(rawServer),
     ...(Number.isFinite(Number(rawServer.startup_timeout_sec)) ? { startup_timeout_sec: Number(rawServer.startup_timeout_sec) } : {}),
+    ...(Number.isFinite(Number(rawServer.request_timeout_ms)) ? { request_timeout_ms: Number(rawServer.request_timeout_ms) } : {}),
   };
 }
 

@@ -105,7 +105,11 @@ export async function executeWorkspaceLaunchPlan(
           runtimeStartCommand,
           runtimeStartCwd,
           agent.launch_session_id,
-          { agent_id: agent.agent, launch_session_id: agent.launch_session_id },
+          {
+            agent_id: agent.agent,
+            launch_session_id: agent.launch_session_id,
+            launch_binding_path: agent.operator_projection_launch_binding?.path ?? null,
+          },
         );
         hiddenLaunches.push(launch);
       }

@@ -1,8 +1,14 @@
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
 import { createControlInputBridge } from './control-input-bridge.mjs';
-import { createSessionCoreRuntimeService, normalizeRuntimeMcpScope } from './session-core-runtime-service.mjs';
+import {
+  createRuntimeCapabilityGateway,
+  createSessionCoreRuntimeService,
+  normalizeRuntimeMcpScope,
+} from './session-core-runtime-service.mjs';
 import { createNarsIntelligenceRuntimeController } from './intelligence-runtime-controller.mjs';
 import { createNarsRuntimeContext } from './runtime-context.mjs';
 import { createLocalIntelligenceRuntime } from './local-intelligence-runtime.mjs';
@@ -41,6 +47,7 @@ import { handleArtifactHttpRequest } from './runtime-server-artifacts.mjs';
 import { createNarsRuntimeHostStateMachine } from './runtime-host-state.mjs';
 import { createNarsHealthProjectionRequestStateMachine } from './health-projection-request-state.mjs';
 import { parseEndpointOptions, valueAfterFlag } from './runtime-server-options.mjs';
+import { createSessionAuthorityRuntimeBinding } from '@narada2/nars-session-authority';
 
 export { formatHostStatusEvent } from './runtime-server-events.mjs';
 
@@ -56,6 +63,13 @@ export function shouldUseInteractiveTerminalProjection({
     && output?.isTTY === true;
 }
 
+function publicResourceId(value) {
+  const id = typeof value === 'string' ? value : value && typeof value === 'object' ? value.id : null;
+  return typeof id === 'string' && id.trim()
+    ? id.trim().replace(/^(?:model|inference-provider):/, '')
+    : null;
+}
+
 function agentIdentitySiteId(agentIdentityRef) {
   if (!agentIdentityRef || typeof agentIdentityRef !== 'object') return null;
   const siteId = typeof agentIdentityRef.site_id === 'string' && agentIdentityRef.site_id.trim() ? agentIdentityRef.site_id.trim() : null;
@@ -69,22 +83,35 @@ function agentIdentitySiteId(agentIdentityRef) {
 function localExecutionEvidence({ lifecycleBinding, launchProcessContext }) {
   const session = lifecycleBinding.session_id;
   const executionLocusId = 'execution-locus:operator-pc';
-  const processEvidence = (componentKind, processId, resourceId = null) => ({
+  const processEvidence = (componentKind, processId, resourceId = null, deploymentRef = null) => ({
     schema: 'narada.invokable-intelligence.local-execution-evidence.v1',
     component_kind: componentKind,
     execution_locus_id: executionLocusId,
     ...(resourceId ? { resource_id: resourceId } : {}),
-    status: processId ? 'ready' : 'unknown',
+    // A launcher is a handoff boundary. Its parent process may already have
+    // exited by the time the detached runtime performs topology preflight,
+    // while the durable start handoff remains the authoritative evidence.
+    status: processId || deploymentRef ? 'ready' : 'unknown',
     observed_for_session: session,
     ...(processId ? { process_id: String(processId) } : {}),
-    evidence_ref: `local-execution:${session}:${componentKind}:${processId ?? 'missing'}`,
-    evidence_class: 'observed-process',
+    ...(deploymentRef ? { deployment_ref: deploymentRef } : {}),
+    evidence_ref: `local-execution:${session}:${componentKind}:${processId ?? deploymentRef ?? 'missing'}`,
+    evidence_class: processId ? 'observed' : deploymentRef ? 'durable' : 'synthetic-correlation',
   });
   return [
-    processEvidence('launcher', launchProcessContext.createdByPid),
+    // The launcher is a handoff/deployment boundary, not a process that must
+    // remain alive after the detached runtime child has been materialized.
+    // Keep the parent PID as corroborating evidence when available, but admit
+    // the durable agent-start handoff as the primary launcher evidence.
+    processEvidence(
+      'launcher',
+      launchProcessContext.createdByPid,
+      null,
+      `agent-start:${process.env.NARADA_AGENT_START_EVENT_ID ?? session}`,
+    ),
     processEvidence('carrier', process.pid),
     processEvidence('runtime', process.pid),
-    processEvidence('adapter', process.pid, process.env.NARADA_INTELLIGENCE_ADAPTER_ID ?? 'adapter:openai-compatible-http'),
+    processEvidence('adapter', process.pid, process.env.NARADA_INTELLIGENCE_ADAPTER_ID ?? 'adapter:codex-mcp-server'),
   ];
 }
 
@@ -106,31 +133,156 @@ function baseRuntimeContextOptions({ lifecycleBinding, operatorSurfaceKind, laun
 
 async function loadRuntimeDependencies(runtimeContext = {}) {
   const deniedTools = new Set(String(process.env.NARADA_DENIED_CAPABILITY_TOOLS ?? '').split(',').map((value) => value.trim()).filter(Boolean));
-  let appendRuntimeEvent = () => {};
-  const intelligenceRuntime = await createLocalIntelligenceRuntime({ runtimeContext });
+  const admitCapability = ({ toolName }) => deniedTools.has(toolName)
+    ? { admitted: false, reason: 'denied_by_runtime_policy' }
+    : { admitted: true, reason: 'admitted_by_runtime_policy' };
+  const toSessionCoreEvent = (event) => {
+    if (!event || typeof event !== 'object' || Array.isArray(event)) {
+      return { event: 'runtime_evidence', value: event ?? null };
+    }
+    const { kind, event: explicitEvent, ...payload } = event;
+    return { event: explicitEvent ?? kind ?? 'runtime_evidence', ...payload };
+  };
+  const pendingRuntimeEvents = [];
+  let appendRuntimeEvent = (event) => { pendingRuntimeEvents.push(toSessionCoreEvent(event)); };
+  let capabilityGateway = null;
+  let intelligenceRuntime = null;
+  let sessionAuthority = null;
+  let sessionCoreForArtifacts = null;
+  let inlineArtifactSequence = 0;
+  const registerPiArtifact = async (candidate = {}) => {
+    if (!sessionCoreForArtifacts) {
+      const error = new Error('session_core_unavailable:registerArtifact');
+      error.code = 'session_core_unavailable';
+      throw error;
+    }
+    const content = typeof candidate.content === 'string'
+      ? candidate.content
+      : candidate.content == null ? null : JSON.stringify(candidate.content);
+    if (content == null) {
+      const error = new Error('pi_artifact_content_required');
+      error.code = 'pi_artifact_content_required';
+      throw error;
+    }
+    if (Buffer.byteLength(content, 'utf8') > 10 * 1024 * 1024) {
+      const error = new Error('pi_artifact_content_too_large');
+      error.code = 'pi_artifact_content_too_large';
+      throw error;
+    }
+    const kind = String(candidate.kind ?? 'text').trim().toLowerCase();
+    const extension = kind === 'html' ? '.html'
+      : kind === 'markdown' ? '.md'
+        : kind === 'json' ? '.json'
+          : '.txt';
+    const materializationRoot = join(dirname(String(runtimeContext.sessionPath)), 'pi-admitted-artifacts');
+    mkdirSync(materializationRoot, { recursive: true });
+    inlineArtifactSequence += 1;
+    const sourcePath = join(materializationRoot, `artifact-${process.pid}-${inlineArtifactSequence}${extension}`);
+    writeFileSync(sourcePath, content, 'utf8');
+    return sessionCoreForArtifacts.registerArtifact({
+      sourcePath,
+      kind,
+      title: candidate.title,
+      contentType: candidate.content_type ?? candidate.contentType,
+      renderHint: candidate.render_hint ?? candidate.renderHint,
+    });
+  };
   try {
+    sessionAuthority = createSessionAuthorityRuntimeBinding({ runtimeContext });
+    await sessionAuthority?.activate({
+      pid: process.pid,
+      evidence: { runtime_server_pid: process.pid },
+    });
+    capabilityGateway = createRuntimeCapabilityGateway({
+      runtimeContext,
+      admitCapability,
+      recordEvidence: (event) => appendRuntimeEvent(event),
+    });
+    intelligenceRuntime = await createLocalIntelligenceRuntime({
+      runtimeContext,
+      capabilityGateway,
+      artifactRegistrar: registerPiArtifact,
+    });
     const intelligenceController = createNarsIntelligenceRuntimeController({
       runtimeContext,
       gateway: intelligenceRuntime.gateway,
       validateSelection: intelligenceRuntime.preflightSelection,
       close: intelligenceRuntime.close,
+      kernelHealth: intelligenceRuntime.kernelHealth,
+      kernelStartEvidence: intelligenceRuntime.kernel_start_evidence ?? null,
+      reconfigureKernel: intelligenceRuntime.kernel?.reconfigure
+        ? (target, admittedPlan) => intelligenceRuntime.kernel.reconfigure({
+            // The kernel contract consumes the canonical admitted plan
+            // directly. Keep compatibility with callers that still wrap the
+            // plan in an invocation envelope.
+            ...(admittedPlan ? { admitted_plan: admittedPlan.plan ?? admittedPlan } : {}),
+          })
+        : null,
       onTransition: (event) => appendRuntimeEvent(event),
     });
     // Fail fast if the default invocation context cannot resolve an eligible
     // canonical route. This preserves the historic startup-time binding check.
     const preflight = await intelligenceRuntime.preflightSelection({ requestedModel: null, requestedOptions: {} });
+    // Preflight resolves the canonical provider/model route after the kernel
+    // has started. Bind that exact admitted plan before exposing the session;
+    // otherwise the kernel can be healthy while advertising null provider and
+    // model configuration and the first operator turn has no active binding.
+    const startupPlan = preflight?.plan
+      ?? (preflight?.schema === 'narada.invokable-intelligence.invocation-plan.v2' ? preflight : null);
+    if (!startupPlan || typeof startupPlan !== 'object' || Array.isArray(startupPlan)) {
+      throw new Error('intelligence_preflight_plan_missing');
+    }
+    const expectedStartupBinding = startupPlan.selected;
+    if (!expectedStartupBinding || typeof expectedStartupBinding !== 'object' || Array.isArray(expectedStartupBinding)
+      || !publicResourceId(expectedStartupBinding.inference_provider)
+      || !publicResourceId(expectedStartupBinding.model)) {
+      throw new Error('intelligence_preflight_plan_binding_missing');
+    }
+    if (typeof intelligenceRuntime.kernel?.reconfigure !== 'function') {
+      throw new Error('intelligence_kernel_start_binding_unsupported');
+    }
+    const startupKernelBinding = await intelligenceRuntime.kernel.reconfigure({ admitted_plan: startupPlan });
+    if (startupKernelBinding?.accepted !== true
+      || publicResourceId(startupKernelBinding.active?.provider) !== publicResourceId(expectedStartupBinding.inference_provider)
+      || publicResourceId(startupKernelBinding.active?.model) !== publicResourceId(expectedStartupBinding.model)) {
+      throw new Error(`intelligence_kernel_start_binding_refused:${startupKernelBinding?.reason ?? 'unknown'}`);
+    }
     intelligenceController.primePreflight(preflight);
     const runtimeService = createSessionCoreRuntimeService({
       runtimeContext,
       intelligenceRuntime: intelligenceController,
-      admitCapability: ({ toolName }) => deniedTools.has(toolName)
-        ? { admitted: false, reason: 'denied_by_runtime_policy' }
-        : { admitted: true, reason: 'admitted_by_runtime_policy' },
+      toolGateway: capabilityGateway,
+      admitCapability,
+      onAuthorityHeartbeat: sessionAuthority
+        ? (options) => sessionAuthority.heartbeat(options)
+        : null,
+      onAuthorityClose: sessionAuthority
+        ? async (options) => {
+          try {
+            return await sessionAuthority.close(options);
+          } finally {
+            sessionAuthority.dispose();
+          }
+        }
+        : null,
     });
-    appendRuntimeEvent = (event) => runtimeService.supervisor.core.appendEvent(event);
+    sessionCoreForArtifacts = runtimeService.supervisor.core;
+    appendRuntimeEvent = (event) => runtimeService.supervisor.core.appendEvent(toSessionCoreEvent(event));
+    for (const event of pendingRuntimeEvents.splice(0)) appendRuntimeEvent(event);
     return runtimeService;
   } catch (error) {
-    await intelligenceRuntime.close();
+    try {
+      await sessionAuthority?.fail({
+        reason: 'runtime_start_failed',
+        evidence: { error: error instanceof Error ? error.message : String(error) },
+      });
+    } catch {
+      // Preserve the original runtime startup error.
+    } finally {
+      sessionAuthority?.dispose?.();
+    }
+    await intelligenceRuntime?.close?.();
+    await capabilityGateway?.close?.();
     throw error;
   }
 }
@@ -490,6 +642,7 @@ async function main() {
     const registryDbPath = process.env.NARADA_INTELLIGENCE_REGISTRY_DB?.trim() || null;
     const principal = process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID?.trim() || null;
     if (!principal) throw new Error('intelligence_principal_required');
+    const principalBinding = parseSiteConfigEnv(process.env.NARADA_INTELLIGENCE_PRINCIPAL_BINDING);
 
     runtimeContext = createNarsRuntimeContext({
       ...baseRuntimeContextOptions({
@@ -503,6 +656,7 @@ async function main() {
         registryDbPath,
         sites: loci,
         principal,
+        principalBinding,
         access: {
           action: 'invoke',
           requested_region: 'global',
@@ -738,6 +892,7 @@ export {
   parseHealthOptions,
   parseEventStreamOptions,
   loadRuntimeDependencies,
+  localExecutionEvidence,
   createDelegatedAuthorityHandoff,
   createEventHub,
   startHealthProjection,

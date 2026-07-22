@@ -119,6 +119,7 @@ export function runProcessDetachedUntilJson(
   const stderrPath = join(logDir, 'detached-stderr.log');
   let stdoutFd: number | null = null;
   let stderrFd: number | null = null;
+  let childPid: number | null = null;
   try {
     stdoutFd = openSync(stdoutPath, 'a');
     stderrFd = openSync(stderrPath, 'a');
@@ -134,6 +135,7 @@ export function runProcessDetachedUntilJson(
         ...env,
       },
     });
+    childPid = typeof child.pid === 'number' ? child.pid : null;
     child.unref();
   } catch (error) {
     if (stdoutFd !== null) closeSync(stdoutFd);
@@ -161,15 +163,26 @@ export function runProcessDetachedUntilJson(
         stderr: `detached_stderr=${stderrPath}`,
       };
     }
+    if (childPid !== null && !isProcessAlive(childPid)) {
+      const stdoutTail = readTextTail(stdoutPath, 2000);
+      const stderrTail = readTextTail(stderrPath, 2000);
+      return {
+        status: 'failed',
+        exit_code: 1,
+        stdout: `detached_stdout=${stdoutPath}\n${stdoutTail}`.trim(),
+        stderr: `agent-start process exited before producing its result: ${resultPath}\ndetached_stderr=${stderrPath}\n${stderrTail}`.trim(),
+        error: 'agent_start_process_exited_before_result',
+      };
+    }
     sleepSync(100);
   }
   const stderrTail = readTextTail(stderrPath, 2000);
   return {
-    status: 'starting',
+    status: 'failed',
     exit_code: 0,
     stdout: `detached_stdout=${stdoutPath}`,
     stderr: `agent-start handoff still pending after ${timeoutMs}ms: ${resultPath}\ndetached_stderr=${stderrPath}\n${stderrTail}`.trim(),
-    error: 'agent_start_handoff_pending',
+    error: 'agent_start_handoff_timeout',
   };
 }
 
@@ -203,6 +216,15 @@ export function runProcessInherited(
 
 function sleepSync(ms: number): void {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function readTextTail(path: string, maxChars: number): string {

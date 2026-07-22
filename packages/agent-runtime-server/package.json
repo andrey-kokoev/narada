@@ -17,10 +17,11 @@
       "artifact_http_request_handling",
       "attachment_contract",
       "carrier_substrate_handoff",
-      "runtime_host_lifecycle"
+      "runtime_host_lifecycle",
+      "capability_gateway_binding"
     ],
     "carrier_substrate": "@narada2/carrier-runtime in-process",
-    "runtime_dependency_owner": "nars-session-core owns session control and durability; nars-provider-runtime supplies provider execution"
+    "runtime_dependency_owner": "nars-session-core owns session control and durability; this package owns the scoped capability-gateway binding; nars-provider-runtime supplies provider execution"
   },
   "bin": {
     "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs"
@@ -51,8 +52,9 @@
   "scripts": {
     "test": "node --test test/*.test.mjs src/*.test.mjs",
     "test:e2e:pty": "node test/pty-e2e.mjs",
+    "test:live:pi-client-kernel": "node test/live-pi-client-kernel-substitutability-fixture-e2e.mjs --enable-live-e2e",
     "test:live:codex-provider-admission": "pnpm --filter @narada2/cli build && node test/live-codex-provider-admission-e2e.mjs --enable-live-codex",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/local-intelligence-runtime.mjs src/local-topology-observer.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/runtime-control-contract.mjs src/intelligence-runtime-reconfiguration-state.mjs src/intelligence-runtime-controller.mjs src/test-fixtures.mjs src/lifecycle-hooks.mjs"
+    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/local-intelligence-runtime.mjs src/local-topology-observer.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/runtime-control-contract.mjs src/intelligence-runtime-reconfiguration-state.mjs src/intelligence-runtime-controller.mjs src/test-fixtures.mjs src/lifecycle-hooks.mjs"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
@@ -60,15 +62,19 @@
     "@narada2/carrier-runtime": "workspace:*",
     "@narada2/carrier-protocol": "workspace:*",
     "@narada2/carrier-terminal-projection": "workspace:*",
+    "@narada2/carrier-provider-support": "workspace:*",
     "@narada2/invokable-intelligence-materialization": "workspace:*",
     "@narada2/invokable-intelligence-contract": "workspace:*",
     "@narada2/invokable-intelligence-registry": "workspace:*",
     "@narada2/invokable-intelligence-resolver": "workspace:*",
     "@narada2/invokable-intelligence-runtime": "workspace:*",
     "@narada2/launch-process-ownership": "workspace:*",
+    "@narada2/nars-session-authority": "workspace:*",
     "@narada2/nars-session-core": "workspace:*",
     "@narada2/nars-runtime-contract": "workspace:*",
     "@narada2/nars-capability-gateway": "workspace:*",
+    "@narada2/nars-intelligence-kernel-contract": "workspace:*",
+    "@narada2/nars-pi-kernel": "workspace:*",
     "@narada2/nars-provider-runtime": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/site-paths": "workspace:*"
