@@ -5,7 +5,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { buildCanonicalLocalTestSeed, canonicalSha256 } from '@narada2/invokable-intelligence-contract';
 import { discoverNarsSessions, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
+import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const naradaProperRoot = resolve(__dirname, '..', '..', '..', '..', '..');
@@ -16,6 +18,102 @@ function parseJsonOutput(stdout) {
   const start = text.search(/[\[{]/);
   assert.notEqual(start, -1, `no JSON payload found in stdout:\n${text}`);
   return JSON.parse(text.slice(start));
+}
+
+async function seedAgentCliIntelligenceFixture(siteRoot, targetSiteId = 'narada') {
+  const now = new Date().toISOString();
+  const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const dbPath = resolve(siteRoot, '.ai', 'intelligence-registry.db');
+  mkdirSync(dirname(dbPath), { recursive: true });
+  const store = await SqliteRegistryStore.open(dbPath);
+  try {
+    const seed = JSON.parse(JSON.stringify(buildCanonicalLocalTestSeed({
+      adapterProtocol: { family: 'codex-subscription', operation: 'responses', version: '1' },
+      credentialStore: 'none',
+      credentialReference: 'codex-subscription-session',
+      invocationModelKey: 'gpt-5.5',
+      now,
+      validUntil,
+    })));
+    const replacements = new Map([
+      ['site:narada', `site:${targetSiteId}`],
+      ['model-provider:kimi', 'model-provider:openai'],
+      ['model:kimi-k2-thinking', 'model:openai-gpt-5.5'],
+      ['model-offering:kimi-via-local-api', 'model-offering:gpt-5.5-via-codex-subscription'],
+      ['route:kimi-local-api', 'route:gpt-5.5-codex-subscription'],
+      ['adapter:openai-compatible-http', 'adapter:codex-subscription'],
+      ['inference-endpoint:remote-default', 'inference-endpoint:codex-subscription'],
+      ['inference-provider:remote-api', 'inference-provider:codex-subscription'],
+      ['local-api', 'codex-subscription'],
+      ['Kimi K2 Thinking', 'GPT-5.5'],
+      ['model-owner:kimi', 'model-owner:openai'],
+    ]);
+    for (const record of seed.records) {
+      let serialized = JSON.stringify(record.document);
+      for (const [from, to] of replacements) serialized = serialized.replaceAll(from, to);
+      record.document = JSON.parse(serialized);
+      record.record_id = record.document.id;
+      if (record.document.schema === 'narada.invokable-intelligence.adapter.v1') {
+        record.document.protocol = { family: 'codex-subscription', operation: 'responses', version: '1' };
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.inference-endpoint.v1') {
+        record.document.address = { kind: 'runtime-service', service: 'codex-subscription' };
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.model-offering.v1') {
+        record.document.invocation_model_key = 'gpt-5.5';
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1') {
+        record.document.topology.nodes = record.document.topology.nodes.map((node) => ({ ...node, required_feasibility: [] }));
+        record.document.topology.edges = record.document.topology.edges.map((edge) => ({ ...edge, required_feasibility: [] }));
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.access-grant.v1') {
+        record.document.scope.purposes = [...new Set([...record.document.scope.purposes, 'agent-session'])];
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.data-governance-requirement.v1') {
+        record.document.purposes = [...new Set([...record.document.purposes, 'agent-session'])];
+      }
+      if (record.document.schema === 'narada.invokable-intelligence.authority-statement.v1') {
+        const origin = record.document.origin;
+        record.authority = {
+          kind: record.document.kind,
+          locus: origin.locus,
+          authority_ref: origin.authority_ref,
+          ...(origin.site_id ? { site_id: origin.site_id } : {}),
+          ...(origin.principal_id ? { principal_id: origin.principal_id } : {}),
+        };
+      }
+      record.source.digest = canonicalSha256(record.document);
+    }
+    await store.loadCatalogSeed(seed);
+  } finally {
+    await store.close();
+  }
+}
+
+function writeAgentCliIntelligenceContext(userSiteRoot, siteRoot, targetSiteId) {
+  const canonicalTargetSiteId = `site:${targetSiteId}`;
+  mkdirSync(resolve(userSiteRoot, '.narada'), { recursive: true });
+  writeFileSync(resolve(userSiteRoot, '.narada', 'intelligence-launch-context.json'), JSON.stringify({
+    schema: 'narada.intelligence.launch_context.v1',
+    user_site_id: 'site:user',
+    host_site_id: 'site:pc',
+    principal_id: 'principal:andrey',
+    registry_db_path: resolve(siteRoot, '.ai', 'intelligence-registry.db'),
+    principal_binding: {
+      schema: 'narada.intelligence.principal_binding.v1',
+      actor: {
+        principal_id: 'principal:andrey',
+        auth_type: 'user-site-session',
+      },
+      memberships: [{
+        registry: 'site-roster',
+        site_id: canonicalTargetSiteId,
+        role: 'resident',
+        evidence_ref: `evidence:test:${targetSiteId}.resident`,
+      }],
+      evidence_refs: [`evidence:test:${targetSiteId}.resident`],
+    },
+  }), 'utf8');
 }
 
 async function waitForLaunchedSession(siteRoot, launchSessionId, existingSessionIds, timeoutMs = 45_000) {
@@ -204,6 +302,212 @@ test('operator launch journey dry-run maps one agent to agent-cli and agent-web-
   }
 });
 
+test('PowerShell launcher executes a fresh NARS agent-cli session with exact identity and terminal handoff contract', { skip: process.platform !== 'win32' }, async () => {
+  assert.equal(existsSync(workspaceLauncher), true, `User Site launcher not found: ${workspaceLauncher}`);
+  const fixtureRoot = mkdtempSync(resolve(tmpdir(), 'narada-launcher-agent-cli-'));
+  const siteRoot = resolve(fixtureRoot, 'site');
+  // Keep the live fixture's User Site and target Site loci separate, as they
+  // are in production. The launch context belongs to the User Site while the
+  // target site's intelligence catalog belongs to the target Site.
+  const userSiteRoot = resolve(fixtureRoot, 'user-site');
+  const routerStateRoot = resolve(fixtureRoot, 'operator-router-state');
+  const registryPath = resolve(fixtureRoot, 'agents.json');
+  const oldSessionId = 'narada-agent-cli-old-session';
+  const oldSessionPath = resolve(siteRoot, '.narada', 'crew', 'nars-sessions', oldSessionId, 'session.jsonl');
+  let savedResult = null;
+  let launchedSession = null;
+  let runtimePid = null;
+  let controlPath = null;
+  mkdirSync(siteRoot, { recursive: true });
+  mkdirSync(userSiteRoot, { recursive: true });
+  mkdirSync(routerStateRoot, { recursive: true });
+  mkdirSync(dirname(oldSessionPath), { recursive: true });
+  writeFileSync(oldSessionPath, '', 'utf8');
+  writeNarsSessionStartedIndex({
+    sessionStartedEvent: {
+      event: 'session_started',
+      session_id: oldSessionId,
+      agent_id: 'narada.resident',
+      site_id: 'narada',
+      started_at: '2020-01-01T00:00:00.000Z',
+      site_root: siteRoot,
+      runtime: 'narada-agent-runtime-server',
+      session_path: oldSessionPath,
+    },
+    sessionPath: oldSessionPath,
+    siteRoot,
+  });
+  writeFileSync(registryPath, JSON.stringify({
+    Agents: [{
+      Agent: 'narada.resident',
+      Role: 'resident',
+      Site: 'narada',
+      NaradaRoot: siteRoot,
+      SiteRoot: siteRoot,
+      WorkspaceRoot: siteRoot,
+      LauncherPath: resolve(siteRoot, 'narada-launcher-agent-cli.ps1'),
+      OperatorSurface: 'agent-cli',
+      Runtime: 'narada-agent-runtime-server',
+    }],
+  }), 'utf8');
+
+  const baseEnv = {
+    ...process.env,
+    NARADA_PROPER_ROOT: naradaProperRoot,
+    NARADA_USER_SITE_ROOT: userSiteRoot,
+    NARADA_OPERATOR_ROUTER_STATE_ROOT: routerStateRoot,
+    NARADA_OPERATOR_ROUTER_PORT: '0',
+    NARADA_NODE_EXECUTABLE: process.execPath,
+    NARADA_NO_BROWSER: '1',
+    KIMI_CODE_API_KEY: 'launcher-agent-cli-fixture-key',
+    KIMI_CODE_API_BASE_URL: 'http://127.0.0.1:1',
+    NARADA_INTELLIGENCE_REGISTRY_DB: resolve(siteRoot, '.ai', 'intelligence-registry.db'),
+    NARADA_INTELLIGENCE_TARGET_SITE: 'site:narada',
+    NARADA_INTELLIGENCE_USER_SITE: 'site:user',
+    NARADA_INTELLIGENCE_HOST_SITE: 'site:pc',
+    NARADA_INTELLIGENCE_PRINCIPAL_ID: 'principal:andrey',
+    NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_MS: '15000',
+    NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_INTERVAL_MS: '100',
+  };
+
+  try {
+    writeAgentCliIntelligenceContext(userSiteRoot, siteRoot, 'narada');
+    await seedAgentCliIntelligenceFixture(siteRoot, 'narada');
+
+    const planResult = spawnSync('pwsh', [
+      '-NoProfile',
+      '-File', workspaceLauncher,
+      '-All',
+      '-Runtime', 'nars',
+      '-OperatorSurface', 'agent-cli',
+      '-Site', 'narada',
+      '-Role', 'resident',
+      '-ConfigPath', registryPath,
+      '-McpScope', 'none',
+      '-VisibleRuntimeTerminal',
+      '-DryRun',
+    ], {
+      cwd: naradaProperRoot,
+      encoding: 'utf8',
+      // The real NARS path has a detached agent-start handoff budget followed
+      // by the session-attachment budget. Keep the test timeout above both
+      // budgets so it reports launch behavior rather than killing a healthy
+      // but slow fixture.
+      timeout: 180_000,
+      env: baseEnv,
+    });
+    assert.equal(planResult.status, 0, `stderr:\n${planResult.stderr}\nstdout:\n${planResult.stdout}`);
+    const plan = parseJsonOutput(planResult.stdout);
+    const plannedAgent = plan.selected_agents?.[0];
+    assert.equal(plannedAgent?.launch_operator_surface, 'agent-cli');
+    assert.deepEqual(plannedAgent?.launch_operator_surfaces, ['agent-cli']);
+    assert.equal(plannedAgent?.launch_runtime, 'narada-agent-runtime-server');
+    assert.equal(plannedAgent?.runtime_start_execution_mode, 'operator_terminal');
+    assert.equal(plannedAgent?.terminal_tabs?.length, 1);
+    assert.equal(plannedAgent?.terminal_tabs?.[0]?.title, 'narada.resident runtime');
+    assert.match(plannedAgent?.terminal_tabs?.[0]?.command ?? '', /agent-runtime-server: starting narada\.resident/);
+    assert.match(plannedAgent?.terminal_tabs?.[0]?.command ?? '', /operator-surface.*runtime.*start.*agent-cli/);
+    assert.match((plannedAgent?.wt_args ?? []).join(' '), /agent-cli/);
+
+    const result = spawnSync('pwsh', [
+      '-NoProfile',
+      '-File', workspaceLauncher,
+      '-All',
+      '-Runtime', 'nars',
+      '-OperatorSurface', 'agent-cli',
+      '-Site', 'narada',
+      '-Role', 'resident',
+      '-ConfigPath', registryPath,
+      '-McpScope', 'none',
+      '-NoWaitForEnterBeforeExec',
+    ], {
+      cwd: naradaProperRoot,
+      encoding: 'utf8',
+      // The real NARS path has a detached agent-start handoff budget followed
+      // by the session-attachment budget. Keep the test timeout above both
+      // budgets so it reports launch behavior rather than killing a healthy
+      // but slow fixture.
+      timeout: 180_000,
+      env: baseEnv,
+    });
+
+    assert.equal(result.status, 0, `error=${result.error?.message ?? 'none'} signal=${result.signal ?? 'none'}\nstderr:\n${result.stderr}\nstdout:\n${result.stdout}`);
+    const resultPathMatch = String(result.stdout).match(/Narada workspace launch started\. Result: ([^\r\n]+)/);
+    assert.ok(resultPathMatch, `saved launch result path missing:\n${result.stdout}`);
+    assert.equal(existsSync(resultPathMatch[1].trim()), true);
+    savedResult = JSON.parse(readFileSync(resultPathMatch[1].trim(), 'utf8'));
+    const savedAgent = savedResult.selected_agents?.[0];
+    assert.equal(savedResult.status, 'launched');
+    assert.equal(savedResult.mutation_performed, true);
+    assert.equal(savedResult.hidden_runtime_invoked, true);
+    assert.equal(savedResult.windows_terminal_invoked, false);
+    assert.equal(savedAgent?.agent, 'narada.resident');
+    assert.equal(savedAgent?.launch_operator_surface, 'agent-cli');
+    assert.deepEqual(savedAgent?.launch_operator_surfaces, ['agent-cli']);
+    assert.equal(savedAgent?.launch_runtime, 'narada-agent-runtime-server');
+    assert.equal(savedAgent?.runtime_start_execution_mode, 'hidden_detached');
+    assert.equal(savedResult.hidden_runtime_launches?.length, 1);
+    assert.deepEqual(savedResult.hidden_projection_launches, []);
+    assert.equal(savedResult.attachment?.status, 'attached');
+    assert.equal(savedResult.attachment?.exact_session, true);
+    assert.equal(savedResult.attachment?.sessions?.[0]?.health_identity_match, true);
+    assert.equal(savedResult.attachment?.sessions?.[0]?.health_status, 'healthy');
+    assert.doesNotMatch(result.stderr, /narada_cli_dist_stale|source_hash_mismatch/i);
+
+    const expectedLaunchSessionId = savedAgent.launch_session_id;
+    launchedSession = await waitForLaunchedSession(siteRoot, expectedLaunchSessionId, new Set([oldSessionId]));
+    assert.notEqual(launchedSession.session_id, oldSessionId);
+    assert.equal(launchedSession.record?.agent_id, 'narada.resident');
+    assert.equal(launchedSession.record?.site_id, 'narada');
+    assert.equal(launchedSession.record?.runtime_kind, 'narada-agent-runtime-server');
+    assert.equal(launchedSession.record?.launch_operator_surface_kind, 'agent-cli');
+    assert.equal(launchedSession.record?.launch_session_id, expectedLaunchSessionId);
+    assert.notEqual(launchedSession.session_id, expectedLaunchSessionId);
+
+    const sessionPath = launchedSession.session_path ?? launchedSession.record?.session_path;
+    assert.equal(typeof sessionPath, 'string');
+    const eventsPath = launchedSession.events_path ?? launchedSession.record?.events_path ?? sessionPath;
+    const startedEvent = readFileSync(eventsPath, 'utf8')
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line))
+      .find((event) => event.event === 'session_started');
+    assert.ok(startedEvent, `session_started event missing from ${sessionPath}`);
+    assert.equal(startedEvent.runtime, 'narada-agent-runtime-server');
+    assert.equal(startedEvent.operator_surface_kind, 'agent-cli');
+    assert.equal(startedEvent.site_id, 'narada');
+    assert.equal(startedEvent.agent_identity_ref?.schema, 'narada.agent_identity_ref.v2');
+    assert.equal(startedEvent.agent_identity_ref?.canonical_agent_id, 'narada.resident');
+    assert.equal(startedEvent.agent_identity_ref?.local_agent_id, 'resident');
+    assert.equal(startedEvent.launch_session_id, expectedLaunchSessionId);
+    assert.equal(startedEvent.runtime_host_state?.runtime_host_state, 'serving');
+
+    runtimePid = Number(launchedSession.pid ?? launchedSession.record?.process_ownership?.pid ?? savedResult.hidden_runtime_launches[0].pid);
+    controlPath = launchedSession.control_path
+      ?? launchedSession.record?.control_path
+      ?? resolve(siteRoot, '.narada', 'crew', 'nars-sessions', launchedSession.session_id, 'control.jsonl');
+    assert.equal(existsSync(controlPath), true, `NARS control path was not materialized: ${controlPath}`);
+    appendFileSync(controlPath, `${JSON.stringify({
+      request_id: 'launcher-agent-cli-close',
+      method: 'session.close',
+      params: {},
+    })}\n`, 'utf8');
+    await waitForSessionClosed(siteRoot, launchedSession.session_id);
+    await waitForProcessExit(runtimePid);
+  } finally {
+    if (controlPath && existsSync(controlPath)) {
+      appendFileSync(controlPath, `${JSON.stringify({
+        request_id: 'launcher-agent-cli-finally-close',
+        method: 'session.close',
+        params: {},
+      })}\n`, 'utf8');
+    }
+    await terminateProcessTreeAndWait(runtimePid);
+    await terminateFixtureProcesses(fixtureRoot);
+    await removeFixtureRoot(fixtureRoot);
+  }
+});
+
 test('operator launch journey dry-run admits agent-web-ui as the primary NARS launch carrier', { skip: process.platform !== 'win32' }, () => {
   assert.equal(existsSync(workspaceLauncher), true, `User Site launcher not found: ${workspaceLauncher}`);
   const fixtureRoot = mkdtempSync(resolve(tmpdir(), 'narada-launcher-plan-'));
@@ -311,13 +615,14 @@ test('PowerShell launcher executes a fresh NARS session and attaches the Web UI 
   }), 'utf8');
 
   try {
+    writeAgentCliIntelligenceContext(userSiteRoot, siteRoot, 'launcher-e2e');
+    await seedAgentCliIntelligenceFixture(siteRoot, 'launcher-e2e');
     const result = spawnSync('pwsh', [
       '-NoProfile',
       '-File', workspaceLauncher,
       '-All',
       '-Runtime', 'nars',
       '-OperatorSurface', 'agent-web-ui',
-      '-IntelligenceProvider', 'kimi-code-api',
       '-Site', 'launcher-e2e',
       '-Role', 'resident',
       '-ConfigPath', registryPath,
@@ -337,6 +642,11 @@ test('PowerShell launcher executes a fresh NARS session and attaches the Web UI 
         NARADA_NO_BROWSER: '1',
         KIMI_CODE_API_KEY: 'launcher-e2e-fixture-key',
         KIMI_CODE_API_BASE_URL: 'http://127.0.0.1:1',
+        NARADA_INTELLIGENCE_REGISTRY_DB: resolve(siteRoot, '.ai', 'intelligence-registry.db'),
+        NARADA_INTELLIGENCE_TARGET_SITE: 'site:launcher-e2e',
+        NARADA_INTELLIGENCE_USER_SITE: 'site:user',
+        NARADA_INTELLIGENCE_HOST_SITE: 'site:pc',
+        NARADA_INTELLIGENCE_PRINCIPAL_ID: 'principal:andrey',
         NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_MS: '15000',
         NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_INTERVAL_MS: '100',
         NARADA_WORKSPACE_LAUNCH_PROJECTION_READINESS_TIMEOUT_MS: '30000',
