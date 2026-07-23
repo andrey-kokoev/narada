@@ -68,6 +68,42 @@ test('an explicitly controlled canonical failure settles its queue item for a la
   await binding.close();
 });
 
+test('a live admission-unknown outcome settles without automatic queue redispatch', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-admission-unknown-'));
+  const failureResult = {
+    kind: 'plan',
+    outcome: { kind: 'admission-unknown' },
+  };
+  let providerCalls = 0;
+  const binding = createRuntimeSessionBinding({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'session-admission-unknown',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+    },
+    invokeIntelligenceFn: async () => {
+      providerCalls += 1;
+      throw new NarsIntelligenceInvocationError(
+        'intelligence_admission_unknown',
+        'canonical intelligence invocation ended as admission-unknown',
+        failureResult,
+      );
+    },
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+  });
+
+  binding.start();
+  await binding.submit({ event_id: 'input_admission_unknown', content: 'do not resend' });
+
+  assert.equal(providerCalls, 1);
+  assert.equal(binding.health().operator_input_queue.pending_count, 0);
+  assert.equal(binding.core.turn('input_admission_unknown').terminal_state, 'failed');
+  assert.match(readFileSync(join(root, 'events.jsonl'), 'utf8'), /"event_kind":"input_completed"/);
+  await binding.close();
+});
+
 test('runtime session binding contains provider follow-up exhaustion as a failed turn', async () => {
   const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-round-limit-'));
   let providerCalls = 0;
@@ -485,6 +521,7 @@ test('runtime writes heartbeat evidence and records natural input exhaustion as 
   const heartbeat = JSON.parse(readFileSync(paths.narsHeartbeatPath, 'utf8'));
   const indexRecord = JSON.parse(readFileSync(paths.narsSessionIndexRecordPath, 'utf8'));
   assert.equal(heartbeat.schema, 'narada.nars.heartbeat.v1');
+  assert.equal(heartbeat.status, 'stopped');
   assert.equal(heartbeat.reason, 'runtime_process_exit');
   assert.equal(indexRecord.terminal_state, 'closed');
   assert.equal(indexRecord.terminal_reason, 'runtime_process_exit');

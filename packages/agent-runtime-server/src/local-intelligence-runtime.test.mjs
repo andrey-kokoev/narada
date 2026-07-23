@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createServer } from 'node:http';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -38,6 +39,17 @@ function runtimeContext() {
     siteRoot: 'D:/code/narada',
     intelligence: {
       principal: IDS.principal,
+      principalBinding: {
+        schema: 'narada.intelligence.principal_binding.v1',
+        actor: { principal_id: IDS.principal, auth_type: 'user-site-session' },
+        memberships: [{
+          registry: 'site-roster',
+          site_id: IDS.targetSite,
+          role: 'resident',
+          evidence_ref: 'evidence:canonical-local-principal-membership',
+        }],
+        evidence_refs: ['evidence:canonical-local-principal-membership'],
+      },
       sites: {
         targetSite: { kind: 'site', id: IDS.targetSite },
         userSite: { kind: 'site', id: IDS.userSite },
@@ -67,30 +79,36 @@ function runtimeContext() {
 }
 
 test('runtime-service availability uses an executable probe rather than adapter shape', async () => {
-  const available = await probeCodexSubscriptionService({
-    env: {
-      ...process.env,
-      NARADA_CODEX_EXEC_COMMAND: process.execPath,
-      NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify(['-e', 'process.exit(0)']),
-    },
-    session: 'runtime-probe-available',
-  });
-  assert.equal(available.status, 'executable-present');
-  assert.equal(available.service, 'codex-executable');
-  assert.equal(available.protocol_family, 'codex-cli');
-  assert.equal(available.probe.kind, 'executable-presence');
-  assert.match(available.evidence_ref, /runtime-probe-available/);
+  const authHome = mkdtempSync(join(tmpdir(), 'narada-codex-auth-'));
+  try {
+    const available = await probeCodexSubscriptionService({
+      env: {
+        ...process.env,
+        NARADA_CODEX_AUTH_HOME: authHome,
+        NARADA_CODEX_EXEC_COMMAND: process.execPath,
+        NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify(['-e', 'process.exit(0)']),
+      },
+      session: 'runtime-probe-available',
+    });
+    assert.equal(available.status, 'ready');
+    assert.equal(available.service, 'codex-subscription');
+    assert.equal(available.protocol_family, 'codex-subscription');
+    assert.equal(available.probe.kind, 'authenticated-provider-preflight');
+    assert.match(available.evidence_ref, /runtime-probe-available/);
 
-  const unavailable = await probeCodexSubscriptionService({
-    env: {
-      ...process.env,
-      NARADA_CODEX_EXEC_COMMAND: `${process.execPath}.missing`,
-      NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([]),
-    },
-    session: 'runtime-probe-unavailable',
-  });
-  assert.equal(unavailable.status, 'unavailable');
-  assert.equal(unavailable.probe.reason_code, 'ENOENT');
+    const unavailable = await probeCodexSubscriptionService({
+      env: {
+        ...process.env,
+        NARADA_CODEX_AUTH_HOME: authHome,
+        NARADA_CODEX_EXEC_COMMAND: `${process.execPath}.missing`,
+        NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([]),
+      },
+      session: 'runtime-probe-unavailable',
+    });
+    assert.equal(unavailable.status, 'unavailable');
+  } finally {
+    rmSync(authHome, { recursive: true, force: true });
+  }
 });
 
 test('runtime refuses an absent registry without creating an empty authority store', async () => {
@@ -146,6 +164,56 @@ test('runtime resolves and executes one exact canonical plan through the durable
     assert.equal(result.result.payload.retention.policy_ref, 'governance:narada-local-api');
   } finally {
     await runtime.close();
+  }
+});
+
+test('runtime installs the admitted capability catalog before kernel startup', async () => {
+  const store = await SqliteRegistryStore.open(':memory:');
+  await store.loadCatalogSeed(buildCanonicalLocalTestSeed());
+  const materialization = await SqliteMaterializationStore.open(':memory:');
+  const startupCatalog = [{
+    type: 'function',
+    function: {
+      name: 'nars.test.echo',
+      parameters: { type: 'object', properties: {} },
+    },
+    nars_gateway_proxy: true,
+  }];
+  let startupContext = null;
+  let catalogCalls = 0;
+  const capabilityGateway = {
+    toolCatalog: async () => {
+      catalogCalls += 1;
+      return startupCatalog;
+    },
+    invoke: async () => ({ status: 'unknown', admission_action: 'admit', execution_outcome: 'unknown' }),
+    close: async () => {},
+  };
+  const kernel = {
+    async start(context) {
+      startupContext = context;
+      return { schema: 'narada.test.kernel-start.v1' };
+    },
+    async invokeAdmitted() {
+      return { admission: 'acknowledged' };
+    },
+    health: () => ({ kernel_kind: 'test' }),
+  };
+  const runtime = await createLocalIntelligenceRuntime({
+    runtimeContext: runtimeContext(),
+    store,
+    materialization,
+    clock: () => canonicalTestClock(AT),
+    kernel,
+    capabilityGateway,
+  });
+  try {
+    assert.equal(catalogCalls, 1);
+    assert.deepEqual(startupContext?.tools, startupCatalog);
+  } finally {
+    await runtime.close();
+    await materialization.close();
+    await store.close();
   }
 });
 
@@ -441,5 +509,102 @@ test('stale injected runtime-service evidence is replaced by a fresh probe', asy
   } finally {
     await materialization.close();
     await store.close();
+  }
+});
+    
+test('runtime preserves the gateway clock when an async service probe completes later', async () => {
+  const server = createServer((_request, response) => {
+    response.writeHead(200, { 'content-type': 'application/json' });
+    response.end(JSON.stringify({ ok: true }));
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const endpointUrl = `http://127.0.0.1:${server.address().port}/v1/invoke`;
+  const store = await SqliteRegistryStore.open(':memory:');
+  await store.loadCatalogSeed(buildCanonicalLocalTestSeed({ endpointUrl }));
+  const materialization = await SqliteMaterializationStore.open(':memory:');
+  const context = runtimeContext();
+  context.executionEvidence = [
+    ...['launcher', 'carrier', 'runtime'].map((component_kind) => ({
+      schema: 'narada.invokable-intelligence.local-execution-evidence.v1',
+      component_kind,
+      execution_locus_id: 'execution-locus:operator-pc',
+      status: 'ready',
+      observed_for_session: context.session,
+      process_id: String(process.pid),
+      evidence_ref: `local-execution:${context.session}:${component_kind}:${process.pid}`,
+    })),
+    {
+      schema: 'narada.invokable-intelligence.local-execution-evidence.v1',
+      component_kind: 'adapter',
+      execution_locus_id: 'execution-locus:operator-pc',
+      resource_id: 'adapter:openai-compatible-http',
+      status: 'ready',
+      observed_for_session: context.session,
+      process_id: String(process.pid),
+      evidence_ref: `local-execution:${context.session}:adapter:${process.pid}`,
+    },
+  ];
+  context.intelligence = {
+    ...context.intelligence,
+    topologyObservations: [],
+    topologyObservationSource: {
+      schema: 'narada.invokable-intelligence.local-topology-observation-source.v1',
+      authority_ref: 'runtime:clock-race-test',
+      observation_validity_ms: 1000,
+      runtime_service_validity_ms: 1000,
+    },
+  };
+  let fakeNowMs = Date.parse(AT);
+  let probeCalls = 0;
+  const clock = () => {
+    fakeNowMs += 750;
+    return canonicalTestClock(new Date(fakeNowMs).toISOString());
+  };
+  try {
+    const runtime = await createLocalIntelligenceRuntime({
+      runtimeContext: context,
+      store,
+      materialization,
+      clock,
+      adapter: {
+        async invoke() {
+          return {
+            admission: 'acknowledged',
+            transportSubmitted: true,
+            response: { choices: [{ message: { role: 'assistant', content: 'clock-race-ok' } }] },
+          };
+        },
+      },
+      runtimeServiceProbe: async ({ session, authorityRef }) => {
+        probeCalls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return {
+          schema: 'narada.invokable-intelligence.local-runtime-service-evidence.v1',
+          service: 'codex-subscription',
+          runtime_family: 'node',
+          protocol_family: 'codex-subscription',
+          status: 'ready',
+          observed_for_session: session,
+          authority_ref: authorityRef,
+          observed_at: clock().instant,
+          evidence_class: 'observed',
+          evidence_ref: `clock-race-probe:${probeCalls}`,
+        };
+      },
+    });
+    const result = await runtime.gateway.invoke({
+      operationId: 'operation:clock-race-test',
+      purpose: 'operator-chat',
+      principal: IDS.principal,
+      messages: [{ role: 'user', content: 'hello' }],
+    });
+    assert.equal(result.outcome.kind, 'success');
+    assert.ok(probeCalls >= 2);
+    await runtime.close();
+  } finally {
+    await materialization.close();
+    await store.close();
+    server.closeAllConnections?.();
+    await new Promise((resolve) => server.close(resolve));
   }
 });

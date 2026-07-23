@@ -65,6 +65,15 @@
       "posture": "agent_identity_projection_contract"
     },
     {
+      "package": "@narada2/agent-pi-tui",
+      "path": "packages/agent-pi-tui",
+      "roles": [
+        "cli_exposure",
+        "descriptor_contract"
+      ],
+      "posture": "nars_pi_tui_client_projection_no_runtime_execution"
+    },
+    {
       "package": "@narada2/agent-runtime-server",
       "path": "packages/agent-runtime-server",
       "roles": [
@@ -442,6 +451,22 @@
         "descriptor_contract"
       ],
       "posture": "nars_client_projection_capability_contracts"
+    },
+    {
+      "package": "@narada2/nars-intelligence-kernel-contract",
+      "path": "packages/nars-intelligence-kernel-contract",
+      "roles": [
+        "descriptor_contract"
+      ],
+      "posture": "representation_neutral_intelligence_kernel_contract"
+    },
+    {
+      "package": "@narada2/nars-pi-kernel",
+      "path": "packages/nars-intelligence-runtime-pi",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "isolated_pi_intelligence_kernel_without_session_authority"
     },
     {
       "package": "@narada2/nars-provider-runtime",

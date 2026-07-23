@@ -173,6 +173,27 @@ test('controller activates canonical model/options constraints only at a clean t
   assert.deepEqual(fixture.calls[0].requestedOptions, { thinking: 'high', batch: false });
 });
 
+test('controller passes the privately admitted plan to the kernel switch', async () => {
+  let switched = null;
+  const controller = createNarsIntelligenceRuntimeController({
+    runtimeContext: { session: 'session-plan', intelligence: { principal: 'principal:plan' } },
+    gateway: { async invoke() { return planResult(); } },
+    validateSelection: async () => PLAN,
+    reconfigureKernel: async (target, admittedPlan) => {
+      switched = { target, admittedPlan };
+      return { accepted: true, active: { provider: 'provider:test', model: 'test', thinking: 'high' } };
+    },
+  });
+  const result = await controller.reconfigure({
+    request_id: 'plan-switch-1',
+    requested_model: { kind: 'model', id: 'model:next' },
+    requested_options: { thinking: 'high' },
+  });
+  assert.equal(result.terminal_state, 'active');
+  assert.equal(switched.target.requestedModel.id, 'model:next');
+  assert.equal(switched.admittedPlan, PLAN);
+});
+
 test('a durable replay without retained payload is not redispatched and is explicit metadata-only', async () => {
   const fixture = createFixture({ result: planResult({ adapterOutcome: null, replayed: true }) });
   const response = await fixture.controller.callIntelligence([], [], { inputEventId: 'input-replay' });

@@ -349,6 +349,17 @@ async function seedIntelligenceRegistry(siteRoot, {
     NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
     NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
     NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
+    NARADA_INTELLIGENCE_PRINCIPAL_BINDING: JSON.stringify({
+      schema: 'narada.intelligence.principal_binding.v1',
+      actor: { principal_id: CANONICAL_LOCAL_TEST_IDS.principal, auth_type: 'user-site-session' },
+      memberships: [{
+        registry: 'site-roster',
+        site_id: CANONICAL_LOCAL_TEST_IDS.targetSite,
+        role: 'resident',
+        evidence_ref: 'evidence:server-wrapper-principal-membership',
+      }],
+      evidence_refs: ['evidence:server-wrapper-principal-membership'],
+    }),
   });
   delete process.env.NARADA_INTELLIGENCE_PROVIDER;
 }

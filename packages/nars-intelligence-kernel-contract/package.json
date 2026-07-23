@@ -1,0 +1,45 @@
+{
+  "name": "@narada2/nars-intelligence-kernel-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "nars_intelligence_kernel_contract",
+    "owns": [
+      "intelligence_kernel_selection",
+      "representation_neutral_kernel_contract",
+      "kernel_health_projection_contract"
+    ],
+    "does_not_own": [
+      "pi_sdk_types",
+      "provider_execution",
+      "session_durability",
+      "client_projection"
+    ]
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs"
+    },
+    "./native-kernel": {
+      "types": "./src/native-kernel.d.ts",
+      "import": "./src/native-kernel.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test src/*.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/native-kernel.mjs"
+  },
+  "description": "Representation-neutral NARS intelligence-kernel contract and native adapter",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/nars-intelligence-kernel-contract"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

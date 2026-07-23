@@ -1,0 +1,50 @@
+{
+  "name": "@narada2/nars-pi-kernel",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "files": ["src", "docs", "README.md", "LICENSE-PI-NOTICE.md"],
+  "narada": {
+    "package_role": "nars_intelligence_kernel",
+    "implements": "@narada2/nars-intelligence-kernel-contract",
+    "substrate": "@earendil-works/pi-coding-agent",
+    "canonical_state_owner": "@narada2/nars-session-core",
+    "operator_surface_independent": true
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "import": "./src/index.mjs"
+    },
+    "./kernel": {
+      "types": "./src/index.d.ts",
+      "import": "./src/kernel.mjs"
+    },
+    "./pi-sdk-host": "./src/pi/pi-sdk-host.mjs",
+    "./pi-rpc-host": "./src/pi/pi-rpc-host.mjs",
+    "./event-adapter": "./src/adapters/event-adapter.mjs",
+    "./tool-adapter": "./src/adapters/tool-adapter.mjs",
+    "./context-adapter": "./src/adapters/context-adapter.mjs",
+    "./runtime-isolation": "./src/pi/pi-runtime-isolation.mjs",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node --test src/**/*.test.mjs src/*.test.mjs",
+    "test:live": "node --test src/live/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "0.80.10",
+    "@narada2/nars-intelligence-kernel-contract": "workspace:*"
+  },
+  "description": "Pi SDK/RPC implementation of the NARS intelligence-kernel boundary",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/nars-intelligence-runtime-pi"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

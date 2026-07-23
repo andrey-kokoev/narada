@@ -5,7 +5,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS } from '@narada2/invokable-intelligence-contract';
+import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS, canonicalSha256 } from '@narada2/invokable-intelligence-contract';
 import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
@@ -16,11 +16,15 @@ async function seedIntelligenceRegistry(siteRoot, providerId, endpointBaseUrl) {
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   const store = await SqliteRegistryStore.open(dbPath);
   try {
+    const now = new Date().toISOString();
+    const validUntil = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
     const seed = JSON.parse(JSON.stringify(buildCanonicalLocalTestSeed({
       endpointBaseUrl,
       adapterProtocol: { family: 'openai', operation: 'chat-completions', version: '1' },
       credentialStore: 'env',
       credentialReference: 'OPENAI_API_KEY',
+      now,
+      validUntil,
     })));
     for (const record of seed.records) {
       const serialized = JSON.stringify(record.document).replaceAll('inference-provider:remote-api', `inference-provider:${providerId}`);
@@ -39,6 +43,7 @@ async function seedIntelligenceRegistry(siteRoot, providerId, endpointBaseUrl) {
       if (record.document.schema === 'narada.invokable-intelligence.data-governance-requirement.v1') {
         record.document.purposes = [...new Set([...record.document.purposes, 'agent-session'])];
       }
+      record.source.digest = canonicalSha256(record.document);
     }
     await store.loadCatalogSeed(seed);
   } finally {
@@ -50,6 +55,17 @@ async function seedIntelligenceRegistry(siteRoot, providerId, endpointBaseUrl) {
     NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
     NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
     NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
+    NARADA_INTELLIGENCE_PRINCIPAL_BINDING: JSON.stringify({
+      schema: 'narada.intelligence.principal_binding.v1',
+      actor: { principal_id: CANONICAL_LOCAL_TEST_IDS.principal, auth_type: 'user-site-session' },
+      memberships: [{
+        registry: 'site-roster',
+        site_id: CANONICAL_LOCAL_TEST_IDS.targetSite,
+        role: 'resident',
+        evidence_ref: 'evidence:pty-principal-membership',
+      }],
+      evidence_refs: ['evidence:pty-principal-membership'],
+    }),
   });
 }
 
@@ -152,7 +168,11 @@ async function runPtyE2E() {
       resolve(event);
     }));
 
-    await waitFor(() => output.includes('operator >'), 7000, 'interactive_prompt');
+    try {
+      await waitFor(() => output.includes('operator >'), 7000, 'interactive_prompt');
+    } catch (error) {
+      throw new Error(`${error.message}\\npty_output:${JSON.stringify(output)}`);
+    }
     terminal.write('hello\r');
     await waitFor(() => output.includes('real pty response'), 7000, 'provider_response');
     assert.equal(output.includes('runtime_output_failure'), false);
