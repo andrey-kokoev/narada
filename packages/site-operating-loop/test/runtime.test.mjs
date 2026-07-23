@@ -51,7 +51,13 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     assert.deepEqual(result.cycles.map((cycle) => cycle.run.execution_lifecycle_state), ['completed', 'completed']);
     assert.deepEqual(result.cycles[0].run.execution_lifecycle_history, ['scheduled', 'admitted', 'running', 'completed']);
     assert.deepEqual(result.cycles.map((cycle) => cycle.run.steps[0].step_id), ['cycle-1', 'cycle-2']);
-    assert.deepEqual(events.map((event) => event.event), [
+    const runtimeEvents = events.filter((event) => [
+      'runtime_started',
+      'cycle_started',
+      'cycle_completed',
+      'runtime_stopped',
+    ].includes(event.event));
+    assert.deepEqual(runtimeEvents.map((event) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
@@ -59,6 +65,9 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
       'cycle_completed',
       'runtime_stopped',
     ]);
+    assert.deepEqual(result.runtime_host_lifecycle_history, ['created', 'binding', 'ready', 'serving', 'closing', 'stopped']);
+    assert.equal(result.runtime_host_state, 'stopped');
+    assert.ok(events.some((event) => event.event === 'runtime_host_lifecycle_transition'));
     assert.ok(events.every((event) => event.event_id));
 
     const status = getLoopStatus(store, { loopId: 'test.loop' });
@@ -66,13 +75,23 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     assert.equal(status.health.status, 'healthy');
     assert.equal(status.health.lifecycle_state, 'healthy');
 
-    const storedEvents = listLoopRuntimeEvents(store, { loopId: 'test.loop', limit: 10 });
-    assert.equal(storedEvents.count, 6);
+    const storedEvents = listLoopRuntimeEvents(store, { loopId: 'test.loop', limit: 20 });
+    assert.equal(storedEvents.count, events.length);
+    assert.equal(storedEvents.events[0].event, 'runtime_host_claimed');
     assert.deepEqual(storedEvents.events.map((event) => event.event), events.map((event) => event.event));
 
-    const afterFirst = listLoopRuntimeEvents(store, { loopId: 'test.loop', afterEventId: storedEvents.events[0].event_id, limit: 10 });
-    assert.equal(afterFirst.count, 5);
-    assert.equal(afterFirst.events[0].event, 'cycle_started');
+    const runtimeStarted = storedEvents.events.find((event) => event.event === 'runtime_started');
+    const afterFirst = listLoopRuntimeEvents(store, { loopId: 'test.loop', afterEventId: runtimeStarted.event_id, limit: 10 });
+    assert.deepEqual(afterFirst.events.map((event) => event.event), [
+      'runtime_host_lifecycle_transition',
+      'cycle_started',
+      'cycle_completed',
+      'cycle_started',
+      'cycle_completed',
+      'runtime_host_lifecycle_transition',
+      'runtime_host_lifecycle_transition',
+      'runtime_stopped',
+    ]);
   } finally {
     store.close();
   }

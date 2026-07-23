@@ -26,13 +26,14 @@ Canonical exports:
 
 | Export | Owns |
 | --- | --- |
-| `@narada2/site-operating-loop/site-loop-store` | Durable loop store, runs, steps, locks, health, control, runtime events, triggers, attention, directive outcomes. |
+| `@narada2/site-operating-loop/site-loop-store` | Durable loop store, runtime-host authority/lease, runs, steps, locks, health, control, runtime events, triggers, attention, directive outcomes. |
 | `@narada2/site-operating-loop/runner` | One bounded Loop Run over a Site-provided step list. |
 | `@narada2/site-operating-loop/runtime` | Recurring runtime host that checks control state, claims triggers, executes bounded runs, and records runtime events. |
 | `@narada2/site-operating-loop/server` | Local HTTP/SSE attachment surface over one Site loop store. |
 | `@narada2/site-operating-loop/loop-module` | Validation of Site-owned loop body modules and step records. |
 | `@narada2/site-operating-loop/policy` | Generic policy loading, merging, validation, and quiet-hours helpers. |
 | `@narada2/site-operating-loop/state` | Pure run, trigger, and health lifecycle guards and transition evidence. |
+| `@narada2/site-operating-loop/runtime-host-state` | Pure Site Operating Runtime Host lifecycle FSM and transition guards. |
 
 ## Layer Shape
 
@@ -57,6 +58,76 @@ Load-bearing boundaries:
 | Store module | Opening the Site-local SQLite database and calling `ensureSiteLoopTables(db)`. | Domain step generation or runtime cadence. |
 | HTTP/SSE server | Local attachment over loop health/status/events/triggers/runs and generic control/trigger admission. | Executing steps, interpreting domain policy, or admitting domain emissions. |
 | Site-specific authority surfaces | Domain-specific admitted mutations and effect confirmation. | Runtime liveness, loop locking, or generic trigger lifecycle. |
+
+## Site Operating Runtime Host
+
+The generic runtime is itself a first-class **Site Operating Runtime Host**. This
+is the Site-loop analogue of the Narada Agent Runtime Server, but it is not an
+Agent Runtime Server and it does not host agent turns. The host is the durable,
+single-authority process boundary that makes a Site loop operational across CLI,
+scheduler, service, HTTP/SSE, and future projection attachments.
+
+The host owns:
+
+- a stable `runtime_id` for the logical host of one loop;
+- an incrementing `authority_epoch` for each authority claim or takeover;
+- an owner lease that prevents two live supervisors from executing the same loop;
+- lifecycle state and durable lifecycle history;
+- host health/control attachment through the generic store and server;
+- durable host claim and lifecycle events, including cursor-readable event ids;
+- restart/takeover evidence without silently creating a second logical host.
+
+The host lifecycle is:
+
+```text
+created -> binding -> ready -> serving -> closing -> stopped
+                 |       |        |         |
+                 +-------+--------+---------+-> failed -> closing -> stopped
+```
+
+`ready` means the generic host has bound its Site store and loop contract. It is
+deliberately not NARS's `projections_ready`: a Site loop can execute without an
+HTTP/SSE projection, while projection readiness belongs to the optional server
+adapter. A host lease is different from a per-run lock: the host lease prevents
+duplicate authorities, while the run lock prevents overlapping bounded runs
+inside the admitted host.
+
+The durable host record is `site_loop_runtime_hosts`, projected in `status` and
+`health` as `runtime_host`. A new supervisor may reclaim a stopped or failed
+host, retaining its logical `runtime_id` and incrementing `authority_epoch`.
+An active host with an unexpired lease refuses a second authority. Every
+takeover, lease heartbeat, and lifecycle transition must remain attributable to
+the runtime id, epoch, owner, and timestamp. The claim API returns a structured
+claim receipt containing both the host snapshot and its persisted
+`runtime_host_claimed` event, so an attached observer can render authority
+acquisition before binding begins.
+
+The canonical relation to NARS is therefore:
+
+```text
+Site authority
+  -> Site Operating Runtime Host
+  -> bounded Loop Runs / triggers
+  -> Site-owned loop module and effects
+  -> loop evidence and projections
+
+Agent identity
+  -> Narada Agent Runtime Server
+  -> Agent Session / turns / provider / MCP
+  -> agent-cli, agent-tui, agent-web-ui projections
+```
+
+The two hosts may coordinate, but neither is a substitute for the other. A
+Site loop may request or reconcile agent work through an admitted Site-owned
+step; it must not smuggle resident identity, provider selection, or NARS session
+semantics into the generic loop host.
+
+Existing Site-specific supervisors, including the `site-loop-mcp` surface, are
+adapters during migration. They may own domain adapters and Site policy, but
+they must not define a competing generic host lifecycle, lease, or authority
+schema. The canonical generic host and its `site_loop_runtime_hosts` record are
+the reference shape; an adapter either delegates to that host or documents a
+bounded migration bridge before it becomes a second authority.
 
 ## Loop Module Contract
 
@@ -203,6 +274,9 @@ The runtime claims at most one pending trigger per active cycle. The Site loop m
 ## Runtime Events And Subscription
 
 Runtime events are durable store records and SSE messages. They are not a transcript.
+Host claim and lifecycle events are part of the same cursor-ordered evidence
+stream, so an observer can distinguish authority acquisition, host serving,
+bounded execution, and shutdown without inferring state from process output.
 
 `narada-site-loop supervise --jsonl-events` also emits an immediate startup packet with schema `narada.site_operating_loop.supervisor_started.v1` after the HTTP attachment server is listening. That packet is service-wrapper evidence, not a durable runtime event.
 
@@ -216,12 +290,19 @@ Minimum event kinds:
 
 | Event | Meaning |
 | --- | --- |
+| `runtime_host_claimed` | A logical Site Operating Runtime Host authority was claimed or taken over; includes `runtime_id` and `authority_epoch`. |
+| `runtime_host_lifecycle_transition` | The host moved between lifecycle states; includes the previous state and lifecycle history. |
 | `runtime_started` | Runtime host started. |
 | `cycle_started` | One runtime cycle began. |
 | `cycle_completed` | One runtime cycle finished or skipped. |
 | `runtime_stopped` | Runtime host stopped. |
 
 `GET /events` returns bounded replay. `GET /events/stream` is a live SSE subscription by default. It accepts `after_event_id`, `limit`, `poll_ms`, and `heartbeat_ms`. It sends heartbeat comments while idle. `GET /events/stream?snapshot=1` returns a bounded SSE snapshot and closes.
+
+The durable event cursor is ordered by occurrence time and row order, and every
+event exposed to an observer has an `event_id`. Runtime host transitions are
+persisted before they are projected to `onEvent`, so an attached surface never
+receives an uncommitted lifecycle transition as if it were authoritative.
 
 ## Health And Control
 
@@ -247,6 +328,13 @@ A first-class Site Operating Loop runtime implementation must have tests proving
 - pause prevents Site step execution;
 - generic trigger admission, claim, completion, and run linkage;
 - runtime events are durable and cursor-readable;
+- host lifecycle events expose stable event ids and preserve ordering across a
+  bounded run;
+- a second live host is refused while the first host lease is active, while an
+  expired lease takeover retains the logical runtime id and increments the
+  authority epoch;
+- restart/failure cleanup leaves durable host lifecycle evidence rather than
+  silently dropping the authority state;
 - live SSE emits newly recorded events and sends heartbeat-compatible stream framing;
 - CLI `run`, `serve`, `supervise`, status, health, events, triggers, pause/resume surfaces work against a store module;
 - HTTP health/status/events/triggers/runs/control surfaces work against the same store;

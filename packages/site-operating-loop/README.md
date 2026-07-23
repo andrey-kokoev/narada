@@ -58,6 +58,34 @@ phases as generic runtime-recorded phase steps with stable ids, lineage refs,
 evidence, and status. The durable generic run should not contain a single opaque
 legacy-wrapper step as a normal loop phase.
 
+## Runtime host authority
+
+`startSiteOperatingLoopRuntime()` hosts one Site Operating Runtime Host. The
+host is a first-class authority boundary, not just a timer: it persists a
+logical `runtime_id`, an `authority_epoch`, an owner lease, and the lifecycle
+`created -> binding -> ready -> serving -> closing -> stopped` (with explicit
+failure cleanup). A live unexpired host lease refuses a second supervisor for
+the same loop. A stopped or failed host can be reclaimed while retaining its
+logical runtime id and incrementing the authority epoch.
+
+The host lifecycle is distinct from a bounded Loop Run lifecycle and from the
+NARS Agent Runtime Server. NARS owns agent sessions, turns, providers, MCP, and
+agent projections; this package owns Site loop cadence, trigger admission,
+bounded runs, and loop evidence. Site-specific supervisors remain adapters and
+must not introduce a competing generic host authority.
+
+The host state is available through `status.runtime_host` and
+`health.runtime_host`. Host claims and lifecycle transitions are durable
+`narada.site_operating_loop.runtime_event.v1` records with stable event ids, so
+CLI, HTTP/SSE, schedulers, and future UI projections can replay the same
+authority evidence. The host-claim operation returns a structured receipt with
+the claimed host snapshot and its persisted claim event, and the runtime
+projects that receipt through `onEvent` before binding begins.
+
+For long-running hosts, `--runtime-lease-ttl-ms` controls the owner lease
+duration. The runtime heartbeats the lease while serving and refuses to continue
+after authority loss.
+
 Runtime events are recorded durably as `narada.site_operating_loop.runtime_event.v1`
 records and can be read back with:
 

@@ -10,6 +10,9 @@ import {
   transitionSiteOperatingLoopTriggerLifecycle,
 } from './site-operating-loop-state.mjs';
 import { siteOperatingLoopExecutionLifecycleFromRunState } from './site-operating-loop-execution-state.mjs';
+import {
+  createSiteOperatingLoopRuntimeHostStateMachine,
+} from './runtime-host-state.mjs';
 
 export const DEFAULT_SITE_OPERATING_LOOP_ID = 'site.operating-loop';
 export const DEFAULT_SITE_OPERATING_LOOP_OWNER_ID = 'site-operating-loop';
@@ -95,6 +98,24 @@ export function ensureSiteLoopTables(db) {
 
     CREATE INDEX IF NOT EXISTS idx_site_loop_runtime_events_loop_time
       ON site_loop_runtime_events(loop_id, occurred_at DESC);
+
+    CREATE TABLE IF NOT EXISTS site_loop_runtime_hosts (
+      loop_id TEXT PRIMARY KEY,
+      runtime_id TEXT NOT NULL,
+      authority_epoch INTEGER NOT NULL,
+      owner_id TEXT NOT NULL,
+      runtime_host_state TEXT NOT NULL,
+      lifecycle_json TEXT NOT NULL,
+      lease_expires_at TEXT,
+      created_at TEXT NOT NULL,
+      started_at TEXT,
+      stopped_at TEXT,
+      updated_at TEXT NOT NULL,
+      metadata_json TEXT
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_site_loop_runtime_hosts_runtime
+      ON site_loop_runtime_hosts(runtime_id);
 
     CREATE TABLE IF NOT EXISTS site_loop_triggers (
       trigger_id TEXT PRIMARY KEY,
@@ -205,6 +226,50 @@ export function ensureSiteLoopTables(db) {
     schema: 'narada.site_operating_loop.schema_repair.v1',
     status: 'ok',
     repairs,
+  };
+}
+
+function parseRuntimeHostRow(row) {
+  const storedLifecycle = parseJson(row.lifecycle_json);
+  const lifecycle = storedLifecycle
+    && typeof storedLifecycle === 'object'
+    && !Array.isArray(storedLifecycle)
+    && storedLifecycle.schema === 'narada.site_operating_loop.runtime_host_state.v1'
+    && storedLifecycle.runtime_id === String(row.runtime_id)
+    && Number(storedLifecycle.authority_epoch) === Number(row.authority_epoch)
+    && typeof storedLifecycle.runtime_host_state === 'string'
+    && storedLifecycle.runtime_host_state === String(row.runtime_host_state)
+    && Array.isArray(storedLifecycle.lifecycle_history)
+    && storedLifecycle.lifecycle_history.at(-1) === String(row.runtime_host_state)
+    ? storedLifecycle
+    : {
+    schema: 'narada.site_operating_loop.runtime_host_state.v1',
+    runtime_id: String(row.runtime_id),
+    authority_epoch: Number(row.authority_epoch),
+    runtime_host_state: String(row.runtime_host_state),
+    lifecycle_history: [String(row.runtime_host_state)],
+  };
+  const leaseExpiresAt = row.lease_expires_at ? String(row.lease_expires_at) : null;
+  return {
+    schema: 'narada.site_operating_loop.runtime_host.v1',
+    loop_id: String(row.loop_id),
+    runtime_id: String(row.runtime_id),
+    authority_epoch: Number(row.authority_epoch),
+    owner_id: String(row.owner_id),
+    runtime_host_state: String(row.runtime_host_state),
+    lifecycle_schema: lifecycle.schema,
+    lifecycle_history: lifecycle.lifecycle_history ?? lifecycle.history ?? [String(row.runtime_host_state)],
+    lifecycle,
+    lease_expires_at: leaseExpiresAt,
+    lease_active: leaseExpiresAt ? Date.parse(leaseExpiresAt) > Date.now() : false,
+    created_at: String(row.created_at),
+    started_at: row.started_at ? String(row.started_at) : null,
+    stopped_at: row.stopped_at ? String(row.stopped_at) : null,
+    updated_at: String(row.updated_at),
+    metadata: parseJson(row.metadata_json) ?? {},
+    // Store-private representation retained for atomic transition helpers.
+    lifecycle_json: row.lifecycle_json,
+    metadata_json: row.metadata_json,
   };
 }
 
@@ -461,6 +526,7 @@ export function getLoopHealth(store, loopId) {
   const attention = getLoopAttentionSummary(store, { loopId });
   const unresolvedBacklog = getLoopUnresolvedBacklogSummary(store, { loopId });
   const directiveOutcomes = getDirectiveOutcomeSummary(store, { loopId });
+  const runtimeHost = getSiteOperatingLoopRuntimeHost(store, loopId);
   if (!row) {
     return {
       schema: 'narada.site_operating_loop.health.v1',
@@ -474,6 +540,7 @@ export function getLoopHealth(store, loopId) {
       attention,
       unresolved_backlog: unresolvedBacklog,
       directive_outcomes: directiveOutcomes,
+      runtime_host: runtimeHost,
     };
   }
   const storedStatus = String(row.status);
@@ -499,6 +566,7 @@ export function getLoopHealth(store, loopId) {
     attention,
     unresolved_backlog: unresolvedBacklog,
     directive_outcomes: directiveOutcomes,
+    runtime_host: runtimeHost,
   };
 }
 
@@ -613,6 +681,7 @@ export function getLoopStatus(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID }
     counts: Object.fromEntries(counts.map((row) => [row.status, row.count])),
     health: getLoopHealth(store, loopId),
     lock: getLoopLock(store, loopId),
+    runtime_host: getSiteOperatingLoopRuntimeHost(store, loopId),
     control: getLoopControl(store, loopId),
     attention: getLoopAttentionSummary(store, { loopId }),
     directive_outcomes: getDirectiveOutcomeSummary(store, { loopId }),
@@ -652,6 +721,222 @@ export function setLoopControl(store, { loopId, paused = false, mode = paused ? 
       updated_at = excluded.updated_at
   `).run(loopId, paused ? 1 : 0, mode, reason, at);
   return getLoopControl(store, loopId);
+}
+
+export function getSiteOperatingLoopRuntimeHost(store, loopId = DEFAULT_SITE_OPERATING_LOOP_ID) {
+  const row = store.db.prepare('SELECT * FROM site_loop_runtime_hosts WHERE loop_id = ?').get(loopId);
+  return row ? parseRuntimeHostRow(row) : null;
+}
+
+export function claimSiteOperatingLoopRuntimeHost(store, {
+  loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
+  ownerId = DEFAULT_SITE_OPERATING_LOOP_OWNER_ID,
+  runtimeId = null,
+  leaseTtlMs = 5 * 60_000,
+  metadata = {},
+  at = new Date().toISOString(),
+} = {}) {
+  if (!loopId) throw new Error('loopId is required');
+  if (!ownerId) throw new Error('ownerId is required');
+  const ttl = normalizePositiveMilliseconds(leaseTtlMs, 'leaseTtlMs');
+  const nowMs = parseTimestampMs(at, 'at');
+  const leaseExpiresAt = new Date(nowMs + ttl).toISOString();
+
+  store.db.exec('BEGIN IMMEDIATE');
+  let persistedEvent;
+  try {
+    const existing = store.db.prepare('SELECT * FROM site_loop_runtime_hosts WHERE loop_id = ?').get(loopId);
+    const existingState = existing?.runtime_host_state ? String(existing.runtime_host_state) : null;
+    const existingLeaseActive = existing?.lease_expires_at && parseTimestampMs(existing.lease_expires_at, 'lease_expires_at') > nowMs;
+    if (existing && ['created', 'binding', 'ready', 'serving', 'closing'].includes(existingState) && existingLeaseActive) {
+      throw new Error(`site_operating_loop_runtime_host_already_owned:${loopId}:${existing.runtime_id}:${existing.owner_id}`);
+    }
+    if (existing && runtimeId && String(runtimeId) !== String(existing.runtime_id)) {
+      throw new Error(`site_operating_loop_runtime_id_mismatch:${loopId}:${runtimeId}:${existing.runtime_id}`);
+    }
+
+    const finalRuntimeId = String(existing?.runtime_id ?? runtimeId ?? `site_loop_runtime_${randomUUID()}`);
+    const authorityEpoch = Number(existing?.authority_epoch ?? 0) + 1;
+    const lifecycle = createSiteOperatingLoopRuntimeHostStateMachine({
+      runtimeId: finalRuntimeId,
+      authorityEpoch,
+      initialState: 'created',
+      metadata,
+      history: ['created'],
+      now: () => at,
+    }).snapshot();
+    store.db.prepare(`
+      INSERT INTO site_loop_runtime_hosts (
+        loop_id, runtime_id, authority_epoch, owner_id, runtime_host_state,
+        lifecycle_json, lease_expires_at, created_at, started_at, stopped_at,
+        updated_at, metadata_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?)
+      ON CONFLICT(loop_id) DO UPDATE SET
+        runtime_id = excluded.runtime_id,
+        authority_epoch = excluded.authority_epoch,
+        owner_id = excluded.owner_id,
+        runtime_host_state = excluded.runtime_host_state,
+        lifecycle_json = excluded.lifecycle_json,
+        lease_expires_at = excluded.lease_expires_at,
+        started_at = NULL,
+        stopped_at = NULL,
+        updated_at = excluded.updated_at,
+        metadata_json = excluded.metadata_json
+    `).run(
+      loopId,
+      finalRuntimeId,
+      authorityEpoch,
+      ownerId,
+      'created',
+      JSON.stringify(lifecycle),
+      leaseExpiresAt,
+      existing?.created_at ?? at,
+      at,
+      stringifyJson(metadata),
+    );
+    persistedEvent = recordLoopRuntimeEvent(store, {
+      schema: 'narada.site_operating_loop.runtime_host_event.v1',
+      event: 'runtime_host_claimed',
+      loop_id: loopId,
+      runtime_id: finalRuntimeId,
+      authority_epoch: authorityEpoch,
+      owner_id: ownerId,
+      previous_runtime_id: existing?.runtime_id ?? null,
+      previous_authority_epoch: existing?.authority_epoch == null ? null : Number(existing.authority_epoch),
+      timestamp: at,
+    });
+    store.db.exec('COMMIT');
+  } catch (error) {
+    try { store.db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+  return {
+    schema: 'narada.site_operating_loop.runtime_host_claim.v1',
+    host: getSiteOperatingLoopRuntimeHost(store, loopId),
+    event: persistedEvent,
+  };
+}
+
+export function assertSiteOperatingLoopRuntimeHostAuthority(store, {
+  loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
+  runtimeId,
+  authorityEpoch,
+  ownerId,
+  at = new Date().toISOString(),
+} = {}) {
+  const host = getSiteOperatingLoopRuntimeHost(store, loopId);
+  if (!host || String(host.runtime_id) !== String(runtimeId)
+    || Number(host.authority_epoch) !== Number(authorityEpoch)
+    || String(host.owner_id) !== String(ownerId)) {
+    throw new Error(`site_operating_loop_runtime_host_authority_lost:${loopId}`);
+  }
+  const activeStates = ['created', 'binding', 'ready', 'serving', 'closing'];
+  if (activeStates.includes(host.runtime_host_state)
+    && (!host.lease_expires_at || parseTimestampMs(host.lease_expires_at, 'lease_expires_at') <= parseTimestampMs(at, 'at'))) {
+    throw new Error(`site_operating_loop_runtime_host_lease_expired:${loopId}:${runtimeId}:${authorityEpoch}`);
+  }
+  return host;
+}
+
+export function heartbeatSiteOperatingLoopRuntimeHost(store, {
+  loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
+  runtimeId,
+  authorityEpoch,
+  ownerId,
+  leaseTtlMs = 5 * 60_000,
+  at = new Date().toISOString(),
+} = {}) {
+  const ttl = normalizePositiveMilliseconds(leaseTtlMs, 'leaseTtlMs');
+  const nowMs = parseTimestampMs(at, 'at');
+  assertSiteOperatingLoopRuntimeHostAuthority(store, { loopId, runtimeId, authorityEpoch, ownerId, at });
+  store.db.prepare(`
+    UPDATE site_loop_runtime_hosts
+    SET lease_expires_at = ?, updated_at = ?
+    WHERE loop_id = ? AND runtime_id = ? AND authority_epoch = ? AND owner_id = ?
+  `).run(new Date(nowMs + ttl).toISOString(), at, loopId, runtimeId, authorityEpoch, ownerId);
+  return assertSiteOperatingLoopRuntimeHostAuthority(store, { loopId, runtimeId, authorityEpoch, ownerId, at });
+}
+
+export function transitionSiteOperatingLoopRuntimeHost(store, {
+  loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
+  runtimeId,
+  authorityEpoch,
+  ownerId,
+  nextState,
+  details = {},
+  leaseTtlMs = 5 * 60_000,
+  at = new Date().toISOString(),
+} = {}) {
+  const ttl = normalizePositiveMilliseconds(leaseTtlMs, 'leaseTtlMs');
+  const host = assertSiteOperatingLoopRuntimeHostAuthority(store, { loopId, runtimeId, authorityEpoch, ownerId, at });
+  const storedLifecycle = parseJson(host.lifecycle_json);
+  const lifecycle = storedLifecycle && typeof storedLifecycle === 'object' && !Array.isArray(storedLifecycle)
+    && Array.isArray(storedLifecycle.lifecycle_history)
+    ? storedLifecycle
+    : {
+    schema: 'narada.site_operating_loop.runtime_host_state.v1',
+    runtime_id: host.runtime_id,
+    authority_epoch: host.authority_epoch,
+    runtime_host_state: host.runtime_host_state,
+    lifecycle_history: [host.runtime_host_state],
+  };
+  const machine = createSiteOperatingLoopRuntimeHostStateMachine({
+    initialState: host.runtime_host_state,
+    runtimeId: host.runtime_id,
+    authorityEpoch: host.authority_epoch,
+    metadata: parseJson(host.metadata_json) ?? {},
+    history: lifecycle.lifecycle_history,
+    now: () => at,
+  });
+  const transition = machine.transition(nextState, details);
+  const leaseExpiresAt = nextState === 'stopped' ? null : new Date(parseTimestampMs(at, 'at') + ttl).toISOString();
+  const startedAt = nextState === 'serving' && !host.started_at ? at : host.started_at;
+  const stoppedAt = nextState === 'stopped' ? at : host.stopped_at;
+
+  store.db.exec('BEGIN IMMEDIATE');
+  let persistedEvent;
+  try {
+    const current = assertSiteOperatingLoopRuntimeHostAuthority(store, { loopId, runtimeId, authorityEpoch, ownerId, at });
+    if (current.runtime_host_state !== host.runtime_host_state) {
+      throw new Error(`site_operating_loop_runtime_host_changed:${loopId}`);
+    }
+    store.db.prepare(`
+      UPDATE site_loop_runtime_hosts
+      SET runtime_host_state = ?, lifecycle_json = ?, lease_expires_at = ?,
+        started_at = ?, stopped_at = ?, updated_at = ?
+      WHERE loop_id = ? AND runtime_id = ? AND authority_epoch = ? AND owner_id = ?
+    `).run(
+      nextState,
+      JSON.stringify(transition),
+      leaseExpiresAt,
+      startedAt,
+      stoppedAt,
+      at,
+      loopId,
+      runtimeId,
+      authorityEpoch,
+      ownerId,
+    );
+    persistedEvent = recordLoopRuntimeEvent(store, {
+      ...transition,
+      schema: 'narada.site_operating_loop.runtime_host_event.v1',
+      event: 'runtime_host_lifecycle_transition',
+      loop_id: loopId,
+      runtime_id: runtimeId,
+      authority_epoch: Number(authorityEpoch),
+      owner_id: ownerId,
+      timestamp: at,
+    });
+    store.db.exec('COMMIT');
+  } catch (error) {
+    try { store.db.exec('ROLLBACK'); } catch {}
+    throw error;
+  }
+  return {
+    schema: 'narada.site_operating_loop.runtime_host_transition.v1',
+    host: getSiteOperatingLoopRuntimeHost(store, loopId),
+    event: persistedEvent,
+  };
 }
 
 export function recordLoopRuntimeEvent(store, event) {
@@ -1302,4 +1587,16 @@ function parseJson(value) {
 
 function hashStable(value) {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
+}
+
+function normalizePositiveMilliseconds(value, name) {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`invalid_positive_milliseconds:${name}:${value}`);
+  return Math.floor(parsed);
+}
+
+function parseTimestampMs(value, name) {
+  const parsed = Date.parse(String(value));
+  if (!Number.isFinite(parsed)) throw new Error(`invalid_timestamp:${name}:${value}`);
+  return parsed;
 }

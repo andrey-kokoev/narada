@@ -99,6 +99,7 @@ try {
       dryRun: Boolean(args.dryRun),
       intervalMs: Number(args.intervalMs ?? 60_000),
       lockTtlMs: Number(args.lockTtlMs ?? 5 * 60_000),
+      runtimeLeaseTtlMs: Number(args.runtimeLeaseTtlMs ?? 5 * 60_000),
       maxCycles: args.forever ? 'forever' : Number(args.maxCycles ?? (args.once ? 1 : 1)),
       prepareRun: loopContract.prepareRun,
       createSteps: (context) => loopContract.createSteps({
@@ -136,6 +137,7 @@ try {
           dry_run: Boolean(args.dryRun),
           interval_ms: Number(args.intervalMs ?? 60_000),
           lock_ttl_ms: Number(args.lockTtlMs ?? 5 * 60_000),
+          runtime_lease_ttl_ms: Number(args.runtimeLeaseTtlMs ?? 5 * 60_000),
           max_cycles: args.forever || (!args.once && args.maxCycles == null) ? null : Number(args.maxCycles ?? 1),
         },
       }));
@@ -148,6 +150,7 @@ try {
         dryRun: Boolean(args.dryRun),
         intervalMs: Number(args.intervalMs ?? 60_000),
         lockTtlMs: Number(args.lockTtlMs ?? 5 * 60_000),
+        runtimeLeaseTtlMs: Number(args.runtimeLeaseTtlMs ?? 5 * 60_000),
         maxCycles: args.forever || (!args.once && args.maxCycles == null) ? 'forever' : Number(args.maxCycles ?? 1),
         prepareRun: loopContract.prepareRun,
         createSteps: (context) => loopContract.createSteps({
@@ -215,6 +218,7 @@ function parseArgs(argv) {
     else if (arg === '--reason') parsed.reason = argv[++i];
     else if (arg === '--interval-ms') parsed.intervalMs = argv[++i];
     else if (arg === '--lock-ttl-ms') parsed.lockTtlMs = argv[++i];
+    else if (arg === '--runtime-lease-ttl-ms') parsed.runtimeLeaseTtlMs = argv[++i];
     else if (arg === '--max-cycles') parsed.maxCycles = argv[++i];
     else if (arg === '--once') parsed.once = true;
     else if (arg === '--forever') parsed.forever = true;
@@ -247,6 +251,7 @@ function helpResult() {
     commands: ['status', 'health', 'events', 'triggers', 'trigger', 'list', 'show', 'pause', 'resume', 'run', 'serve', 'supervise'],
     required: ['--store-module', '--loop-id'],
     run_required: ['--loop-module'],
+    runtime_host: ['--owner-id', '--runtime-lease-ttl-ms'],
     trigger_required: ['--kind'],
   };
 }

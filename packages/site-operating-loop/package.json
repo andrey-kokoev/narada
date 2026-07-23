@@ -42,6 +42,9 @@
     },
     "./execution-state": {
       "import": "./dist/site-operating-loop-execution-state.mjs"
+    },
+    "./runtime-host-state": {
+      "import": "./dist/runtime-host-state.mjs"
     }
   },
   "license": "MIT",

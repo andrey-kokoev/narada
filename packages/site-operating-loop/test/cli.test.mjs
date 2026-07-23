@@ -227,12 +227,19 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
 
     assert.equal(events.status, 0, events.stderr);
     const eventResult = JSON.parse(events.stdout);
-    assert.deepEqual(eventResult.events.map((event) => event.event), [
+    const runtimeEvents = eventResult.events.filter((event) => [
+      'runtime_started',
+      'cycle_started',
+      'cycle_completed',
+      'runtime_stopped',
+    ].includes(event.event));
+    assert.deepEqual(runtimeEvents.map((event) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ]);
+    assert.ok(eventResult.events.some((event) => event.event === 'runtime_host_lifecycle_transition'));
 
     const health = runHiddenPostureCommandSync(process.execPath, [
       cliPath,

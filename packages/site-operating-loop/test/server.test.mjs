@@ -34,9 +34,17 @@ test('HTTP server exposes health status runs and events for a loop', async () =>
     const status = await getJson(`${listening.base_url}/status`);
     assert.equal(status.latest.status, 'ok');
     assert.equal(status.counts.ok, 1);
+    assert.equal(status.runtime_host.runtime_host_state, 'stopped');
+    assert.deepEqual(status.runtime_host.lifecycle_history, ['created', 'binding', 'ready', 'serving', 'closing', 'stopped']);
 
     const events = await getJson(`${listening.base_url}/events`);
-    assert.deepEqual(events.events.map((event) => event.event), [
+    const runtimeEvents = events.events.filter((event) => [
+      'runtime_started',
+      'cycle_started',
+      'cycle_completed',
+      'runtime_stopped',
+    ].includes(event.event));
+    assert.deepEqual(runtimeEvents.map((event) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',

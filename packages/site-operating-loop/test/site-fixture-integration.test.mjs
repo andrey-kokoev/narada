@@ -84,12 +84,19 @@ test('Site-owned loop fixture runs end-to-end through generic supervise surface'
       '--loop-id',
       'fixture.site-loop',
     ], env);
-    assert.deepEqual(events.events.map((event) => event.event), [
+    const runtimeEvents = events.events.filter((event) => [
+      'runtime_started',
+      'cycle_started',
+      'cycle_completed',
+      'runtime_stopped',
+    ].includes(event.event));
+    assert.deepEqual(runtimeEvents.map((event) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ]);
+    assert.ok(events.events.some((event) => event.event === 'runtime_host_lifecycle_transition'));
     assert.equal(events.events.find((event) => event.event === 'cycle_completed').trigger_id, trigger.trigger_id);
   } finally {
     rmSync(dir, { recursive: true, force: true });

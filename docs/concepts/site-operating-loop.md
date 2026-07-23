@@ -6,7 +6,7 @@ Narada should treat an **Operating Loop** as a first-class Site object for gover
 
 An operating loop is not an agent, carrier, daemon, prompt, task, or directive. It is the Site-owned routine that observes Site state over bounded runs and may emit first-class Site objects.
 
-For implementation-facing runtime details, see [`site-operating-loop-runtime-contract.md`](site-operating-loop-runtime-contract.md).
+For implementation-facing runtime details, see [`site-operating-loop-runtime-contract.md`](site-operating-loop-runtime-contract.md). For the Task Executability reconciliation proof and restart recovery contract, see [`../operations/task-executability-e2e-and-recovery.md`](../operations/task-executability-e2e-and-recovery.md). That proof concerns executable-path and lifecycle/recovery mechanics; it does not establish task correctness.
 
 ## Definition
 
@@ -24,6 +24,9 @@ The loop may be hosted by a daemon, scheduled task, worker, CLI process, or carr
 - **Loop Decision**: admitted or refused conclusion that determines whether the loop emits anything.
 - **Loop Emission**: first-class object produced by the run, such as a directive, task candidate, task, report, health event, inbox envelope, or trace.
 - **Loop Policy**: cadence, trigger mode, authority limits, target agents or roles, permitted observations, permitted emissions, and failure posture.
+- **Site Operating Runtime Host**: Narada-owned, Site-scoped authority host that
+  owns loop lifecycle, cadence, host lease, bounded run scheduling, and runtime
+  evidence; it is not the loop's domain body.
 - **Loop Lease**: coordination object preventing duplicate concurrent runs.
 - **Loop Cursor**: remembered progress, such as the latest mailbox message, task transition, webhook sequence, or checkpoint.
 - **Loop Receipt**: evidence that an emitted object was delivered, acknowledged, refused, or otherwise consumed by its target boundary.
@@ -43,11 +46,28 @@ A continuous loop still records bounded Loop Runs. The durable run may represent
 
 Continuous execution is substrate behavior. Loop Run evidence is the auditable unit.
 
-## Generic Runtime Host
+## Site Operating Runtime Host
 
 Narada proper provides a generic Site Operating Loop runtime host in
 `@narada2/site-operating-loop/runtime`. The runtime host is the reusable
-execution shell for a loop; it is not the Site-specific loop implementation.
+execution shell and authority boundary for a loop; it is not the Site-specific
+loop implementation. It is a first-class host object, not merely a process
+that happens to run a loop.
+
+The host has a stable logical `runtime_id`, an `authority_epoch`, an owner
+lease, and durable lifecycle state. Its lifecycle is
+`created -> binding -> ready -> serving -> closing -> stopped`, with explicit
+failure cleanup. This makes host startup, duplicate-supervisor refusal,
+restart/takeover, and shutdown observable and attributable. The host lease is
+distinct from the per-run lease: the former protects the Site authority
+boundary; the latter protects one bounded Loop Run.
+
+This is structurally parallel to the Narada Agent Runtime Server, but the
+semantic domains remain separate. NARS owns agent sessions, turns, providers,
+MCP, and client projections. The Site Operating Runtime Host owns loop cadence,
+trigger admission, loop runs, and loop evidence. A Site loop can coordinate
+with an agent through an admitted Site-owned step, but the generic loop host
+must not acquire resident/provider/session semantics.
 
 The generic host owns:
 
