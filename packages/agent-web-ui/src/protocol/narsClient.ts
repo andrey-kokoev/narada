@@ -4,7 +4,7 @@ import { startCloudflareSessionTransport } from './cloudflareSessionTransport';
 import { startLocalSessionTransport } from './localSessionTransport';
 import { createNarsTransportLifecycle, isNarsTransportClosed, projectionHeaders, transitionNarsTransport, type NarsClientState, type NarsTransportPhase } from './sessionTransportAdapters';
 import { PENDING_OPERATOR_INPUT_PHASES, transitionPendingOperatorInput, type PendingOperatorInputLifecycle, type PendingOperatorInputPhase } from './operatorInputLifecycle';
-import { findCorrelatedInput, inputCorrelationFromEvent, mergeInputCorrelation, normalizeInputCorrelationId as normalizeRequestId } from '../operator-input-correlation.js';
+import { findCorrelatedInput, inputCorrelationFromEvent, mergeInputCorrelation, normalizeInputCorrelationId as normalizeRequestId } from '../operator-input-correlation.ts';
 
 export interface NarsClientOptions {
   endpoint: string | null;
@@ -35,6 +35,7 @@ export const NARS_PENDING_OPERATOR_INPUT_RETENTION_MS = 24 * 60 * 60 * 1000;
 type PendingInputStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
 interface PendingOperatorInput extends PendingOperatorInputLifecycle {
+  [key: string]: unknown;
   request_id: string;
   method: string;
   content: string;

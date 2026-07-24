@@ -1,6 +1,6 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from 'vue';
-import { createSessionProjection } from '../../session-projection.js';
-import { summarizeSessionIdentity as summarizeProjectedSessionIdentity } from '../../session-identity.js';
+import { createSessionProjection } from '../../session-projection.ts';
+import { summarizeSessionIdentity as summarizeProjectedSessionIdentity } from '../../session-identity.ts';
 import type { ProjectedEventRow } from '../lib/eventProjection';
 import type { HealthIdentitySummary } from './useHealthStatus';
 import type { AgentActivityState } from './useAgentActivity';

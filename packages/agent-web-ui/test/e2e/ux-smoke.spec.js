@@ -4,7 +4,7 @@ import { PassThrough } from 'node:stream';
 import { expect, test } from '@playwright/test';
 import { createEventHub, startEventStreamProjection } from '@narada2/agent-runtime-server/test-fixtures';
 import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
-import { startAgentWebUiServer } from '../../src/server.js';
+import { startAgentWebUiServer } from '../../src/server.ts';
 
 function listen(server, host = '127.0.0.1') {
   return new Promise((resolve, reject) => {

@@ -17,7 +17,7 @@ import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandE
 import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
 import type { ProjectionViewDraft } from './lib/projectionViews';
 import { useRuntimeTopology } from './composables/useRuntimeTopology';
-import { useResolvedFavicon } from './composables/useResolvedFavicon.js';
+import { useResolvedFavicon } from './composables/useResolvedFavicon.ts';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
 import { useSopSummary } from './composables/useSopSummary';
 import { useSurfaceAffordances } from './composables/useSurfaceAffordances';

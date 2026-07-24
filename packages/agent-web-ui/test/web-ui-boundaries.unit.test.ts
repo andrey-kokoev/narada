@@ -19,11 +19,11 @@ import {
 import {
   OPERATOR_INPUT_PHASES,
   OPERATOR_INPUT_TRANSITIONS,
-} from '../src/operator-input-lifecycle.js';
+} from '../src/operator-input-lifecycle.ts';
 import {
   OPERATOR_INPUT_DELIVERY_PHASES,
   OPERATOR_INPUT_DELIVERY_TRANSITIONS,
-} from '../src/operator-input-delivery.js';
+} from '../src/operator-input-delivery.ts';
 import { buildMessageContentPipeline } from '../src/app/lib/contentPipeline';
 import {
   SESSION_PANEL_REGISTRY,
@@ -37,13 +37,13 @@ import {
   readBooleanPreference,
   readJsonPreference,
   writeBooleanPreference,
-} from '../src/app/lib/browserPreferences.js';
+} from '../src/app/lib/browserPreferences.ts';
 import { createNarsClient } from '../src/protocol/narsClient';
-import { createSessionProjection } from '../src/session-projection.js';
+import { createSessionProjection } from '../src/session-projection.ts';
 import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
 import { buildIntelligenceReconfigureFrame } from '../src/app/lib/narsFrames';
 import { isOperatorInputTransportReady, isTransportLive, operatorInputNotReadyReason } from '../src/app/lib/operatorInputReadiness';
-import { findCorrelatedInput, inputCorrelationFromEvent } from '../src/operator-input-correlation.js';
+import { findCorrelatedInput, inputCorrelationFromEvent } from '../src/operator-input-correlation.ts';
 import type { SessionProtocolFrame, SessionTransport } from '../src/protocol/sessionTransport';
 
 describe('agent-web-ui runtime boundaries', () => {

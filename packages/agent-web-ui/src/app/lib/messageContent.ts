@@ -1,4 +1,4 @@
-import { parseMessageContent as parseCanonicalMessageContent } from '../../content-pipeline.js';
+import { parseMessageContent as parseCanonicalMessageContent } from '../../content-pipeline.ts';
 
 export type MessageRenderKind = 'plain_text' | 'markdown' | 'code_block' | 'mermaid_diagram' | 'json_block' | 'artifact_ref' | 'intent_ref';
 

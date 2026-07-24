@@ -5,8 +5,7 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "jsx": "preserve",
-    "allowJs": true,
-    "checkJs": false,
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "noEmit": true,
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
@@ -16,5 +15,5 @@
       "@/*": ["src/*"]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.js", "bin/**/*.mjs"]
+  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"]
 }

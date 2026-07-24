@@ -9,7 +9,7 @@ import {
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
 } from '@narada2/cloudflare-nars-projection/node';
-import { startAgentWebUiServer } from '../src/server.js';
+import { startAgentWebUiServer } from '../src/server.ts';
 import { startSessionCoreRuntime, waitFor } from './e2e/nars-runtime-fixture.mjs';
 import {
   findHeadlessBrowser,

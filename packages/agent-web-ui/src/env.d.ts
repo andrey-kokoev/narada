@@ -56,14 +56,35 @@ declare module '@narada2/nars-client-projection-contract' {
   export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS: readonly string[];
   export type NarsClientProjectionVerbosity = string;
   export function normalizeNarsClientProjectionVerbosity(value: unknown): string;
-  export function projectNarsClientEvent(message: unknown): any;
+  export interface NarsClientProjection {
+    kind: string;
+    class?: string;
+    label: string;
+    tone: string;
+    summary: unknown;
+    event: unknown;
+    renderKey?: string;
+  }
+  export interface AgentWebUiProtocolFrame {
+    id?: string;
+    method: string;
+    params?: Record<string, unknown>;
+    [key: string]: unknown;
+  }
+  export interface AgentWebUiOperatorAction {
+    kind: string;
+    frame?: unknown;
+    message?: string;
+    [key: string]: unknown;
+  }
+  export function projectNarsClientEvent(message: unknown): NarsClientProjection;
   export function shouldProjectNarsClientProjection(projection: unknown, options?: object): boolean;
-  export function unwrapNarsClientEvent(message: unknown): any;
-  export function buildAgentWebUiEventsReadFrame(options?: object): any;
-  export function buildAgentWebUiIntelligenceReconfigureFrame(input?: object, options?: object): any;
-  export function buildAgentWebUiSubscribeFrame(options?: object): any;
-  export function buildAgentWebUiConversationSendFrame(message: string): any;
-  export function buildAgentWebUiConversationSteerFrame(command: string): any;
+  export function unwrapNarsClientEvent(message: unknown): unknown;
+  export function buildAgentWebUiEventsReadFrame(options?: object): AgentWebUiProtocolFrame;
+  export function buildAgentWebUiIntelligenceReconfigureFrame(input?: object, options?: object): AgentWebUiProtocolFrame | null;
+  export function buildAgentWebUiSubscribeFrame(options?: object): AgentWebUiProtocolFrame;
+  export function buildAgentWebUiConversationSendFrame(message: unknown, options?: object): AgentWebUiProtocolFrame | null;
+  export function buildAgentWebUiConversationSteerFrame(command: unknown, options?: object): AgentWebUiProtocolFrame | null;
   export function buildAgentWebUiHelpText(options?: { supportsProtocolMethod?: (method: string) => boolean }): string;
   export function findAgentWebUiCommand(rawCommand: unknown): AgentWebUiCommand | null;
   export function filterAgentWebUiCommands(query?: unknown, options?: { supportsProtocolMethod?: (method: string) => boolean }): AgentWebUiCommand[];
@@ -72,7 +93,7 @@ declare module '@narada2/nars-client-projection-contract' {
   export function isAgentWebUiSnippetSelectionAction(rawVerb?: unknown): boolean;
   export function isAgentWebUiSnippetManagementAction(rawVerb?: unknown): boolean;
   export function parseAgentWebUiSnippetCommand(value?: unknown): AgentWebUiSnippetCommandParse;
-  export function buildAgentWebUiOperatorInputAction(text: string, options?: object): any;
+  export function buildAgentWebUiOperatorInputAction(text: unknown, options?: object): AgentWebUiOperatorAction | null;
   export function isAgentWebUiNarsMethod(value: unknown): boolean;
   export function isAgentWebUiCloudflareMethod(value: unknown): boolean;
   export function isAgentWebUiProtocolFrame(value: unknown): boolean;

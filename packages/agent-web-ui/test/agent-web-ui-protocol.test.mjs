@@ -24,8 +24,8 @@ import {
   buildSubscribeFrame,
   isAgentWebUiNarsMethod,
   isAgentWebUiProtocolFrame,
-} from '../src/agent-web-ui.js';
-import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareWebSocketEndpoint } from '../src/protocol/cloudflare-session-contract.js';
+} from '../src/agent-web-ui.ts';
+import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareWebSocketEndpoint } from '../src/protocol/cloudflare-session-contract.ts';
 
 test('agent-web-ui emits admitted NARS methods for event attach and operator input', () => {
   const subscribe = buildSubscribeFrame({ id: 'sub-1', maxReplay: 25, includeReplay: true });

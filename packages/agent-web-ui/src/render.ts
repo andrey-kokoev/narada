@@ -1,18 +1,40 @@
-import { createSessionProjection, classifyRuntimeMessage } from './session-projection.js';
-import { NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, normalizeNarsClientProjectionVerbosity, projectRuntimeEvent, shouldRenderRuntimeProjection } from './runtime-events.js';
-import { parseMessageContent } from './content-pipeline.js';
+import { createSessionProjection, classifyRuntimeMessage } from './session-projection.ts';
+import { NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, normalizeNarsClientProjectionVerbosity, projectRuntimeEvent, shouldRenderRuntimeProjection } from './runtime-events.ts';
+import { parseMessageContent, type MessageContentPart } from './content-pipeline.ts';
+import { isRecord, type UnknownRecord } from './types.ts';
 
-export function setText(id, text, documentRef = document) {
+type RenderDocument = Document & { __naradaAgentWebUiEvents?: unknown[] };
+type RenderElement = HTMLElement;
+type RenderProjection = {
+  kind: string;
+  tone: string;
+  label: string;
+  summary: unknown;
+  event: unknown;
+  renderKey?: string;
+  streamContent?: string;
+};
+type RenderOptions = {
+  store?: boolean;
+  verbosity?: string;
+};
+type RenderContext = Record<string, unknown>;
+
+function childrenOf(list: RenderElement): RenderElement[] {
+  return Array.from(list.children ?? []) as RenderElement[];
+}
+
+export function setText(id: string, text: string, documentRef: Document = document): void {
   const element = documentRef.getElementById(id);
   if (element) element.textContent = text;
 }
 
-function pruneSupersededOperatorEcho(list, projection) {
+function pruneSupersededOperatorEcho(list: RenderElement, projection: RenderProjection): void {
   if (projection.kind !== 'user_message') return;
   const summary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
   if (!summary) return;
   const scope = eventScope(projection.event);
-  for (const child of Array.from(list.children ?? [])) {
+  for (const child of childrenOf(list)) {
     if (child?.dataset?.eventKind !== 'operator_input_submitted') continue;
     if (!sameDatasetOperatorScope(child.dataset, scope)) continue;
     if (normalizeAssistantText(child.dataset.operatorSummary ?? child.textContent ?? '') !== summary) continue;
@@ -24,11 +46,11 @@ function pruneSupersededOperatorEcho(list, projection) {
   }
 }
 
-function isDuplicateOperatorMessage(list, item, projection) {
+function isDuplicateOperatorMessage(list: RenderElement, item: RenderElement, projection: RenderProjection): boolean {
   if (!isOperatorProjection(projection)) return false;
   const summary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
   if (!summary) return false;
-  for (const child of Array.from(list.children ?? [])) {
+  for (const child of childrenOf(list)) {
     if (child === item) continue;
     if (!isOperatorEventKind(child?.dataset?.eventKind)) continue;
     if (!sameDatasetOperatorScope(child.dataset, eventScope(projection.event))) continue;
@@ -39,13 +61,13 @@ function isDuplicateOperatorMessage(list, item, projection) {
   return false;
 }
 
-function sessionIdFromProjection(projection) {
-  const event = projection?.event ?? {};
-  const nested = event?.event ?? {};
-  return String(event.session_id ?? nested.session_id ?? '').trim() || null;
+function sessionIdFromProjection(projection: RenderProjection): string | null {
+  if (!isRecord(projection.event)) return null;
+  const nested = isRecord(projection.event.event) ? projection.event.event : {};
+  return String(projection.event.session_id ?? nested.session_id ?? '').trim() || null;
 }
 
-function appendStructuredSummaryContent(container, parts, documentRef, context = {}) {
+function appendStructuredSummaryContent(container: RenderElement, parts: readonly MessageContentPart[], documentRef: Document, context: RenderContext = {}): void {
   for (const part of parts) {
     if (part?.kind === 'artifact_ref' && part.artifact) {
       container.append(createArtifactReferenceCard(part.artifact, documentRef, context));
@@ -71,7 +93,7 @@ function appendStructuredSummaryContent(container, parts, documentRef, context =
   }
 }
 
-function createCanonicalCodeBlock(part, documentRef) {
+function createCanonicalCodeBlock(part: MessageContentPart, documentRef: Document): HTMLElement {
   const pre = documentRef.createElement('pre');
   pre.className = `message-code-block message-code-${part.kind}`;
   const code = documentRef.createElement('code');
@@ -81,7 +103,7 @@ function createCanonicalCodeBlock(part, documentRef) {
   return pre;
 }
 
-function createArtifactReferenceCard(part, documentRef, context = {}) {
+function createArtifactReferenceCard(part: UnknownRecord, documentRef: Document, context: RenderContext = {}): HTMLElement {
   const basePath = injectedArtifactBasePath(documentRef);
   const artifactTransport = injectedArtifactTransport(documentRef);
   const browserToken = injectedBrowserToken(documentRef);
@@ -136,7 +158,7 @@ function createArtifactReferenceCard(part, documentRef, context = {}) {
   return card;
 }
 
-function injectedArtifactBasePath(documentRef) {
+function injectedArtifactBasePath(documentRef: Document): string | null {
   try {
     const text = documentRef.getElementById?.('nars-config')?.textContent;
     if (!text) return null;
@@ -147,7 +169,7 @@ function injectedArtifactBasePath(documentRef) {
   }
 }
 
-function injectedArtifactTransport(documentRef) {
+function injectedArtifactTransport(documentRef: Document): string | null {
   try {
     const text = documentRef.getElementById?.('nars-config')?.textContent;
     if (!text) return null;
@@ -158,7 +180,7 @@ function injectedArtifactTransport(documentRef) {
   }
 }
 
-function injectedBrowserToken(documentRef) {
+function injectedBrowserToken(documentRef: Document): string | null {
   try {
     const text = documentRef.getElementById?.('nars-config')?.textContent;
     if (!text) return null;
@@ -169,14 +191,20 @@ function injectedBrowserToken(documentRef) {
   }
 }
 
-function withBrowserToken(url, browserToken) {
+function withBrowserToken(url: string, browserToken: string | null): string {
   if (!browserToken) return url;
   const parsed = new URL(url);
   parsed.searchParams.set('browser-token', browserToken);
   return parsed.toString();
 }
 
-function artifactContentPath({ basePath, artifactTransport, sessionId, artifactId, browserToken }) {
+function artifactContentPath({ basePath, artifactTransport, sessionId, artifactId, browserToken }: {
+  basePath: string | null;
+  artifactTransport: string | null;
+  sessionId: string;
+  artifactId: string;
+  browserToken: string | null;
+}): string | null {
   const normalizedBasePath = basePath?.replace(/\/+$/, '') ?? null;
   if (!normalizedBasePath || !artifactId) return null;
   if (artifactTransport === 'cloudflare-projection' || artifactTransport === 'cloudflare-authority') return withBrowserToken(`${normalizedBasePath}/${encodeURIComponent(artifactId)}/content`, browserToken);
@@ -185,7 +213,7 @@ function artifactContentPath({ basePath, artifactTransport, sessionId, artifactI
   return `${normalizedBasePath}/sessions/${encodeURIComponent(sessionId)}/artifacts/${encodeURIComponent(artifactId)}/content`;
 }
 
-function appendSummaryContent(container, value, documentRef, context = {}) {
+function appendSummaryContent(container: RenderElement, value: unknown, documentRef: Document, context: RenderContext = {}): void {
   const parts = parseMessageContent(value);
   if (parts.length === 1 && parts[0].kind === 'plain_text') {
     container.textContent = parts[0].content;
@@ -198,7 +226,7 @@ function appendSummaryContent(container, value, documentRef, context = {}) {
   container.textContent = stringSummary(value);
 }
 
-function createRenderedMarkdownFrame(markdownText, documentRef) {
+function createRenderedMarkdownFrame(markdownText: string, documentRef: Document): HTMLElement {
   const figure = documentRef.createElement('figure');
   figure.className = 'message-part rendered-part-frame';
   const tabs = documentRef.createElement('div');
@@ -244,7 +272,7 @@ function createRenderedMarkdownFrame(markdownText, documentRef) {
   pre.append(code);
   codePanel.append(toolbar, pre);
 
-  const activate = (view) => {
+  const activate = (view: 'render' | 'code'): void => {
     const renderActive = view === 'render';
     renderPanel.hidden = !renderActive;
     codePanel.hidden = renderActive;
@@ -261,7 +289,7 @@ function createRenderedMarkdownFrame(markdownText, documentRef) {
   return figure;
 }
 
-function createIntentReferenceButton(part, documentRef) {
+function createIntentReferenceButton(part: UnknownRecord, documentRef: Document): HTMLElement {
   const button = documentRef.createElement('button');
   button.type = 'button';
   button.className = 'message-part intent-ref-part';
@@ -287,7 +315,7 @@ function createIntentReferenceButton(part, documentRef) {
   });
   return button;
 }
-function createRenderedPartTab(label, active, documentRef) {
+function createRenderedPartTab(label: string, active: boolean, documentRef: Document): HTMLButtonElement {
   const button = documentRef.createElement('button');
   button.type = 'button';
   button.className = `rendered-part-tab${active ? ' is-active' : ''}`;
@@ -298,7 +326,7 @@ function createRenderedPartTab(label, active, documentRef) {
   return button;
 }
 
-function renderMarkdownToDom(markdownText, documentRef) {
+function renderMarkdownToDom(markdownText: string, documentRef: Document): HTMLElement {
   const wrapper = documentRef.createElement('div');
   wrapper.className = 'message-markdown';
   const lines = markdownText.split('\n');
@@ -331,7 +359,7 @@ function renderMarkdownToDom(markdownText, documentRef) {
     const heading = line.match(/^(#{1,3})\s+(.+)$/);
     if (heading) {
       const node = documentRef.createElement(`h${heading[1].length}`);
-      appendInlineMarkdown(node, heading[2], documentRef);
+      appendInlineMarkdown(node, heading[2] ?? '', documentRef);
       wrapper.append(node);
       continue;
     }
@@ -354,7 +382,7 @@ function renderMarkdownToDom(markdownText, documentRef) {
   return wrapper;
 }
 
-function appendInlineMarkdown(parent, text, documentRef) {
+function appendInlineMarkdown(parent: RenderElement, text: string, documentRef: Document): void {
   const segments = String(text ?? '').split(/(`[^`]+`|\[[^\]]+\]\([^)]+\))/g).filter((segment) => segment.length > 0);
   for (const segment of segments) {
     if (/^`[^`]+`$/.test(segment)) {
@@ -371,7 +399,7 @@ function appendInlineMarkdown(parent, text, documentRef) {
   }
 }
 
-function createInlineMarkdownLink(segment, documentRef) {
+function createInlineMarkdownLink(segment: string, documentRef: Document): Node {
   const match = segment.match(/^\[([^\]]+)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)$/);
   if (!match) return documentRef.createTextNode(segment);
   const label = match[1] ?? '';
@@ -388,7 +416,7 @@ function createInlineMarkdownLink(segment, documentRef) {
   return link;
 }
 
-function createMarkdownIntentButton({ intent, label, title }, documentRef) {
+function createMarkdownIntentButton({ intent, label, title }: { intent: string; label: string; title: string }, documentRef: Document): HTMLButtonElement {
   const button = documentRef.createElement('button');
   button.type = 'button';
   button.className = 'message-part markdown-intent-button';
@@ -409,13 +437,13 @@ function createMarkdownIntentButton({ intent, label, title }, documentRef) {
   return button;
 }
 
-function intentFromHref(href) {
+function intentFromHref(href: unknown): string | null {
   const value = String(href ?? '').trim();
   const intent = value.match(/^(?:narada-)?intent:(.+)$/i)?.[1]?.trim() ?? '';
   return intent || null;
 }
 
-function tryParseMarkdownTable(lines, startIndex, documentRef) {
+function tryParseMarkdownTable(lines: readonly string[], startIndex: number, documentRef: Document): { node: HTMLElement; endIndex: number } | null {
   if (!isMarkdownTableRow(lines[startIndex]) || !isMarkdownTableDivider(lines[startIndex + 1] ?? '')) return null;
   const table = documentRef.createElement('table');
   const thead = documentRef.createElement('thead');
@@ -443,60 +471,62 @@ function tryParseMarkdownTable(lines, startIndex, documentRef) {
   return { node: table, endIndex: index - 1 };
 }
 
-function isMarkdownTableRow(line) {
-  return /^\s*\|.+\|\s*$/.test(line ?? '');
+function isMarkdownTableRow(line: unknown): boolean {
+  return /^\s*\|.+\|\s*$/.test(String(line ?? ''));
 }
 
-function isMarkdownTableDivider(line) {
-  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(line ?? '');
+function isMarkdownTableDivider(line: unknown): boolean {
+  return /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/.test(String(line ?? ''));
 }
 
-function splitMarkdownTableRow(line) {
+function splitMarkdownTableRow(line: unknown): string[] {
   return String(line ?? '').trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
 }
 
-function normalizeAssistantText(value) {
+function normalizeAssistantText(value: unknown): string {
   return String(value ?? '').trim().replace(/\r\n/g, '\n');
 }
 
-function isDuplicateAssistantMessage(list, item, projection) {
+function isDuplicateAssistantMessage(list: RenderElement, item: RenderElement, projection: RenderProjection): boolean {
   if (projection.kind !== 'assistant_message') return false;
   const summary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
   if (!summary) return false;
-  for (const child of Array.from(list.children ?? [])) {
+  for (const child of childrenOf(list)) {
     if (child === item) continue;
     if (child?.dataset?.eventKind !== 'assistant_message') continue;
-    const childSummary = child?.dataset?.assistantSummary ?? child?.children?.at?.(1)?.children?.at?.(0)?.textContent ?? '';
+    const childSummary = child?.dataset?.assistantSummary
+      ?? Array.from(child.children).at(1)?.children.item(0)?.textContent
+      ?? '';
     if (normalizeAssistantText(childSummary) === summary) return true;
   }
   item.dataset.assistantSummary = summary;
   return false;
 }
 
-function eventStore(documentRef) {
+function eventStore(documentRef: RenderDocument): unknown[] {
   if (!documentRef.__naradaAgentWebUiEvents) documentRef.__naradaAgentWebUiEvents = [];
   return documentRef.__naradaAgentWebUiEvents;
 }
 
-function accumulateStreamingProjection(item, projection) {
+function accumulateStreamingProjection(item: RenderElement, projection: RenderProjection): RenderProjection {
   if (projection.kind !== 'assistant_message_stream') return projection;
   const previous = item?.dataset?.streamContent ?? '';
   const next = `${previous}${stringSummary(projection.summary)}`;
   return { ...projection, summary: next, streamContent: next };
 }
 
-export function currentProjectionVerbosity(documentRef = document) {
-  const element = documentRef.getElementById?.('projection-verbosity');
+export function currentProjectionVerbosity(documentRef: Document = document): string {
+  const element = documentRef.getElementById?.('projection-verbosity') as HTMLSelectElement | null;
   return normalizeNarsClientProjectionVerbosity(element?.value ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
 }
 
-export function appendEvent(event, documentRef = document, options = {}) {
+export function appendEvent(event: unknown, documentRef: Document = document, options: RenderOptions = {}): void {
   if (options.store !== false) eventStore(documentRef).push(event);
   renderEvent(event, documentRef, options);
   renderActivityIndicator(documentRef);
 }
 
-function renderActivityIndicator(documentRef) {
+function renderActivityIndicator(documentRef: Document): void {
   const list = documentRef.getElementById('events');
   if (!list) return;
   const activity = activityFromEvents(eventStore(documentRef));
@@ -537,8 +567,8 @@ function renderActivityIndicator(documentRef) {
   list.append(item);
 }
 
-function removeActivityIndicator(list) {
-  for (const child of Array.from(list.children ?? [])) {
+function removeActivityIndicator(list: RenderElement): void {
+  for (const child of childrenOf(list)) {
     if (child?.id !== 'agent-activity-indicator') continue;
     if (typeof child.remove === 'function') child.remove();
     else if (Array.isArray(list.children)) {
@@ -548,15 +578,15 @@ function removeActivityIndicator(list) {
   }
 }
 
-function activityFromEvents(events) {
+function activityFromEvents(events: readonly unknown[]) {
   return createSessionProjection(events).activity;
 }
 
-function renderEvent(event, documentRef = document, options = {}) {
+function renderEvent(event: unknown, documentRef: Document = document, options: RenderOptions = {}): void {
   const list = documentRef.getElementById('events');
   if (!list) return;
   if (classifyRuntimeMessage(event) === 'state_sample') return;
-  let projection = projectRuntimeEvent(event);
+  let projection = projectRuntimeEvent(event) as RenderProjection;
   const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity ?? currentProjectionVerbosity(documentRef));
   if (!shouldRenderRuntimeProjection(projection, { verbosity })) return;
   const item = projection.renderKey ? findRenderedEvent(list, projection.renderKey) ?? documentRef.createElement('li') : documentRef.createElement('li');
@@ -626,10 +656,10 @@ function renderEvent(event, documentRef = document, options = {}) {
   list.scrollTop = list.scrollHeight;
 }
 
-function pruneSupersededAssistantStreams(list, projection) {
+function pruneSupersededAssistantStreams(list: RenderElement, projection: RenderProjection): void {
   if (projection.kind !== 'assistant_message') return;
   const finalSummary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
-  for (const child of Array.from(list.children ?? [])) {
+  for (const child of childrenOf(list)) {
     if (child?.dataset?.eventKind !== 'assistant_message_stream' && child?.dataset?.eventKind !== 'assistant_message') continue;
     const priorSummary = normalizeAssistantText(child?.dataset?.assistantSummary ?? child?.dataset?.streamContent ?? child?.textContent ?? '');
     if (!priorSummary || priorSummary === finalSummary) continue;
@@ -642,15 +672,15 @@ function pruneSupersededAssistantStreams(list, projection) {
   }
 }
 
-function isSupersededLifecycleAssistantAggregate(list, projection) {
+function isSupersededLifecycleAssistantAggregate(list: RenderElement, projection: RenderProjection): boolean {
   if (projection.kind !== 'assistant_message') return false;
   const event = projection.event;
-  if (!event || typeof event !== 'object') return false;
+  if (!isRecord(event)) return false;
   if (event.lifecycle_event !== 'assistant_message' || !event.turn_id) return false;
   const finalSummary = normalizeAssistantText(stringSummary(projection.summary || projection.event));
   if (!finalSummary) return false;
   const scope = eventScope(event);
-  for (const child of Array.from(list.children ?? [])) {
+  for (const child of childrenOf(list)) {
     if (child?.dataset?.eventKind !== 'assistant_message') continue;
     if (child?.dataset?.assistantProviderMessage !== 'true') continue;
     if (!sameDatasetAssistantScope(child.dataset, scope)) continue;
@@ -660,58 +690,63 @@ function isSupersededLifecycleAssistantAggregate(list, projection) {
   return false;
 }
 
-function isProviderAssistantMessage(event) {
-  const providerEvent = event?.event;
-  return Boolean(providerEvent && typeof providerEvent === 'object' && providerEvent.type === 'item.completed' && providerEvent.item?.type === 'agent_message');
+function isProviderAssistantMessage(event: unknown): boolean {
+  if (!isRecord(event)) return false;
+  const providerEvent = event.event;
+  return Boolean(isRecord(providerEvent) && providerEvent.type === 'item.completed' && isRecord(providerEvent.item) && providerEvent.item.type === 'agent_message');
 }
 
-function sameDatasetAssistantScope(dataset, scope) {
+type EventScope = { agentId: string | null; sessionId: string | null };
+
+function sameDatasetAssistantScope(dataset: DOMStringMap, scope: EventScope): boolean {
   const agentId = dataset?.assistantAgentId || null;
   const sessionId = dataset?.assistantSessionId || null;
   if (!agentId && !sessionId && !scope.agentId && !scope.sessionId) return true;
   return agentId === scope.agentId && sessionId === scope.sessionId;
 }
 
-function isOperatorProjection(projection) {
+function isOperatorProjection(projection: RenderProjection): boolean {
   return projection?.kind === 'user_message' || projection?.kind === 'operator_input_submitted';
 }
 
-function isOperatorEventKind(kind) {
+function isOperatorEventKind(kind: unknown): boolean {
   return kind === 'user_message' || kind === 'operator_input_submitted';
 }
 
-function sameDatasetOperatorScope(dataset, scope) {
+function sameDatasetOperatorScope(dataset: DOMStringMap, scope: EventScope): boolean {
   const sessionId = dataset?.operatorSessionId || null;
   if (!sessionId || !scope.sessionId) return true;
   return sessionId === scope.sessionId;
 }
 
-function eventScope(value) {
-  if (!value || typeof value !== 'object') return { agentId: null, sessionId: null };
+function eventScope(value: unknown): EventScope {
+  if (!isRecord(value)) return { agentId: null, sessionId: null };
+  const agentId = value.agent_id ?? value.agentId;
+  const sessionId = value.session_id ?? value.sessionId;
   return {
-    agentId: value.agent_id ?? value.agentId ?? null,
-    sessionId: value.session_id ?? value.sessionId ?? null,
+    agentId: typeof agentId === 'string' ? agentId : null,
+    sessionId: typeof sessionId === 'string' ? sessionId : null,
   };
 }
 
-export function rerenderEvents(documentRef = document, options = {}) {
+export function rerenderEvents(documentRef: Document = document, options: RenderOptions = {}): void {
   const events = [...eventStore(documentRef)];
   clearEvents(documentRef, { keepStore: true });
   for (const event of events) renderEvent(event, documentRef, { ...options, store: false });
 }
 
-function findRenderedEvent(list, renderKey) {
-  for (const child of Array.from(list.children ?? [])) {
+function findRenderedEvent(list: RenderElement, renderKey: string): RenderElement | null {
+  for (const child of childrenOf(list)) {
     if (child?.dataset?.eventRenderKey === renderKey) return child;
   }
   return null;
 }
 
-function isRenderedEventChild(list, item) {
-  return Array.from(list.children ?? []).includes(item);
+function isRenderedEventChild(list: RenderElement, item: RenderElement): boolean {
+  return childrenOf(list).includes(item);
 }
 
-function clearNode(node) {
+function clearNode(node: RenderElement): void {
   if (typeof node.replaceChildren === 'function') {
     node.replaceChildren();
   } else if (Array.isArray(node.children)) {
@@ -720,7 +755,7 @@ function clearNode(node) {
   node.textContent = '';
 }
 
-function stringSummary(value) {
+function stringSummary(value: unknown): string {
   if (value === null || value === undefined) return '';
   if (Array.isArray(value)) return value.map((part) => stringSummary(part)).join('\n');
   if (typeof value === 'string') return value;
@@ -729,7 +764,7 @@ function stringSummary(value) {
   return String(value);
 }
 
-export function clearEvents(documentRef = document, options = {}) {
+export function clearEvents(documentRef: RenderDocument = document, options: { keepStore?: boolean } = {}): void {
   const list = documentRef.getElementById('events');
   if (list) clearNode(list);
   if (!options.keepStore) documentRef.__naradaAgentWebUiEvents = [];

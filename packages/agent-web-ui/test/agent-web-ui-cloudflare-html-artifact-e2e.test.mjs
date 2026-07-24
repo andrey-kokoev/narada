@@ -10,7 +10,7 @@ import {
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
 } from '@narada2/cloudflare-nars-projection/node';
-import { startAgentWebUiServer } from '../src/server.js';
+import { startAgentWebUiServer } from '../src/server.ts';
 import {
   findHeadlessBrowser,
   openCdpPage,

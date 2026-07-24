@@ -1,12 +1,32 @@
-import { unwrapRuntimeEvent } from './runtime-events.js';
+import { unwrapRuntimeEvent } from './runtime-events.ts';
 import { agentIdentityDisplay, normalizeAgentIdentityRef } from '@narada2/agent-identity';
+import { isRecord, type UnknownRecord } from './types.ts';
+
+export type SessionIdentityFallback = {
+  siteId?: string | null;
+  agentId?: string | null;
+  role?: string | null;
+  sessionId?: string | null;
+};
+
+export type SessionIdentitySummary = SessionIdentityFallback & {
+  siteId: string | null;
+  agentId: string | null;
+  role: string | null;
+  sessionId: string | null;
+  title: string;
+  subtitle: string;
+};
 
 /**
  * @param {unknown[]} events
  * @param {{ siteId?: string | null, agentId?: string | null, role?: string | null, sessionId?: string | null } | undefined} fallback
  * @returns {{ siteId: string | null, agentId: string | null, role: string | null, sessionId: string | null, title: string, subtitle: string }}
  */
-export function summarizeSessionIdentity(events = [], fallback = undefined) {
+export function summarizeSessionIdentity(
+  events: readonly unknown[] = [],
+  fallback?: SessionIdentityFallback,
+): SessionIdentitySummary {
   let siteId = fallback?.siteId ?? null;
   let agentId = fallback?.agentId ?? null;
   let role = fallback?.role ?? null;
@@ -58,7 +78,10 @@ export function summarizeSessionIdentity(events = [], fallback = undefined) {
  * @param {{ siteId?: string | null, agentId?: string | null } | undefined} identity
  * @returns {{ siteLabel: string | null, agentLabel: string | null }}
  */
-export function summarizeSessionTitleParts(identity = undefined) {
+export function summarizeSessionTitleParts(identity?: SessionIdentityFallback): {
+  siteLabel: string | null;
+  agentLabel: string | null;
+} {
   const agentId = typeof identity?.agentId === 'string' && identity.agentId ? identity.agentId : null;
   return {
     siteLabel: typeof identity?.siteId === 'string' && identity.siteId ? identity.siteId : sitePartFromAgentId(agentId),
@@ -66,24 +89,24 @@ export function summarizeSessionTitleParts(identity = undefined) {
   };
 }
 
-function objectField(record, field) {
-  if (!record || typeof record !== 'object') return null;
+function objectField(record: unknown, field: string): UnknownRecord | null {
+  if (!isRecord(record)) return null;
   const value = record[field];
-  return value && typeof value === 'object' ? value : null;
+  return isRecord(value) ? value : null;
 }
 
-function stringField(record, field) {
-  if (!record || typeof record !== 'object') return null;
+function stringField(record: unknown, field: string): string | null {
+  if (!isRecord(record)) return null;
   const value = record[field];
   return typeof value === 'string' && value ? value : null;
 }
 
-function sitePartFromAgentId(agentId) {
+function sitePartFromAgentId(agentId: string | null): string | null {
   if (!agentId || !agentId.includes('.')) return null;
   return agentId.split('.').slice(0, -1).join('.') || null;
 }
 
-function agentPartFromAgentId(agentId) {
+function agentPartFromAgentId(agentId: string | null): string | null {
   if (!agentId) return null;
   return agentId.includes('.') ? agentId.split('.').at(-1) || null : agentId;
 }

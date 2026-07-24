@@ -3,8 +3,8 @@ import {
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   normalizeNarsClientProjectionVerbosity,
-} from '../../runtime-events.js';
-import { AGENT_WEB_UI_PREFERENCE_KEYS, readJsonPreference, readStringPreference, writeJsonPreference, writeStringPreference } from '../lib/browserPreferences.js';
+} from '../../runtime-events.ts';
+import { AGENT_WEB_UI_PREFERENCE_KEYS, readJsonPreference, readStringPreference, writeJsonPreference, writeStringPreference } from '../lib/browserPreferences.ts';
 import {
   BUILT_IN_PROJECTION_VIEWS,
   PROJECTION_VIEW_FACET_OPTIONS,
@@ -22,6 +22,10 @@ export type ProjectionVerbosity = typeof NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS
 export type { CustomProjectionView, ProjectionViewDraft, ProjectionViewOption } from '../lib/projectionViews';
 const PROJECTION_VERBOSITY_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.projectionVerbosity;
 const PROJECTION_VIEWS_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.projectionViews;
+type StoredProjectionViews = {
+  activeViewId?: string;
+  customViews?: unknown;
+};
 
 export function useProjectionVerbosity(initial = NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY) {
   const fallbackVerbosity = loadProjectionVerbosity(initial);
@@ -83,7 +87,7 @@ export function useProjectionVerbosity(initial = NARS_CLIENT_PROJECTION_DEFAULT_
 function loadProjectionViews(fallbackVerbosity: ProjectionVerbosity): { activeViewId: string; customViews: CustomProjectionView[] } {
   const legacyActiveViewId = loadProjectionVerbosity(fallbackVerbosity);
   if (typeof window === 'undefined') return { activeViewId: legacyActiveViewId, customViews: [] };
-  const stored = readJsonPreference(PROJECTION_VIEWS_STORAGE_KEY, null);
+  const stored = readJsonPreference<StoredProjectionViews | null>(PROJECTION_VIEWS_STORAGE_KEY, null);
   const customViews = sanitizeCustomProjectionViews(stored?.customViews);
   const activeViewId = typeof stored?.activeViewId === 'string'
     && (isCanonicalProjectionVerbosity(stored.activeViewId) || customViews.some((view) => view.id === stored.activeViewId))

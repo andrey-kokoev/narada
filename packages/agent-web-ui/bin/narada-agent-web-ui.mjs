@@ -2,7 +2,7 @@
 import { realpathSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseAgentWebUiArgs, startAgentWebUiServer } from '../src/server.js';
+import { parseAgentWebUiArgs, startAgentWebUiServer } from '../src/server.ts';
 
 function printHelp() {
   console.log(`narada-agent-web-ui --event-endpoint <ws-url> [--health-endpoint <http-url>] [--host 127.0.0.1] [--port 0]\n\nCloudflare projection mode: narada-agent-web-ui --cloudflare-projection-id <id> --cloudflare-api-base-url <url>\nCloudflare authority mode: narada-agent-web-ui --cloudflare-authority-session-id <id> --cloudflare-api-base-url <url>\n\nStarts a browser operator surface over one NARS session. The web UI submits ordinary text with session.submit, queues active-turn text with delivery_mode=admit_after_active_turn, and uses session.cancel/session.close for slash controls. Cloudflare adapters translate these frames to their remote wire vocabulary. Browser status polling uses the local HTTP /api/health proxy or the Cloudflare projection/authority health endpoint.`);

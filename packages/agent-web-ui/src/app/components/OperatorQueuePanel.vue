@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
-import { AGENT_WEB_UI_PREFERENCE_KEYS, readBooleanPreference, writeBooleanPreference } from '../lib/browserPreferences.js';
+import { AGENT_WEB_UI_PREFERENCE_KEYS, readBooleanPreference, writeBooleanPreference } from '../lib/browserPreferences.ts';
 
 const props = defineProps<{
   items: OperatorQueueItem[];

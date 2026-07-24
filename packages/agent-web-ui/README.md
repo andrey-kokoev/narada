@@ -26,7 +26,7 @@ Verification ownership:
 - From the Narada repository root, the same proof is available as `pnpm test:agent-web-ui:live:delegated-task`.
 
 Browser-local preferences are owned by their feature and use the registry in
-`src/app/lib/browserPreferences.js`. They affect only browser presentation or
+`src/app/lib/browserPreferences.ts`. They affect only browser presentation or
 browser-local snippets; they are never session authority, durable event state,
 or protocol input. Provider, model, and thinking changes are NARS session
 actions and therefore are deliberately not persisted as browser preferences.

@@ -1,5 +1,5 @@
 import { computed, ref, watch, type Ref } from 'vue';
-import { readJsonPreference, writeJsonPreference } from '../lib/browserPreferences.js';
+import { readJsonPreference, writeJsonPreference } from '../lib/browserPreferences.ts';
 
 interface BoxVisibilityPreferenceOptions<TId extends string> {
   storageKey: string;

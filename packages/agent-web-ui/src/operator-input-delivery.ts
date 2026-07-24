@@ -1,13 +1,90 @@
-import { unwrapRuntimeEvent } from './runtime-events.js';
-import { findCorrelatedInput, inputCorrelationFromEvent, mergeInputCorrelation } from './operator-input-correlation.js';
+import { unwrapRuntimeEvent } from './runtime-events.ts';
+import { findCorrelatedInput, inputCorrelationFromEvent, mergeInputCorrelation, type InputCorrelation, type CorrelationRecord } from './operator-input-correlation.ts';
 import {
   OPERATOR_INPUT_PHASES,
   OPERATOR_INPUT_TRANSITIONS,
   canTransitionOperatorInput,
   transitionOperatorInputLifecycle,
-} from './operator-input-lifecycle.js';
+  type OperatorInputPhase,
+  type OperatorInputLifecycle,
+} from './operator-input-lifecycle.ts';
 
-function isProjectionInputAdmissionAccepted(event) {
+type DeliveryEvent = {
+  event?: string | null;
+  status?: string | null;
+  http_ok?: boolean;
+  method?: string | null;
+  content?: string | null;
+  source?: string | null;
+  operator_delivery_mode?: string | null;
+  delivery_mode?: string | null;
+  idempotency_key?: string | null;
+  request_id?: string | null;
+  input_event_id?: string | null;
+  input_id?: string | null;
+  event_id?: string | null;
+  session_id?: string | null;
+  active_turn_id?: string | boolean | null;
+  turn_id?: string | null;
+  pending_state?: string | null;
+  message?: string | null;
+  reason_code?: string | null;
+  error?: string | null;
+  terminal_state?: string | null;
+  request_state?: string | null;
+  code?: string | null;
+  drop_reason?: string | null;
+  timestamp?: string | number | null;
+  created_at?: string | number | null;
+  [key: string]: unknown;
+};
+
+type DeliveryRecord = OperatorInputLifecycle & CorrelationRecord & {
+  requestId: string | null;
+  phase: OperatorInputPhase;
+  content: string | null;
+  method: string | null;
+  idempotencyKey: string | null;
+  source: string | null;
+  operatorDeliveryMode: string | null;
+  deliveryMode: string | null;
+  inputEventId: string | null;
+  sessionId: string | null;
+  activeTurnId: string | boolean | null;
+  acceptedAtMs: number | null;
+  startedAtMs: number | null;
+  terminalAtMs: number | null;
+  terminalState: string | null;
+  error: unknown;
+  localSubmission: boolean;
+  history: OperatorInputPhase[];
+};
+
+type DeliveryState = {
+  records: Map<string, DeliveryRecord>;
+  order: string[];
+};
+
+export type OperatorInputDeliveryProjection = {
+  phase: OperatorInputPhase;
+  requestId: string | null;
+  content: string | null;
+  method: string | null;
+  idempotencyKey: string | null;
+  source: string | null;
+  deliveryMode: string | null;
+  activeTurnId: string | boolean | null;
+  acceptedAtMs: number | null;
+  startedAtMs: number | null;
+  terminalAtMs: number | null;
+  terminalState: string | null;
+  error: unknown;
+  history: OperatorInputPhase[];
+  label: string;
+  detail: string | null;
+};
+
+function isProjectionInputAdmissionAccepted(event: DeliveryEvent): boolean {
   const status = typeof event?.status === 'string' ? event.status.trim().toLowerCase() : '';
   if (!status) return event?.http_ok === true;
   return ['ok', 'accepted', 'admitted', 'admitted_to_turn', 'queued'].includes(status);
@@ -36,14 +113,14 @@ export const IDLE_OPERATOR_INPUT_DELIVERY = Object.freeze({
   detail: null,
 });
 
-export function createOperatorInputDeliveryState() {
+export function createOperatorInputDeliveryState(): DeliveryState {
   return {
     records: new Map(),
     order: [],
   };
 }
 
-export function createOperatorInputDeliveryProjection(events = [], nowMs = Date.now()) {
+export function createOperatorInputDeliveryProjection(events: readonly unknown[] = [], nowMs = Date.now()): OperatorInputDeliveryProjection {
   const state = createOperatorInputDeliveryState();
   for (const message of events) reduceOperatorInputDelivery(state, message);
   return materializeOperatorInputDelivery(state, nowMs);
@@ -54,8 +131,8 @@ export function createOperatorInputDeliveryProjection(events = [], nowMs = Date.
  * request lifecycle. The local event starts the lifecycle; durable NARS
  * events acknowledge admission and terminal outcome.
  */
-export function reduceOperatorInputDelivery(state, message) {
-  const event = unwrapRuntimeEvent(message);
+export function reduceOperatorInputDelivery(state: DeliveryState, message: unknown): DeliveryState {
+  const event = unwrapRuntimeEvent(message) as DeliveryEvent | null;
   if (!event || typeof event !== 'object') return state;
   const kind = event.event;
   const requestId = requestIdFromEvent(event);
@@ -197,14 +274,15 @@ export function reduceOperatorInputDelivery(state, message) {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
-    if (kind === 'session_control_response' && ['failed', 'rejected', 'refused', 'interrupted'].includes(event.terminal_state)) {
-      const phase = event.terminal_state === 'rejected' || event.terminal_state === 'refused'
+    const terminalState = typeof event.terminal_state === 'string' ? event.terminal_state : null;
+    if (kind === 'session_control_response' && terminalState !== null && ['failed', 'rejected', 'refused', 'interrupted'].includes(terminalState)) {
+      const phase = terminalState === 'rejected' || terminalState === 'refused'
         ? OPERATOR_INPUT_DELIVERY_PHASES.REJECTED
         : OPERATOR_INPUT_DELIVERY_PHASES.FAILED;
-      transition(record, phase, event, event.error ?? event.message ?? event.terminal_state, event.terminal_state);
+      transition(record, phase, event, event.error ?? event.message ?? terminalState, terminalState);
       return state;
     }
-    if (kind === 'session_control_response' && event.terminal_state === 'completed') {
+    if (kind === 'session_control_response' && terminalState === 'completed') {
       absorbRuntimeMetadata(record, event);
       transition(record, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED, event, null, 'completed');
       return state;
@@ -222,11 +300,12 @@ export function reduceOperatorInputDelivery(state, message) {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
-    if (event.request_state === 'failed' || event.request_state === 'rejected') {
-      const phase = event.request_state === 'rejected'
+    const requestState = typeof event.request_state === 'string' ? event.request_state : null;
+    if (requestState === 'failed' || requestState === 'rejected') {
+      const phase = requestState === 'rejected'
         ? OPERATOR_INPUT_DELIVERY_PHASES.REJECTED
         : OPERATOR_INPUT_DELIVERY_PHASES.FAILED;
-      transition(record, phase, event, event.error ?? event.message ?? event.request_state, event.request_state);
+      transition(record, phase, event, event.error ?? event.message ?? requestState, requestState);
     }
     return state;
   }
@@ -235,10 +314,11 @@ export function reduceOperatorInputDelivery(state, message) {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
-    const phase = event.code === 'request_dispatch_failed'
+    const code = typeof event.code === 'string' ? event.code : null;
+    const phase = code === 'request_dispatch_failed'
       ? OPERATOR_INPUT_DELIVERY_PHASES.FAILED
       : OPERATOR_INPUT_DELIVERY_PHASES.REJECTED;
-    transition(record, phase, event, event.error ?? event.code ?? 'request rejected', event.code ?? 'rejected');
+    transition(record, phase, event, event.error ?? code ?? 'request rejected', code ?? 'rejected');
     return state;
   }
 
@@ -264,8 +344,9 @@ export function reduceOperatorInputDelivery(state, message) {
   return state;
 }
 
-export function materializeOperatorInputDelivery(state, nowMs = Date.now()) {
-  const record = state.order.length > 0 ? state.records.get(state.order.at(-1)) : null;
+export function materializeOperatorInputDelivery(state: DeliveryState, nowMs = Date.now()): OperatorInputDeliveryProjection {
+  const latestKey = state.order.length > 0 ? state.order[state.order.length - 1] : undefined;
+  const record = latestKey ? state.records.get(latestKey) : null;
   if (!record) return { ...IDLE_OPERATOR_INPUT_DELIVERY, history: [...IDLE_OPERATOR_INPUT_DELIVERY.history] };
   return {
     phase: record.phase,
@@ -287,7 +368,7 @@ export function materializeOperatorInputDelivery(state, nowMs = Date.now()) {
   };
 }
 
-function ensureRecord(state, requestId, event) {
+function ensureRecord(state: DeliveryState, requestId: string | null, event: DeliveryEvent): DeliveryRecord {
   const correlation = inputCorrelationFromEvent(event);
   const normalizedRequestId = requestId ?? correlation.requestId;
   const key = normalizedRequestId ?? (correlation.inputEventId ? `input:${correlation.inputEventId}` : `event:${state.order.length}`);
@@ -319,17 +400,17 @@ function ensureRecord(state, requestId, event) {
   return record;
 }
 
-function findRecord(state, requestId, event) {
+function findRecord(state: DeliveryState, requestId: string | null, event: DeliveryEvent): DeliveryRecord | null {
   const explicitMatch = findCorrelatedInput(state.records.values(), { ...event, request_id: requestId ?? event?.request_id });
-  if (explicitMatch.record || explicitMatch.ambiguous) return explicitMatch.record;
+  if (explicitMatch.record || explicitMatch.ambiguous) return explicitMatch.record as DeliveryRecord | null;
   const activeMatch = findCorrelatedInput(state.records.values(), event, {
     allowUniqueMethod: true,
     activeOnly: (record) => !isFinalTerminal(record.phase),
   });
-  return activeMatch.record;
+  return activeMatch.record as DeliveryRecord | null;
 }
 
-function findOrCreateRuntimeRecord(state, requestId, event) {
+function findOrCreateRuntimeRecord(state: DeliveryState, requestId: string | null, event: DeliveryEvent): DeliveryRecord | null {
   const existing = findRecord(state, requestId, event);
   if (existing) return existing;
   const activeMatch = findCorrelatedInput(state.records.values(), event, {
@@ -340,7 +421,7 @@ function findOrCreateRuntimeRecord(state, requestId, event) {
   return ensureRecord(state, requestId, event);
 }
 
-function findRecordByTurnOrRequest(state, requestId, event) {
+function findRecordByTurnOrRequest(state: DeliveryState, requestId: string | null, event: DeliveryEvent): DeliveryRecord | null {
   const direct = findRecord(state, requestId, event);
   if (direct) return direct;
   if (event?.turn_id) {
@@ -352,7 +433,7 @@ function findRecordByTurnOrRequest(state, requestId, event) {
   return null;
 }
 
-function absorbRuntimeMetadata(record, event) {
+function absorbRuntimeMetadata(record: DeliveryRecord, event: DeliveryEvent): void {
   mergeInputCorrelation(record, event);
   record.source ??= event.source ?? null;
   record.deliveryMode ??= event.delivery_mode ?? null;
@@ -361,7 +442,13 @@ function absorbRuntimeMetadata(record, event) {
   record.idempotencyKey ??= event.idempotency_key ?? null;
 }
 
-function transition(record, phase, event, error = null, terminalState = null) {
+function transition(
+  record: DeliveryRecord,
+  phase: OperatorInputPhase,
+  event: DeliveryEvent,
+  error: unknown = null,
+  terminalState: string | null = null,
+): DeliveryRecord {
   if (isFinalTerminal(record.phase)) return record;
   const previousPhase = record.phase;
   const timestampMs = timestampFromEvent(event) ?? Date.now();
@@ -389,14 +476,14 @@ function transition(record, phase, event, error = null, terminalState = null) {
   return record;
 }
 
-function queuedPhase(record) {
+function queuedPhase(record: DeliveryRecord): OperatorInputPhase {
   return record.operatorDeliveryMode === 'enqueue'
     || (record.operatorDeliveryMode == null && record.deliveryMode === 'admit_after_active_turn')
     ? OPERATOR_INPUT_DELIVERY_PHASES.QUEUED
     : OPERATOR_INPUT_DELIVERY_PHASES.STEERING;
 }
 
-function isFinalTerminal(phase) {
+function isFinalTerminal(phase: unknown): boolean {
   return phase === OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED
     || phase === OPERATOR_INPUT_DELIVERY_PHASES.REJECTED
     || phase === OPERATOR_INPUT_DELIVERY_PHASES.FAILED
@@ -406,31 +493,32 @@ function isFinalTerminal(phase) {
     || phase === OPERATOR_INPUT_DELIVERY_PHASES.EXPIRED;
 }
 
-function isTrackedOperatorFrame(method) {
+function isTrackedOperatorFrame(method: unknown): boolean {
   return method === 'session.submit' || method === 'conversation.send' || method === 'conversation.enqueue' || method === 'conversation.steer' || method === 'session.close';
 }
 
-function requestIdFromEvent(event) {
+function requestIdFromEvent(event: DeliveryEvent): string | null {
   return inputCorrelationFromEvent(event).requestId;
 }
 
-function timestampFromEvent(event) {
+function timestampFromEvent(event: DeliveryEvent): number | null {
   const parsed = Date.parse(String(event?.timestamp ?? event?.created_at ?? ''));
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function deliveryLabel(phase, record = null) {
+function deliveryLabel(phase: OperatorInputPhase, record: DeliveryRecord | null = null): string {
   if (record?.method === 'session.close') {
-    const closeLabel = {
+    const closeLabels: Partial<Record<OperatorInputPhase, string>> = {
       [OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING]: 'Closing session…',
       [OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED]: 'Session close accepted',
       [OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED]: 'Session closed',
       [OPERATOR_INPUT_DELIVERY_PHASES.REJECTED]: 'Session close rejected',
       [OPERATOR_INPUT_DELIVERY_PHASES.FAILED]: 'Session close failed',
-    }[phase];
+    };
+    const closeLabel = closeLabels[phase];
     if (closeLabel) return closeLabel;
   }
-  return {
+  const labels: Record<OperatorInputPhase, string> = {
     [OPERATOR_INPUT_DELIVERY_PHASES.DRAFT]: 'Enter a message',
     [OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING]: 'Submitting input…',
     [OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED]: 'Input accepted',
@@ -446,10 +534,12 @@ function deliveryLabel(phase, record = null) {
     [OPERATOR_INPUT_DELIVERY_PHASES.LATE_RECONCILED]: 'Late acknowledgment reconciled',
     [OPERATOR_INPUT_DELIVERY_PHASES.DISCARDED]: 'Input discarded',
     [OPERATOR_INPUT_DELIVERY_PHASES.EXPIRED]: 'Recovery expired',
-  }[phase] ?? 'Input state unknown';
+    [OPERATOR_INPUT_DELIVERY_PHASES.SENT]: 'Input sent',
+  };
+  return labels[phase] ?? 'Input state unknown';
 }
 
-function deliveryDetail(record, nowMs) {
+function deliveryDetail(record: DeliveryRecord, nowMs: number): string | null {
   if (record.method === 'session.close' && record.phase === OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING) return 'Waiting for NARS session.close acknowledgment';
   if (record.method === 'session.close' && record.phase === OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED) return 'NARS accepted the close request; waiting for session closed';
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT) return 'No acknowledgment was observed; the input may still have been admitted. Review before retrying manually; no automatic resend was attempted';

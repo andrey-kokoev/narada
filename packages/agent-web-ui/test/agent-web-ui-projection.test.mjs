@@ -2,28 +2,28 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFileSync } from 'node:fs';
 
-import { appendEvent } from '../src/render.js';
-import { refreshHttpHealthStatus } from '../src/health.js';
-import { classifyRuntimeMessage, createSessionProjection } from '../src/session-projection.js';
+import { appendEvent } from '../src/render.ts';
+import { refreshHttpHealthStatus } from '../src/health.ts';
+import { classifyRuntimeMessage, createSessionProjection } from '../src/session-projection.ts';
 import {
   TURN_ACTIVITY_PHASES,
   createTurnActivityState,
   materializeTurnActivity,
   reduceTurnActivity,
-} from '../src/session-projection-activity.js';
+} from '../src/session-projection-activity.ts';
 import {
   projectRuntimeEvent,
   reconnectDelayForAttempt,
   resolveAttachConfig,
   shouldRenderRuntimeEvent,
   summarizeRuntimeEvent,
-} from '../src/agent-web-ui.js';
+} from '../src/agent-web-ui.ts';
 import {
   OPERATOR_INPUT_DELIVERY_PHASES,
   OPERATOR_INPUT_DELIVERY_TRANSITIONS,
   canTransitionOperatorInputDelivery,
   createOperatorInputDeliveryProjection,
-} from '../src/operator-input-delivery.js';
+} from '../src/operator-input-delivery.ts';
 
 class FakeElement {
   constructor(tagName = 'div') {
@@ -224,6 +224,34 @@ test('turn activity ignores late evidence and rebases on a newer turn or health 
   assert.equal(state.state, TURN_ACTIVITY_PHASES.THINKING);
   assert.equal(state.activeTurnId, 'turn-3');
   assert.equal(state.activeRequestId, null);
+});
+
+test('detailed active health states keep Chat activity reactive', () => {
+  const expectedStates = {
+    accepted: TURN_ACTIVITY_PHASES.THINKING,
+    contextualized: TURN_ACTIVITY_PHASES.THINKING,
+    evaluating: TURN_ACTIVITY_PHASES.THINKING,
+    tool_requested: TURN_ACTIVITY_PHASES.TOOL,
+    tool_admitted: TURN_ACTIVITY_PHASES.TOOL,
+    executing: TURN_ACTIVITY_PHASES.TOOL,
+    reconciling: TURN_ACTIVITY_PHASES.THINKING,
+  };
+
+  for (const [activeTurnState, expectedState] of Object.entries(expectedStates)) {
+    const state = createTurnActivityState();
+    const activeTurnId = `turn-${activeTurnState}`;
+    reduceTurnActivity(state, {
+      event: 'session_health',
+      active_turn_state: activeTurnState,
+      active_turn_id: activeTurnId,
+      agent_id: 'resident',
+      timestamp: '2026-07-11T12:00:00.000Z',
+    });
+    const activity = materializeTurnActivity(state, Date.parse('2026-07-11T12:00:01.000Z'));
+    assert.equal(activity.active, true, activeTurnState);
+    assert.equal(activity.state, expectedState, activeTurnState);
+    assert.equal(activity.activeTurnId, activeTurnId, activeTurnState);
+  }
 });
 
 test('session projection reconciles incomplete replay from the runtime health snapshot', () => {

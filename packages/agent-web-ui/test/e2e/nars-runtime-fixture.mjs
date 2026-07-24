@@ -5,7 +5,7 @@ import { PassThrough, Writable } from 'node:stream';
 import { createSessionCoreRuntimeService } from '@narada2/agent-runtime-server/session-core-runtime-service';
 import { createEventHub, startEventStreamProjection, startHealthProjection } from '@narada2/agent-runtime-server/test-fixtures';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { startAgentWebUiServer } from '../../src/server.js';
+import { startAgentWebUiServer } from '../../src/server.ts';
 
 export function waitFor(predicate, timeoutMs, evidence = () => ({})) {
   const started = Date.now();
@@ -98,8 +98,11 @@ export async function startSessionCoreRuntime({
     operatorSurfaceKind: 'agent-web-ui',
     sessionPath: sessionPaths.narsSessionPath,
     eventsPath: sessionPaths.narsEventsPath,
-    intelligenceProvider: 'codex-subscription',
-    providerSettings: { provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'medium', stream: false },
+    intelligence: {
+      principal: 'principal:narada.e2e',
+      requestedModel: { kind: 'model', id: 'model:openai:gpt-5.5' },
+      requestedOptions: { thinking_level: 'medium', stream: false },
+    },
   };
   const gateway = toolGateway ?? {
     toolCatalog: async () => [],

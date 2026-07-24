@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
-import { startAgentWebUiServer } from '../src/server.js';
+import { startAgentWebUiServer } from '../src/server.ts';
 import { startSessionCoreRuntime } from './e2e/nars-runtime-fixture.mjs';
 import {
   findHeadlessBrowser,

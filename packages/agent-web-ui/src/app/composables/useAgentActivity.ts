@@ -1,15 +1,8 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from 'vue';
-import { createSessionProjection } from '../../session-projection.js';
+import { createSessionProjection } from '../../session-projection.ts';
+import type { ActivitySnapshot } from '../../session-projection-activity.ts';
 
-export interface AgentActivityState {
-  active: boolean;
-  state: 'idle' | 'queued' | 'thinking' | 'tool' | 'streaming' | 'failed';
-  label: string;
-  detail: string | null;
-  elapsedSeconds: number;
-  startedAtMs: number | null;
-  activeTurnId: string | boolean | null;
-}
+export type AgentActivityState = ActivitySnapshot;
 
 export const IDLE_ACTIVITY: AgentActivityState = {
   active: false,
@@ -38,11 +31,11 @@ export function useAgentActivity(events: unknown[] | Ref<unknown[]>, healthBody?
     return createSessionProjection(sourceEvents ?? [], {
       nowMs: now.value,
       healthSnapshot: healthBody?.value ?? null,
-    }).activity as AgentActivityState;
+    }).activity;
   });
   return { activity };
 }
 
 export function accumulateActivity(events: unknown[], nowMs = Date.now()): AgentActivityState {
-  return createSessionProjection(events, { nowMs }).activity as AgentActivityState;
+  return createSessionProjection(events, { nowMs }).activity;
 }

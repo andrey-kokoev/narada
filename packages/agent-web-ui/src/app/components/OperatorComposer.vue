@@ -7,7 +7,7 @@ import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPrefe
 import { useOperatorCommandPalette } from '../composables/useOperatorCommandPalette';
 import { useOperatorInterruptPrompt } from '../composables/useOperatorInterruptPrompt';
 import { isCaretOnFirstLine, isCaretOnLastLine, useComposerHistory } from '../composables/useComposerHistory';
-import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
+import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.ts';
 import type { OperatorSnippet, OperatorSnippetDeliveryMode } from '../composables/useOperatorSnippets';
 import type { OperatorInputDeliveryProjection } from '../composables/useNarsEvents';
 

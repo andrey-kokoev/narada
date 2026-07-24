@@ -18,16 +18,16 @@ import {
   isAgentWebUiCloudflareMethod,
   isAgentWebUiCloudflareProtocolFrame,
 } from '@narada2/nars-client-projection-contract';
-import { readInjectedConfig, resolveAttachConfig } from './config.js';
-import { connectEvents, buildSubscribeFrame, reconnectDelayForAttempt } from './event-stream.js';
-import { refreshHttpHealthStatus } from './health.js';
+import { readInjectedConfig, resolveAttachConfig, type AuthorityTransition } from './config.ts';
+import { connectEvents, buildSubscribeFrame, reconnectDelayForAttempt } from './event-stream.ts';
+import { refreshHttpHealthStatus } from './health.ts';
 import {
   bindComposer,
   buildConversationEnqueueFrame,
   buildConversationSendFrame,
   buildConversationSteerFrame,
   buildOperatorInputAction,
-} from './input.js';
+} from './input.ts';
 import {
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
@@ -37,8 +37,8 @@ import {
   shouldRenderRuntimeEvent,
   summarizeRuntimeEvent,
   unwrapRuntimeEvent,
-} from './runtime-events.js';
-import { rerenderEvents, setText } from './render.js';
+} from './runtime-events.ts';
+import { rerenderEvents, setText } from './render.ts';
 
 export const AGENT_WEB_UI_DEFAULT_VERBOSITY = 'conversation';
 
@@ -86,7 +86,13 @@ export {
   unwrapRuntimeEvent,
 };
 
-export function startAgentWebUi({ windowRef = globalThis.window, documentRef = globalThis.document } = {}) {
+export function startAgentWebUi({
+  windowRef = globalThis.window,
+  documentRef = globalThis.document,
+}: {
+  windowRef?: Window & { WebSocket?: typeof WebSocket };
+  documentRef?: Document;
+} = {}) {
   if (!windowRef || !documentRef) return null;
   const config = resolveAttachConfig(windowRef.location?.search ?? '', readInjectedConfig(documentRef));
   bindProjectionVerbositySelector(documentRef);
@@ -97,15 +103,21 @@ export function startAgentWebUi({ windowRef = globalThis.window, documentRef = g
   refreshHttpHealthStatus(config, documentRef, fetchFn);
   const healthTimer = config.healthEndpoint ? windowRef.setInterval(() => refreshHttpHealthStatus(config, documentRef, fetchFn), 10000) : null;
   const connection = connectEvents(config, config.maxReplay, documentRef, windowRef.WebSocket ?? globalThis.WebSocket, {
-    setTimeout: windowRef.setTimeout ?? globalThis.setTimeout,
-    clearTimeout: windowRef.clearTimeout ?? globalThis.clearTimeout,
+    setTimeout: (handler, timeout) => (windowRef.setTimeout ?? globalThis.setTimeout)(handler, timeout),
+    clearTimeout: (id) => {
+      if (id === undefined) return;
+      (windowRef.clearTimeout ?? globalThis.clearTimeout)(id as number);
+    },
     fetch: fetchFn,
   });
   bindComposer(connection, documentRef);
   return { config, socket: connection?.getSocket?.() ?? null, connection, healthTimer };
 }
 
-export function renderAuthorityTransition(authorityTransition, documentRef = globalThis.document) {
+export function renderAuthorityTransition(
+  authorityTransition: AuthorityTransition | null | undefined,
+  documentRef: Document | undefined = globalThis.document,
+): void {
   const status = documentRef?.getElementById?.('authority-status');
   const reattach = documentRef?.getElementById?.('authority-reattach');
   if (!status && !reattach) return;
@@ -127,8 +139,8 @@ export function renderAuthorityTransition(authorityTransition, documentRef = glo
     : '';
 }
 
-function bindProjectionVerbositySelector(documentRef) {
-  const selector = documentRef.getElementById?.('projection-verbosity');
+function bindProjectionVerbositySelector(documentRef: Document): void {
+  const selector = documentRef.getElementById?.('projection-verbosity') as HTMLSelectElement | null;
   if (!selector) return;
   if (Array.isArray(selector.children) && selector.children.length === 0 && typeof documentRef.createElement === 'function') {
     for (const level of NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS) {

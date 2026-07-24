@@ -1,4 +1,4 @@
-import { sequenceFromRuntimeMessage } from '../../runtime-events.js';
+import { sequenceFromRuntimeMessage } from '../../runtime-events.ts';
 
 export interface RetainedEventState {
   events: unknown[];

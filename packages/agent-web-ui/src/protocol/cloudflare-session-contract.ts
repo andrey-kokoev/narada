@@ -1,4 +1,6 @@
-export function cloudflareWebSocketEndpoint(endpoint, browserToken) {
+import { isRecord, type UnknownRecord } from '../types.ts';
+
+export function cloudflareWebSocketEndpoint(endpoint: string, browserToken?: string | null): string {
   const url = new URL(endpoint);
   url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
   let path = url.pathname.replace(/\/+$/, '');
@@ -14,18 +16,22 @@ export function cloudflareWebSocketEndpoint(endpoint, browserToken) {
   return url.href;
 }
 
-export function applyCloudflareEventQuery(url, subscribeFrame, fallbackPageSize = 100) {
-  const params = subscribeFrame?.params && typeof subscribeFrame.params === 'object' && !Array.isArray(subscribeFrame.params)
+export function applyCloudflareEventQuery(
+  url: URL,
+  subscribeFrame: unknown,
+  fallbackPageSize = 100,
+): URL {
+  const params = isRecord(subscribeFrame) && isRecord(subscribeFrame.params)
     ? subscribeFrame.params
     : {};
   if (params.since_sequence != null) url.searchParams.set('since_sequence', String(params.since_sequence));
   url.searchParams.set('max_events', String(params.page_size ?? fallbackPageSize));
-  if (params.view) url.searchParams.set('view', params.view);
+  if (params.view) url.searchParams.set('view', String(params.view));
   return url;
 }
 
-export function cloudflareEventItemToRuntimeMessage(item) {
-  const record = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+export function cloudflareEventItemToRuntimeMessage(item: unknown): unknown {
+  const record: UnknownRecord = isRecord(item) ? item : {};
   const payload = record.payload ?? record;
   const sequence = typeof record.event_sequence === 'number'
     ? record.event_sequence
@@ -36,7 +42,21 @@ export function cloudflareEventItemToRuntimeMessage(item) {
   return { event: 'session_event', payload, cursor: { sequence } };
 }
 
-export function cloudflareSubscriptionStarted({ requestId, subscriptionId, view = 'conversation', pageSize = 100, transport = 'cloudflare-projection' }) {
+type SubscriptionOptions = {
+  requestId: string;
+  subscriptionId: string;
+  view?: string;
+  pageSize?: number;
+  transport?: string;
+};
+
+export function cloudflareSubscriptionStarted({
+  requestId,
+  subscriptionId,
+  view = 'conversation',
+  pageSize = 100,
+  transport = 'cloudflare-projection',
+}: SubscriptionOptions): UnknownRecord {
   return {
     schema: 'narada.nars.events.subscription.v1',
     event: 'session_events_subscription_started',
@@ -49,10 +69,25 @@ export function cloudflareSubscriptionStarted({ requestId, subscriptionId, view 
   };
 }
 
-/**
- * @param {{ messages: unknown[], eventCount?: number, hasMore?: boolean, historyTruncated?: boolean, view?: string, cursor?: unknown, transport?: string }} options
- */
-export function cloudflareEventsRead({ messages, eventCount, hasMore, historyTruncated, view = 'conversation', cursor = null, transport = 'cloudflare-projection-replay' }) {
+type EventsReadOptions = {
+  messages: readonly unknown[];
+  eventCount?: number;
+  hasMore?: boolean;
+  historyTruncated?: boolean;
+  view?: string;
+  cursor?: unknown;
+  transport?: string;
+};
+
+export function cloudflareEventsRead({
+  messages,
+  eventCount,
+  hasMore,
+  historyTruncated,
+  view = 'conversation',
+  cursor = null,
+  transport = 'cloudflare-projection-replay',
+}: EventsReadOptions): UnknownRecord {
   return {
     event: 'session_events_read',
     transport,
@@ -67,10 +102,27 @@ export function cloudflareEventsRead({ messages, eventCount, hasMore, historyTru
   };
 }
 
-/**
- * @param {{ requestId: string, subscriptionId: string, replayCount: number, hasMore?: boolean, historyTruncated?: boolean, view?: string, cursor?: unknown, transport?: string }} options
- */
-export function cloudflareReplayCompleted({ requestId, subscriptionId, replayCount, hasMore, historyTruncated, view = 'conversation', cursor = null, transport = 'cloudflare-projection' }) {
+type ReplayCompletedOptions = {
+  requestId: string;
+  subscriptionId: string;
+  replayCount: number;
+  hasMore?: boolean;
+  historyTruncated?: boolean;
+  view?: string;
+  cursor?: unknown;
+  transport?: string;
+};
+
+export function cloudflareReplayCompleted({
+  requestId,
+  subscriptionId,
+  replayCount,
+  hasMore,
+  historyTruncated,
+  view = 'conversation',
+  cursor = null,
+  transport = 'cloudflare-projection',
+}: ReplayCompletedOptions): UnknownRecord {
   return {
     schema: 'narada.nars.events.subscription.v1',
     event: 'session_events_replay_completed',

@@ -1,5 +1,5 @@
 import { computed, type Ref } from 'vue';
-import { unwrapRuntimeEvent } from '../../runtime-events.js';
+import { unwrapRuntimeEvent } from '../../runtime-events.ts';
 
 export interface SurfaceFeedbackSummary {
   status: string;

@@ -5,7 +5,7 @@ import BoxRowShell from './BoxRowShell.vue';
 import ProjectionVerbositySelect from './ProjectionVerbositySelect.vue';
 import ProjectionViewCustomizer from './ProjectionViewCustomizer.vue';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';
-import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.js';
+import { AGENT_WEB_UI_PREFERENCE_KEYS } from '../lib/browserPreferences.ts';
 import { NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD } from '@narada2/nars-client-projection-contract';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@narada2/ui-vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';

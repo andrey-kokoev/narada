@@ -1,21 +1,56 @@
 import { buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada2/nars-client-projection-contract';
-import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from './runtime-events.js';
-import { appendEvent, setText } from './render.js';
-import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareEventsRead, cloudflareReplayCompleted, cloudflareSubscriptionStarted, cloudflareWebSocketEndpoint } from './protocol/cloudflare-session-contract.js';
+import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from './runtime-events.ts';
+import { appendEvent, setText } from './render.ts';
+import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareEventsRead, cloudflareReplayCompleted, cloudflareSubscriptionStarted, cloudflareWebSocketEndpoint } from './protocol/cloudflare-session-contract.ts';
+import { isRecord, type UnknownRecord } from './types.ts';
+
+type EventStreamConfig = {
+  eventEndpoint?: string | null;
+  event_endpoint?: string | null;
+  inputEndpoint?: string | null;
+  input_endpoint?: string | null;
+  cacheEndpoint?: string | null;
+  healthTransport?: string;
+  browserToken?: string | null;
+  browser_token_fingerprint?: string | null;
+  mode?: string;
+};
+
+type TimerHandle = ReturnType<typeof globalThis.setTimeout> | number;
+type TimerFunction = (handler: TimerHandler, timeout?: number) => TimerHandle;
+
+type TimerOverrides = {
+  setTimeout?: TimerFunction;
+  clearTimeout?: (id: TimerHandle | undefined) => void;
+  fetch?: typeof globalThis.fetch;
+};
+
+type EventStreamConnection = {
+  socket: WebSocket | null;
+  closed: boolean;
+  lastSequence: number | null;
+  activeTurnId: string | null;
+  reconnectTimer: TimerHandle | null;
+  reconnectAttempt: number;
+  disconnectedAt: number | null;
+  getSocket(): WebSocket | null;
+  sendFrame(frame: UnknownRecord): boolean;
+  close(): void;
+};
 
 export const buildSubscribeFrame = buildAgentWebUiSubscribeFrame;
 
-export function reconnectDelayForAttempt(attempt, { baseMs = 1000, maxMs = 10000 } = {}) {
+export function reconnectDelayForAttempt(attempt: number, { baseMs = 1000, maxMs = 10000 }: { baseMs?: number; maxMs?: number } = {}): number {
   const exponent = Math.max(0, Number(attempt) - 1);
   return Math.min(maxMs, baseMs * (2 ** exponent));
 }
 
-function projectionHeaders(browserToken) {
+function projectionHeaders(browserToken: string | null): Record<string, string> {
   return browserToken ? { 'x-narada-browser-token-fingerprint': browserToken } : {};
 }
 
-function projectionInputResponse(body, response, requestId, transportMethod, remoteMethod) {
-  const bodyRecord = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+function projectionInputResponse(body: unknown, response: Response, requestId: string, transportMethod: string, remoteMethod: string): UnknownRecord {
+  const bodyRecord: UnknownRecord = isRecord(body) ? body : {};
   const authorityMethod = typeof bodyRecord.method === 'string' && bodyRecord.method.trim()
     ? bodyRecord.method
     : remoteMethod;
@@ -35,30 +70,37 @@ function projectionInputResponse(body, response, requestId, transportMethod, rem
   };
 }
 
-function disconnectedDurationText(disconnectedAt, now = Date.now()) {
+function disconnectedDurationText(disconnectedAt: number | null, now = Date.now()): string {
   if (!disconnectedAt) return '0s';
   return `${Math.max(0, Math.floor((now - disconnectedAt) / 1000))}s`;
 }
 
-function setReconnectText(connection, documentRef, delayMs) {
+function setReconnectText(connection: EventStreamConnection, documentRef: Document | undefined, delayMs: number): void {
   setText('stream', `reconnecting in ${Math.ceil(delayMs / 1000)}s · disconnected ${disconnectedDurationText(connection.disconnectedAt)}`, documentRef);
 }
 
-export function connectEvents(endpointOrConfig, maxReplay, documentRef = document, WebSocketCtor = globalThis.WebSocket, timers = {}) {
-  const config = typeof endpointOrConfig === 'object' && endpointOrConfig !== null
+export function connectEvents(
+  endpointOrConfig: string | EventStreamConfig | null | undefined,
+  maxReplay = 100,
+  documentRef: Document | undefined = globalThis.document,
+  WebSocketCtor: typeof WebSocket | undefined = globalThis.WebSocket,
+  timers: TimerOverrides | TimerFunction = {},
+): EventStreamConnection | null {
+  const config: EventStreamConfig = typeof endpointOrConfig === 'object' && endpointOrConfig !== null
     ? endpointOrConfig
     : { eventEndpoint: endpointOrConfig, inputEndpoint: null, cacheEndpoint: null, healthTransport: 'websocket' };
-  const endpoint = config.eventEndpoint ?? config.event_endpoint ?? endpointOrConfig;
+  const endpointCandidate = config.eventEndpoint ?? config.event_endpoint ?? (typeof endpointOrConfig === 'string' ? endpointOrConfig : null);
+  const endpoint = typeof endpointCandidate === 'string' ? endpointCandidate : null;
   const inputEndpoint = config.inputEndpoint ?? config.input_endpoint ?? null;
   const browserToken = config.browserToken ?? config.browser_token_fingerprint ?? null;
-  const fetchFn = timers.fetch ?? globalThis.fetch;
+  const fetchFn: typeof globalThis.fetch = typeof timers === 'function' ? globalThis.fetch : timers.fetch ?? globalThis.fetch;
   if (!endpoint) {
     setText('stream', 'event endpoint not configured', documentRef);
     return null;
   }
-  const setTimeoutFn = typeof timers === 'function' ? timers : timers.setTimeout ?? globalThis.setTimeout;
-  const clearTimeoutFn = typeof timers === 'function' ? globalThis.clearTimeout : timers.clearTimeout ?? globalThis.clearTimeout;
-  const connection = {
+  const setTimeoutFn: TimerFunction = typeof timers === 'function' ? timers : timers.setTimeout ?? globalThis.setTimeout;
+  const clearTimeoutFn: (id: TimerHandle | undefined) => void = typeof timers === 'function' ? globalThis.clearTimeout : timers.clearTimeout ?? globalThis.clearTimeout;
+  const connection: EventStreamConnection = {
     socket: null,
     closed: false,
     lastSequence: null,
@@ -67,11 +109,13 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
     reconnectAttempt: 0,
     disconnectedAt: null,
     getSocket() { return this.socket; },
-    sendFrame(frame) {
+    sendFrame(frame: UnknownRecord) {
       if (!inputEndpoint || !fetchFn) {
-        const openState = this.socket?.constructor?.OPEN ?? globalThis.WebSocket?.OPEN ?? 1;
+        const openState = globalThis.WebSocket?.OPEN ?? 1;
         if (this.socket?.readyState !== openState) return false;
-        this.socket.send(JSON.stringify(frame));
+        const socket = this.socket;
+        if (!socket) return false;
+        socket.send(JSON.stringify(frame));
         return true;
       }
       const remoteFrame = translateAgentWebUiFrameForCloudflare(frame);
@@ -79,11 +123,11 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
       fetchFn(inputEndpoint, {
         method: 'POST',
         headers: { 'content-type': 'application/json', ...projectionHeaders(browserToken) },
-        body: JSON.stringify({ method: remoteFrame.method, payload: remoteFrame.params ?? {}, request_id: frame.id }),
-      }).then(async (response) => {
+        body: JSON.stringify({ method: String(remoteFrame.method), payload: remoteFrame.params ?? {}, request_id: frame.id }),
+      }).then(async (response: Response) => {
         const body = await response.json().catch(() => ({ event: 'projection_input_response', status: response.ok ? 'ok' : 'failed' }));
-        appendEvent(projectionInputResponse(body, response, frame.id, frame.method, remoteFrame.method), documentRef);
-      }).catch((error) => appendEvent({ event: 'projection_input_failed', message: error instanceof Error ? error.message : String(error) }, documentRef));
+        appendEvent(projectionInputResponse(body, response, String(frame.id), String(frame.method), String(remoteFrame.method)), documentRef);
+      }).catch((error: unknown) => appendEvent({ event: 'projection_input_failed', message: error instanceof Error ? error.message : String(error) }, documentRef));
       return true;
     },
     close() {
@@ -92,9 +136,13 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
       this.socket?.close?.();
     },
   };
+  if (typeof WebSocketCtor !== 'function') {
+    setText('stream', 'websocket unavailable', documentRef);
+    return null;
+  }
   if (/^https?:/i.test(String(endpoint))) {
     const remoteWebSocketEnabled = (config.mode === 'cloudflare_authority' || config.mode === 'cloudflare_projection') && typeof WebSocketCtor === 'function';
-    const processRemoteMessage = (message) => {
+    const processRemoteMessage = (message: UnknownRecord): void => {
       const sequence = sequenceFromRuntimeMessage(message);
       if (sequence !== null) connection.lastSequence = sequence;
       applyRuntimeEventToWebUiState(connection, message);
@@ -124,7 +172,7 @@ export function connectEvents(endpointOrConfig, maxReplay, documentRef = documen
         for (const item of body.events ?? []) {
           const message = cloudflareEventItemToRuntimeMessage(item);
           messages.push(message);
-          processRemoteMessage(message);
+          processRemoteMessage(message as UnknownRecord);
         }
         appendEvent(cloudflareEventsRead({
           messages,

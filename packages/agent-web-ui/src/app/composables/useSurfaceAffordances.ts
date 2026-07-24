@@ -1,5 +1,5 @@
 import { computed } from 'vue';
-import { unwrapRuntimeEvent } from '../../runtime-events.js';
+import { unwrapRuntimeEvent } from '../../runtime-events.ts';
 
 export interface SurfaceAffordanceItem {
   surfaceKind: string;

@@ -1,7 +1,7 @@
 import { createApp } from 'vue';
 import App from './app/App.vue';
 import './agent-web-ui.css';
-import { readInjectedConfig, resolveAttachConfig } from './config.js';
+import { readInjectedConfig, resolveAttachConfig } from './config.ts';
 
 const config = resolveAttachConfig(window.location?.search ?? '', readInjectedConfig(document));
 

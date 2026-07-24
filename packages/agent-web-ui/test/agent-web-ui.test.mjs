@@ -24,15 +24,15 @@ import {
   shouldRenderRuntimeEvent,
   startAgentWebUi,
   summarizeRuntimeEvent,
-} from '../src/agent-web-ui.js';
+} from '../src/agent-web-ui.ts';
 import {
   buildClientConfig,
   parseAgentWebUiArgs,
   startAgentWebUiServer,
-} from '../src/server.js';
+} from '../src/server.ts';
 import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
-import { createSessionProjection } from '../src/session-projection.js';
-import { summarizeSessionIdentity, summarizeSessionTitleParts } from '../src/session-identity.js';
+import { createSessionProjection } from '../src/session-projection.ts';
+import { summarizeSessionIdentity, summarizeSessionTitleParts } from '../src/session-identity.ts';
 import {
   createEventHub,
   startEventStreamProjection,
@@ -41,21 +41,21 @@ import {
 import { createSessionCoreRuntimeService } from '@narada2/agent-runtime-server/session-core-runtime-service';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada2/cloudflare-nars-projection/node';
-import { appendEvent } from '../src/render.js';
+import { appendEvent } from '../src/render.ts';
 import {
   AGENT_WEB_UI_PREFERENCE_KEYS,
   readBooleanPreference,
   readJsonPreference,
   writeBooleanPreference,
   writeJsonPreference,
-} from '../src/app/lib/browserPreferences.js';
+} from '../src/app/lib/browserPreferences.ts';
 import {
   applyManagedFavicon,
   extractFaviconCandidatesFromHealth,
   isSafeFaviconHref,
   NARADA_DEFAULT_FAVICON,
   resolveFaviconDescriptor,
-} from '../src/app/composables/useResolvedFavicon.js';
+} from '../src/app/composables/useResolvedFavicon.ts';
 
 async function connectWebSocket(url) {
   assert.equal(typeof WebSocket, 'function');
@@ -871,7 +871,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   const selectorComponent = await readFile(new URL('../src/app/components/ProjectionVerbositySelect.vue', import.meta.url), 'utf8');
   const composer = await readFile(new URL('../src/app/components/OperatorComposer.vue', import.meta.url), 'utf8');
   const boxVisibilityPreference = await readFile(new URL('../src/app/composables/useBoxVisibilityPreference.ts', import.meta.url), 'utf8');
-  const browserPreferences = await readFile(new URL('../src/app/lib/browserPreferences.js', import.meta.url), 'utf8');
+  const browserPreferences = await readFile(new URL('../src/app/lib/browserPreferences.ts', import.meta.url), 'utf8');
   const viteConfig = await readFile(new URL('../vite.config.mjs', import.meta.url), 'utf8');
   const css = await readAgentWebUiCss();
   assert.match(css, /--sans:\s*Inter/);
@@ -1068,7 +1068,7 @@ test('Vue message content renderer has typed parts, inline code, and lazy Mermai
   const mermaidPart = await readFile(new URL('../src/app/components/content/MermaidDiagramPart.vue', import.meta.url), 'utf8');
   const renderedFrame = await readFile(new URL('../src/app/components/content/RenderedPartFrame.vue', import.meta.url), 'utf8');
   const parser = await readFile(new URL('../src/app/lib/messageContent.ts', import.meta.url), 'utf8');
-  const canonicalParser = await readFile(new URL('../src/content-pipeline.js', import.meta.url), 'utf8');
+  const canonicalParser = await readFile(new URL('../src/content-pipeline.ts', import.meta.url), 'utf8');
   const css = await readAgentWebUiCss();
 
   assert.match(eventRow, /<MessageContent :content="row\.summary"/);

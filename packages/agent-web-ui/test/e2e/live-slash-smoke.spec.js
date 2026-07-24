@@ -92,8 +92,8 @@ test.describe('agent-web-ui session-core runtime slash commands', () => {
             expect(event.event).toBe('session_health');
             expect(event.schema).toBe('narada.nars.health.v1');
             expect(event.session_id).toBe('web-ui-playwright-e2e');
-            expect(event.intelligence?.provider).toBe('codex-subscription');
-            expect(event.intelligence?.model).toBe('gpt-5.5');
+            expect(event.intelligence?.requested_model).toEqual({ kind: 'model', id: 'model:openai:gpt-5.5' });
+            expect(event.intelligence?.requested_options).toEqual({ thinking_level: 'medium', stream: false });
           },
         },
         {

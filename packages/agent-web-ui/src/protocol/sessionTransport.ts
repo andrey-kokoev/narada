@@ -6,7 +6,7 @@ export interface SessionProtocolFrame {
   params?: Record<string, unknown>;
 }
 
-export { toSessionProtocolFrame } from './session-frame.js';
+export { toSessionProtocolFrame } from './session-frame.ts';
 
 export function isProjectionInputAdmissionAccepted(event: Record<string, unknown>): boolean {
   const status = typeof event.status === 'string' ? event.status.trim().toLowerCase() : '';

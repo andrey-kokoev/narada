@@ -2,7 +2,7 @@ import {
   OPERATOR_INPUT_TRANSITIONS,
   canTransitionOperatorInput,
   transitionOperatorInputLifecycle,
-} from '../operator-input-lifecycle.js';
+} from '../operator-input-lifecycle.ts';
 
 export const PENDING_OPERATOR_INPUT_PHASES = Object.freeze({
   SENT: 'sent',
@@ -32,6 +32,7 @@ export function canTransitionPendingOperatorInput(
 export interface PendingOperatorInputLifecycle {
   phase: PendingOperatorInputPhase;
   updated_at: string;
+  [key: string]: unknown;
 }
 
 export function transitionPendingOperatorInput(

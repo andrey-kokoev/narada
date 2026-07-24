@@ -1,5 +1,5 @@
 import type { NarsClientProjectionVerbosity } from '@narada2/nars-client-projection-contract';
-import { createSessionProjection } from '../../session-projection.js';
+import { createSessionProjection } from '../../session-projection.ts';
 
 export interface ProjectedEventRow {
   key: string;

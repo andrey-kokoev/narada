@@ -7,19 +7,27 @@ export const AGENT_WEB_UI_PREFERENCE_KEYS = Object.freeze({
   operatorFooterItems: 'narada:agent-web-ui:operator-footer-items.v1',
   operatorQueueOpen: 'narada:agent-web-ui:operator-queue-open.v1',
   operatorSnippets: 'narada:agent-web-ui:operator-snippets.v1',
-});
+} as const);
 
-export function readJsonPreference(key, fallback, storage = browserStorage()) {
+export function readJsonPreference<T>(
+  key: string,
+  fallback: T,
+  storage: Storage | null = browserStorage(),
+): T {
   const raw = safeGetItem(storage, key);
   if (raw === null || raw === undefined) return fallback;
   try {
-    return JSON.parse(raw);
+    return JSON.parse(raw) as T;
   } catch {
     return fallback;
   }
 }
 
-export function writeJsonPreference(key, value, storage = browserStorage()) {
+export function writeJsonPreference(
+  key: string,
+  value: unknown,
+  storage: Storage | null = browserStorage(),
+): boolean {
   if (!storage) return false;
   try {
     storage.setItem(key, JSON.stringify(value));
@@ -29,11 +37,19 @@ export function writeJsonPreference(key, value, storage = browserStorage()) {
   }
 }
 
-export function readStringPreference(key, fallback, storage = browserStorage()) {
+export function readStringPreference(
+  key: string,
+  fallback: string,
+  storage: Storage | null = browserStorage(),
+): string {
   return safeGetItem(storage, key) ?? fallback;
 }
 
-export function writeStringPreference(key, value, storage = browserStorage()) {
+export function writeStringPreference(
+  key: string,
+  value: string,
+  storage: Storage | null = browserStorage(),
+): boolean {
   if (!storage) return false;
   try {
     storage.setItem(key, value);
@@ -43,18 +59,26 @@ export function writeStringPreference(key, value, storage = browserStorage()) {
   }
 }
 
-export function readBooleanPreference(key, fallback, storage = browserStorage()) {
+export function readBooleanPreference(
+  key: string,
+  fallback: boolean,
+  storage: Storage | null = browserStorage(),
+): boolean {
   const stored = safeGetItem(storage, key);
   if (stored === 'true') return true;
   if (stored === 'false') return false;
   return fallback;
 }
 
-export function writeBooleanPreference(key, value, storage = browserStorage()) {
+export function writeBooleanPreference(
+  key: string,
+  value: boolean,
+  storage: Storage | null = browserStorage(),
+): boolean {
   return writeStringPreference(key, String(value), storage);
 }
 
-function browserStorage() {
+function browserStorage(): Storage | null {
   if (typeof window === 'undefined') return null;
   try {
     return window.localStorage;
@@ -63,7 +87,7 @@ function browserStorage() {
   }
 }
 
-function safeGetItem(storage, key) {
+function safeGetItem(storage: Storage | null, key: string): string | null {
   if (!storage) return null;
   try {
     return storage.getItem(key);

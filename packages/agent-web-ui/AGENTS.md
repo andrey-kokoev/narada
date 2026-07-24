@@ -27,11 +27,11 @@ Protocol method shapes come from `@narada2/nars-client-projection-contract`; do 
 
 ## Layout
 
-- `src/server.js` — server entry resolved by the Narada CLI (`@narada2/agent-web-ui/server`).
+- `src/server.ts` — server entry resolved by the Narada CLI (`@narada2/agent-web-ui/server`).
 - `src/protocol/` — transports (`localSessionTransport.ts`, `cloudflareSessionTransport.ts`, `sessionTransportAdapters.ts`), `narsClient.ts`, operator input framing/lifecycle.
-- `src/session-projection*.js`, `src/event-stream.js`, `src/runtime-events.js` — session store and projection.
-- `classifyRuntimeMessage()` in `session-projection.js` separates `operation_fact` evidence (control, request-state, input lifecycle) from `conversation_fact`; `session-projection-boundaries.js` merges assistant-message streaming boundaries.
-- `src/app/` — Vue 3 surface: `components/`, `composables/`, `lib/` (including `browserPreferences.js`), `panel-registry.ts`.
+- `src/session-projection*.ts`, `src/event-stream.ts`, `src/runtime-events.ts` — session store and projection.
+- `classifyRuntimeMessage()` in `session-projection.ts` separates `operation_fact` evidence (control, request-state, input lifecycle) from `conversation_fact`; `session-projection-boundaries.ts` merges assistant-message streaming boundaries.
+- `src/app/` — Vue 3 surface: `components/`, `composables/`, `lib/` (including `browserPreferences.ts`), `panel-registry.ts`.
 - `bin/narada-agent-web-ui.mjs` — CLI shim.
 - `test/` — node:test suites at top level, `*.unit.test.ts` (Vitest), `e2e/` (Playwright), `fixtures/`, live-smoke drivers.
 
@@ -41,8 +41,8 @@ Protocol method shapes come from `@narada2/nars-client-projection-contract`; do 
 - Reconnect/reload reconcile pending input from durable session events. The UI never resends automatically after a timeout; the operator chooses Retry, and a retry keeps the original `idempotency_key`.
 - A local socket failure surfaces as `websocket_error`, distinct from durable admission.
 - Terminal `runtime_request_state_transition` states (`completed`, `failed`, `rejected`, `interrupted`) count as acknowledgment evidence for pending-input reconciliation; request transitions must flow through both replay and live transport.
-- Browser-local preferences live in `src/app/lib/browserPreferences.js` and affect presentation only — never session authority, durable event state, or protocol input. Provider/model/thinking changes are NARS session actions and are deliberately not persisted as preferences.
-- Keep the conversation projection free of control/operations rows; classification happens in `classifyRuntimeMessage()` (`session-projection.js`), not in components.
+- Browser-local preferences live in `src/app/lib/browserPreferences.ts` and affect presentation only — never session authority, durable event state, or protocol input. Provider/model/thinking changes are NARS session actions and are deliberately not persisted as preferences.
+- Keep the conversation projection free of control/operations rows; classification happens in `classifyRuntimeMessage()` (`session-projection.ts`), not in components.
 - Observation panels are read-only projections; mutations go through NARS-admitted inputs, never direct store writes from UI code.
 
 ## Verification

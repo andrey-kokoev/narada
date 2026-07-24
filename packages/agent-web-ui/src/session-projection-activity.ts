@@ -1,5 +1,6 @@
-import { unwrapRuntimeEvent } from './runtime-events.js';
+import { unwrapRuntimeEvent } from './runtime-events.ts';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
+import { isRecord, type UnknownRecord } from './types.ts';
 
 export const TURN_ACTIVITY_PHASES = Object.freeze({
   IDLE: 'idle',
@@ -20,7 +21,57 @@ export const IDLE_ACTIVITY = Object.freeze({
   activeTurnId: null,
 });
 
-export function createInitialHealthState() {
+export type ActivitySnapshot = {
+  active: boolean;
+  state: 'idle' | 'queued' | 'thinking' | 'tool' | 'streaming' | 'failed';
+  label: string;
+  detail: string | null;
+  elapsedSeconds: number;
+  startedAtMs: number | null;
+  activeTurnId: string | boolean | null;
+};
+
+type HealthState = {
+  status: string;
+  text: string;
+  agentId: string | null;
+  sessionId: string | null;
+  lastSeenAt: string | null;
+  healthySampleCount: number;
+  degradedSampleCount: number;
+  lastEvent: UnknownRecord | null;
+};
+
+type TurnActivityState = {
+  state: ActivitySnapshot['state'];
+  startedAtMs: number | null;
+  label: string;
+  detail: string | null;
+  activeTurnId: string | boolean | null;
+  activeRequestId: string | null;
+  lastTerminalTurnId: string | null;
+  lastTerminalRequestId: string | null;
+  activeToolIds: Set<string>;
+  toolCallCount: number;
+  toolResultCount: number;
+  toolFailureCount: number;
+  latestToolName: string | null;
+};
+
+export const ACTIVE_TURN_HEALTH_STATES = Object.freeze([
+  'running',
+  'accepted',
+  'contextualized',
+  'evaluating',
+  'tool_requested',
+  'tool_admitted',
+  'executing',
+  'reconciling',
+]);
+
+const TOOL_TURN_HEALTH_STATES = new Set(['tool_requested', 'tool_admitted', 'executing']);
+
+export function createInitialHealthState(): HealthState {
   return {
     status: 'unknown',
     text: 'health unknown',
@@ -33,35 +84,36 @@ export function createInitialHealthState() {
   };
 }
 
-function eventRequestId(event) {
+function eventRequestId(event: UnknownRecord): string | null {
   const requestId = event?.request_id ?? event?.requestId;
   return typeof requestId === 'string' && requestId ? requestId : null;
 }
 
-export function reduceHealthState(state, message) {
+export function reduceHealthState(state: HealthState, message: unknown): void {
   const event = unwrapRuntimeEvent(message);
   if (!event || typeof event !== 'object' || event.event !== 'session_health') return;
   const status = String(event.status ?? 'unknown');
   state.status = status;
   state.agentId = eventAgentDisplay(event) ?? state.agentId;
-  state.sessionId = event.session_id ?? state.sessionId;
-  state.lastSeenAt = event.timestamp ?? new Date().toISOString();
+  state.sessionId = typeof event.session_id === 'string' ? event.session_id : state.sessionId;
+  state.lastSeenAt = typeof event.timestamp === 'string' ? event.timestamp : new Date().toISOString();
   state.lastEvent = event;
   state.text = `${status} · ${state.agentId ?? 'agent'} · ${state.sessionId ?? 'session'}`;
   if (isRoutineHealthySessionHealth(event)) state.healthySampleCount += 1;
   else state.degradedSampleCount += 1;
 }
 
-export function isRoutineHealthySessionHealth(event) {
+export function isRoutineHealthySessionHealth(event: UnknownRecord | null): boolean {
   if (!event || event.event !== 'session_health') return false;
   const status = String(event.status ?? '').toLowerCase();
-  const mcpState = String(event.mcp?.operational_state ?? event.mcp_operational_state ?? '').toLowerCase();
-  const startupFailures = Number(event.mcp_startup_failure_count ?? event.mcp?.startup_failure_count ?? 0);
-  const runtimeFaults = Number(event.mcp_runtime_fault_count ?? event.mcp?.runtime_fault_count ?? 0);
+  const mcp = isRecord(event.mcp) ? event.mcp : {};
+  const mcpState = String(mcp.operational_state ?? event.mcp_operational_state ?? '').toLowerCase();
+  const startupFailures = Number(event.mcp_startup_failure_count ?? mcp.startup_failure_count ?? 0);
+  const runtimeFaults = Number(event.mcp_runtime_fault_count ?? mcp.runtime_fault_count ?? 0);
   return status === 'healthy' && (mcpState === '' || mcpState === 'healthy') && startupFailures === 0 && runtimeFaults === 0;
 }
 
-export function createTurnActivityState() {
+export function createTurnActivityState(): TurnActivityState {
   return {
     state: TURN_ACTIVITY_PHASES.IDLE,
     startedAtMs: null,
@@ -84,7 +136,7 @@ export function createTurnActivityState() {
  * Events can arrive from the middle of a turn after replay, so transitions
  * are tolerant of missing earlier events rather than rejecting observations.
  */
-export function reduceTurnActivity(state, message) {
+export function reduceTurnActivity(state: TurnActivityState, message: unknown): TurnActivityState {
   const event = unwrapRuntimeEvent(message);
   const timestampMs = timestampFromEvent(event) ?? timestampFromEvent(message) ?? state.startedAtMs ?? Date.now();
   if (!event || typeof event !== 'object') return state;
@@ -99,7 +151,7 @@ export function reduceTurnActivity(state, message) {
   if (event.event === 'directive_received' || event.event === 'directive_carrier_accepted_recorded') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'directive accepted');
   if (event.event === 'turn_started' || event.event === 'carrier_turn_started') {
     if (isLateCompletedActivityEvent(state, event)) return state;
-    return startTurnActivity(state, timestampMs, agentLabel(event, 'is thinking...'), providerDetail(event), event.turn_id ?? true, eventRequestId(event));
+    return startTurnActivity(state, timestampMs, agentLabel(event, 'is thinking...'), providerDetail(event), turnIdentity(event.turn_id) ?? true, eventRequestId(event));
   }
   if (event.event === 'assistant_message_stream') {
     if (isStaleTurnActivityEvent(state, event)) return state;
@@ -108,7 +160,7 @@ export function reduceTurnActivity(state, message) {
   }
   if (event.event === 'session_health') return reconcileTurnActivityWithHealth(state, event);
   const providerEvent = event.event;
-  if (providerEvent && typeof providerEvent === 'object') {
+  if (isRecord(providerEvent)) {
     if (providerEvent.type === 'turn.started' || providerEvent.type === 'thread.started') return applyProviderActivityEvent(state, providerEvent, event, timestampMs);
     if (isStaleTurnActivityEvent(state, event)) return state;
     return applyProviderActivityEvent(state, providerEvent, event, timestampMs);
@@ -130,25 +182,25 @@ export function reduceTurnActivity(state, message) {
     || event.event === 'directive_complete'
     || event.event === 'session_closed') return resetTurnActivity(state, event);
   if (event.event === 'turn_failed' || event.event === 'carrier_turn_failed') {
-    return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.FAILED, timestampMs, 'Turn failed', terminalDetail(event), event.turn_id ?? state.activeTurnId);
+    return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.FAILED, timestampMs, 'Turn failed', terminalDetail(event), turnIdentity(event.turn_id) ?? state.activeTurnId);
   }
   return state;
 }
 
-function adoptActivityIdentity(state, event) {
+function adoptActivityIdentity(state: TurnActivityState, event: UnknownRecord): void {
   const turnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
   const requestId = eventRequestId(event);
   if (turnId && !state.activeTurnId) state.activeTurnId = turnId;
   if (requestId && !state.activeRequestId) state.activeRequestId = requestId;
 }
 
-function isLateCompletedActivityEvent(state, event) {
+function isLateCompletedActivityEvent(state: TurnActivityState, event: UnknownRecord): boolean {
   const turnId = activityTurnId(event);
   const requestId = eventRequestId(event);
   return Boolean((turnId && turnId === state.lastTerminalTurnId) || (requestId && requestId === state.lastTerminalRequestId));
 }
 
-function isStaleTurnActivityEvent(state, event) {
+function isStaleTurnActivityEvent(state: TurnActivityState, event: UnknownRecord): boolean {
   if (isLateCompletedActivityEvent(state, event)) return true;
   const turnId = activityTurnId(event);
   const requestId = eventRequestId(event);
@@ -162,7 +214,7 @@ export const createActivityAccumulator = createTurnActivityState;
 export const applyActivityEvent = reduceTurnActivity;
 export const materializeActivity = materializeTurnActivity;
 
-export function materializeTurnActivity(state, nowMs) {
+export function materializeTurnActivity(state: TurnActivityState, nowMs: number): ActivitySnapshot {
   if (state.state === TURN_ACTIVITY_PHASES.IDLE || !state.startedAtMs) return { ...IDLE_ACTIVITY };
   return {
     active: true,
@@ -175,18 +227,33 @@ export function materializeTurnActivity(state, nowMs) {
   };
 }
 
-export function reconcileTurnActivityWithHealth(state, event) {
+export function reconcileTurnActivityWithHealth(state: TurnActivityState, event: UnknownRecord | null): TurnActivityState {
   if (!event || typeof event !== 'object') return state;
   if (!Object.prototype.hasOwnProperty.call(event, 'active_turn_state')) return state;
   const activeTurnState = event.active_turn_state;
-  if (activeTurnState === 'running') {
-    const activeTurnId = event.active_turn_id ?? true;
-    const differentTurn = event.active_turn_id && state.activeTurnId && event.active_turn_id !== state.activeTurnId;
+  if (typeof activeTurnState === 'string' && ACTIVE_TURN_HEALTH_STATES.includes(activeTurnState)) {
+    const activeTurnId = turnIdentity(event.active_turn_id) ?? true;
+    const differentTurn = Boolean(activeTurnId && state.activeTurnId && activeTurnId !== state.activeTurnId);
     if (state.state === TURN_ACTIVITY_PHASES.IDLE || state.state === TURN_ACTIVITY_PHASES.FAILED || !state.activeTurnId || differentTurn) {
-      return startTurnActivity(state, timestampFromEvent(event) ?? Date.now(), agentLabel(event, 'is thinking...'), providerDetail(event), activeTurnId, null);
+      const phase = TOOL_TURN_HEALTH_STATES.has(activeTurnState)
+        ? TURN_ACTIVITY_PHASES.TOOL
+        : TURN_ACTIVITY_PHASES.THINKING;
+      const label = phase === TURN_ACTIVITY_PHASES.TOOL ? 'is using tools...' : 'is thinking...';
+      const started = startTurnActivity(state, timestampFromEvent(event) ?? Date.now(), agentLabel(event, label), providerDetail(event), activeTurnId, null);
+      started.state = phase;
+      started.label = agentLabel(event, label);
+      started.detail = providerDetail(event) ?? 'NARS turn state: ' + activeTurnState;
+      return started;
     }
+    const phase = TOOL_TURN_HEALTH_STATES.has(activeTurnState)
+      ? TURN_ACTIVITY_PHASES.TOOL
+      : TURN_ACTIVITY_PHASES.THINKING;
+    state.state = phase;
+    state.label = agentLabel(event, phase === TURN_ACTIVITY_PHASES.TOOL ? 'is using tools...' : 'is thinking...');
+    state.detail = providerDetail(event) ?? 'NARS turn state: ' + activeTurnState;
+    return state;
   }
-  if (activeTurnState !== 'running') {
+  if (typeof activeTurnState !== 'string' || !ACTIVE_TURN_HEALTH_STATES.includes(activeTurnState)) {
     // Health is polled independently from the event stream. An idle sample
     // observed before the current turn started must not erase newer live
     // activity while the next health sample is still in flight.
@@ -196,10 +263,10 @@ export function reconcileTurnActivityWithHealth(state, event) {
   return state;
 }
 
-function applyProviderActivityEvent(state, providerEvent, envelope, timestampMs) {
+function applyProviderActivityEvent(state: TurnActivityState, providerEvent: UnknownRecord, envelope: UnknownRecord, timestampMs: number): TurnActivityState {
   if (providerEvent.type === 'turn.started' || providerEvent.type === 'thread.started') {
     if (isLateCompletedActivityEvent(state, envelope)) return state;
-    return startTurnActivity(state, timestampMs, agentLabel(envelope, 'is thinking...'), providerDetail(envelope), envelope.turn_id ?? state.activeTurnId ?? true, eventRequestId(envelope));
+    return startTurnActivity(state, timestampMs, agentLabel(envelope, 'is thinking...'), providerDetail(envelope), turnIdentity(envelope.turn_id) ?? state.activeTurnId ?? true, eventRequestId(envelope));
   }
   if (providerEvent.type === 'turn.completed') return resetTurnActivity(state, envelope);
   if (providerEvent.type === 'item.started') {
@@ -226,13 +293,13 @@ function applyProviderActivityEvent(state, providerEvent, envelope, timestampMs)
   return state;
 }
 
-function applyTopLevelToolCallActivity(state, event, timestampMs) {
+function applyTopLevelToolCallActivity(state: TurnActivityState, event: UnknownRecord, timestampMs: number): TurnActivityState {
   adoptActivityIdentity(state, event);
   recordToolCall(state, topLevelToolName(event));
   return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.TOOL, timestampMs, agentLabel(event, 'is using tools...'), toolProgressDetail(state));
 }
 
-function applyTopLevelToolResultActivity(state, event, timestampMs) {
+function applyTopLevelToolResultActivity(state: TurnActivityState, event: UnknownRecord, timestampMs: number): TurnActivityState {
   adoptActivityIdentity(state, event);
   recordToolResult(state, topLevelToolName(event), topLevelToolFailed(event));
   const activeCount = activeToolCount(state);
@@ -240,18 +307,18 @@ function applyTopLevelToolResultActivity(state, event, timestampMs) {
   return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampMs, agentLabel(event, 'is thinking...'), toolProgressDetail(state));
 }
 
-function recordToolCall(state, toolName) {
+function recordToolCall(state: TurnActivityState, toolName: string | null): void {
   state.toolCallCount += 1;
   if (toolName) state.latestToolName = toolName;
 }
 
-function recordToolResult(state, toolName, failed) {
+function recordToolResult(state: TurnActivityState, toolName: string | null, failed: boolean): void {
   state.toolResultCount += 1;
   if (failed) state.toolFailureCount += 1;
   if (toolName) state.latestToolName = toolName;
 }
 
-function toolProgressDetail(state) {
+function toolProgressDetail(state: TurnActivityState): string | null {
   if (!state.toolCallCount && !state.toolResultCount) return null;
   const parts = [`${state.toolCallCount} called`, `${state.toolResultCount} completed`];
   const activeCount = activeToolCount(state);
@@ -261,11 +328,11 @@ function toolProgressDetail(state) {
   return `tools: ${parts.join(' · ')}`;
 }
 
-function activeToolCount(state) {
+function activeToolCount(state: TurnActivityState): number {
   return Math.max(state.activeToolIds.size, state.toolCallCount - state.toolResultCount, 0);
 }
 
-function topLevelToolName(event) {
+function topLevelToolName(event: UnknownRecord): string | null {
   const direct = event.tool_name ?? event.tool;
   if (typeof direct === 'string' && direct) return direct;
   const server = typeof event.server === 'string' && event.server ? event.server : null;
@@ -273,13 +340,20 @@ function topLevelToolName(event) {
   return [server, tool].filter(Boolean).join('.') || null;
 }
 
-function topLevelToolFailed(event) {
+function topLevelToolFailed(event: UnknownRecord): boolean {
   if (event.error) return true;
   const status = typeof event.status === 'string' ? event.status.toLowerCase() : '';
   return status === 'failed' || status === 'error';
 }
 
-function transitionTurnActivity(state, nextState, timestampMs, label, detail, activeTurnId) {
+function transitionTurnActivity(
+  state: TurnActivityState,
+  nextState: ActivitySnapshot['state'],
+  timestampMs: number,
+  label: string,
+  detail: string | null,
+  activeTurnId?: string | boolean | null,
+): TurnActivityState {
   state.state = nextState;
   state.startedAtMs ??= timestampMs;
   state.label = label;
@@ -288,16 +362,16 @@ function transitionTurnActivity(state, nextState, timestampMs, label, detail, ac
   return state;
 }
 
-function startTurnActivity(state, timestampMs, label, detail, activeTurnId, activeRequestId) {
+function startTurnActivity(state: TurnActivityState, timestampMs: number, label: string, detail: string | null, activeTurnId: string | boolean | null, activeRequestId: string | null): TurnActivityState {
   state.lastTerminalTurnId = null;
   state.lastTerminalRequestId = null;
   state.activeRequestId = activeRequestId ?? null;
   return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampMs, label, detail, activeTurnId);
 }
 
-function resetTurnActivity(state, event) {
+function resetTurnActivity(state: TurnActivityState, event: UnknownRecord): TurnActivityState {
   if (isStaleTurnActivityEvent(state, event)) return state;
-  const terminalTurnId = activityTurnId(event) ?? state.activeTurnId;
+  const terminalTurnId = activityTurnId(event) ?? (typeof state.activeTurnId === 'string' ? state.activeTurnId : null);
   const terminalRequestId = eventRequestId(event) ?? state.activeRequestId;
   if (terminalTurnId || terminalRequestId) {
     state.lastTerminalTurnId = terminalTurnId ?? null;
@@ -315,7 +389,7 @@ function resetTurnActivity(state, event) {
   return state;
 }
 
-function activityTurnId(event) {
+function activityTurnId(event: UnknownRecord): string | null {
   const directTurnId = typeof event?.turn_id === 'string' && event.turn_id ? event.turn_id : null;
   if (directTurnId) return directTurnId;
   if (event?.event === 'input_event_completed' || event?.event === 'input_completed') {
@@ -325,40 +399,44 @@ function activityTurnId(event) {
   return null;
 }
 
-function agentLabel(event, suffix) {
+function turnIdentity(value: unknown): string | boolean | null {
+  return typeof value === 'string' || typeof value === 'boolean' ? value : null;
+}
+
+function agentLabel(event: UnknownRecord, suffix: string): string {
   const agentId = eventAgentDisplay(event) ?? 'Agent';
   return `${agentId} ${suffix}`;
 }
 
-function eventAgentDisplay(event) {
+function eventAgentDisplay(event: UnknownRecord): string | null {
   return agentIdentityDisplay(event?.agent_identity_ref, event?.agent_id ?? event?.agentId ?? null);
 }
 
-function providerDetail(event) {
+function providerDetail(event: UnknownRecord): string | null {
   const provider = typeof event.provider === 'string' && event.provider ? event.provider : null;
   return provider ? `waiting on ${provider}` : null;
 }
 
-function terminalDetail(event) {
+function terminalDetail(event: UnknownRecord): string | null {
   return typeof event.terminal_state === 'string' ? event.terminal_state : null;
 }
 
-function toolDetail(item) {
+function toolDetail(item: UnknownRecord): string | null {
   const name = [item.server, item.tool].filter((value) => typeof value === 'string' && value).join('.');
   return name || null;
 }
 
-function objectField(record, field) {
+function objectField(record: UnknownRecord, field: string): UnknownRecord | null {
   const value = record[field];
-  return value && typeof value === 'object' ? value : null;
+  return isRecord(value) ? value : null;
 }
 
-function timestampFromEvent(value) {
-  if (!value || typeof value !== 'object') return null;
+function timestampFromEvent(value: unknown): number | null {
+  if (!isRecord(value)) return null;
   return parseTimestamp(value.timestamp);
 }
 
-function healthSamplePredatesActivity(state, event) {
+function healthSamplePredatesActivity(state: TurnActivityState, event: UnknownRecord): boolean {
   const observedAtMs = parseTimestamp(event?.health_observed_at)
     ?? parseTimestamp(event?.generated_at)
     ?? timestampFromEvent(event);
@@ -367,7 +445,7 @@ function healthSamplePredatesActivity(state, event) {
     && state.startedAtMs > observedAtMs;
 }
 
-function parseTimestamp(value) {
+function parseTimestamp(value: unknown): number | null {
   if (typeof value !== 'string') return null;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;

@@ -1,6 +1,6 @@
 import { AGENT_WEB_UI_SNIPPET_USAGE, parseAgentWebUiSnippetCommand } from '@narada2/nars-client-projection-contract';
 import { computed, ref } from 'vue';
-import { AGENT_WEB_UI_PREFERENCE_KEYS, readJsonPreference, writeJsonPreference } from '../lib/browserPreferences.js';
+import { AGENT_WEB_UI_PREFERENCE_KEYS, readJsonPreference, writeJsonPreference } from '../lib/browserPreferences.ts';
 
 export interface OperatorSnippet {
   id: string;

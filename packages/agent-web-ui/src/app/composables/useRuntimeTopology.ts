@@ -238,6 +238,10 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
 }
 
 function fallbackLaunchNode(health: Record<string, unknown> | null, healthText: string): RuntimeTopologyNode {
+  const intelligence = objectField(health, 'intelligence');
+  const kernel = objectField(intelligence, 'kernel');
+  const latestPlan = objectField(intelligence, 'latest_plan');
+  const latestPlanOptions = objectField(latestPlan, 'options');
   return {
     id: 'launch',
     label: 'Launch',
@@ -247,7 +251,18 @@ function fallbackLaunchNode(health: Record<string, unknown> | null, healthText: 
       ['Site', stringField(health, 'site_id')],
       ['Agent', stringField(health, 'agent_id')],
       ['Role', stringField(health, 'role')],
-      ['Provider', stringField(objectField(health, 'intelligence'), 'provider') ?? stringField(health, 'provider')],
+      ['Provider', stringField(intelligence, 'provider')
+        ?? stringField(kernel, 'provider')
+        ?? stringField(health, 'provider')
+        ?? resourceIdField(latestPlan, 'inference_provider', 'inference-provider:')],
+      ['Model', stringField(intelligence, 'model')
+        ?? stringField(kernel, 'model')
+        ?? stringField(health, 'model')
+        ?? resourceIdField(latestPlan, 'model', 'model:')],
+      ['Thinking', stringField(intelligence, 'thinking')
+        ?? stringField(kernel, 'thinking')
+        ?? stringField(health, 'thinking')
+        ?? stringField(latestPlanOptions, 'thinking')],
     ]),
   };
 }
@@ -406,6 +421,12 @@ function objectField(record: unknown, field: string): Record<string, unknown> | 
   if (!record || typeof record !== 'object') return null;
   const value = (record as Record<string, unknown>)[field];
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function resourceIdField(record: Record<string, unknown> | null, field: string, prefix: string): string | null {
+  const value = objectField(record, field);
+  const id = stringField(value, 'id');
+  return id?.startsWith(prefix) ? id.slice(prefix.length) : id;
 }
 
 function arrayField(record: unknown, field: string): Record<string, unknown>[] {

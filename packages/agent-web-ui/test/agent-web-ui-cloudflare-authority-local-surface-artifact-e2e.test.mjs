@@ -6,7 +6,7 @@ import {
   createCloudflareNarsWorkspaceDirectoryService,
 } from '@narada2/cloudflare-nars-projection';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
-import { startAgentWebUiServer } from '../src/server.js';
+import { startAgentWebUiServer } from '../src/server.ts';
 import {
   findHeadlessBrowser,
   openCdpPage,

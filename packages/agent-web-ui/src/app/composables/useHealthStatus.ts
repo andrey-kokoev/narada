@@ -100,16 +100,34 @@ function objectField(record: unknown, field: string): Record<string, unknown> | 
   return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
 }
 
-function healthIntelligence(record: Record<string, unknown>): HealthIntelligenceSummary {
+export function healthIntelligence(record: Record<string, unknown>): HealthIntelligenceSummary {
   const intelligence = objectField(record, 'intelligence');
+  const kernel = objectField(intelligence, 'kernel');
+  const latestPlan = objectField(intelligence, 'latest_plan');
+  const latestPlanOptions = objectField(latestPlan, 'options');
   return {
-    provider: stringField(intelligence, 'provider') ?? stringField(record, 'provider'),
-    model: stringField(intelligence, 'model') ?? stringField(record, 'model'),
-    thinking: stringField(intelligence, 'thinking') ?? stringField(record, 'thinking'),
+    provider: stringField(intelligence, 'provider')
+      ?? stringField(kernel, 'provider')
+      ?? stringField(record, 'provider')
+      ?? resourceIdField(latestPlan, 'inference_provider', 'inference-provider:'),
+    model: stringField(intelligence, 'model')
+      ?? stringField(kernel, 'model')
+      ?? stringField(record, 'model')
+      ?? resourceIdField(latestPlan, 'model', 'model:'),
+    thinking: stringField(intelligence, 'thinking')
+      ?? stringField(kernel, 'thinking')
+      ?? stringField(record, 'thinking')
+      ?? stringField(latestPlanOptions, 'thinking'),
     providerChoices: stringArrayField(intelligence, 'provider_choices'),
     modelChoices: stringArrayField(intelligence, 'model_choices'),
     thinkingChoices: stringArrayField(intelligence, 'thinking_choices'),
   };
+}
+
+function resourceIdField(record: Record<string, unknown> | null, field: string, prefix: string): string | null {
+  const value = objectField(record, field);
+  const id = stringField(value, 'id');
+  return id?.startsWith(prefix) ? id.slice(prefix.length) : id;
 }
 
 function emptyIntelligence(): HealthIntelligenceSummary {
