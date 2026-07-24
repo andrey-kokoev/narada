@@ -6,10 +6,13 @@ import { fileURLToPath } from 'node:url';
 import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
+  OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,
   OPERATOR_ROUTER_HEALTH_SCHEMA,
   OPERATOR_ROUTER_IDENTITY,
+  OPERATOR_ROUTER_STATE_SCHEMA,
   OPERATOR_ROUTER_VERSION,
   type OperatorRouterHealthResponse,
+  type OperatorRouterAdminRoutesResponse,
   type OperatorRouterRouteRegistration,
   type OperatorRouterRouteRegistrationInput,
   type OperatorRouterRouteProjection,
@@ -171,12 +174,16 @@ export interface EnsureOperatorRouterResult {
   url: string;
   ownership: 'started' | 'attached';
   registration_token: string;
+  /** State root that supplied the authenticated router token. */
+  state_root?: string;
   child: ChildProcess | null;
 }
 
 export interface OperatorRouterAdminOptions {
   url: string;
   registration_token: string;
+  /** State root used only as a compatibility fallback for an older router. */
+  state_root?: string;
   fetch_fn?: typeof fetch;
   timeout_ms?: number;
 }
@@ -253,6 +260,49 @@ async function readToken(stateRoot: string): Promise<string> {
   return token;
 }
 
+function routerStateRootCandidates(options: EnsureOperatorRouterOptions, primaryStateRoot: string): string[] {
+  const explicitStateRoot = options.state_root !== undefined
+    || Boolean(process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT?.trim());
+  if (explicitStateRoot) return [primaryStateRoot];
+  const legacyStateRoot = join(homedir(), '.narada', 'operator-router');
+  return [...new Set([primaryStateRoot, legacyStateRoot])];
+}
+
+async function resolveRegistrationToken(
+  url: string,
+  stateRoots: readonly string[],
+  fetchFn: typeof fetch,
+): Promise<{ registration_token: string; state_root: string }> {
+  let lastError: unknown = null;
+  for (const stateRoot of stateRoots) {
+    let token: string;
+    try {
+      token = await readToken(stateRoot);
+    } catch {
+      continue;
+    }
+    try {
+      await adminRequest<OperatorRouterAdminRoutesResponse>({
+        url,
+        registration_token: token,
+        fetch_fn: fetchFn,
+        timeout_ms: 3_000,
+      }, '/admin/routes', 'GET');
+      return { registration_token: token, state_root: stateRoot };
+    } catch (error) {
+      lastError = error;
+      // Older routers may not expose authenticated inventory yet. A 404 here
+      // still proves that the token was accepted; the caller can use the
+      // matching local routes file as the read-only compatibility fallback.
+      if (error instanceof Error && error.message === 'operator_router_admin_route_not_found') {
+        return { registration_token: token, state_root: stateRoot };
+      }
+    }
+  }
+  if (lastError instanceof Error) throw lastError;
+  throw new Error('operator_router_registration_token_unavailable');
+}
+
 async function probeRouter(url: string, fetchFn: typeof fetch): Promise<'absent' | 'matching' | 'foreign' | 'unhealthy'> {
   try {
     const response = await fetchFn(`${url}/health`, { signal: AbortSignal.timeout(800) });
@@ -279,6 +329,34 @@ async function waitForRouter(url: string, fetchFn: typeof fetch, timeoutMs: numb
   throw new Error(`operator_router_start_timeout:${lastStatus}`);
 }
 
+/**
+ * Attach to an already-running Operator Router without creating one.
+ * Lifecycle commands use this to keep inspection/stop operations read-only
+ * with respect to the router host itself.
+ */
+export async function attachOperatorRouter(options: EnsureOperatorRouterOptions = {}): Promise<EnsureOperatorRouterResult | null> {
+  const host = options.host ?? '127.0.0.1';
+  const port = options.port ?? DEFAULT_OPERATOR_ROUTER_PORT;
+  assertLoopbackHost(host);
+  assertOperatorRouterPort(port);
+  const stateRoot = options.state_root ?? defaultStateRoot();
+  const fetchFn = options.fetch_fn ?? fetch;
+  const url = baseUrl(host, port);
+  const existing = await probeRouter(url, fetchFn);
+  if (existing === 'matching') {
+    const resolvedToken = await resolveRegistrationToken(url, routerStateRootCandidates(options, stateRoot), fetchFn);
+    return {
+      url,
+      ownership: 'attached',
+      registration_token: resolvedToken.registration_token,
+      state_root: resolvedToken.state_root,
+      child: null,
+    };
+  }
+  if (existing === 'foreign' || existing === 'unhealthy') throw new Error(`operator_router_port_occupied:${port}:${existing}`);
+  return null;
+}
+
 export async function ensureOperatorRouter(options: EnsureOperatorRouterOptions = {}): Promise<EnsureOperatorRouterResult> {
   const host = options.host ?? '127.0.0.1';
   const port = options.port ?? DEFAULT_OPERATOR_ROUTER_PORT;
@@ -287,9 +365,8 @@ export async function ensureOperatorRouter(options: EnsureOperatorRouterOptions 
   const stateRoot = options.state_root ?? defaultStateRoot();
   const url = baseUrl(host, port);
   const fetchFn = options.fetch_fn ?? fetch;
-  const existing = await probeRouter(url, fetchFn);
-  if (existing === 'matching') return { url, ownership: 'attached', registration_token: await readToken(stateRoot), child: null };
-  if (existing === 'foreign' || existing === 'unhealthy') throw new Error(`operator_router_port_occupied:${port}:${existing}`);
+  const attached = await attachOperatorRouter({ ...options, host, port, fetch_fn: fetchFn });
+  if (attached) return attached;
 
   const entrypoint = options.entrypoint ?? process.env.NARADA_OPERATOR_ROUTER_ENTRYPOINT ?? defaultEntrypoint();
   const child = spawnHiddenPostureProcess(process.execPath, [entrypoint, '--host', host, '--port', String(port), '--state-root', stateRoot], {
@@ -301,7 +378,7 @@ export async function ensureOperatorRouter(options: EnsureOperatorRouterOptions 
   });
   child.unref();
   await waitForRouter(url, fetchFn, options.timeout_ms ?? 10_000);
-  return { url, ownership: 'started', registration_token: await readToken(stateRoot), child };
+  return { url, ownership: 'started', registration_token: await readToken(stateRoot), state_root: stateRoot, child };
 }
 
 async function adminRequest<T>(options: OperatorRouterAdminOptions, path: string, method: string, body?: unknown): Promise<T> {
@@ -334,6 +411,38 @@ export async function readOperatorRouterRoutes(options: { url: string; fetch_fn?
     throw new Error(`operator_router_routes_read_failed:${response.status}`);
   }
   return payload as unknown as OperatorRouterRoutesResponse;
+}
+
+async function readOperatorRouterRoutesFromStateRoot(stateRoot: string): Promise<OperatorRouterAdminRoutesResponse> {
+  let payload: unknown;
+  try {
+    payload = JSON.parse(await readFile(join(stateRoot, 'routes.json'), 'utf8')) as unknown;
+  } catch {
+    throw new Error('operator_router_admin_route_inventory_unavailable');
+  }
+  if (!isRecord(payload) || payload.schema !== OPERATOR_ROUTER_STATE_SCHEMA || !Array.isArray(payload.routes)) {
+    throw new Error('operator_router_admin_route_inventory_invalid');
+  }
+  return {
+    schema: OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,
+    identity: OPERATOR_ROUTER_IDENTITY,
+    routes: payload.routes as OperatorRouterRouteRegistration[],
+  };
+}
+
+export async function readOperatorRouterAdminRoutes(
+  options: OperatorRouterAdminOptions,
+): Promise<OperatorRouterAdminRoutesResponse> {
+  try {
+    return await adminRequest<OperatorRouterAdminRoutesResponse>(options, '/admin/routes', 'GET');
+  } catch (error) {
+    // A router started by an older CLI may not expose the authenticated GET
+    // inventory yet. Its token-protected local routes file is the same
+    // authority that the router loaded, so use it only for that one bounded
+    // compatibility gap; mutations still go through the live admin API.
+    if (!(error instanceof Error) || error.message !== 'operator_router_admin_route_not_found') throw error;
+    return readOperatorRouterRoutesFromStateRoot(options.state_root ?? defaultStateRoot());
+  }
 }
 
 export function registerOperatorRoute(

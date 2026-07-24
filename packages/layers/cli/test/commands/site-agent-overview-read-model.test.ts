@@ -109,6 +109,30 @@ describe('site-agent overview read model', () => {
       detail: 'task-42',
       source: 'principal-runtime',
     });
+    expect(sites?.sites[0]?.agents[0]?.operator_surfaces).toEqual({
+      default_kind: 'agent-web-ui',
+      choices: [
+        { kind: 'agent-web-ui', label: 'Web UI', status: 'available', reason: null },
+        { kind: 'agent-cli', label: 'CLI', status: 'unavailable', reason: 'An existing session can only be attached from the Web UI here.' },
+        { kind: 'agent-tui', label: 'TUI', status: 'unavailable', reason: 'An existing session can only be attached from the Web UI here.' },
+      ],
+    });
+  });
+
+  it('projects the compact selector from the runtime host without exposing external surfaces', async () => {
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      readLaunchRecords: async () => ({ records: [
+        launchRecord('sonar', 'resident'),
+        launchRecord('other', 'resident', { runtime: 'external-runtime' }),
+      ], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({ site_id: record.site, display_name: record.site, site_kind: 'site' }),
+      readPrincipalStates: async () => [],
+    });
+    const result = await model.read();
+    const agents = result.groups.flatMap((group) => group.sites).flatMap((site) => site.agents);
+    expect(agents.find((agent) => agent.agent_id === 'sonar.resident')?.operator_surfaces.choices.every((choice) => choice.status === 'available')).toBe(true);
+    expect(agents.find((agent) => agent.agent_id === 'other.resident')?.operator_surfaces.choices.every((choice) => choice.status === 'unavailable')).toBe(true);
   });
 
   it('does not project a matching principal identity from a different Site scope', async () => {
@@ -127,6 +151,142 @@ describe('site-agent overview read model', () => {
       detail: 'Principal runtime scope does not match the admitted Site.',
       source: 'unavailable',
     });
+  });
+
+  it('uses the Site session authority as the canonical selector when the legacy index has healthy duplicates', async () => {
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      agentSessions: {
+        list: async () => ({
+          refusals: [],
+          sessions: [
+            {
+              session_id: 'session-legacy',
+              site_id: 'sonar',
+              agent_id: 'sonar.resident',
+              display_state: 'active',
+              heartbeat_fresh: true,
+              health_status: 'healthy',
+            },
+            {
+              session_id: 'session-canonical',
+              site_id: 'sonar',
+              agent_id: 'sonar.resident',
+              display_state: 'active',
+              heartbeat_fresh: true,
+              health_status: 'healthy',
+            },
+          ],
+        }),
+      } as never,
+      readLaunchRecords: async () => ({ records: [launchRecord('sonar', 'resident')], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({ site_id: record.site, display_name: record.site, site_kind: 'site' }),
+      readPrincipalStates: async () => [],
+      readSessionAuthority: async () => ({ state: 'active', session_id: 'session-canonical' }),
+    });
+
+    const result = await model.read();
+    const agent = result.groups.flatMap((group) => group.sites)[0]?.agents[0];
+    expect(agent?.runtime).toEqual({
+      state: 'running',
+      session_count: 1,
+      healthy_session_ids: ['session-canonical'],
+      selected_session_id: 'session-canonical',
+    });
+  });
+
+  it('keeps legacy ambiguity when no session authority exists', async () => {
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      agentSessions: {
+        list: async () => ({
+          refusals: [],
+          sessions: [
+            {
+              session_id: 'session-a',
+              site_id: 'sonar',
+              agent_id: 'sonar.resident',
+              display_state: 'active',
+              heartbeat_fresh: true,
+              health_status: 'healthy',
+            },
+            {
+              session_id: 'session-b',
+              site_id: 'sonar',
+              agent_id: 'sonar.resident',
+              display_state: 'active',
+              heartbeat_fresh: true,
+              health_status: 'healthy',
+            },
+          ],
+        }),
+      } as never,
+      readLaunchRecords: async () => ({ records: [launchRecord('sonar', 'resident')], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({ site_id: record.site, display_name: record.site, site_kind: 'site' }),
+      readPrincipalStates: async () => [],
+    });
+
+    const result = await model.read();
+    const agent = result.groups.flatMap((group) => group.sites)[0]?.agents[0];
+    expect(agent?.runtime.state).toBe('ambiguous');
+  });
+
+  it('projects a live authority as degraded while its session index row is still pending', async () => {
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      readLaunchRecords: async () => ({ records: [launchRecord('sonar', 'resident')], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({ site_id: record.site, display_name: record.site, site_kind: 'site' }),
+      readPrincipalStates: async () => [],
+      readSessionAuthority: async () => ({ state: 'active', session_id: 'session-pending-index' }),
+    });
+
+    const result = await model.read();
+    const agent = result.groups.flatMap((group) => group.sites)[0]?.agents[0];
+    expect(agent?.runtime).toEqual({
+      state: 'degraded',
+      session_count: 1,
+      healthy_session_ids: [],
+      selected_session_id: null,
+    });
+  });
+
+  it('reads authority independently for each admitted agent on the same Site', async () => {
+    const sessions = (agentId: string, canonicalId: string) => [
+      {
+        session_id: `${agentId}-legacy`,
+        site_id: 'sonar',
+        agent_id: `sonar.${agentId}`,
+        display_state: 'active',
+        heartbeat_fresh: true,
+        health_status: 'healthy',
+      },
+      {
+        session_id: canonicalId,
+        site_id: 'sonar',
+        agent_id: `sonar.${agentId}`,
+        display_state: 'active',
+        heartbeat_fresh: true,
+        health_status: 'healthy',
+      },
+    ];
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      agentSessions: { list: async () => ({ refusals: [], sessions: [...sessions('resident', 'resident-current'), ...sessions('architect', 'architect-current')] }) } as never,
+      readLaunchRecords: async () => ({ records: [launchRecord('sonar', 'resident'), launchRecord('sonar', 'architect')], siteCatalog: [] }),
+      readSiteMetadata: async (record) => ({ site_id: record.site, display_name: record.site, site_kind: 'site' }),
+      readPrincipalStates: async () => [],
+      readSessionAuthority: async (record) => ({
+        state: 'active',
+        session_id: `${record.agent_identity_ref.local_agent_id}-current`,
+      }),
+    });
+
+    const result = await model.read();
+    const agents = result.groups.flatMap((group) => group.sites).flatMap((site) => site.agents);
+    expect(agents.map((agent) => [agent.local_agent_id, agent.runtime.selected_session_id])).toEqual([
+      ['architect', 'architect-current'],
+      ['resident', 'resident-current'],
+    ]);
   });
 
   it('refuses when the admitted launch registry cannot be read', async () => {
@@ -260,7 +420,7 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
     expect(site).toMatchObject({ site_kind: 'user_site', classification_source: 'declared', group_id: 'personal-infrastructure' });
   });
 
-  it('refuses Sites whose canonical metadata is missing or invalid', async () => {
+  it('falls back when declared Site metadata is missing or invalid and keeps overview success', async () => {
     const fallbackRoot = mkdtempSync(join(tmpdir(), 'site-agent-fallback-'));
     const unreadableRoot = mkdtempSync(join(tmpdir(), 'site-agent-unreadable-'));
     writeFileSync(join(unreadableRoot, 'config.json'), 'not json');
@@ -276,10 +436,12 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
       readPrincipalStates: async () => [],
     });
     const result = await model.read();
-    expect(result.status).toBe('refused');
-    expect(result.groups.flatMap((group) => group.sites)).toEqual([]);
-    expect(result.refusals).toContain('site_metadata_missing:alpha');
-    expect(result.refusals).toContain('site_metadata_invalid:beta');
+    expect(result.status).toBe('success');
+    const sites = result.groups.flatMap((group) => group.sites);
+    expect(sites.map((site) => site.site_id).sort()).toEqual(['alpha', 'beta']);
+    expect(sites.every((site) => site.site_kind === 'site' && site.classification_source === 'fallback')).toBe(true);
+    expect(result.refusals).toContain('site_metadata_fallback_missing:alpha');
+    expect(result.refusals).toContain('site_metadata_fallback_invalid:beta');
   });
 
   it('classifies registry-only Sites from canonical Site metadata and marks registry_only', async () => {
@@ -311,7 +473,7 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
     expect(site).toMatchObject({ site_kind: 'user_site', classification_source: 'registry_only', group_id: 'personal-infrastructure' });
   });
 
-  it('refuses a registry-only Site when canonical metadata cannot be read', async () => {
+  it('falls back when registry-only Site metadata cannot be read and keeps overview success', async () => {
     const model = createSiteAgentOverviewReadModel({
       registryReadModel: {
         list: async () => ({
@@ -329,9 +491,53 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
       }),
     });
     const result = await model.read();
-    expect(result.status).toBe('refused');
-    expect(result.groups.flatMap((group) => group.sites)).toEqual([]);
-    expect(result.refusals).toContain('site_metadata_unreadable:host-a');
+    expect(result.status).toBe('success');
+    const sites = result.groups.flatMap((group) => group.sites);
+    expect(sites.map((site) => site.site_id)).toEqual(['host-a']);
+    expect(sites[0]).toMatchObject({ site_kind: 'site', classification_source: 'registry_only' });
+    expect(result.refusals).toContain('site_metadata_fallback_unreadable:host-a');
+  });
+
+  it('maps narada_proper metadata kind to the public site kind', async () => {
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      readLaunchRecords: async () => ({
+        records: [launchRecord('narada', 'resident')],
+        siteCatalog: [],
+      }),
+      readSiteMetadata: async (record) => ({
+        site_id: record.site,
+        display_name: 'Narada proper',
+        site_kind: 'narada_proper',
+        metadata_status: 'available',
+      }),
+      readPrincipalStates: async () => [],
+    });
+    const result = await model.read();
+    const site = result.groups.flatMap((group) => group.sites)[0];
+    expect(site).toMatchObject({ site_id: 'narada', display_name: 'Narada proper', site_kind: 'site', classification_source: 'declared' });
+  });
+
+  it('uses the launch record identity when metadata site_id differs', async () => {
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      readLaunchRecords: async () => ({
+        records: [launchRecord('narada', 'resident')],
+        siteCatalog: [],
+      }),
+      readSiteMetadata: async () => ({
+        site_id: 'narada-proper',
+        display_name: 'Narada proper',
+        site_kind: 'narada_proper',
+        metadata_status: 'available',
+      }),
+      readPrincipalStates: async () => [],
+    });
+    const result = await model.read();
+    expect(result.status).toBe('success');
+    const site = result.groups.flatMap((group) => group.sites)[0];
+    expect(site).toMatchObject({ site_id: 'narada', display_name: 'Narada proper', site_kind: 'site', classification_source: 'fallback' });
+    expect(result.refusals).toContain('site_metadata_fallback_identity_mismatch:narada:narada-proper');
   });
 
   it('diagnoses duplicate canonical agent identities instead of rendering them silently', async () => {
@@ -348,5 +554,59 @@ describe('site-agent overview authority and identity (findings 1, 3, 5)', () => 
     expect(result.status).toBe('refused');
     expect(result.groups).toEqual([]);
     expect(result.refusals).toContain('duplicate_agent_identity:sonar.resident');
+  });
+});
+
+describe('site-agent overview default metadata reader', () => {
+  it('maps unknown site_kind values to the public site kind', async () => {
+    const siteRoot = mkdtempSync(join(tmpdir(), 'site-agent-unknown-kind-'));
+    writeFileSync(join(siteRoot, 'config.json'), JSON.stringify({ site_id: 'acme', site_kind: 'client_service' }));
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      readLaunchRecords: async () => ({
+        records: [launchRecord('acme', 'resident', { site_root: siteRoot, workspace_root: siteRoot })],
+        siteCatalog: [],
+      }),
+      readPrincipalStates: async () => [],
+    });
+    const result = await model.read();
+    expect(result.status).toBe('success');
+    const site = result.groups.flatMap((group) => group.sites)[0];
+    expect(site).toMatchObject({ site_id: 'acme', site_kind: 'site', classification_source: 'declared' });
+    expect(result.refusals).toEqual([]);
+  });
+
+  it('prefers a metadata file whose site_id matches the launch record', async () => {
+    const siteRoot = mkdtempSync(join(tmpdir(), 'site-agent-mismatch-'));
+    mkdirSync(join(siteRoot, '.narada'), { recursive: true });
+    writeFileSync(join(siteRoot, '.narada', 'site.json'), JSON.stringify({
+      schema: 'narada.site.v0',
+      site_id: 'narada-proper',
+      display_name: 'Narada proper',
+      site_kind: 'narada_proper',
+    }));
+    writeFileSync(join(siteRoot, 'config.json'), JSON.stringify({
+      site_id: 'narada',
+      display_name: 'Narada',
+      site_kind: 'project',
+    }));
+    const model = createSiteAgentOverviewReadModel({
+      ...quietDependencies(),
+      readLaunchRecords: async () => ({
+        records: [launchRecord('narada', 'resident', { site_root: siteRoot, workspace_root: siteRoot })],
+        siteCatalog: [],
+      }),
+      readPrincipalStates: async () => [],
+    });
+    const result = await model.read();
+    expect(result.status).toBe('success');
+    const site = result.groups.flatMap((group) => group.sites)[0];
+    expect(site).toMatchObject({
+      site_id: 'narada',
+      display_name: 'Narada',
+      site_kind: 'site',
+      classification_source: 'declared',
+    });
+    expect(result.refusals).toEqual([]);
   });
 });

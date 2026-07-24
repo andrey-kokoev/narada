@@ -2,14 +2,25 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { JsonPrincipalRuntimeRegistry, type PrincipalRuntimeSnapshot } from '@narada2/control-plane';
+import {
+  defaultSessionAuthorityDbPath,
+  normalizeSessionPrincipal,
+  openLocalSessionAuthority,
+} from '@narada2/nars-session-authority';
 import type {
   OperatorSessionWireRecord,
   OperatorSiteAgentGroupId,
   OperatorSiteAgentOverviewWireResponse,
   OperatorSiteAgentSiteWireRecord,
   OperatorSiteAgentWireRecord,
+  OperatorSiteAgentRuntimeWireState,
   OperatorSiteKind,
 } from '@narada2/operator-console-contract';
+import {
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+  normalizeRuntimeAlias,
+  operatorSurfaceKindsForRuntimeHost,
+} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { readWorkspaceLaunchRecords } from './workspace-launch-registry.js';
 import type { WorkspaceLaunchRecord } from './workspace-launch-types.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
@@ -21,6 +32,30 @@ interface SiteMetadata {
   display_name: string;
   site_kind: OperatorSiteKind | null;
   metadata_status?: 'available' | 'missing' | 'invalid' | 'unreadable';
+}
+
+async function defaultReadSessionAuthority(
+  record: Pick<WorkspaceLaunchRecord, 'site' | 'site_root' | 'agent_identity_ref'>,
+): Promise<SessionAuthoritySnapshot | null> {
+  const dbPath = defaultSessionAuthorityDbPath(record.site_root);
+  if (!existsSync(dbPath)) return null;
+  const authority = openLocalSessionAuthority({ dbPath });
+  try {
+    const principal = normalizeSessionPrincipal({
+      siteId: record.site,
+      localAgentId: record.agent_identity_ref.local_agent_id,
+    });
+    return authority.inspectSession({ principal }) as SessionAuthoritySnapshot | null;
+  } finally {
+    authority.close();
+  }
+}
+
+interface SessionAuthoritySnapshot {
+  state?: string;
+  session_id?: string | null;
+  authority_epoch?: number;
+  updated_at?: string | null;
 }
 
 interface RegistrySiteRow {
@@ -39,6 +74,7 @@ export interface SiteAgentOverviewReadModelDependencies {
   readLaunchRecords?: typeof readWorkspaceLaunchRecords;
   readSiteMetadata?: (record: Pick<WorkspaceLaunchRecord, 'site' | 'site_root' | 'workspace_root'>) => Promise<SiteMetadata>;
   readPrincipalStates?: (record: Pick<WorkspaceLaunchRecord, 'site_root' | 'workspace_root'>) => Promise<PrincipalRuntimeSnapshot[]>;
+  readSessionAuthority?: (record: Pick<WorkspaceLaunchRecord, 'site' | 'site_root' | 'agent_identity_ref'>) => Promise<SessionAuthoritySnapshot | null>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -53,6 +89,8 @@ function siteKind(value: unknown): OperatorSiteKind | null {
   if (value === 'user_site') return 'user_site';
   if (value === 'pc_site' || value === 'host_site' || value === 'host') return 'pc_site';
   if (value === 'site') return 'site';
+  if (value === 'narada_proper') return 'site';
+  if (typeof value === 'string' && value.trim().length > 0) return 'site';
   return null;
 }
 
@@ -74,6 +112,7 @@ async function defaultReadSiteMetadata(
   record: Pick<WorkspaceLaunchRecord, 'site' | 'site_root' | 'workspace_root'>,
 ): Promise<SiteMetadata> {
   let failureStatus: SiteMetadata['metadata_status'] = 'missing';
+  let firstValid: SiteMetadata | undefined;
   for (const candidate of siteDescriptorCandidates(record.site_root, record.workspace_root)) {
     let raw: string;
     try {
@@ -103,13 +142,16 @@ async function defaultReadSiteMetadata(
       if (failureStatus !== 'unreadable') failureStatus = 'invalid';
       continue;
     }
-    return {
+    const metadata: SiteMetadata = {
       site_id: siteId,
       display_name: stringValue(parsed.display_name) ?? siteId,
       site_kind: kind,
       metadata_status: 'available',
     };
+    if (siteId.toLowerCase() === record.site.toLowerCase()) return metadata;
+    if (!firstValid) firstValid = metadata;
   }
+  if (firstValid) return firstValid;
   return { site_id: record.site, display_name: record.site, site_kind: null, metadata_status: failureStatus };
 }
 
@@ -167,13 +209,50 @@ function sessionsForAgent(sessions: OperatorSessionWireRecord[], record: Workspa
     && agentMatches(session.agent_id, record));
 }
 
-function runtimeState(sessions: OperatorSessionWireRecord[]) {
+function runtimeState(
+  sessions: OperatorSessionWireRecord[],
+  authority: SessionAuthoritySnapshot | null = null,
+): OperatorSiteAgentRuntimeWireState {
   const healthy = sessions.filter((session) =>
     session.display_state === 'active'
     && session.heartbeat_fresh
     && session.health_status === 'healthy');
   const active = sessions.filter((session) =>
     session.display_state === 'active' || session.display_state === 'starting_or_degraded');
+  // Once the Site has an authority record, it is the operational selector.
+  // The session index remains an inventory and can contain legacy/stale
+  // duplicates; those must not turn the Site-agent projection ambiguous.
+  if (authority) {
+    const authoritySessionId = stringValue(authority.session_id);
+    const authorityIsLive = authority.state === 'starting'
+      || authority.state === 'active'
+      || authority.state === 'stopping';
+    const selected = authorityIsLive && authoritySessionId
+      ? healthy.find((session) => session.session_id === authoritySessionId)
+      : undefined;
+    if (selected) {
+      return {
+        state: 'running',
+        session_count: 1,
+        healthy_session_ids: [selected.session_id],
+        selected_session_id: selected.session_id,
+      };
+    }
+    if (active.length > 0 || authorityIsLive) {
+      return {
+        state: 'degraded',
+        // The Site authority is the canonical runtime inventory. During the
+        // short authority-to-session-index handoff window the authority may
+        // already be live while the session index still has no row. Count
+        // that authoritative live runtime so the wire shape remains valid
+        // and the console can show a truthful degraded/starting state rather
+        // than refusing the whole overview.
+        session_count: Math.max(active.length, authorityIsLive ? 1 : 0),
+        healthy_session_ids: [],
+        selected_session_id: null,
+      };
+    }
+  }
   const state = healthy.length > 1
     ? 'ambiguous'
     : healthy.length === 1
@@ -247,12 +326,57 @@ function workState(principals: PrincipalRuntimeSnapshot[], record: WorkspaceLaun
   };
 }
 
+const COMPACT_OPERATOR_SURFACE_KINDS = ['agent-web-ui', 'agent-cli', 'agent-tui'] as const;
+const COMPACT_OPERATOR_SURFACE_LABELS: Record<(typeof COMPACT_OPERATOR_SURFACE_KINDS)[number], string> = {
+  'agent-web-ui': 'Web UI',
+  'agent-cli': 'CLI',
+  'agent-tui': 'TUI',
+};
+
+function operatorSurfaces(
+  record: WorkspaceLaunchRecord,
+  runtime: OperatorSiteAgentRuntimeWireState,
+): {
+  default_kind: string;
+  choices: Array<{
+    kind: (typeof COMPACT_OPERATOR_SURFACE_KINDS)[number];
+    label: string;
+    status: 'available' | 'unavailable';
+    reason: string | null;
+  }>;
+} {
+  const runtimeHost = normalizeRuntimeAlias(record.runtime);
+  const runtimeSupports = new Set(operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND));
+  return {
+    default_kind: record.operator_surface,
+    choices: COMPACT_OPERATOR_SURFACE_KINDS.map((kind) => {
+      const admitted = runtimeHost === NARADA_AGENT_RUNTIME_SERVER_KIND && runtimeSupports.has(kind);
+      const attachable = runtime.state === 'stopped'
+        || (runtime.state === 'running' && kind === 'agent-web-ui');
+      const available = admitted && attachable;
+      return {
+        kind,
+        label: COMPACT_OPERATOR_SURFACE_LABELS[kind],
+        status: available ? 'available' : 'unavailable',
+        reason: available
+          ? null
+          : !admitted
+          ? 'This runtime host does not admit this operator surface.'
+          : runtime.state === 'running'
+            ? 'An existing session can only be attached from the Web UI here.'
+            : 'The agent does not have a single healthy session to attach.',
+      };
+    }),
+  };
+}
+
 function projectAgent(
   record: WorkspaceLaunchRecord,
   sessions: OperatorSessionWireRecord[],
   principals: PrincipalRuntimeSnapshot[],
+  authority: SessionAuthoritySnapshot | null,
 ): OperatorSiteAgentWireRecord {
-  const runtime = runtimeState(sessionsForAgent(sessions, record));
+  const runtime = runtimeState(sessionsForAgent(sessions, record), authority);
   const inspectReason = runtime.state === 'ambiguous'
     ? 'Choose a session from Agent Sessions.'
     : runtime.state !== 'running'
@@ -266,6 +390,7 @@ function projectAgent(
     admission_status: 'admitted',
     runtime,
     work: workState(principals, record),
+    operator_surfaces: operatorSurfaces(record, runtime),
     actions: {
       start: runtime.state === 'stopped',
       inspect: runtime.state === 'running',
@@ -284,6 +409,7 @@ export function createSiteAgentOverviewReadModel(
   const readLaunchRecords = dependencies.readLaunchRecords ?? readWorkspaceLaunchRecords;
   const readSiteMetadata = dependencies.readSiteMetadata ?? defaultReadSiteMetadata;
   const readPrincipalStates = dependencies.readPrincipalStates ?? defaultReadPrincipalStates;
+  const readSessionAuthority = dependencies.readSessionAuthority ?? defaultReadSessionAuthority;
   return {
     async read(): Promise<OperatorSiteAgentOverviewWireResponse> {
       const refusals: string[] = [];
@@ -347,24 +473,37 @@ export function createSiteAgentOverviewReadModel(
             return [];
           }),
         ]);
-        if (!metadata.site_kind || metadata.metadata_status === 'missing' || metadata.metadata_status === 'invalid' || metadata.metadata_status === 'unreadable') {
-          refusals.push(`site_metadata_${metadata.metadata_status ?? 'invalid'}:${first.site}`);
-          continue;
-        }
-        if (metadata.site_id.toLowerCase() !== first.site.toLowerCase()) {
-          refusals.push(`site_metadata_identity_mismatch:${first.site}:${metadata.site_id}`);
-          continue;
-        }
         const registrySite = registryBySite.get(key);
-        const kind = metadata.site_kind;
-        const agents = records
-          .map((record) => projectAgent(record, sessionEnvelope?.sessions ?? [], principals))
-          .sort((a, b) => a.agent_id.localeCompare(b.agent_id));
+        let kind: OperatorSiteKind;
+        let displayName: string;
+        let classificationSource: OperatorSiteAgentSiteWireRecord['classification_source'];
+        if (!metadata.site_kind || metadata.metadata_status === 'missing' || metadata.metadata_status === 'invalid' || metadata.metadata_status === 'unreadable') {
+          refusals.push(`site_metadata_fallback_${metadata.metadata_status ?? 'invalid'}:${first.site}`);
+          kind = 'site';
+          displayName = first.site;
+          classificationSource = 'fallback';
+        } else if (metadata.site_id.toLowerCase() !== first.site.toLowerCase()) {
+          refusals.push(`site_metadata_fallback_identity_mismatch:${first.site}:${metadata.site_id}`);
+          kind = siteKind(metadata.site_kind) ?? 'site';
+          displayName = metadata.display_name;
+          classificationSource = 'fallback';
+        } else {
+          kind = siteKind(metadata.site_kind) ?? 'site';
+          displayName = metadata.display_name;
+          classificationSource = 'declared';
+        }
+        const agents = (await Promise.all(records.map(async (record) => {
+          const authority = await readSessionAuthority(record).catch(() => {
+            refusals.push(`session_authority_read_failed:${record.site}:${record.agent_identity_ref.local_agent_id}`);
+            return null;
+          });
+          return projectAgent(record, sessionEnvelope?.sessions ?? [], principals, authority);
+        }))).sort((a, b) => a.agent_id.localeCompare(b.agent_id));
         sites.push({
           site_id: first.site,
-          display_name: metadata.display_name,
+          display_name: displayName,
           site_kind: kind,
-          classification_source: 'declared',
+          classification_source: classificationSource,
           group_id: groupId(kind),
           observation_status: registrySite?.observation_status ?? 'not_registered',
           agents,
@@ -383,20 +522,29 @@ export function createSiteAgentOverviewReadModel(
           site_kind: null,
           metadata_status: 'unreadable',
         }));
+        let kind: OperatorSiteKind;
+        let displayName: string;
+        let classificationSource: OperatorSiteAgentSiteWireRecord['classification_source'];
         if (!metadata.site_kind || metadata.metadata_status === 'missing' || metadata.metadata_status === 'invalid' || metadata.metadata_status === 'unreadable') {
-          refusals.push(`site_metadata_${metadata.metadata_status ?? 'invalid'}:${registrySite.site_id}`);
-          continue;
+          refusals.push(`site_metadata_fallback_${metadata.metadata_status ?? 'invalid'}:${registrySite.site_id}`);
+          kind = 'site';
+          displayName = registrySite.site_id;
+          classificationSource = 'registry_only';
+        } else if (metadata.site_id.toLowerCase() !== registrySite.site_id.toLowerCase()) {
+          refusals.push(`site_metadata_fallback_identity_mismatch:${registrySite.site_id}:${metadata.site_id}`);
+          kind = siteKind(metadata.site_kind) ?? 'site';
+          displayName = metadata.display_name;
+          classificationSource = 'registry_only';
+        } else {
+          kind = siteKind(metadata.site_kind) ?? 'site';
+          displayName = metadata.display_name;
+          classificationSource = 'registry_only';
         }
-        if (metadata.site_id.toLowerCase() !== registrySite.site_id.toLowerCase()) {
-          refusals.push(`site_metadata_identity_mismatch:${registrySite.site_id}:${metadata.site_id}`);
-          continue;
-        }
-        const kind = metadata.site_kind;
         sites.push({
           site_id: registrySite.site_id,
-          display_name: metadata.display_name,
+          display_name: displayName,
           site_kind: kind,
-          classification_source: 'registry_only',
+          classification_source: classificationSource,
           group_id: groupId(kind),
           observation_status: registrySite.observation_status,
           agents: [],
@@ -404,9 +552,11 @@ export function createSiteAgentOverviewReadModel(
       }
 
       const ordered = sites.sort((a, b) => a.display_name.localeCompare(b.display_name));
+      const fatalMetadataRefusal = (reason: string) =>
+        reason.startsWith('site_metadata_') && !reason.startsWith('site_metadata_fallback_');
       return {
         schema: 'narada.operator_console.site_agent_overview.v1',
-        status: refusals.some((reason) => reason.startsWith('site_metadata_')) ? 'refused' : 'success',
+        status: refusals.some(fatalMetadataRefusal) ? 'refused' : 'success',
         generated_at: new Date().toISOString(),
         groups: [
           {

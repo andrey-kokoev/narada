@@ -25,6 +25,14 @@ const overview = {
         admission_status: 'admitted',
         runtime: { state: 'stopped', session_count: 0, healthy_session_ids: [], selected_session_id: null },
         work: { state: 'available', detail: null, source: 'principal-runtime' },
+        operator_surfaces: {
+          default_kind: 'agent-web-ui',
+          choices: [
+            { kind: 'agent-web-ui', label: 'Web UI', status: 'available', reason: null },
+            { kind: 'agent-cli', label: 'CLI', status: 'available', reason: null },
+            { kind: 'agent-tui', label: 'TUI', status: 'available', reason: null },
+          ],
+        },
         actions: { start: true, inspect: false, inspect_reason: 'No healthy session is available.' },
       }],
     }],
@@ -45,6 +53,25 @@ test('site agents adapter accepts governed overview and launch contracts', async
   });
   assert.equal((await adapter.overview()).groups[0]?.sites[0]?.agents[0]?.agent_id, 'sonar.resident');
   assert.equal((await adapter.launch('sonar', 'sonar.resident')).session_id, 'session-1');
+});
+
+test('site agents transport carries the selected operator surface explicitly', async () => {
+  let requestBody: unknown = null;
+  const transport = createSiteAgentsTransport('/console/agents/api', async (_input, init) => {
+    requestBody = JSON.parse(String(init?.body));
+    return new Response(JSON.stringify({
+      schema: 'narada.operator_console.agent_launch.v1',
+      status: 'launched',
+      site_id: 'sonar',
+      agent_id: 'sonar.resident',
+      session_id: 'session-2',
+      reason: null,
+      operator_surface: 'agent-tui',
+      handoff: { kind: 'terminal', status: 'started', url: null, command: null, message: 'started' },
+    }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  });
+  await transport.launch('sonar', 'sonar.resident', 'agent-tui');
+  assert.deepEqual(requestBody, { site_id: 'sonar', agent_id: 'sonar.resident', operator_surface: 'agent-tui' });
 });
 
 test('site agents adapter refuses malformed authority projections', async () => {
@@ -69,7 +96,7 @@ test('site agents adapter refuses malformed launch diagnostics', async () => {
   await assert.rejects(() => adapter.launch('sonar', 'sonar.resident'), (error: unknown) => error instanceof SiteAgentsApiError && error.code === 'invalid_launch');
 });
 
-test('site agents adapter flags semantically invalid overview payloads', async () => {
+test('site agents adapter refuses semantically invalid overview payloads', async () => {
   const violating = {
     ...overview,
     groups: [{
@@ -86,9 +113,10 @@ test('site agents adapter flags semantically invalid overview payloads', async (
     }],
   };
   const adapter = createSiteAgentsAdapter({ overview: async () => violating, launch: async () => null });
-  const response = await adapter.overview();
-  assert.ok(response.refusals.some((entry) => entry.startsWith('invariant_violation:runtime_running_shape:')));
-  assert.ok(response.refusals.some((entry) => entry.startsWith('invariant_violation:action_state_mismatch:')));
+  await assert.rejects(
+    () => adapter.overview(),
+    (error: unknown) => error instanceof SiteAgentsApiError && error.code === 'invalid_overview',
+  );
 });
 
 test('site agents transport preserves structured launch diagnostics from HTTP 500', async () => {

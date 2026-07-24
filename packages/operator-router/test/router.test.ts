@@ -10,12 +10,16 @@ import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
 import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import {
   OPERATOR_ROUTER_IDENTITY,
+  OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,
+  OPERATOR_ROUTER_STATE_SCHEMA,
   OPERATOR_ROUTER_ROUTES_SCHEMA,
+  attachOperatorRouter,
   createOperatorRouterServer,
   ensureOperatorRouter,
   inspectOperatorRouterRouteSet,
   registerOperatorRouteSet,
   registerOperatorRoute,
+  readOperatorRouterAdminRoutes,
   reconstructOperatorRouteSet,
   unregisterOperatorRoute,
   projectRouteRegistration,
@@ -54,6 +58,15 @@ function requestStatusPath(baseUrl: string, requestPath: string, headers: Record
   });
 }
 
+async function waitForCondition(condition: () => Promise<boolean>, timeoutMs = 2_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (await condition()) return;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.fail(`condition_not_met_within_${timeoutMs}ms`);
+}
+
 function close(server: ReturnType<typeof createServer>): Promise<void> {
   return new Promise((resolve) => server.close(() => resolve()));
 }
@@ -84,6 +97,31 @@ function routeInput(targetUrl: string, healthUrl: string) {
     lease_ms: 60_000,
   };
 }
+
+test('admin route inventory falls back to the legacy state file for an older live router', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-legacy-admin-'));
+  const route = validateRouteRegistration(routeInput('http://127.0.0.1:1', 'http://127.0.0.1:1/health'));
+  await writeFile(join(stateRoot, 'routes.json'), JSON.stringify({
+    schema: OPERATOR_ROUTER_STATE_SCHEMA,
+    generation: 1,
+    routes: [route],
+  }), 'utf8');
+  try {
+    const inventory = await readOperatorRouterAdminRoutes({
+      url: 'http://127.0.0.1:1',
+      registration_token: 'legacy-token',
+      state_root: stateRoot,
+      fetch_fn: async () => new Response(JSON.stringify({ error: 'operator_router_admin_route_not_found' }), {
+        status: 404,
+        headers: { 'content-type': 'application/json' },
+      }),
+    });
+    assert.equal(inventory.schema, OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA);
+    assert.equal(inventory.routes[0]?.route_id, 'agent-session-demo');
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
 
 test('route admission requires loopback targets and non-PID process identity', () => {
   assert.throws(() => validateRouteRegistration({
@@ -174,6 +212,65 @@ test('router enforces admitted methods and bounded request bodies', async () => 
     assert.equal(accepted.status, 200);
     assert.equal(await accepted.text(), 'received:1234');
     assert.equal(observedBody, '1234');
+  } finally {
+    await router.stop();
+    await close(upstream);
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
+test('live route health failure returns 503 and recovers after upstream health returns', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-live-health-'));
+  let upstreamHealthy = true;
+  const upstream = createServer((req, res) => {
+    if (req.url === '/health') {
+      res.writeHead(upstreamHealthy ? 200 : 503);
+      res.end(upstreamHealthy ? 'healthy' : 'degraded');
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ status: 'overview' }));
+  });
+  const upstreamUrl = await listen(upstream);
+  const router = await createOperatorRouterServer({
+    host: '127.0.0.1',
+    port: 0,
+    state_root: stateRoot,
+    health_interval_ms: 20,
+  });
+  const route = {
+    route_id: 'operator-console',
+    route_class: 'operator-console' as const,
+    public_path: '/',
+    route_mode: 'prefix' as const,
+    target_url: upstreamUrl,
+    health_url: `${upstreamUrl}/health`,
+    owner_id: 'operator-console:live-health-test',
+    process_evidence: { instance_nonce: 'operatorconsolelivehealth123', pid: null, started_at: new Date().toISOString() },
+    methods: ['GET', 'HEAD'],
+    protocols: ['http'] as const,
+    lease_ms: 60_000,
+  };
+  try {
+    const routerUrl = await router.start();
+    await registerOperatorRoute({ url: routerUrl, registration_token: router.getRegistrationToken() }, route);
+    const overviewUrl = `${routerUrl}/console/agents/api/overview`;
+
+    assert.equal(await requestStatus(overviewUrl), 200);
+
+    upstreamHealthy = false;
+    await waitForCondition(async () => (await requestStatus(overviewUrl)) === 503);
+    const degradedRoutes = await (await fetch(`${routerUrl}/routes`)).json() as OperatorRouterRoutesResponse;
+    const degradedRoute = degradedRoutes.routes.find((candidate) => candidate.route_id === route.route_id);
+    assert.equal(degradedRoute?.state, 'degraded');
+    assert.equal(degradedRoute?.last_health_error, 'health_status:503');
+
+    upstreamHealthy = true;
+    await waitForCondition(async () => (await requestStatus(overviewUrl)) === 200);
+    const recoveredRoutes = await (await fetch(`${routerUrl}/routes`)).json() as OperatorRouterRoutesResponse;
+    const recoveredRoute = recoveredRoutes.routes.find((candidate) => candidate.route_id === route.route_id);
+    assert.equal(recoveredRoute?.state, 'healthy');
+    assert.equal(recoveredRoute?.last_health_error, null);
   } finally {
     await router.stop();
     await close(upstream);
@@ -396,6 +493,16 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     const admin = { url: routerUrl, registration_token: router.getRegistrationToken() };
     const registered = await registerOperatorRoute(admin, routeInput(upstreamUrl, `${upstreamUrl}/health`));
     assert.equal(registered.state, 'healthy');
+    const attached = await attachOperatorRouter({
+      host: '127.0.0.1',
+      port: Number.parseInt(new URL(routerUrl).port, 10),
+      state_root: stateRoot,
+    });
+    assert.equal(attached?.ownership, 'attached');
+    assert.equal(attached?.child, null);
+    const adminRoutes = await readOperatorRouterAdminRoutes(admin);
+    assert.equal(adminRoutes.schema, OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA);
+    assert.equal(adminRoutes.routes[0]?.process_evidence.instance_nonce, 'agentnonce123');
     const health = await fetch(`${routerUrl}/health`);
     assert.equal((await health.json()).version, '0.1.0');
 

@@ -272,6 +272,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     registryReadModel,
     agentSessions,
   });
+  const siteAgentLaunch = config.siteAgentLaunch ?? createSiteAgentLaunchGateway({ overview: siteAgentOverview });
 
   const routeContext = {
     registry,
@@ -281,7 +282,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     registryMutationGateway: config.registryMutationGateway ?? createRegistryMutationGateway(),
     agentSessions,
     siteAgentOverview,
-    siteAgentLaunch: config.siteAgentLaunch ?? createSiteAgentLaunchGateway({ overview: siteAgentOverview }),
+    siteAgentLaunch,
     siteAgentPending: config.siteAgentPending ?? createSiteAgentPendingTracker(),
     workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,
@@ -491,16 +492,20 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     },
 
     async stop(): Promise<void> {
-      registry.close();
-      if (server) {
-        await new Promise<void>((resolve) => {
-          server!.close(() => {
-            isRunning = false;
-            serverUrl = null;
-            server = null;
-            resolve();
+      try {
+        await siteAgentLaunch.close?.();
+      } finally {
+        registry.close();
+        if (server) {
+          await new Promise<void>((resolve) => {
+            server!.close(() => {
+              isRunning = false;
+              serverUrl = null;
+              server = null;
+              resolve();
+            });
           });
-        });
+        }
       }
     },
 

@@ -4,7 +4,7 @@ export type SiteAgentsFetch = (input: string, init?: RequestInit) => Promise<Res
 
 export interface SiteAgentsTransport {
   overview(): Promise<unknown>;
-  launch(siteId: string, agentId: string): Promise<unknown>;
+  launch(siteId: string, agentId: string, operatorSurface?: string): Promise<unknown>;
   pending(): Promise<unknown>;
 }
 
@@ -48,11 +48,15 @@ export function createSiteAgentsTransport(
       if (!response.ok) throw new SiteAgentsTransportError(response.status, `Sites and Agents overview failed with HTTP ${response.status}.`);
       return payload;
     },
-    async launch(siteId, agentId): Promise<unknown> {
+    async launch(siteId, agentId, operatorSurface): Promise<unknown> {
       const response = await fetchLike(`${basePath}/launch`, {
         method: 'POST',
         headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
-        body: JSON.stringify({ site_id: siteId, agent_id: agentId }),
+        body: JSON.stringify({
+          site_id: siteId,
+          agent_id: agentId,
+          ...(operatorSurface ? { operator_surface: operatorSurface } : {}),
+        }),
       });
       const payload = await readJson(response);
       if (!response.ok && response.status !== 409) {

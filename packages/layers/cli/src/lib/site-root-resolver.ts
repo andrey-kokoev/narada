@@ -109,6 +109,8 @@ function siteIdFromSiteRoot(siteRoot: string | undefined): string | null {
   if (!siteRoot) return null;
   const resolvedRoot = resolve(siteRoot);
   const configPaths = [
+    join(resolvedRoot, 'site.json'),
+    join(resolvedRoot, '.narada', 'site.json'),
     join(resolvedRoot, 'config.json'),
     join(resolvedRoot, '.narada', 'config.json'),
   ];
@@ -152,10 +154,16 @@ export interface SiteRootOptions {
 
 export async function resolveSiteRootForCli(options: SiteRootOptions): Promise<ResolvedSiteRoot> {
   if (options.siteRoot) {
+    const siteRoot = resolve(options.siteRoot);
+    const launchRegistrySite = listLaunchRegistrySites(options.launchRegistryPath)
+      .find((candidate) => candidate.site_root.toLowerCase() === siteRoot.toLowerCase());
+    const localRegistrySite = launchRegistrySite
+      ? null
+      : (await listLocalRegistrySites()).find((candidate) => candidate.site_root.toLowerCase() === siteRoot.toLowerCase());
     return {
-      site_root: resolve(options.siteRoot),
+      site_root: siteRoot,
       source: 'explicit_site_root',
-      site_id: null,
+      site_id: siteIdFromSiteRoot(siteRoot) ?? launchRegistrySite?.site_id ?? localRegistrySite?.site_id ?? null,
     };
   }
   if (!options.site) throw new Error('site_required: pass --site <site-id> or --site-root <path>');

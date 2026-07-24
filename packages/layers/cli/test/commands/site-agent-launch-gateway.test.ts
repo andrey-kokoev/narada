@@ -7,6 +7,7 @@ import { buildAgentIdentityRefV2 } from '@narada2/agent-identity';
 import { createSiteAgentLaunchAdmission } from '../../src/commands/site-agent-launch-admission.js';
 import { createSiteAgentLaunchDiagnostics } from '../../src/commands/site-agent-launch-diagnostics.js';
 import { createSiteAgentLaunchGateway } from '../../src/commands/site-agent-launch-gateway.js';
+import { WorkspaceLaunchContractError } from '../../src/commands/workspace-launch-contracts.js';
 
 function overview(state: 'running' | 'stopped' | 'degraded', sessionId: string | null = null) {
   return {
@@ -37,6 +38,14 @@ function overview(state: 'running' | 'stopped' | 'degraded', sessionId: string |
               selected_session_id: sessionId,
             },
             work: { state: 'unavailable', detail: null, source: 'unavailable' as const },
+            operator_surfaces: {
+              default_kind: 'agent-web-ui',
+              choices: [
+                { kind: 'agent-web-ui' as const, label: 'Web UI', status: 'available' as const, reason: null },
+                { kind: 'agent-cli' as const, label: 'CLI', status: 'available' as const, reason: null },
+                { kind: 'agent-tui' as const, label: 'TUI', status: 'available' as const, reason: null },
+              ],
+            },
             actions: { start: state === 'stopped', inspect: state === 'running', inspect_reason: null },
           }],
         }],
@@ -81,9 +90,11 @@ function testDiagnostics() {
 describe('site-agent launch gateway', () => {
   it('reuses one healthy session without launching', async () => {
     const launchCommand = vi.fn();
+    const attachWebUiCommand = vi.fn(async () => ({ exitCode: 0, result: {} }));
     const gateway = createSiteAgentLaunchGateway({
       overview: overview('running', 'session-1'),
       launchCommand,
+      attachWebUiCommand: attachWebUiCommand as never,
       launchAdmission: testAdmission(),
       diagnostics: testDiagnostics(),
     });
@@ -92,6 +103,36 @@ describe('site-agent launch gateway', () => {
       session_id: 'session-1',
     });
     expect(launchCommand).not.toHaveBeenCalled();
+    expect(attachWebUiCommand).toHaveBeenCalledWith(expect.objectContaining({
+      session: 'session-1',
+      agent: 'sonar.resident',
+      site: 'sonar',
+      format: 'json',
+      open: false,
+    }), expect.anything());
+  });
+
+  it('fails explicitly when a healthy runtime cannot be attached to the Web UI', async () => {
+    const attachWebUiCommand = vi.fn(async () => ({
+      exitCode: 1,
+      result: { reason: 'health_unavailable', message: 'runtime health is unavailable' },
+    }));
+    const gateway = createSiteAgentLaunchGateway({
+      overview: overview('running', 'session-1'),
+      attachWebUiCommand: attachWebUiCommand as never,
+      launchAdmission: testAdmission(),
+      diagnostics: testDiagnostics(),
+    });
+    expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
+      status: 'failed',
+      session_id: 'session-1',
+      reason: 'health_unavailable',
+      failure: {
+        phase: 'web_ui_attach',
+        code: 'health_unavailable',
+        message: 'runtime health is unavailable',
+      },
+    });
   });
 
   it('launches one stopped admitted agent through workspace launch', async () => {
@@ -99,23 +140,77 @@ describe('site-agent launch gateway', () => {
       exitCode: 0,
       result: { attachment: { sessions: [{ session_id: 'session-2' }] } },
     }));
+    const attachWebUiCommand = vi.fn(async () => ({ exitCode: 0, result: {} }));
     const gateway = createSiteAgentLaunchGateway({
       overview: overview('stopped'),
       readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
       launchCommand: launchCommand as never,
+      attachWebUiCommand: attachWebUiCommand as never,
       diagnostics: testDiagnostics(),
-      diagnostics: testDiagnostics(),
       launchAdmission: testAdmission(),
-      launchAdmission: testAdmission(),
-      launchAdmission: testAdmission(),
-      launchAdmission: testAdmission(),
-      diagnostics: testDiagnostics(),
     });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
       status: 'launched',
       session_id: 'session-2',
     });
     expect(launchCommand).toHaveBeenCalledTimes(1);
+    expect(launchCommand.mock.calls[0]?.[0]).toMatchObject({
+      agent: ['resident'],
+      configPath: [launchRecord.config_path],
+      format: 'json',
+      operatorSurface: 'agent-web-ui',
+    });
+  });
+
+  it('forwards an explicitly selected compact operator surface', async () => {
+    const launchCommand = vi.fn(async () => ({
+      exitCode: 0,
+      result: { attachment: { sessions: [{ session_id: 'session-tui' }] } },
+    }));
+    const gateway = createSiteAgentLaunchGateway({
+      overview: overview('stopped'),
+      readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
+      launchCommand: launchCommand as never,
+      launchAdmission: testAdmission(),
+      diagnostics: testDiagnostics(),
+    });
+    expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident', operatorSurface: 'agent-tui' })).toMatchObject({
+      status: 'launched',
+      operator_surface: 'agent-tui',
+      handoff: { kind: 'terminal', status: 'started' },
+    });
+    expect(launchCommand.mock.calls[0]?.[0]).toMatchObject({ operatorSurface: 'agent-tui' });
+  });
+
+  it('refuses a terminal surface for an existing session instead of creating a duplicate', async () => {
+    const launchCommand = vi.fn();
+    const runningOverview = overview('running', 'session-1');
+    runningOverview.read = async () => {
+      const result = await overview('running', 'session-1').read();
+      result.groups[0]!.sites[0]!.agents[0]!.operator_surfaces.choices = [
+        { kind: 'agent-web-ui', label: 'Web UI', status: 'available', reason: null },
+        { kind: 'agent-cli', label: 'CLI', status: 'unavailable', reason: 'Existing sessions are not terminal-attachable.' },
+        { kind: 'agent-tui', label: 'TUI', status: 'unavailable', reason: 'Existing sessions are not terminal-attachable.' },
+      ];
+      return result;
+    };
+    const gateway = createSiteAgentLaunchGateway({
+      overview: runningOverview,
+      launchCommand,
+      launchAdmission: testAdmission(),
+      diagnostics: testDiagnostics(),
+    });
+    expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident', operatorSurface: 'agent-cli' })).toMatchObject({
+      status: 'refused',
+      reason: 'operator_surface_not_available',
+      operator_surface: 'agent-cli',
+      handoff: {
+        kind: 'terminal',
+        status: 'refused',
+        message: 'Existing sessions are not terminal-attachable.',
+      },
+    });
+    expect(launchCommand).not.toHaveBeenCalled();
   });
 
   it('refuses degraded or unadmitted agents before mutation', async () => {
@@ -165,10 +260,12 @@ describe('site-agent launch gateway', () => {
       exitCode: 0,
       result: { attachment: { sessions: [{ session_id: 'session-2' }] } },
     }));
+    const attachWebUiCommand = vi.fn(async () => ({ exitCode: 0, result: {} }));
     const gateway = createSiteAgentLaunchGateway({
       overview: dynamicOverview,
       readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
       launchCommand: launchCommand as never,
+      attachWebUiCommand: attachWebUiCommand as never,
     });
     const request = { siteId: 'sonar', agentId: 'sonar.resident' };
     expect(await gateway.launch(request)).toMatchObject({ status: 'launched', session_id: 'session-2' });
@@ -176,6 +273,7 @@ describe('site-agent launch gateway', () => {
     sessionId = 'session-2';
     expect(await gateway.launch(request)).toMatchObject({ status: 'reused', session_id: 'session-2' });
     expect(launchCommand).toHaveBeenCalledTimes(1);
+    expect(attachWebUiCommand).toHaveBeenCalledTimes(1);
   });
 
   it('releases the admission after a failed launch so a retry can succeed', async () => {
@@ -267,5 +365,39 @@ describe('site-agent launch gateway', () => {
         failure: { phase: entry.phase, diagnostic_ref: expect.any(String) },
       });
     }
+  });
+
+  it('preserves the workspace failure artifact path when execution throws', async () => {
+    const diagnostics = testDiagnostics();
+    let launchOptions: Record<string, unknown> | null = null;
+    const gateway = createSiteAgentLaunchGateway({
+      overview: overview('stopped'),
+      readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
+      launchCommand: async (options) => {
+        launchOptions = options as Record<string, unknown>;
+        throw new WorkspaceLaunchContractError(
+          'workspace_launch_projection_start_failed',
+          'projection failed',
+          'Inspect the launch artifact and retry.',
+          'D:/runtime/workspace-launch-result.json',
+        );
+      },
+      diagnostics,
+    });
+
+    const result = await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' });
+    expect(typeof launchOptions?.resultPath).toBe('string');
+    expect(launchOptions?.resultPath).toMatch(/\.narada[\\/]runtime[\\/]operator-console[\\/]workspace-launch-results[\\/]/);
+    expect(result).toMatchObject({
+      status: 'failed',
+      reason: 'workspace_launch_exception',
+      failure: { phase: 'workspace_launch', diagnostic_ref: expect.any(String) },
+    });
+    const artifactPath = result.failure?.diagnostic_ref;
+    if (!artifactPath) throw new Error('expected persisted launch failure artifact');
+    const artifact = JSON.parse(await readFile(artifactPath, 'utf8')) as Record<string, unknown>;
+    expect(artifact).toMatchObject({
+      context: { workspace_result_path: 'D:/runtime/workspace-launch-result.json' },
+    });
   });
 });

@@ -7,6 +7,7 @@ export const ADMITTED_RUNTIME_SUBSTRATE_KINDS: readonly string[];
 export const ADMITTED_OPERATOR_SURFACE_KINDS: readonly string[];
 export const ADMITTED_RUNTIME_IMPLEMENTATION_KINDS: readonly string[];
 export const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS: readonly string[];
+export const INTELLIGENCE_KERNEL_KINDS: readonly string[];
 export const OPERATOR_SURFACE_RUNTIME_SELECTION_SCHEMA: 'narada.operator_surface_runtime_selection.v1';
 export const LEGACY_CARRIER_RUNTIME_SELECTION_SCHEMA: 'narada.carrier_runtime_selection.v1';
 export const OPERATOR_SURFACE_RUNTIME_COMPATIBILITY_SCHEMA: 'narada.operator_surface_runtime_compatibility.v1';
@@ -54,6 +55,7 @@ export interface RuntimeSelectionOptions {
   runtimeContractSchema?: string;
   admittedCarrierKinds?: readonly string[];
   admittedOperatorSurfaceKinds?: readonly string[];
+  intelligenceKernelValue?: string | null;
 }
 
 export interface AcceptedCarrierRuntimeSelection {
@@ -72,6 +74,8 @@ export interface AcceptedCarrierRuntimeSelection {
   operator_surface_source_field: 'operator_surface' | 'carrier' | 'derived';
   carrier_source_field: 'carrier' | 'operator_surface' | 'derived';
   runtime_source_field: 'runtime' | 'derived';
+  intelligence_kernel_kind: string | null;
+  intelligence_kernel_source_field: 'intelligence_kernel' | 'derived' | 'not_applicable';
 }
 
 export interface RefusedCarrierRuntimeSelection {

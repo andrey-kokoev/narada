@@ -3,11 +3,27 @@ import assert from 'node:assert/strict';
 import {
   buildFailureProjectionDocument,
   buildPendingProjectionDocument,
+  decideAgentWebUiHandoff,
   PENDING_PROJECTION_BUDGET_MS,
   PENDING_PROJECTION_POLL_INTERVAL_MS,
   scopedAgentSessionsPath,
   sessionRoutePollUrl,
 } from '../src/site-agents/projection-handoff.ts';
+
+test('Web UI handoff waits instead of closing when a running session route is not indexed yet', () => {
+  assert.deepEqual(
+    decideAgentWebUiHandoff('carrier-1', null),
+    { kind: 'pending', sessionId: 'carrier-1' },
+  );
+  assert.deepEqual(
+    decideAgentWebUiHandoff('carrier-1', '/sessions/carrier-1'),
+    { kind: 'ready', url: '/sessions/carrier-1' },
+  );
+  assert.deepEqual(
+    decideAgentWebUiHandoff(null, null),
+    { kind: 'unavailable', reason: 'No NARS session is available for Web UI handoff.' },
+  );
+});
 
 test('session route poll url carries site, agent, and optional session identity', () => {
   assert.equal(

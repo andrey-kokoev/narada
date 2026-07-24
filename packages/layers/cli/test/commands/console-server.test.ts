@@ -1066,10 +1066,15 @@ describe('console server', () => {
       const agentLaunch = await httpPost(`${url}/console/agents/api/launch`, {
         site_id: 'sonar',
         agent_id: 'sonar.resident',
+        operator_surface: 'agent-tui',
       });
       expect(agentLaunch.status).toBe(200);
       expect((agentLaunch.body as { session_id: string }).session_id).toBe('session-new');
-      expect(siteAgentLaunch.launch).toHaveBeenCalledWith({ siteId: 'sonar', agentId: 'sonar.resident' });
+      expect(siteAgentLaunch.launch).toHaveBeenCalledWith({
+        siteId: 'sonar',
+        agentId: 'sonar.resident',
+        operatorSurface: 'agent-tui',
+      });
 
       const failedAgentLaunch = await httpPost(`${url}/console/agents/api/launch`, {
         site_id: 'sonar',
@@ -1181,6 +1186,14 @@ describe('console server', () => {
                 admission_status: 'admitted' as const,
                 runtime: { state: 'running' as const, session_count: 0, healthy_session_ids: [], selected_session_id: null },
                 work: { state: 'unavailable', detail: null, source: 'unavailable' as const },
+                operator_surfaces: {
+                  default_kind: 'agent-web-ui',
+                  choices: [
+                    { kind: 'agent-web-ui' as const, label: 'Web UI', status: 'available' as const, reason: null },
+                    { kind: 'agent-cli' as const, label: 'CLI', status: 'available' as const, reason: null },
+                    { kind: 'agent-tui' as const, label: 'TUI', status: 'available' as const, reason: null },
+                  ],
+                },
                 actions: { start: true, inspect: false, inspect_reason: null },
               }],
             }],

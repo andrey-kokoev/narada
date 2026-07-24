@@ -12,10 +12,42 @@ import {
   createObservationFactory,
   createControlClientFactory,
 } from '../lib/console-core.js';
+import { stopOperatorConsoleProjection } from './console-projection-lifecycle.js';
+import { startOperatorConsoleOverlay } from '@narada2/operator-console-overlay';
 
 export interface ConsoleOptions {
   format?: string;
   verbose?: boolean;
+}
+
+export interface ConsoleProjectionOptions extends ConsoleOptions {
+  host?: string;
+  port?: number;
+  state_root?: string;
+}
+
+export interface ConsoleOverlayOptions extends ConsoleOptions {
+  url?: string;
+  title?: string;
+  state_root?: string;
+  visibility_policy?: 'always' | 'windows-terminal';
+  refresh_seconds?: number;
+}
+
+export async function consoleOverlayCommand(
+  options: ConsoleOverlayOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const status = await startOperatorConsoleOverlay({
+    url: options.url,
+    title: options.title,
+    stateRoot: options.state_root,
+    visibilityPolicy: options.visibility_policy,
+    refreshSeconds: options.refresh_seconds,
+  });
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  if (fmt.getFormat() === 'human') fmt.message('Operator Console overlay started.', 'success');
+  return { exitCode: ExitCode.SUCCESS, result: status };
 }
 
 export async function consoleStatusCommand(
@@ -66,6 +98,20 @@ export async function consoleStatusCommand(
   } finally {
     registry.close();
   }
+}
+
+export async function consoleStopCommand(
+  options: ConsoleProjectionOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const stopped = await stopOperatorConsoleProjection({
+    host: options.host,
+    port: options.port,
+    state_root: options.state_root,
+  });
+  if (fmt.getFormat() === 'human') fmt.message(stopped.detail, stopped.status === 'not_running' ? 'info' : 'success');
+  return { exitCode: ExitCode.SUCCESS, result: { outcome: 'success', ...stopped } };
 }
 
 export async function consoleAttentionCommand(

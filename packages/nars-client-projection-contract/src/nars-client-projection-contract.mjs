@@ -143,6 +143,18 @@ export const NARS_CLIENT_EVENT_LABELS = Object.freeze({
   user_message: 'Operator',
   tool_call: 'Tool call',
   tool_result: 'Tool result',
+  carrier_tool_requested: 'Tool call',
+  carrier_tool_completed: 'Tool result',
+  tool_execution_state_transition: 'Tool execution state',
+  tool_execution_completed: 'Tool execution complete',
+  tool_execution_refused: 'Tool execution refused',
+  tool_admitted: 'Tool admitted',
+  tool_refused: 'Tool refused',
+  turn_lifecycle_transition: 'Turn state',
+  carrier_turn_started: 'Turn started',
+  carrier_turn_completed: 'Turn complete',
+  carrier_turn_failed: 'Turn failed',
+  carrier_turn_interrupted: 'Turn interrupted',
   session_started: 'Session started',
   session_closed: 'Session closed',
   turn_started: 'Turn started',
@@ -1014,7 +1026,12 @@ export function classifyNarsClientEventProjection(projection) {
   if (kind === 'runtime_projection_failure' || kind === 'runtime_control_input_bridge_error' || kind === 'runtime_intelligence_reconfiguration' || kind === 'intelligence_runtime_reconfiguration_state_transition') return 'diagnostics';
   if (kind === 'web_ui_input_ack_timeout' || kind === 'web_ui_input_transport_failed' || kind === 'web_ui_input_ack_ignored' || kind === 'web_ui_input_correlation_ambiguous' || kind === 'web_ui_session_correlation_mismatch') return 'conversation';
   if (kind === 'operator_input_pending_restored' || kind === 'operator_input_pending_expired' || kind === 'operator_input_discarded' || kind === 'operator_input_reviewed' || kind === 'operator_input_retried' || kind === 'operator_input_late_acknowledged') return 'diagnostics';
-  if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed') return 'operations';
+  if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed'
+    || kind === 'carrier_tool_requested' || kind === 'carrier_tool_completed'
+    || kind === 'tool_execution_state_transition' || kind === 'tool_execution_completed'
+    || kind === 'tool_execution_refused' || kind === 'tool_admitted' || kind === 'tool_refused'
+    || kind === 'turn_lifecycle_transition' || kind === 'carrier_turn_started'
+    || kind === 'carrier_turn_completed' || kind === 'carrier_turn_failed' || kind === 'carrier_turn_interrupted') return 'operations';
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
   if (kind === 'session_control_accepted' || kind === 'session_control_response' || kind === 'session_control_rejected' || kind === 'runtime_request_state_transition' || kind === 'conversation_enqueue_requested' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_event_completed' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
   if (kind === 'session_health') return 'diagnostics';
@@ -1052,7 +1069,14 @@ export function shouldProjectNarsClientEvent(message, options = {}) {
 function eventTone(kind, event = null) {
   if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'provider_agent_message') return NARS_CLIENT_EVENT_TONES.assistant;
   if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
-  if (kind === 'tool_call' || kind === 'tool_result') return NARS_CLIENT_EVENT_TONES.tool;
+  if (kind === 'tool_call' || kind === 'tool_result' || kind === 'carrier_tool_requested'
+    || kind === 'carrier_tool_completed' || kind === 'tool_execution_state_transition'
+    || kind === 'tool_execution_completed' || kind === 'tool_execution_refused'
+    || kind === 'tool_admitted' || kind === 'tool_refused') {
+    return ['refused', 'failed', 'error'].includes(String(event?.status ?? event?.execution_state ?? '').trim().toLowerCase())
+      ? NARS_CLIENT_EVENT_TONES.error
+      : NARS_CLIENT_EVENT_TONES.tool;
+  }
   if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'session_control_rejected') return NARS_CLIENT_EVENT_TONES.error;
   if (kind === 'session_control_accepted' || kind === 'session_control_response') return NARS_CLIENT_EVENT_TONES.status;
@@ -1075,8 +1099,14 @@ function eventSummary(event, kind) {
   if (kind === 'assistant_message') return event.content ?? event.message ?? 'assistant message';
   if (kind === 'provider_agent_message') return event.provider_event?.item?.text ?? event.event?.item?.text ?? 'provider agent message';
   if (kind === 'user_message') return event.content ?? event.message ?? 'operator message';
-  if (kind === 'tool_call') return event.tool_name ?? event.tool ?? event.name ?? 'tool call';
-  if (kind === 'tool_result') return `${event.tool_name ?? event.tool ?? event.name ?? 'tool result'}${event.status ? ` ${event.status}` : ''}`;
+  if (kind === 'tool_call' || kind === 'carrier_tool_requested') return toolName(event, 'tool call');
+  if (kind === 'tool_result' || kind === 'carrier_tool_completed') return `${toolName(event, 'tool result')}${event.status ? ` ${event.status}` : ''}`;
+  if (kind === 'tool_execution_state_transition') return `${toolName(event, 'tool execution')} ${event.execution_state ?? event.state ?? 'unknown'}`;
+  if (kind === 'tool_execution_completed') return `${toolName(event, 'tool execution')} ${event.execution_state ?? event.status ?? 'completed'}`;
+  if (kind === 'tool_execution_refused') return `${toolName(event, 'tool execution')} refused${event.reason ? ` · ${event.reason}` : ''}`;
+  if (kind === 'tool_admitted') return `${toolName(event, 'tool')} admitted`;
+  if (kind === 'tool_refused') return `${toolName(event, 'tool')} refused${event.reason ? ` · ${event.reason}` : ''}`;
+  if (kind === 'turn_lifecycle_transition') return `${event.turn_state ?? event.terminal_state ?? 'turn state'}`;
   if (kind === 'session_started') return `${eventAgentDisplay(event)} / ${event.session_id ?? 'session'}`;
   if (kind === 'authority_session_revoked') return event.code ?? 'session_revoked';
   if (kind === 'projection_revoked') return event.code ?? 'projection_revoked';
@@ -1104,6 +1134,10 @@ function eventSummary(event, kind) {
   if (typeof event?.message === 'string') return event.message;
   if (typeof event?.content === 'string') return event.content;
   return '';
+}
+
+function toolName(event, fallback) {
+  return event?.tool_name ?? event?.tool ?? event?.name ?? fallback;
 }
 
 function errorSummary(event) {
@@ -1355,6 +1389,14 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
       attach_template: 'agent-tui --attach <event_endpoint>',
       required_endpoints: Object.freeze(['event_endpoint']),
     }),
+    agent_pi_tui: Object.freeze({
+      id: 'agent_pi_tui',
+      package: '@narada2/agent-pi-tui',
+      bin: 'narada-agent-pi-tui',
+      attach_template: 'narada-agent-pi-tui --attach <event_endpoint>',
+      required_endpoints: Object.freeze(['event_endpoint']),
+      admitted_methods: AGENT_WEB_UI_NARS_METHOD_LIST,
+    }),
     agent_web_ui: Object.freeze({
       id: 'agent_web_ui',
       package: '@narada2/agent-web-ui',
@@ -1375,6 +1417,7 @@ export function buildNarsAttachCommands({ eventEndpoint = '<session_started.even
     registry_schema: NARS_CLIENT_PROJECTION_REGISTRY.schema,
     agent_cli: `narada-agent-cli --attach ${event}`,
     agent_tui: `agent-tui --attach ${event}`,
+    agent_pi_tui: `narada-agent-pi-tui --attach ${event}`,
     agent_web_ui: `narada-agent-web-ui --event-endpoint ${event}${agentWebUiHealth}`,
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"page_size":20}}',
     operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
@@ -1382,3 +1425,73 @@ export function buildNarsAttachCommands({ eventEndpoint = '<session_started.even
     slash_command_protocol: '{"id":"command-1","method":"session.command.execute","params":{"command":"/status","value":""}}',
   };
 }
+
+// Representation-neutral fixtures shared by client projections. These are
+// intentionally event/protocol records rather than renderer snapshots so each
+// surface can assert semantic equivalence without sharing presentation code.
+export const NARS_CLIENT_CONFORMANCE_FIXTURES = Object.freeze({
+  schema: 'narada.nars.client_conformance_fixtures.v1',
+  scenarios: Object.freeze([
+    'initial_attach',
+    'bounded_replay',
+    'replay_live_overlap',
+    'ordinary_user_input',
+    'queued_input',
+    'steering_delivery',
+    'assistant_completion',
+    'assistant_streaming',
+    'tool_request',
+    'tool_admitted',
+    'tool_refused',
+    'tool_execution',
+    'tool_result',
+    'reconciliation',
+    'runtime_health_degradation',
+    'provider_failure',
+    'cancellation',
+    'recovery_recommendation',
+    'artifact_registration',
+    'reconnect',
+    'duplicate_event',
+    'intelligence_reconfiguration',
+    'session_close',
+    'unknown_slash_command',
+    'unsupported_command',
+    'operator_controlled_scroll',
+  ]),
+  canonical_events: Object.freeze([
+    { event: 'session_started', event_id: 'fixture-session-started', event_sequence: 1, session_id: 'fixture-session' },
+    { event: 'user_message', event_id: 'fixture-user-1', event_sequence: 2, request_id: 'fixture-request-1', content: 'hello' },
+    { event: 'assistant_message_stream', event_id: 'fixture-assistant-stream-1', event_sequence: 3, request_id: 'fixture-turn-1', content: 'hel', done: false },
+    { event: 'assistant_message_stream', event_id: 'fixture-assistant-stream-2', event_sequence: 4, request_id: 'fixture-turn-1', content: 'hello', done: true },
+    { event: 'assistant_message', event_id: 'fixture-assistant-1', event_sequence: 5, turn_id: 'fixture-turn-1', content: 'hello back' },
+    { event: 'turn_complete', event_id: 'fixture-turn-complete-1', event_sequence: 6, turn_id: 'fixture-turn-1' },
+    { event: 'tool_call', event_id: 'fixture-tool-call-1', event_sequence: 7, request_id: 'fixture-tool-1', tool_name: 'fixture.read', status: 'requested' },
+    { event: 'tool_admitted', event_id: 'fixture-tool-admitted-1', event_sequence: 8, request_id: 'fixture-tool-1', status: 'admitted' },
+    { event: 'tool_execution', event_id: 'fixture-tool-execution-1', event_sequence: 9, request_id: 'fixture-tool-1', status: 'running' },
+    { event: 'tool_result', event_id: 'fixture-tool-result-1', event_sequence: 10, request_id: 'fixture-tool-1', status: 'completed', artifact_id: 'fixture-artifact-1' },
+    { event: 'session_artifact_registered', event_id: 'fixture-artifact-registered-1', event_sequence: 11, artifact_id: 'fixture-artifact-1', artifact_kind: 'text', title: 'Fixture artifact' },
+    { event: 'runtime_request_state_transition', event_id: 'fixture-request-state-1', event_sequence: 12, request_id: 'fixture-request-1', request_state: 'completed' },
+    { event: 'session_health', event_id: 'fixture-health-1', event_sequence: 13, status: 'degraded', provider: 'fixture-provider', model: 'fixture-model', thinking: 'medium', usage: { input_tokens: 10, output_tokens: 5 } },
+    { event: 'carrier_diagnostic_recorded', event_id: 'fixture-provider-failure-1', event_sequence: 14, status: 'failed', message: 'provider failure' },
+    { event: 'tool_refused', event_id: 'fixture-tool-refused-1', event_sequence: 15, request_id: 'fixture-tool-refused', status: 'refused', reason: 'not admitted' },
+    { event: 'session_recovery', event_id: 'fixture-recovery-1', event_sequence: 16, status: 'recommended', recommendation: 'reconnect' },
+    { event: 'input_queued_for_turn_boundary', event_id: 'fixture-input-queued-1', event_sequence: 17, request_id: 'fixture-request-2', idempotency_key: 'fixture-input-2', status: 'queued' },
+    { event: 'input_admitted_to_turn', event_id: 'fixture-input-admitted-1', event_sequence: 18, request_id: 'fixture-request-2', idempotency_key: 'fixture-input-2', status: 'admitted' },
+    { event: 'input_completed', event_id: 'fixture-input-completed-1', event_sequence: 19, request_id: 'fixture-request-2', idempotency_key: 'fixture-input-2', status: 'completed' },
+    { event: 'session_cancelled', event_id: 'fixture-cancelled-1', event_sequence: 20, request_id: 'fixture-turn-2', status: 'cancelled' },
+    { event: 'runtime_intelligence_reconfiguration', event_id: 'fixture-reconfigure-1', event_sequence: 21, request_id: 'fixture-reconfigure-request-1', status: 'completed', model: 'fixture-model-2' },
+    { event: 'session_closed', event_id: 'fixture-session-closed', event_sequence: 22, reason: 'operator_requested' },
+  ]),
+  protocol_frames: Object.freeze({
+    ordinary_input: Object.freeze({ id: 'fixture-frame-submit', method: 'session.submit', params: { content: 'hello', source: 'manual_operator', idempotency_key: 'fixture-input-1' } }),
+    steering_input: Object.freeze({ id: 'fixture-frame-steer', method: 'session.submit', params: { content: 'queue this', source: 'operator_steering', delivery_mode: 'admit_after_active_turn', active_turn_id: 'fixture-turn-1', idempotency_key: 'fixture-input-2' } }),
+    subscribe: Object.freeze({ id: 'fixture-frame-subscribe', method: 'session.events.subscribe', params: { include_replay: true, page_size: 20, since_sequence: 4 } }),
+    read: Object.freeze({ id: 'fixture-frame-read', method: 'session.events.read', params: { limit: 20, after_sequence: 4 } }),
+    health: Object.freeze({ id: 'fixture-frame-health', method: 'session.health', params: {} }),
+    recovery: Object.freeze({ id: 'fixture-frame-recovery', method: 'session.recovery', params: {} }),
+    cancel: Object.freeze({ id: 'fixture-frame-cancel', method: 'session.cancel', params: {} }),
+    close: Object.freeze({ id: 'fixture-frame-close', method: 'session.close', params: { reason: 'operator_requested' } }),
+    intelligence_reconfigure: Object.freeze({ id: 'fixture-frame-reconfigure', method: NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD, params: { model: 'fixture-model-2' } }),
+  }),
+});

@@ -2,6 +2,7 @@ export const OPERATOR_ROUTER_IDENTITY = 'narada.operator-router' as const;
 export const OPERATOR_ROUTER_VERSION = '0.1.0' as const;
 export const OPERATOR_ROUTER_HEALTH_SCHEMA = 'narada.operator_router.health.v1' as const;
 export const OPERATOR_ROUTER_ROUTES_SCHEMA = 'narada.operator_router.routes.v1' as const;
+export const OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA = 'narada.operator_router.admin_routes.v1' as const;
 export const OPERATOR_ROUTER_STATE_SCHEMA = 'narada.operator_router.state.v1' as const;
 export const OPERATOR_ROUTER_REGISTRATION_SCHEMA = 'narada.operator_router.route_registration.v1' as const;
 
@@ -148,6 +149,17 @@ export interface OperatorRouterRoutesResponse {
   schema: typeof OPERATOR_ROUTER_ROUTES_SCHEMA;
   identity: typeof OPERATOR_ROUTER_IDENTITY;
   routes: OperatorRouterRouteProjection[];
+}
+
+/**
+ * Authenticated route inventory used by lifecycle commands.  Process evidence
+ * is intentionally omitted from the public `/routes` projection and exposed
+ * only through the router's token-protected admin surface.
+ */
+export interface OperatorRouterAdminRoutesResponse {
+  schema: typeof OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA;
+  identity: typeof OPERATOR_ROUTER_IDENTITY;
+  routes: OperatorRouterRouteRegistration[];
 }
 
 export interface OperatorRouterState {

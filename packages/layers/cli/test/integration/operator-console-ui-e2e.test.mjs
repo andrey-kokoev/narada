@@ -51,7 +51,7 @@ function siteAgent(agentId, role, runtimeState, workState, sessionId = null) {
   };
 }
 
-function siteAgentOverview(launched) {
+function siteAgentOverview(launched, { userSiteResidentAmbiguous = false } = {}) {
   return {
     schema: 'narada.operator_console.site_agent_overview.v1',
     status: 'success',
@@ -68,7 +68,13 @@ function siteAgentOverview(launched) {
             site_kind: 'user_site',
             group_id: 'personal-infrastructure',
             observation_status: 'present',
-            agents: [siteAgent('user-site.resident', 'resident', 'running', 'available', 'session-user-resident')],
+            agents: [siteAgent(
+              'user-site.resident',
+              'resident',
+              userSiteResidentAmbiguous ? 'ambiguous' : 'running',
+              'available',
+              userSiteResidentAmbiguous ? null : 'session-user-resident',
+            )],
           },
           {
             site_id: 'desktop-host',
@@ -203,7 +209,7 @@ function mutationResponse(input, applied) {
   };
 }
 
-async function startFixtureServer({ agentSessions = [] } = {}) {
+async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguous = false } = {}) {
   const requests = [];
   let onboardingStarted = false;
   let siteAgentLaunched = false;
@@ -277,7 +283,7 @@ async function startFixtureServer({ agentSessions = [] } = {}) {
         return;
       }
       if (req.method === 'GET' && pathname === '/console/agents/api/overview') {
-        sendJson(res, 200, siteAgentOverview(siteAgentLaunched));
+        sendJson(res, 200, siteAgentOverview(siteAgentLaunched, { userSiteResidentAmbiguous }));
         return;
       }
       if (req.method === 'POST' && pathname === '/console/agents/api/launch') {
@@ -480,6 +486,39 @@ test('Operator Console Vue registry projection works at desktop and mobile width
   }
 });
 
+test('LIVE Operator Console reproduces ambiguous resident action on the running surface', { skip: !process.env.NARADA_LIVE_OPERATOR_CONSOLE_E2E }, async () => {
+  const baseUrl = process.env.NARADA_OPERATOR_CONSOLE_BASE_URL ?? 'http://127.0.0.1:61729';
+  const siteId = process.env.NARADA_LIVE_OPERATOR_CONSOLE_SITE_ID ?? 'andrey-user';
+  const agentId = process.env.NARADA_LIVE_OPERATOR_CONSOLE_AGENT_ID ?? `${siteId}.resident`;
+  const overviewResponse = await fetch(`${baseUrl}/console/agents/api/overview`);
+  assert.equal(overviewResponse.status, 200);
+  const overview = await overviewResponse.json();
+  const agent = overview.groups
+    .flatMap((group) => group.sites)
+    .find((siteRecord) => siteRecord.site_id === siteId)?.agents
+    .find((siteAgentRecord) => siteAgentRecord.agent_id === agentId);
+  assert.ok(agent, `live Agent overview did not contain ${agentId}`);
+  assert.equal(agent.runtime.state, 'ambiguous');
+  assert.ok(agent.runtime.healthy_session_ids.length >= 2);
+
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const launchRequests = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/console/agents/api/launch')) launchRequests.push(request.url());
+    });
+    await page.goto(`${baseUrl}/console/agents`, { waitUntil: 'domcontentloaded' });
+    const resident = page.locator(`button[aria-label^="${agentId}:"]`).first();
+    await resident.waitFor({ state: 'attached', timeout: 60_000 });
+    await resident.evaluate((button) => button.click());
+    await page.getByText('Multiple healthy sessions exist. Choose one from Agent Sessions.', { exact: true }).waitFor();
+    assert.equal(launchRequests.length, 0);
+  } finally {
+    await browser.close();
+  }
+});
+
 test('Operator Console Sites and Agents groups authority, launches admitted agents, and routes inspection', async () => {
   const fixture = await startFixtureServer({ agentSessions: [
     { ...activeAgentSession, session_id: 'session-a', agent_id: 'site-a.architect' },
@@ -558,6 +597,28 @@ test('Operator Console Sites and Agents groups authority, launches admitted agen
     await page.getByRole('button', { name: 'site-a.resident: running, work executing' }).waitFor();
     await assertNoHorizontalOverflow(page, 'sites and agents mobile');
     await page.screenshot({ path: 'test-results/operator-console-sites-agents-mobile.png', fullPage: true });
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
+test('Operator Console reproduces user-site ambiguous resident with empty Agent Sessions inventory', async () => {
+  const fixture = await startFixtureServer({ userSiteResidentAmbiguous: true });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(fixture.url + '/console/agents');
+    const resident = page.getByRole('button', { name: 'user-site.resident: ambiguous, work available' });
+    await resident.waitFor();
+
+    await resident.click();
+    await page.getByText('Multiple healthy sessions exist. Choose one from Agent Sessions.').waitFor();
+
+    await resident.click({ button: 'right' });
+    await page.waitForURL('**/console/sessions?site=user-site&agent=user-site.resident');
+    await page.getByText('No NARS sessions are currently discoverable.').waitFor();
+    assert.equal(await page.locator('tbody tr').count(), 0);
   } finally {
     await browser.close();
     await fixture.close();

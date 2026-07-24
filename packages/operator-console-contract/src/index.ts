@@ -47,6 +47,17 @@ export interface OperatorSurfaceAuthorityRef {
   id: string | null;
 }
 
+export type OperatorSiteAgentHandoffKind = 'browser' | 'terminal' | 'none';
+export type OperatorSiteAgentHandoffStatus = 'ready' | 'started' | 'pending' | 'refused';
+
+export interface OperatorSiteAgentLaunchHandoffWireRecord {
+  kind: OperatorSiteAgentHandoffKind;
+  status: OperatorSiteAgentHandoffStatus;
+  url: string | null;
+  command: string | null;
+  message: string | null;
+}
+
 export type OperatorSurfaceHostKind = 'local' | 'cloudflare';
 
 export interface OperatorSurfaceHostRef {
@@ -184,6 +195,21 @@ export type OperatorSiteAgentGroupId = 'personal-infrastructure' | 'sites';
 export type OperatorSiteKind = 'user_site' | 'pc_site' | 'site';
 export type OperatorSiteClassificationSource = 'declared' | 'registry' | 'fallback' | 'registry_only';
 export type OperatorAgentRuntimeState = 'running' | 'degraded' | 'stopped' | 'ambiguous';
+export type OperatorSiteAgentSurfaceKind = 'agent-web-ui' | 'agent-cli' | 'agent-tui';
+export type OperatorSiteAgentSurfaceStatus = 'available' | 'unavailable';
+
+export interface OperatorSiteAgentSurfaceOption {
+  kind: OperatorSiteAgentSurfaceKind;
+  label: string;
+  status: OperatorSiteAgentSurfaceStatus;
+  reason: string | null;
+}
+
+export interface OperatorSiteAgentSurfaceWireState {
+  /** The configured launch default; it may be outside the compact selector. */
+  default_kind: string;
+  choices: OperatorSiteAgentSurfaceOption[];
+}
 
 export interface OperatorSiteAgentRuntimeWireState {
   state: OperatorAgentRuntimeState;
@@ -206,6 +232,7 @@ export interface OperatorSiteAgentWireRecord {
   admission_status: 'admitted';
   runtime: OperatorSiteAgentRuntimeWireState;
   work: OperatorSiteAgentWorkWireState;
+  operator_surfaces: OperatorSiteAgentSurfaceWireState;
   actions: {
     start: boolean;
     inspect: boolean;
@@ -240,6 +267,7 @@ export interface OperatorSiteAgentOverviewWireResponse {
 export type OperatorSiteAgentLaunchFailurePhase =
   | 'overview_read'
   | 'launch_record_read'
+  | 'web_ui_attach'
   | 'workspace_launch'
   | 'admission';
 
@@ -257,6 +285,9 @@ export interface OperatorSiteAgentLaunchWireResponse {
   agent_id: string;
   session_id: string | null;
   reason: string | null;
+  /** Effective surface after defaulting and admission. */
+  operator_surface?: string;
+  handoff?: OperatorSiteAgentLaunchHandoffWireRecord;
   request_id?: string;
   failure?: OperatorSiteAgentLaunchFailureWireRecord | null;
 }
@@ -305,6 +336,16 @@ export function validateOperatorSiteAgentOverviewInvariants(
         if (seenCanonicalAgentIds.has(agentKey)) push('duplicate_agent_id', agentPath, `${agent.agent_id} appears more than once`);
         seenCanonicalAgentIds.add(agentKey);
         const runtime = agent.runtime;
+        const surfaceKinds = agent.operator_surfaces.choices.map((choice) => choice.kind);
+        if (new Set(surfaceKinds).size !== surfaceKinds.length) {
+          push('operator_surface_choices_unique', agentPath, 'operator surface choices must be unique');
+        }
+        if (surfaceKinds.length !== 3
+          || !surfaceKinds.includes('agent-web-ui')
+          || !surfaceKinds.includes('agent-cli')
+          || !surfaceKinds.includes('agent-tui')) {
+          push('operator_surface_choices_complete', agentPath, 'the compact selector must expose web UI, CLI, and TUI');
+        }
         const healthySessionIds = new Set(runtime.healthy_session_ids);
         if (healthySessionIds.size !== runtime.healthy_session_ids.length) {
           push('duplicate_healthy_session_id', agentPath, 'healthy_session_ids must be unique');
@@ -375,12 +416,29 @@ function parseSiteAgentRuntime(value: unknown): OperatorSiteAgentRuntimeWireStat
   return row as unknown as OperatorSiteAgentRuntimeWireState;
 }
 
+function parseSiteAgentSurfaces(value: unknown): OperatorSiteAgentSurfaceWireState | null {
+  const row = recordValue(value);
+  if (!row || !nonEmptyWireString(row.default_kind) || !Array.isArray(row.choices)) return null;
+  const choices = row.choices.map((value): OperatorSiteAgentSurfaceOption | null => {
+    const choice = recordValue(value);
+    if (!choice
+      || !['agent-web-ui', 'agent-cli', 'agent-tui'].includes(String(choice.kind))
+      || !nonEmptyWireString(choice.label)
+      || !['available', 'unavailable'].includes(String(choice.status))
+      || (choice.reason !== null && typeof choice.reason !== 'string')) return null;
+    return choice as unknown as OperatorSiteAgentSurfaceOption;
+  });
+  if (choices.some((choice) => choice === null)) return null;
+  return { ...row, choices: choices as OperatorSiteAgentSurfaceOption[] } as unknown as OperatorSiteAgentSurfaceWireState;
+}
+
 function parseSiteAgent(value: unknown): OperatorSiteAgentWireRecord | null {
   const row = recordValue(value);
   const runtime = parseSiteAgentRuntime(row?.runtime);
   const work = recordValue(row?.work);
+  const operatorSurfaces = parseSiteAgentSurfaces(row?.operator_surfaces);
   const actions = recordValue(row?.actions);
-  if (!row || !runtime || !work || !actions
+  if (!row || !runtime || !work || !operatorSurfaces || !actions
     || !nonEmptyWireString(row.agent_id)
     || !nonEmptyWireString(row.local_agent_id)
     || !nonEmptyWireString(row.title)
@@ -392,7 +450,7 @@ function parseSiteAgent(value: unknown): OperatorSiteAgentWireRecord | null {
     || typeof actions.start !== 'boolean'
     || typeof actions.inspect !== 'boolean'
     || (actions.inspect_reason !== null && typeof actions.inspect_reason !== 'string')) return null;
-  return row as unknown as OperatorSiteAgentWireRecord;
+  return { ...row, operator_surfaces: operatorSurfaces } as unknown as OperatorSiteAgentWireRecord;
 }
 
 function parseSiteAgentSite(value: unknown): OperatorSiteAgentSiteWireRecord | null {
@@ -431,7 +489,8 @@ export function parseOperatorSiteAgentOverviewWireResponse(value: unknown): Oper
     return { ...groupRow, sites: sites as OperatorSiteAgentSiteWireRecord[] } as unknown as OperatorSiteAgentGroupWireRecord;
   });
   if (groups.some((group) => group === null)) return null;
-  return { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
+  const parsed = { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
+  return validateOperatorSiteAgentOverviewInvariants(parsed).length > 0 ? null : parsed;
 }
 
 export interface OperatorSurfaceAvailabilityDetail {

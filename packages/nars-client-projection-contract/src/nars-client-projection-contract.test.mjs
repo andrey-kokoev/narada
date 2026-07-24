@@ -8,7 +8,9 @@ import {
   AGENT_WEB_UI_SNIPPET_USAGE,
   NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   NARS_CLIENT_PROJECTION_REGISTRY,
+  NARS_CLIENT_CONFORMANCE_FIXTURES,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_AFFORDANCE_ACTION_EVENTS,
   NARS_AFFORDANCE_ACTION_POSTURES,
   NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
@@ -88,12 +90,14 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('command.execute'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('carrier.command.execute'), false);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
+  assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_pi_tui.admitted_methods, AGENT_WEB_UI_NARS_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_web_ui.adapter_methods, AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST);
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.clients.agent_tui.attach_template, 'agent-tui --attach <event_endpoint>');
   assert.deepEqual(buildNarsAttachCommands({ eventEndpoint: 'ws://127.0.0.1/events', healthEndpoint: 'http://127.0.0.1/health' }), {
     registry_schema: 'narada.nars.client_projection_registry.v1',
     agent_cli: 'narada-agent-cli --attach ws://127.0.0.1/events',
     agent_tui: 'agent-tui --attach ws://127.0.0.1/events',
+    agent_pi_tui: 'narada-agent-pi-tui --attach ws://127.0.0.1/events',
     agent_web_ui: 'narada-agent-web-ui --event-endpoint ws://127.0.0.1/events --health-endpoint http://127.0.0.1/health',
     protocol: '{"id":"events-1","method":"session.events.subscribe","params":{"include_replay":true,"page_size":20}}',
     operator_input_protocol: '{"id":"input-1","method":"session.submit","params":{"content":"<operator message>","source":"manual_operator"}}',
@@ -103,6 +107,16 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
   assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
   assert.deepEqual(NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS, ['conversation', 'operations', 'diagnostics', 'raw']);
+});
+
+test('NARS client conformance fixtures remain representation-neutral and complete', () => {
+  assert.equal(NARS_CLIENT_CONFORMANCE_FIXTURES.schema, 'narada.nars.client_conformance_fixtures.v1');
+  assert.ok(NARS_CLIENT_CONFORMANCE_FIXTURES.scenarios.includes('replay_live_overlap'));
+  assert.ok(NARS_CLIENT_CONFORMANCE_FIXTURES.scenarios.includes('operator_controlled_scroll'));
+  assert.equal(NARS_CLIENT_CONFORMANCE_FIXTURES.canonical_events[0].event, 'session_started');
+  assert.equal(NARS_CLIENT_CONFORMANCE_FIXTURES.canonical_events.at(-1).event, 'session_closed');
+  assert.equal(NARS_CLIENT_CONFORMANCE_FIXTURES.protocol_frames.ordinary_input.method, 'session.submit');
+  assert.equal(NARS_CLIENT_CONFORMANCE_FIXTURES.protocol_frames.intelligence_reconfigure.method, NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD);
 });
 
 test('NARS client projection contract builds the direct runtime intelligence control frame', () => {

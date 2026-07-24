@@ -24,9 +24,13 @@ function normalizeIdempotencyKey(value) {
 export function normalizeInputEvent(input, defaults = {}, { randomIdFn = defaultRandomId } = {}) {
   const record = normalizeInputRecord(input);
   const receivedAt = defaults.received_at ?? input?.received_at ?? new Date().toISOString();
+  const params = input?.params && typeof input.params === 'object' && !Array.isArray(input.params)
+    ? input.params
+    : {};
   const inputSource = record.source;
-  const protocolSourceKind = input?.source_kind ?? sourceKindForInputSource(inputSource);
+  const protocolSourceKind = input?.source_kind ?? params.source_kind ?? sourceKindForInputSource(inputSource);
   const protocolMetadata = {
+    ...(params.metadata ?? {}),
     ...(input?.metadata ?? {}),
     input_source: inputSource,
     ...(protocolSourceKind === 'system' && record.directive_id ? { directive_provenance: { kind: 'system_directive' } } : {}),
@@ -37,14 +41,14 @@ export function normalizeInputEvent(input, defaults = {}, { randomIdFn = default
     schema: 'narada.carrier.input_event.v1',
     event_id: input?.event_id ?? `input_${randomIdFn()}`,
     source_kind: protocolSourceKind,
-    source_id: input?.source_id ?? sourceIdForInputSource(inputSource),
-    transport: input?.transport ?? defaults.transport ?? transportForInputSource(inputSource),
-    delivery_mode: input?.delivery_mode ?? deliveryModeForInputSource(inputSource),
-    hold_condition: input?.hold_condition ?? null,
+    source_id: input?.source_id ?? params.source_id ?? sourceIdForInputSource(inputSource),
+    transport: input?.transport ?? params.transport ?? defaults.transport ?? transportForInputSource(inputSource),
+    delivery_mode: input?.delivery_mode ?? params.delivery_mode ?? deliveryModeForInputSource(inputSource),
+    hold_condition: input?.hold_condition ?? params.hold_condition ?? null,
     content: record.content,
     created_at: receivedAt,
-    authority_ref: record.authority_ref,
-    directive_id: input?.directive_id ?? record.directive_id ?? null,
+    authority_ref: record.authority_ref ?? params.authority_ref ?? null,
+    directive_id: input?.directive_id ?? params.directive_id ?? record.directive_id ?? null,
     metadata: protocolMetadata,
   });
   return {
@@ -62,35 +66,42 @@ export function normalizeInputEvent(input, defaults = {}, { randomIdFn = default
 
 export function normalizeInputRecord(input) {
   if (typeof input === 'string') return { content: input, source: 'manual_operator' };
-  if (input?.metadata?.observer || input?.source === 'observer') {
+  const params = input?.params && typeof input.params === 'object' && !Array.isArray(input.params)
+    ? input.params
+    : {};
+  const source = input?.source ?? params.source;
+  const sourceKind = input?.source_kind ?? params.source_kind;
+  const deliveryMode = input?.delivery_mode ?? params.delivery_mode;
+  const metadata = input?.metadata ?? params.metadata;
+  if (metadata?.observer || source === 'observer') {
     return {
-      content: String(input?.content ?? ''),
+      content: String(input?.content ?? params.content ?? params.message ?? ''),
       source: 'observer',
       authority_ref: input?.authority_ref ?? null,
       directive_id: input?.directive_id ?? null,
     };
   }
-  if (input?.source_kind === 'system' && !input?.source) {
+  if (sourceKind === 'system' && !source) {
     return {
-      content: String(input?.content ?? ''),
+      content: String(input?.content ?? params.content ?? params.message ?? ''),
       source: 'system_directive',
-      authority_ref: input?.authority_ref ?? null,
-      directive_id: input?.directive_id ?? null,
+      authority_ref: input?.authority_ref ?? params.authority_ref ?? null,
+      directive_id: input?.directive_id ?? params.directive_id ?? null,
     };
   }
-  if (input?.delivery_mode === 'admit_after_active_turn' && !input?.source) {
+  if (deliveryMode === 'admit_after_active_turn' && !source) {
     return {
-      content: String(input?.content ?? ''),
+      content: String(input?.content ?? params.content ?? params.message ?? ''),
       source: 'operator_steering',
-      authority_ref: input?.authority_ref ?? null,
-      directive_id: input?.directive_id ?? null,
+      authority_ref: input?.authority_ref ?? params.authority_ref ?? null,
+      directive_id: input?.directive_id ?? params.directive_id ?? null,
     };
   }
   return {
-    content: String(input?.content ?? ''),
-    source: input?.source ?? 'manual_operator',
-    authority_ref: input?.authority_ref ?? null,
-    directive_id: input?.directive_id ?? null,
+    content: String(input?.content ?? params.content ?? params.message ?? ''),
+    source: source ?? 'manual_operator',
+    authority_ref: input?.authority_ref ?? params.authority_ref ?? null,
+    directive_id: input?.directive_id ?? params.directive_id ?? null,
   };
 }
 
@@ -124,6 +135,24 @@ export function inputWithObserverMetadata(input = {}) {
   };
 }
 
+function defaultDirectiveEvidence(event, { agentId = null, carrierSessionId = null } = {}) {
+  return {
+    input_event_id: event.event_id,
+    directive_id: event.directive_id,
+    ...(event.request_id ? { request_id: event.request_id } : {}),
+    ...(carrierSessionId ? { carrier_session_id: carrierSessionId } : {}),
+    ...(agentId ? { agent_id: agentId } : {}),
+    ...(event.transport ? { transport: event.transport } : {}),
+  };
+}
+
+function defaultDirectiveAcceptedEvidence(event, context = {}) {
+  return {
+    ...defaultDirectiveEvidence(event, context),
+    acceptance_semantics: 'carrier_started_directive_turn',
+  };
+}
+
 export function createInputQueue({
   drain,
   shouldDefer = () => false,
@@ -141,8 +170,8 @@ export function createInputQueue({
   classifyInputRuntimeQueueAdmissionFn = () => ({ queue_events: [] }),
   classifyInputRuntimeAdmissionFn = () => ({ admission_events: [] }),
   classifyInputRuntimeHoldFn = (event, state) => classifyCarrierInputHold(inputWithObserverMetadata(event), state),
-  directiveReceiptEvidenceFn = () => ({}),
-  directiveAcceptedEvidenceFn = () => ({}),
+  directiveReceiptEvidenceFn = defaultDirectiveEvidence,
+  directiveAcceptedEvidenceFn = defaultDirectiveAcceptedEvidence,
   identity = null,
   session = null,
   transcriptDisplaySettings = {},

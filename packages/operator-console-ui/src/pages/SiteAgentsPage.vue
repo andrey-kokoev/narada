@@ -2,6 +2,7 @@
 import { ref, type Component } from 'vue';
 import type {
   OperatorSiteAgentLaunchFailureWireRecord,
+  OperatorSiteAgentSurfaceOption,
   OperatorSiteAgentWireRecord,
 } from '@narada2/operator-console-contract';
 import {
@@ -20,6 +21,7 @@ import { decideAgentInspection, decideAgentPrimaryAction } from '../site-agents/
 import {
   buildFailureProjectionDocument,
   buildPendingProjectionDocument,
+  decideAgentWebUiHandoff,
   scopedAgentSessionsPath,
 } from '../site-agents/projection-handoff';
 
@@ -44,16 +46,18 @@ function sessionUrl(sessionId: string): string | null {
   return directory ? findOperatorRouteTarget(directory, { kind: 'session', id: sessionId }) : null;
 }
 
-async function openSession(sessionId: string, target?: Window | null): Promise<boolean> {
+async function resolveSessionUrl(sessionId: string): Promise<string | null> {
   let url = sessionUrl(sessionId);
   if (!url && routeDirectory) {
     await routeDirectory.load();
     url = sessionUrl(sessionId);
   }
-  if (!url) return false;
+  return url;
+}
+
+function openResolvedSession(url: string, target?: Window | null): void {
   if (target && !target.closed) target.location.replace(url);
   else window.open(url, '_blank', 'noopener,noreferrer');
-  return true;
 }
 
 function pendingProjectionWindow(agentId: string): Window | null {
@@ -93,18 +97,27 @@ function isStarting(siteId: string, agent: OperatorSiteAgentWireRecord): boolean
     && entry.agent_id.toLowerCase() === agent.agent_id.toLowerCase());
 }
 
-async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Promise<void> {
+function surfaceLabel(surface: string): string {
+  return surface === 'agent-web-ui' ? 'Web UI' : surface === 'agent-cli' ? 'CLI' : surface === 'agent-tui' ? 'TUI' : surface;
+}
+
+function surfaceChoices(agent: OperatorSiteAgentWireRecord): OperatorSiteAgentSurfaceOption[] {
+  return agent.operator_surfaces.choices;
+}
+
+async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, selectedSurface?: string): Promise<void> {
   if (busyAgentId.value) return;
   const decision = decideAgentPrimaryAction(agent);
   if (decision.kind === 'unavailable') {
     actionMessage.value = decision.reason;
     return;
   }
-  const target = pendingProjectionWindow(agent.agent_id);
+  const surface = selectedSurface ?? agent.operator_surfaces.default_kind;
+  const target = surface === 'agent-web-ui' ? pendingProjectionWindow(agent.agent_id) : null;
   busyAgentId.value = agent.agent_id;
-  actionMessage.value = `Starting ${agent.agent_id}...`;
+  actionMessage.value = `${surfaceLabel(surface)}: starting ${agent.agent_id}...`;
   try {
-    const result = await siteAgents.launch(siteId, agent.agent_id);
+    const result = await siteAgents.launch(siteId, agent.agent_id, surface);
     if (result.status === 'refused' || result.status === 'failed') {
       if (result.status === 'failed') {
         const failure = result.failure ?? {
@@ -113,7 +126,7 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
           message: result.reason ?? `Could not start ${agent.agent_id}.`,
           diagnostic_ref: null,
         };
-        driveFailureWindow(target, siteId, agent.agent_id, result.request_id, failure);
+        if (target) driveFailureWindow(target, siteId, agent.agent_id, result.request_id, failure);
         actionMessage.value = failure.message;
       } else {
         target?.close();
@@ -121,16 +134,39 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord): P
       }
       return;
     }
-    if (result.status === 'reused' && result.session_id && await openSession(result.session_id, target)) {
-      actionMessage.value = `Opened ${agent.agent_id}.`;
+    if (result.status === 'reused') {
+      if (surface === 'agent-web-ui' && result.session_id) {
+        const handoff = decideAgentWebUiHandoff(result.session_id, await resolveSessionUrl(result.session_id));
+        if (handoff.kind === 'ready') {
+          openResolvedSession(handoff.url, target);
+          actionMessage.value = `Opened ${agent.agent_id} in the Web UI.`;
+        } else if (handoff.kind === 'pending') {
+          // A healthy runtime can exist before its Web UI route is indexed.
+          // Keep the handoff page alive so it can observe route registration;
+          // closing here made an otherwise valid Web UI launch look broken.
+          drivePendingWindow(target, siteId, agent, handoff.sessionId);
+          actionMessage.value = `${agent.agent_id} is already running. Waiting for its Web UI route...`;
+        } else {
+          target?.close();
+          actionMessage.value = handoff.reason;
+        }
+      } else {
+        target?.close();
+        actionMessage.value = result.handoff?.message ?? `The existing session was not attachable in ${surfaceLabel(surface)}.`;
+      }
       return;
     }
-    drivePendingWindow(target, siteId, agent, result.session_id);
-    actionMessage.value = `${agent.agent_id} started. Its Web UI opens when the route is ready.`;
+    if (surface === 'agent-web-ui') {
+      drivePendingWindow(target, siteId, agent, result.session_id);
+      actionMessage.value = `${agent.agent_id} started. Its Web UI opens when the route is ready.`;
+    } else {
+      target?.close();
+      actionMessage.value = result.handoff?.message ?? `${agent.agent_id} started in ${surfaceLabel(surface)}.`;
+    }
   } catch (cause) {
     const failed = siteAgents.launchFailure.value;
     if (failed?.failure) {
-      driveFailureWindow(target, siteId, agent.agent_id, failed.request_id, failed.failure);
+      if (target) driveFailureWindow(target, siteId, agent.agent_id, failed.request_id, failed.failure);
       actionMessage.value = failed.failure.message;
     } else {
       target?.close();
@@ -146,11 +182,20 @@ async function inspectAgent(siteId: string, agent: OperatorSiteAgentWireRecord):
   const decision = decideAgentInspection(agent);
   if (decision.kind === 'open-session') {
     const target = pendingProjectionWindow(agent.agent_id);
-    if (await openSession(decision.sessionId, target)) {
+    const handoff = decideAgentWebUiHandoff(decision.sessionId, await resolveSessionUrl(decision.sessionId));
+    if (handoff.kind === 'ready') {
+      openResolvedSession(handoff.url, target);
       actionMessage.value = `Opened ${agent.agent_id}.`;
       return;
     }
+    if (handoff.kind === 'pending') {
+      drivePendingWindow(target, siteId, agent, handoff.sessionId);
+      actionMessage.value = `Waiting for ${agent.agent_id}'s Web UI route...`;
+      return;
+    }
     target?.close();
+    actionMessage.value = handoff.reason;
+    return;
   }
   if (decision.kind === 'choose-session') {
     window.location.href = scopedAgentSessionsPath(siteId, agent.agent_id);
@@ -186,7 +231,7 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
       <header class="page-header">
         <div>
           <h2>Sites and Agents</h2>
-          <p>Start admitted agents and open the Web UI for a healthy runtime session.</p>
+          <p>Start admitted agents in their configured surface, or choose another admitted surface.</p>
         </div>
         <button class="icon-button" type="button" title="Refresh" :disabled="siteAgents.loading.value" @click="siteAgents.load">
           <RefreshCw :size="16" aria-hidden="true" />
@@ -215,7 +260,7 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
         <h3 :id="`group-${group.id}`">{{ group.label }}</h3>
         <p v-if="!group.sites.length" class="empty">No Sites are registered in this group.</p>
         <div v-else class="site-grid">
-          <article v-for="site in group.sites" :key="site.site_id" class="site-box">
+          <article v-for="site in group.sites" :key="site.site_id" class="site-box" :data-site-id="site.site_id">
             <header class="site-header">
               <div>
                 <h4>{{ site.display_name }}</h4>
@@ -250,6 +295,23 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
                     <span>{{ isStarting(site.site_id, agent) ? 'starting' : agent.work.state }}</span>
                   </span>
                 </button>
+                <details v-if="surfaceChoices(agent).length" class="surface-menu">
+                  <summary @click.stop>Open in…</summary>
+                  <div class="surface-options" role="menu">
+                    <button
+                      v-for="choice in surfaceChoices(agent)"
+                      :key="choice.kind"
+                      type="button"
+                      role="menuitem"
+                      :disabled="choice.status !== 'available' || busyAgentId !== null"
+                      :title="choice.reason ?? `Open in ${choice.label}`"
+                      @click.stop="startAgent(site.site_id, agent, choice.kind)"
+                    >
+                      <span>{{ choice.label }}</span>
+                      <span v-if="choice.kind === agent.operator_surfaces.default_kind" class="surface-default">default</span>
+                    </button>
+                  </div>
+                </details>
               </div>
             </div>
           </article>
@@ -305,6 +367,15 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
 .agent-copy strong, .agent-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-copy strong { font-size: 12px; font-weight: 650; }
 .agent-copy span { color: var(--muted); font-size: 10px; }
+.surface-menu { position: absolute; right: 2px; bottom: 2px; z-index: 2; }
+.surface-menu summary { padding: 2px 4px; border-radius: 4px; color: var(--muted); font-size: 9px; cursor: pointer; list-style: none; }
+.surface-menu summary::-webkit-details-marker { display: none; }
+.surface-menu summary:hover { background: var(--surface); color: var(--text); }
+.surface-options { position: absolute; right: 0; bottom: 22px; display: grid; min-width: 126px; padding: 4px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / 14%); }
+.surface-options button { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--text); font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
+.surface-options button:hover:not(:disabled) { background: var(--surface-muted); }
+.surface-options button:disabled { color: var(--muted); cursor: not-allowed; opacity: .6; }
+.surface-default { color: var(--muted); font-size: 9px; }
 .empty.compact { margin: 12px 0 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 700px) { .workspace-main { padding: 18px 12px 28px; } .site-grid { grid-template-columns: 1fr; } }

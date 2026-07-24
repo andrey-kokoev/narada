@@ -518,6 +518,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         const payload = await requestJson(req);
         const siteId = optionalString(payload?.site_id)?.trim();
         const agentId = optionalString(payload?.agent_id)?.trim();
+        const operatorSurface = optionalString(payload?.operator_surface)?.trim() || undefined;
         if (!siteId || !agentId) {
           jsonResponse(res, 400, { error: 'site_id and agent_id are required' });
           return;
@@ -530,10 +531,15 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
             agent_id: agentId,
             session_id: null,
             reason: 'site_agent_launch_unavailable',
+            ...(operatorSurface ? { operator_surface: operatorSurface } : {}),
           });
           return;
         }
-        const result = await ctx.siteAgentLaunch.launch({ siteId, agentId });
+        const result = await ctx.siteAgentLaunch.launch({
+          siteId,
+          agentId,
+          ...(operatorSurface ? { operatorSurface } : {}),
+        });
         if (result.status === 'launched') {
           const now = new Date().toISOString();
           ctx.siteAgentPending?.record({

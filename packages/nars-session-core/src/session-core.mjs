@@ -1,5 +1,9 @@
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import {
+  classifyCarrierInputAdmission,
+  classifyCarrierInputQueueAdmission,
+} from '@narada2/carrier-protocol';
 import { createNarsEventHub } from './event-hub.mjs';
 import { readNarsEventLog } from './event-log.mjs';
 import { registerNarsArtifact, readNarsArtifactIndex, transitionNarsArtifact } from './artifacts.mjs';
@@ -366,6 +370,10 @@ export function createNarsSessionCore({
       session: options.session ?? sessionId,
       initialPending: options.initialPending ?? persisted.pending,
       initialIdempotencyRecords: options.initialIdempotencyRecords ?? existing,
+      classifyInputRuntimeQueueAdmissionFn: options.classifyInputRuntimeQueueAdmissionFn
+        ?? ((event, _transcriptDisplaySettings, state) => classifyCarrierInputQueueAdmission(event, state)),
+      classifyInputRuntimeAdmissionFn: options.classifyInputRuntimeAdmissionFn
+        ?? ((event) => classifyCarrierInputAdmission(event)),
       assertEnqueueAllowedFn: (event, enqueueOptions) => {
         if (state.lifecycle !== 'ready') throw new Error(`nars_session_not_accepting_input:${state.lifecycle}`);
         options.assertEnqueueAllowedFn?.(event, enqueueOptions);

@@ -1,6 +1,6 @@
-import { closeSync, mkdirSync, openSync } from 'node:fs';
+import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs';
 import { appendFile, readFile, unlink } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, isAbsolute } from 'node:path';
 import { runGovernedCommandSync, spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 import type { WorkspaceLaunchProcessLaunch } from './workspace-launch-types.js';
 import type { WorkspaceLaunchRollbackEvidence, WorkspaceLaunchRollbackTargetEvidence } from './workspace-launch-contracts.js';
@@ -32,6 +32,13 @@ export function workspaceLaunchProcessIsAlive(pid: number): boolean {
 
 export function workspaceLaunchProjectionReadinessPath(bindingPath: string): string {
   return `${bindingPath}.ready.json`;
+}
+
+function workspaceLaunchValidateRuntimeEntrypoint(commandArgs: string[]): void {
+  const entrypoint = commandArgs[1];
+  if (typeof entrypoint === 'string' && isAbsolute(entrypoint) && !existsSync(entrypoint)) {
+    throw new Error(`workspace_launch_runtime_entrypoint_missing: ${entrypoint}`);
+  }
 }
 
 async function workspaceLaunchWaitForProcessReadiness(
@@ -112,6 +119,7 @@ export async function workspaceLaunchStartHiddenRuntimeHost(
     throw new Error('workspace_launch_hidden_runtime_argv_invalid');
   }
   if (!ownerRef || !ownerRef.trim()) throw new Error('workspace_launch_process_owner_ref_missing');
+  workspaceLaunchValidateRuntimeEntrypoint(commandArgs);
   const captureLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG;
   if (captureLog) {
     const redactedArgs = redactWorkspaceLaunchArgv(commandArgs);

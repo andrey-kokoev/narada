@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createConsoleServer } from '../../dist/commands/console-server.js';
+import { createConsoleServer } from '../../src/commands/console-server.ts';
 
 test('GET /console/agents/api/overview includes every Site returned by the real Site Registry', async () => {
   const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });

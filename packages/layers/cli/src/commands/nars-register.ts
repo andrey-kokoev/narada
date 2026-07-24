@@ -4,7 +4,7 @@ import {
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from './nars.js';
+import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionReconcileCommand, narsSessionsCommand } from './nars.js';
 import { narsProjectionBridgeRunCommand, narsProjectionBridgeStartCommand, narsProjectionRegisterCommand } from './nars-projection.js';
 
 const NARS_PROJECTION_SURFACE_KINDS = operatorSurfaceKindsForProjectionCapability('nars_attach');
@@ -33,6 +33,33 @@ export function registerNarsCommands(program: Command): void {
         health: opts.health as boolean | undefined,
         healthTimeoutMs: opts.healthTimeoutMs ? Number(opts.healthTimeoutMs) : undefined,
         limit: opts.limit ? Number(opts.limit) : undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
+      }, silentCommandContext()),
+    }));
+
+  const session = nars
+    .command('session')
+    .description('Repair one principal\'s legacy NARS session multiplicity');
+
+  session
+    .command('reconcile')
+    .description('Plan or explicitly record reconciliation of legacy sessions before a fresh authority admission')
+    .option('--site-root <path>', 'Target Site root')
+    .option('--site <id>', 'Registered Site id')
+    .requiredOption('--agent <local-agent-id>', 'Local agent identity within the Site')
+    .requiredOption('--keep-session <id>', 'Named session to preserve during reconciliation')
+    .option('--apply', 'Record the reconciliation only after all matching sessions are inactive')
+    .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
+    .action(directCommandAction<[CommanderOptionValues]>({
+      command: 'nars session reconcile',
+      emit: emitCommandResult,
+      format: (opts: CommanderOptionValues) => opts.format,
+      invocation: (opts) => narsSessionReconcileCommand({
+        siteRoot: opts.siteRoot as string | undefined,
+        site: opts.site as string | undefined,
+        agent: opts.agent as string | undefined,
+        keepSession: opts.keepSession as string | undefined,
+        apply: opts.apply as boolean | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }, silentCommandContext()),
     }));

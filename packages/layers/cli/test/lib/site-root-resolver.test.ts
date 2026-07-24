@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { listLaunchRegistrySites } from '../../src/lib/site-root-resolver.js';
+import { listLaunchRegistrySites, resolveSiteRootForCli } from '../../src/lib/site-root-resolver.js';
 
 const tempDirs: string[] = [];
 
@@ -50,6 +50,13 @@ describe('listLaunchRegistrySites identity precedence', () => {
     const sites = listLaunchRegistrySites(registry);
     expect(sites).toHaveLength(1);
     expect(sites[0]).toMatchObject({ site_root: siteRoot, site_id: 'andrey-user' });
+  });
+
+  it('resolves the Site id for an explicit root from site.json', async () => {
+    const siteRoot = tempRoot();
+    writeFileSync(join(siteRoot, 'site.json'), JSON.stringify({ site_id: 'sonar' }), 'utf8');
+    const resolved = await resolveSiteRootForCli({ siteRoot });
+    expect(resolved).toMatchObject({ site_root: siteRoot, source: 'explicit_site_root', site_id: 'sonar' });
   });
 
   it('keeps an explicit Site field ahead of the config declaration', () => {

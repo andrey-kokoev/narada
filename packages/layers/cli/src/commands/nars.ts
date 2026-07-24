@@ -12,8 +12,14 @@ import { prepareTargetAuthority, readAuthorityTransitionSourceState, authorityTr
 import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
 import { listKnownSiteRootsForCli, resolveSiteRootForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { probeNarsSessionHealth } from '../lib/nars-session-health.js';
+import {
+  defaultSessionAuthorityDbPath,
+  normalizeSessionPrincipal,
+  openLocalSessionAuthority,
+} from '@narada2/nars-session-authority';
 
 const NARS_AUTHORITY_RUNTIME_HOST_KINDS = ['local', 'cloudflare-host'];
 const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA = 'narada.nars.authority_runtime_host_transition.v1';
@@ -26,6 +32,125 @@ export interface NarsSessionsOptions {
   limit?: number;
   format?: CliFormat;
   launchRegistryPath?: string;
+}
+
+export async function narsSessionReconcileCommand(
+  options: NarsSessionReconcileOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const agent = options.agent?.trim();
+  const keepSession = options.keepSession?.trim();
+  if (!agent) throw new Error('nars_agent_required: pass --agent <local-agent-id>');
+  if (!keepSession) throw new Error('nars_keep_session_required: pass --keep-session <session-id>');
+  const siteResolutions = await resolveNarsSiteRoots(options);
+  const plans: Record<string, unknown>[] = [];
+  let refused = false;
+  for (const siteResolution of siteResolutions) {
+    const discovery = discoverNarsSessions({ siteRoot: siteResolution.site_root });
+    const principal = normalizeSessionPrincipal({
+      siteId: siteResolution.site_id ?? options.site ?? 'unknown-site',
+      localAgentId: agent,
+    });
+    const authority = openLocalSessionAuthority({
+      dbPath: defaultSessionAuthorityDbPath(siteResolution.site_root),
+    });
+    try {
+      const plan = authority.reconcileSession({
+        principal,
+        keepSessionId: keepSession,
+        sessions: discovery.sessions,
+      });
+      const keepRecord = discovery.sessions.find((session) => session.session_id === keepSession) ?? null;
+      const keepLive = keepRecord ? isLegacySessionLive(keepRecord as unknown as Record<string, unknown>) : false;
+      const sitePlan: Record<string, unknown> = {
+        ...plan,
+        site_root: siteResolution.site_root,
+        site_id: siteResolution.site_id,
+        authority_db_path: defaultSessionAuthorityDbPath(siteResolution.site_root),
+        keep_session_live: keepLive,
+      };
+      if (options.apply) {
+        if (plan.status !== 'ready') {
+          refused = true;
+          sitePlan.status = 'refused';
+          sitePlan.reason_code = 'active_non_keep_sessions';
+          sitePlan.required_next_step = 'Close every non-keep session explicitly, then rerun with --apply.';
+        } else if (keepLive) {
+          refused = true;
+          sitePlan.status = 'refused';
+          sitePlan.reason_code = 'keep_session_must_be_closed_before_reconciliation';
+          sitePlan.required_next_step = 'Stop the named legacy session, then rerun --apply; reconciliation never silently rebinds a running process without a launcher-issued authority token.';
+        } else {
+          const reconciliationPath = join(siteResolution.site_root, '.ai', 'runtime', 'session-authority-reconciliation.json');
+          mkdirSync(join(siteResolution.site_root, '.ai', 'runtime'), { recursive: true });
+          const applied = {
+            schema: 'narada.nars.session_authority_reconciliation_applied.v1',
+            mutation_performed: true,
+            principal,
+            keep_session_id: keepSession,
+            matching_sessions: plan.matching_sessions,
+            applied_at: new Date().toISOString(),
+            next_required_action: 'Start the named principal through the launcher so it receives a fresh authority admission token.',
+          };
+          writeFileSync(reconciliationPath, `${JSON.stringify(applied, null, 2)}\n`, 'utf8');
+          sitePlan.status = 'applied';
+          sitePlan.mutation_performed = true;
+          sitePlan.reconciliation_path = reconciliationPath;
+          sitePlan.applied = applied;
+        }
+      }
+      plans.push(sitePlan);
+    } finally {
+      authority.close();
+    }
+  }
+  const result = {
+    schema: 'narada.nars.session_authority_reconciliation_command_result.v1',
+    status: refused ? 'refused' : options.apply ? 'applied' : 'planned',
+    mutation_performed: options.apply && !refused,
+    agent,
+    keep_session_id: keepSession,
+    apply: options.apply === true,
+    sites: plans,
+    generated_at: new Date().toISOString(),
+    recommended_next_action: refused
+      ? 'repair_refusals_and_rerun_reconciliation'
+      : options.apply
+        ? 'start_the_principal_through_the_launcher'
+        : 'review_the_plan_then_rerun_with_apply',
+  };
+  return {
+    exitCode: refused ? ExitCode.INVALID_CONFIG : ExitCode.SUCCESS,
+    result: formattedResult(result, formatNarsSessionReconciliation(result), options.format ?? 'auto'),
+  };
+}
+
+function isLegacySessionLive(session: Record<string, unknown>): boolean {
+  return session.terminal_state !== 'closed'
+    && (session.display_state === 'active'
+      || session.display_state === 'starting_or_degraded'
+      || session.heartbeat_fresh === true);
+}
+
+function formatNarsSessionReconciliation(result: Record<string, unknown>): string {
+  const lines = [
+    `NARS session reconciliation: ${result.status}`,
+    `  principal: ${result.agent ?? 'unknown'}`,
+    `  keep: ${result.keep_session_id ?? 'unknown'}`,
+  ];
+  for (const site of Array.isArray(result.sites) ? result.sites : []) {
+    if (!isRecord(site)) continue;
+    lines.push(`  ${site.site_root ?? 'unknown'}: ${site.status ?? 'unknown'}${site.reason_code ? ` (${site.reason_code})` : ''}`);
+    if (site.reconciliation_path) lines.push(`    record: ${site.reconciliation_path}`);
+  }
+  lines.push(`  next: ${result.recommended_next_action ?? 'unknown'}`);
+  return lines.join('\n');
+}
+
+export interface NarsSessionReconcileOptions extends NarsSessionsOptions {
+  agent?: string;
+  keepSession?: string;
+  apply?: boolean;
 }
 
 export const NARS_LATEST_SESSION_SELECTOR = 'latest';
@@ -270,7 +395,7 @@ async function probeSelectedSessionsBySiteRoot(
   }
   const result = new Map<string, Record<string, string>>();
   await Promise.all(Array.from(bySiteRoot.entries()).map(async ([siteRoot, sessions]) => {
-    result.set(siteRoot, await probeSessionHealth(sessions, timeoutMs));
+    result.set(siteRoot, await probeNarsSessionHealth(sessions, timeoutMs));
   }));
   return result;
 }
@@ -847,30 +972,6 @@ function formatNarsAttachCommandResult(result: Record<string, unknown>): string 
   return lines.join('\n');
 }
 
-async function probeSessionHealth(sessions: Array<Record<string, unknown>>, timeoutMs: number): Promise<Record<string, string>> {
-  const entries = await Promise.all(sessions.map(async (session) => {
-    const sessionId = String(session.session_id ?? '');
-    const healthEndpoint = typeof session.health_endpoint === 'string' ? session.health_endpoint : null;
-    if (!sessionId || !healthEndpoint) return [sessionId, 'not_checked'] as const;
-    return [sessionId, await probeHealthEndpoint(healthEndpoint, timeoutMs)] as const;
-  }));
-  return Object.fromEntries(entries.filter(([sessionId]) => sessionId));
-}
-
-async function probeHealthEndpoint(endpoint: string, timeoutMs: number): Promise<string> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetch(endpoint, { signal: controller.signal });
-    if (!response.ok) return 'unhealthy';
-    return 'healthy';
-  } catch {
-    return 'unavailable';
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function formatNarsSessions(discovery: { site_root?: unknown; sessions?: Array<Record<string, unknown>> }): string {
   const sessions = discovery.sessions ?? [];
   const heading = discovery.site_root ? `NARS sessions for ${discovery.site_root}` : 'NARS sessions across known Sites';
@@ -907,6 +1008,7 @@ function normalizeSurface(surface: string): string {
   if (surface === 'web' || surface === 'agent-web-ui') return 'agent_web_ui';
   if (surface === 'cli' || surface === 'agent-cli') return 'agent_cli';
   if (surface === 'tui' || surface === 'agent-tui') return 'agent_tui';
+  if (surface === 'pi-tui' || surface === 'agent-pi-tui') return 'agent_pi_tui';
   return surface.replace(/-/g, '_');
 }
 
@@ -922,6 +1024,7 @@ function attachCommandForSession(session: Record<string, unknown>, surface: stri
   if (surface === 'agent_web_ui') {
     return `narada-agent-web-ui --event-endpoint ${eventEndpoint}${healthEndpoint ? ` --health-endpoint ${healthEndpoint}` : ''}`;
   }
+  if (surface === 'agent_pi_tui') return `narada-agent-pi-tui --attach ${eventEndpoint}`;
   return null;
 }
 

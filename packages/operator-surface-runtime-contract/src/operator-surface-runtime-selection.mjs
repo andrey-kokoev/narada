@@ -1,4 +1,8 @@
 import { loadOperatorSurfaceLaunchMatrixContract, loadRuntimeSubstrateKindsContract } from './operator-surface-runtime-contract.mjs';
+import {
+  INTELLIGENCE_KERNEL_KINDS,
+  normalizeIntelligenceKernelKind,
+} from '@narada2/nars-intelligence-kernel-contract';
 
 export const AGENT_CLI_OPERATOR_SURFACE_KIND = 'agent-cli';
 export const NARADA_AGENT_RUNTIME_SERVER_KIND = 'narada-agent-runtime-server';
@@ -55,7 +59,11 @@ const isCarrierLaunchMatrixRow = (row) => row
   && Array.isArray(row.states)
   && row.states.length > 0
   && row.states.every((state) => isNonEmptyString(state))
-  && (row.admission_basis === undefined || isNonEmptyString(row.admission_basis));
+  && (row.admission_basis === undefined || isNonEmptyString(row.admission_basis))
+  && (row.intelligence_kernel_kinds === undefined
+    || (Array.isArray(row.intelligence_kernel_kinds)
+      && row.intelligence_kernel_kinds.length > 0
+      && row.intelligence_kernel_kinds.every((kind) => INTELLIGENCE_KERNEL_KINDS.includes(kind))));
 if (
   carrierLaunchMatrix.schema !== OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA
   || runtimeSubstrateContract.schema !== 'narada.runtime_substrate_kind.v1'
@@ -77,6 +85,9 @@ const carrierLaunchMatrixRows = Object.freeze(rawCarrierLaunchMatrixRows.map((ro
   projection_capabilities: Object.freeze([...row.projection_capabilities]),
   expected_tools: Object.freeze([...row.expected_tools]),
   states: Object.freeze([...row.states]),
+  ...(Array.isArray(row.intelligence_kernel_kinds)
+    ? { intelligence_kernel_kinds: Object.freeze([...row.intelligence_kernel_kinds]) }
+    : {}),
 })));
 const carrierLaunchMatrixByLaunchSelection = new Map(carrierLaunchMatrixRows.map((row) => [row.launch_selection_kind, row]));
 const carrierLaunchMatrixByOperatorSurface = new Map(carrierLaunchMatrixRows.map((row) => [row.operator_surface_kind, row]));
@@ -106,6 +117,7 @@ export const ADMITTED_RUNTIME_IMPLEMENTATION_KINDS = Object.freeze([
 export const ADMITTED_TOOL_FABRIC_ADAPTER_KINDS = Object.freeze([
   ...new Set(carrierLaunchMatrixRows.map((row) => row.tool_fabric_adapter_kind)),
 ]);
+export { INTELLIGENCE_KERNEL_KINDS };
 export const OPERATOR_SURFACE_RUNTIME_SELECTION_SCHEMA = 'narada.operator_surface_runtime_selection.v1';
 export const LEGACY_CARRIER_RUNTIME_SELECTION_SCHEMA = 'narada.carrier_runtime_selection.v1';
 export const OPERATOR_SURFACE_RUNTIME_COMPATIBILITY_SCHEMA = 'narada.operator_surface_runtime_compatibility.v1';
@@ -219,6 +231,7 @@ export function resolveOperatorSurfaceRuntimeSelection({
   runtimeContractSchema = runtimeSubstrateContract.schema,
   admittedCarrierKinds = ADMITTED_LAUNCH_SELECTION_KINDS,
   admittedOperatorSurfaceKinds = ADMITTED_OPERATOR_SURFACE_KINDS,
+  intelligenceKernelValue,
 } = {}) {
   const explicitCarrier = typeof carrierValue === 'string' && carrierValue.trim() ? carrierValue.trim() : null;
   const explicitOperatorSurface = typeof operatorSurfaceValue === 'string' && operatorSurfaceValue.trim() ? operatorSurfaceValue.trim() : null;
@@ -264,6 +277,39 @@ export function resolveOperatorSurfaceRuntimeSelection({
     });
   }
 
+  const explicitKernel = typeof intelligenceKernelValue === 'string' && intelligenceKernelValue.trim()
+    ? intelligenceKernelValue.trim()
+    : null;
+  const kernelKinds = matrixRow.intelligence_kernel_kinds ?? null;
+  let intelligenceKernelKind = null;
+  if (kernelKinds) {
+    try {
+      intelligenceKernelKind = normalizeIntelligenceKernelKind(explicitKernel);
+    } catch {
+      return operatorSurfaceRefusal(explicitKernel, {
+        admittedOperatorSurfaceKinds,
+        reasonCode: 'intelligence_kernel_kind_unsupported',
+        reason: `intelligence kernel must be one of ${(kernelKinds ?? []).join(', ')} for ${operatorSurfaceKind}.`,
+        requiredNextStep: 'Use --intelligence-kernel with an admitted NARS kernel kind.',
+      });
+    }
+    if (!kernelKinds.includes(intelligenceKernelKind)) {
+      return operatorSurfaceRefusal(intelligenceKernelKind, {
+        admittedOperatorSurfaceKinds,
+        reasonCode: 'intelligence_kernel_kind_unsupported',
+        reason: `intelligence kernel '${intelligenceKernelKind}' is not admitted for ${operatorSurfaceKind}.`,
+        requiredNextStep: 'Select an admitted intelligence kernel for the NARS runtime.',
+      });
+    }
+  } else if (explicitKernel) {
+    return operatorSurfaceRefusal(explicitKernel, {
+      admittedOperatorSurfaceKinds,
+      reasonCode: 'intelligence_kernel_carrier_conflation_refused',
+      reason: 'The independent carrier surface does not select a NARS intelligence kernel.',
+      requiredNextStep: 'Select a NARS operator surface before selecting intelligence_kernel_kind.',
+    });
+  }
+
   return {
     schema: OPERATOR_SURFACE_RUNTIME_SELECTION_SCHEMA,
     legacy_schema: LEGACY_CARRIER_RUNTIME_SELECTION_SCHEMA,
@@ -280,5 +326,9 @@ export function resolveOperatorSurfaceRuntimeSelection({
     operator_surface_source_field: explicitOperatorSurface ? 'operator_surface' : explicitCarrier ? 'carrier' : 'derived',
     carrier_source_field: explicitCarrier ? 'carrier' : explicitOperatorSurface ? 'operator_surface' : 'derived',
     runtime_source_field: explicitRuntime ? 'runtime' : 'derived',
+    intelligence_kernel_kind: intelligenceKernelKind,
+    intelligence_kernel_source_field: kernelKinds
+      ? (explicitKernel ? 'intelligence_kernel' : 'derived')
+      : 'not_applicable',
   };
 }

@@ -58,6 +58,7 @@
     "@narada2/agent-identity",
     "@narada2/agent-start",
     "@narada2/agent-runtime-server",
+    "@narada2/agent-pi-tui",
     "@narada2/agent-web-ui",
     "@narada2/nars-client-projection-contract",
     "@narada2/nars-runtime-contract",
@@ -82,7 +83,9 @@
     "@narada2/mcp-transport",
     "@narada2/macos-site",
     "@narada2/nars-session-core",
+    "@narada2/nars-session-authority",
     "@narada2/operator-console-contract",
+    "@narada2/operator-console-overlay",
     "@narada2/operator-console-ui",
     "@narada2/operator-router",
     "@narada2/ops-kit",
@@ -101,7 +104,8 @@
     "@narada2/sqlite",
     "@narada2/nars-capability-gateway",
     "@narada2/nars-provider-runtime",
-    "@narada2/windows-site"
+    "@narada2/windows-site",
+    "@narada2/window-overlay-core"
   ],
   "scripts": {
     "prepublishOnly": "node ../../../scripts/assert-publication-admission.js",
@@ -118,7 +122,7 @@
     "test:launcher-acceptance": "pnpm run build && node --import tsx --test --test-concurrency=1 test/integration/operator-launch-journey.test.mjs",
     "test:operator-journey-acceptance": "pnpm run build && pnpm --filter @narada2/agent-web-ui build && node --import tsx --test --test-concurrency=1 test/integration/operator-journey-acceptance-e2e.test.mjs",
     "test:operator-projection-open": "node scripts/run-vitest-quiet.mjs run --silent test/commands/nars.test.ts test/commands/launcher-workspace-plan.test.ts test/lib/browser-render.test.ts test/commands/task-graph.test.ts",
-    "test:realfs": "pnpm --filter @narada2/ui build && node --import tsx --test test/integration/*.test.mjs",
+    "test:realfs": "pnpm --filter @narada2/ui build && pnpm --filter @narada2/agent-web-ui build && node --import tsx --test test/integration/*.test.mjs",
     "coverage": "vitest run --coverage"
   },
   "dependencies": {
@@ -126,6 +130,7 @@
     "@narada2/agent-identity": "workspace:*",
     "@narada2/agent-start": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
+    "@narada2/agent-pi-tui": "workspace:*",
     "@clack/prompts": "^0.7.0",
     "@narada2/agent-context-memory": "workspace:*",
     "@narada2/agent-web-ui": "workspace:*",
@@ -152,8 +157,10 @@
     "@narada2/mcp-transport": "workspace:*",
     "@narada2/macos-site": "workspace:*",
     "@narada2/nars-session-core": "workspace:*",
+    "@narada2/nars-session-authority": "workspace:*",
     "@narada2/operator-console-ui": "workspace:*",
     "@narada2/operator-console-contract": "workspace:*",
+    "@narada2/operator-console-overlay": "workspace:*",
     "@narada2/operator-router": "workspace:*",
     "@narada2/ops-kit": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",

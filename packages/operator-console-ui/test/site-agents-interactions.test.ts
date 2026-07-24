@@ -17,6 +17,14 @@ function agent(state: 'running' | 'stopped' | 'degraded' | 'ambiguous', sessionI
       selected_session_id: sessionId,
     },
     work: { state: 'available', detail: null, source: 'principal-runtime' },
+    operator_surfaces: {
+      default_kind: 'agent-web-ui',
+      choices: [
+        { kind: 'agent-web-ui', label: 'Web UI', status: 'available', reason: null },
+        { kind: 'agent-cli', label: 'CLI', status: 'available', reason: null },
+        { kind: 'agent-tui', label: 'TUI', status: 'available', reason: null },
+      ],
+    },
     actions: { start: state === 'stopped', inspect: state === 'running', inspect_reason: 'No single healthy session is available.' },
   };
 }

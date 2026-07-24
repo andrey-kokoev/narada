@@ -117,6 +117,8 @@ export function createNarsSessionSupervisor({
         turnId,
         inputEventId: turnId,
         abortSignal: controller.signal,
+        recoveryReplay: isRecoveryReplay,
+        ...(recoveryAttempt ? { recoveryAttemptId: recoveryAttempt.attempt_id } : {}),
       };
       const result = await carrier.runTurn(context, eventSink, toolGateway);
       const current = core.turn(turnId);

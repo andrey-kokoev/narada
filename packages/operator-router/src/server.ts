@@ -14,6 +14,7 @@ import {
 import {
   OPERATOR_ROUTER_HEALTH_SCHEMA,
   OPERATOR_ROUTER_IDENTITY,
+  OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,
   OPERATOR_ROUTER_REGISTRATION_SCHEMA,
   OPERATOR_ROUTER_ROUTES_SCHEMA,
   OPERATOR_ROUTER_STATE_SCHEMA,
@@ -24,6 +25,7 @@ import {
   type OperatorRouterWebSocketLiveness,
   projectRouteRegistration,
   type OperatorRouterHealthResponse,
+  type OperatorRouterAdminRoutesResponse,
   type OperatorRouterRouteRegistration,
   type OperatorRouterRouteRegistrationInput,
   type OperatorRouterRoutesResponse,
@@ -787,6 +789,15 @@ export async function createOperatorRouterServer(config: Partial<OperatorRouterS
   async function handleAdmin(req: IncomingMessage, res: ServerResponse, urlObject: URL): Promise<void> {
     if (!authorized(req)) {
       jsonResponse(res, 401, { error: 'operator_router_registration_authorization_required' });
+      return;
+    }
+    if (urlObject.pathname === '/admin/routes' && req.method === 'GET') {
+      const payload: OperatorRouterAdminRoutesResponse = {
+        schema: OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,
+        identity: OPERATOR_ROUTER_IDENTITY,
+        routes: structuredClone(state.routes),
+      };
+      jsonResponse(res, 200, payload);
       return;
     }
     if (urlObject.pathname === '/admin/routes' && req.method === 'POST') {

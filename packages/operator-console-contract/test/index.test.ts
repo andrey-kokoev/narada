@@ -189,6 +189,14 @@ test('site-agent overview parser preserves orthogonal runtime and work state', (
           admission_status: 'admitted',
           runtime: { state: 'running', session_count: 1, healthy_session_ids: ['session-1'], selected_session_id: 'session-1' },
           work: { state: 'executing', detail: 'task-1', source: 'principal-runtime' },
+          operator_surfaces: {
+            default_kind: 'agent-web-ui',
+            choices: [
+              { kind: 'agent-web-ui', label: 'Web UI', status: 'available', reason: null },
+              { kind: 'agent-cli', label: 'CLI', status: 'available', reason: null },
+              { kind: 'agent-tui', label: 'TUI', status: 'available', reason: null },
+            ],
+          },
           actions: { start: false, inspect: true, inspect_reason: null },
         }],
       }],
@@ -267,6 +275,14 @@ function validSiteAgentOverview() {
           admission_status: 'admitted' as const,
           runtime: { state: 'running' as const, session_count: 1, healthy_session_ids: ['session-1'], selected_session_id: 'session-1' },
           work: { state: 'executing', detail: 'task-1', source: 'principal-runtime' as const },
+          operator_surfaces: {
+            default_kind: 'agent-web-ui',
+            choices: [
+              { kind: 'agent-web-ui' as const, label: 'Web UI', status: 'available' as const, reason: null },
+              { kind: 'agent-cli' as const, label: 'CLI', status: 'available' as const, reason: null },
+              { kind: 'agent-tui' as const, label: 'TUI', status: 'available' as const, reason: null },
+            ],
+          },
           actions: { start: false, inspect: true, inspect_reason: null },
         }],
       }],

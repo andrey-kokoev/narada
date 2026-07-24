@@ -20,7 +20,7 @@ export interface UseSiteAgentsState {
   error: Ref<string | null>;
   launchFailure: Ref<OperatorSiteAgentLaunchWireResponse | null>;
   load(): Promise<void>;
-  launch(siteId: string, agentId: string): Promise<OperatorSiteAgentLaunchWireResponse>;
+  launch(siteId: string, agentId: string, operatorSurface?: string): Promise<OperatorSiteAgentLaunchWireResponse>;
 }
 
 export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter()): UseSiteAgentsState {
@@ -55,10 +55,10 @@ export function useSiteAgents(client: SiteAgentsClient = createSiteAgentsAdapter
     }
   }
 
-  async function launch(siteId: string, agentId: string): Promise<OperatorSiteAgentLaunchWireResponse> {
+  async function launch(siteId: string, agentId: string, operatorSurface?: string): Promise<OperatorSiteAgentLaunchWireResponse> {
     launchFailure.value = null;
     try {
-      const result = await client.launch(siteId, agentId);
+      const result = await client.launch(siteId, agentId, operatorSurface);
       if (result.status === 'failed') launchFailure.value = result;
       return result;
     } catch (cause) {

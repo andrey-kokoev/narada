@@ -22,6 +22,20 @@ export interface FailureProjectionDocumentOptions {
   failure: OperatorSiteAgentLaunchFailureWireRecord;
 }
 
+export type AgentWebUiHandoffDecision =
+  | { kind: 'ready'; url: string }
+  | { kind: 'pending'; sessionId: string }
+  | { kind: 'unavailable'; reason: string };
+
+export function decideAgentWebUiHandoff(
+  sessionId: string | null,
+  routeUrl: string | null,
+): AgentWebUiHandoffDecision {
+  if (routeUrl) return { kind: 'ready', url: routeUrl };
+  if (sessionId) return { kind: 'pending', sessionId };
+  return { kind: 'unavailable', reason: 'No NARS session is available for Web UI handoff.' };
+}
+
 export function scopedAgentSessionsPath(siteId: string, agentId: string): string {
   return `/console/sessions?site=${encodeURIComponent(siteId)}&agent=${encodeURIComponent(agentId)}`;
 }

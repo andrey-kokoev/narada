@@ -27,7 +27,7 @@ It does not own:
 - Read-only observation: GET responses from the console server are projections; rendering must not synthesize or repair missing authority fields.
 - Mutations (registry add/manage, control actions) cross to the server through the contract-bound endpoints only; no direct Site or session writes from UI code.
 - Navigation targets come from the v3 route directory and are same-origin, workspace-relative paths; reject external or protocol-relative URLs rather than following them.
-- The Agent Sessions page renders the redacted `OperatorSessionWireRecord`; session authority stays in the NARS session index — no lifecycle control from this UI.
+- The Agent Sessions page renders the redacted `OperatorSessionWireRecord`; session authority stays in the NARS session-authority registry, while the session index is an inventory/projection — no lifecycle control from this UI.
 
 ## Verification
 

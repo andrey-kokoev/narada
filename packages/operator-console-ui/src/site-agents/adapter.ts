@@ -3,6 +3,7 @@ import {
   parseOperatorSiteAgentOverviewWireResponse,
   validateOperatorSiteAgentOverviewInvariants,
   type OperatorSiteAgentLaunchFailureWireRecord,
+  type OperatorSiteAgentLaunchHandoffWireRecord,
   type OperatorSiteAgentLaunchWireResponse,
   type OperatorSiteAgentOverviewWireResponse,
 } from '@narada2/operator-console-contract';
@@ -17,9 +18,19 @@ export interface SiteAgentsPendingEntry {
   phase: 'launch_accepted' | 'waiting_for_session' | 'waiting_for_route';
 }
 
+function parseLaunchHandoff(value: unknown): OperatorSiteAgentLaunchHandoffWireRecord | null {
+  if (!isRecord(value)
+    || !['browser', 'terminal', 'none'].includes(String(value.kind))
+    || !['ready', 'started', 'pending', 'refused'].includes(String(value.status))
+    || !(typeof value.url === 'string' || value.url === null)
+    || !(typeof value.command === 'string' || value.command === null)
+    || !(typeof value.message === 'string' || value.message === null)) return null;
+  return value as unknown as OperatorSiteAgentLaunchHandoffWireRecord;
+}
+
 export interface SiteAgentsClient {
   overview(): Promise<OperatorSiteAgentOverviewWireResponse>;
-  launch(siteId: string, agentId: string): Promise<OperatorSiteAgentLaunchWireResponse>;
+  launch(siteId: string, agentId: string, operatorSurface?: string): Promise<OperatorSiteAgentLaunchWireResponse>;
   pending(): Promise<SiteAgentsPendingEntry[]>;
 }
 
@@ -51,6 +62,8 @@ export function parseOperatorSiteAgentLaunchWireResponse(value: unknown): Operat
     || typeof value.agent_id !== 'string'
     || !(typeof value.session_id === 'string' || value.session_id === null)
     || !(typeof value.reason === 'string' || value.reason === null)
+    || (value.operator_surface !== undefined && typeof value.operator_surface !== 'string')
+    || (value.handoff !== undefined && !parseLaunchHandoff(value.handoff))
     || (value.request_id !== undefined && typeof value.request_id !== 'string')
     || (value.failure !== undefined && value.failure !== null && !parseLaunchFailure(value.failure))) return null;
   return value as unknown as OperatorSiteAgentLaunchWireResponse;
@@ -90,8 +103,8 @@ export function createSiteAgentsAdapter(
       }
       return response;
     },
-    async launch(siteId, agentId) {
-      const response = parseOperatorSiteAgentLaunchWireResponse(await transport.launch(siteId, agentId));
+    async launch(siteId, agentId, operatorSurface) {
+      const response = parseOperatorSiteAgentLaunchWireResponse(await transport.launch(siteId, agentId, operatorSurface));
       if (!response) throw new SiteAgentsApiError('invalid_launch', 'Agent launch response did not match its contract.');
       return response;
     },

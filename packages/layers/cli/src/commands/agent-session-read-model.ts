@@ -5,6 +5,7 @@ import type {
   OperatorSessionWireRecord,
 } from '@narada2/operator-console-contract';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
+import { probeNarsSessionHealth } from '../lib/nars-session-health.js';
 
 const AGENT_SESSION_LIST_SCHEMA = 'narada.operator_console.agent_sessions.v1' as const;
 const MAX_SITES = 100;
@@ -104,7 +105,9 @@ export function createAgentSessionReadModel(
         }
         try {
           const discovery = discoverNarsSessions({ siteRoot });
-          for (const entry of discovery.sessions) {
+          const healthBySessionId = await probeNarsSessionHealth(discovery.sessions);
+          const refreshedDiscovery = discoverNarsSessions({ siteRoot, healthBySessionId });
+          for (const entry of refreshedDiscovery.sessions) {
             if (sessions.length >= MAX_SESSIONS) break;
             const projection = isRecord(entry) ? sessionProjection(entry, siteId) : null;
             if (projection) sessions.push(projection);

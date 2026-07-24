@@ -75,7 +75,7 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
   assert.equal(contract.schema, OPERATOR_SURFACE_LAUNCH_MATRIX_CONTRACT_SCHEMA);
   assert.deepEqual(
     contract.rows.map((row) => row.launch_selection_kind),
-    ['agent-cli', 'agent-web-ui', 'agent-tui', 'codex', 'kimi', 'pi', 'claude-code', 'opencode'],
+    ['agent-cli', 'agent-web-ui', 'agent-tui', 'agent-pi-tui', 'codex', 'kimi', 'pi', 'claude-code', 'opencode'],
   );
   assert.deepEqual(
     contract.rows.map((row) => row.operator_surface_kind),
@@ -84,13 +84,13 @@ test('carrier launch matrix is the complete admitted launch-selection authority'
   assert.deepEqual([...ADMITTED_LAUNCH_SELECTION_KINDS], contract.rows.map((row) => row.launch_selection_kind));
   assert.deepEqual([...ADMITTED_RUNTIME_SUBSTRATE_KINDS], loadRuntimeSubstrateKindsContract().admitted_runtime_substrate_kinds);
   assert.equal(contract.rows.every((row) => ADMITTED_RUNTIME_SUBSTRATE_KINDS.includes(row.runtime_host_kind)), true);
-  assert.deepEqual([...operatorSurfaceKindsForRuntimeHost('narada-agent-runtime-server')], ['agent-cli', 'agent-web-ui', 'agent-tui']);
-  assert.deepEqual([...operatorSurfaceKindsForProjectionCapability('nars_attach')], ['agent-cli', 'agent-web-ui', 'agent-tui']);
+  assert.deepEqual([...operatorSurfaceKindsForRuntimeHost('narada-agent-runtime-server')], ['agent-cli', 'agent-web-ui', 'agent-tui', 'agent-pi-tui']);
+  assert.deepEqual([...operatorSurfaceKindsForProjectionCapability('nars_attach')], ['agent-cli', 'agent-web-ui', 'agent-tui', 'agent-pi-tui']);
   assert.equal(contract.rows.every((row) => Array.isArray(row.projection_capabilities)), true);
   assert.equal(contract.rows.every((row) => row.conformance && Array.isArray(row.conformance.known_gaps)), true);
   assert.deepEqual(
     contract.rows.map((row) => row.conformance.evidence_level),
-    ['code_enforced', 'code_enforced', 'code_enforced', 'config_enforced', 'unverified', 'config_enforced', 'config_enforced', 'documented_advisory'],
+    ['code_enforced', 'code_enforced', 'code_enforced', 'code_enforced', 'config_enforced', 'unverified', 'config_enforced', 'config_enforced', 'documented_advisory'],
   );
   assert.equal(contract.rows.find((row) => row.launch_selection_kind === 'opencode').conformance.evidence_level, 'documented_advisory');
   assert.deepEqual([...ADMITTED_RUNTIME_IMPLEMENTATION_KINDS].sort(), [

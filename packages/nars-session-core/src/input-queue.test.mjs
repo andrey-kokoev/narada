@@ -1,6 +1,24 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createInputQueue } from './input-queue.mjs';
+import { createInputQueue, normalizeInputEvent } from './input-queue.mjs';
+
+test('input normalization preserves nested session.submit steering fields', () => {
+  const normalized = normalizeInputEvent({
+    method: 'session.submit',
+    params: {
+      content: 'steer this turn',
+      source: 'operator_steering',
+      source_kind: 'operator',
+      delivery_mode: 'admit_after_active_turn',
+      active_turn_id: 'turn_active',
+    },
+  }, { received_at: '2026-07-22T00:00:00.000Z' }, { randomIdFn: () => 'nested' });
+
+  assert.equal(normalized.source, 'operator_steering');
+  assert.equal(normalized.source_kind, 'operator');
+  assert.equal(normalized.delivery_mode, 'admit_after_active_turn');
+  assert.equal(normalized.content, 'steer this turn');
+});
 
 test('input queue persists admission transitions and keeps them distinct from turn state', async () => {
   const events = [];
@@ -34,6 +52,47 @@ test('input queue persists admission transitions and keeps them distinct from tu
   assert.equal(queue.pendingCount, 0);
   assert.ok(events.some((event) => event.event === 'input_event_started' && event.admission_state === 'admitted'));
   assert.equal(queueStates.at(-1).transition, 'completed');
+});
+
+test('system directive receipt evidence preserves correlation identity by default', async () => {
+  const events = [];
+  const queue = createInputQueue({
+    identity: 'resident',
+    session: 'carrier_receipt_default_test',
+    shouldDefer: () => false,
+    drain: async () => ({ terminal_state: 'completed' }),
+    appendSessionFn: (event) => events.push(event),
+    sessionEventEntryFn: (event, payload) => ({ event, ...payload }),
+  });
+
+  await queue.enqueue({
+    event_id: 'input_directive_default_test',
+    request_id: 'request_directive_default_test',
+    directive_id: 'dir_default_test',
+    source: 'system_directive',
+    transport: 'control_jsonl',
+    content: 'record this directive',
+  }, { drain: true });
+
+  assert.deepEqual(events.find((event) => event.event === 'directive_receipt_recorded'), {
+    event: 'directive_receipt_recorded',
+    input_event_id: 'input_directive_default_test',
+    request_id: 'request_directive_default_test',
+    directive_id: 'dir_default_test',
+    carrier_session_id: 'carrier_receipt_default_test',
+    agent_id: 'resident',
+    transport: 'control_jsonl',
+  });
+  assert.deepEqual(events.find((event) => event.event === 'directive_carrier_accepted_recorded'), {
+    event: 'directive_carrier_accepted_recorded',
+    input_event_id: 'input_directive_default_test',
+    request_id: 'request_directive_default_test',
+    directive_id: 'dir_default_test',
+    carrier_session_id: 'carrier_receipt_default_test',
+    agent_id: 'resident',
+    transport: 'control_jsonl',
+    acceptance_semantics: 'carrier_started_directive_turn',
+  });
 });
 
 test('input queue requeues an admitted item after a crash window', async () => {
