@@ -6,6 +6,7 @@ import test from "node:test";
 
 import {
   CANONICAL_CATALOG_SEED_SCHEMA,
+  buildCanonicalLocalTestSeed,
   buildCanonicalCloudflareTestSeed,
   canonicalSha256,
   canonicalTestClock,
@@ -41,6 +42,8 @@ import {
 } from "../src/deployment.js";
 import type { ManagementDeploymentBundle } from "../src/deployment.js";
 import { parseLegacyRegistry } from "../src/legacy.js";
+import { inspectLocalIntelligenceReadiness } from "../src/local-readiness.js";
+import type { LocalReadinessContext } from "../src/local-readiness.js";
 import { createManagementTools } from "../src/mcp-tools.js";
 import { buildMigrationPlan } from "../src/migrate.js";
 import { MigrationValidationError } from "../src/migrate.js";
@@ -84,6 +87,45 @@ test("management error output preserves migration validator diagnostics", () => 
   }]);
 });
 
+test("local readiness is read-only, requires explicit principal binding, and accepts a complete canonical graph", async () => {
+  const { session, close } = await sqliteSession();
+  try {
+    const seed = buildCanonicalLocalTestSeed({
+      now: DECIDED_AT,
+      validUntil: "2026-07-20T00:00:00Z",
+    });
+    const principalRecord = seed.records.find(({ record_id }) => record_id === PRINCIPAL);
+    assert.ok(principalRecord, "canonical fixture must contain the invocation principal");
+    const principal = principalRecord.document as {
+      id: string;
+      admission_bindings?: unknown[];
+    };
+    principal.admission_bindings = [{
+      id: "binding:andrey:site-roster",
+      kind: "site-membership",
+      registry: "site-roster",
+      site_id: "site:narada",
+      roles: ["resident"],
+      auth_types: ["user-site-session"],
+    }];
+    principalRecord.source.digest = canonicalSha256(principal);
+    await session.store.loadCatalogSeed(seed);
+    const before = await session.store.listCatalogRecords();
+
+    const missingBinding = await inspectLocalIntelligenceReadiness(session.store, localReadinessContext({ principal_binding: null }));
+    assert.equal(missingBinding.status, "blocked");
+    assert.equal(missingBinding.checks.find(({ id }) => id === "principal-binding")?.code, "principal-binding-context-required");
+
+    const ready = await inspectLocalIntelligenceReadiness(session.store, localReadinessContext());
+    assert.equal(ready.status, "ready", JSON.stringify(ready, null, 2));
+    assert.ok(ready.checks.every(({ status }) => status === "ready"), JSON.stringify(ready.checks, null, 2));
+    assert.ok(ready.route_readiness.some(({ eligible }) => eligible));
+    assert.deepEqual(await session.store.listCatalogRecords(), before, "readiness inspection must not mutate the catalog");
+  } finally {
+    await close();
+  }
+});
+
 function resolverContext(instant = DECIDED_AT): ResolverContext {
   return {
     targetSite: TARGET,
@@ -101,6 +143,27 @@ function resolverContext(instant = DECIDED_AT): ResolverContext {
       expected_cost: { amount: 1, currency: "USD" },
     },
     topology_observations: [],
+  };
+}
+
+function localReadinessContext(overrides: Partial<LocalReadinessContext> = {}): LocalReadinessContext {
+  return {
+    target_site_id: "site:narada",
+    user_site_id: "site:user",
+    host_site_id: "site:pc",
+    principal_id: PRINCIPAL,
+    now: DECIDED_AT,
+    principal_binding: {
+      actor: { principal_id: PRINCIPAL, auth_type: "user-site-session" },
+      memberships: [{
+        registry: "site-roster",
+        site_id: "site:narada",
+        role: "resident",
+        evidence_ref: "evidence:principal-membership",
+      }],
+      evidence_refs: ["evidence:principal-membership"],
+    },
+    ...overrides,
   };
 }
 
@@ -573,6 +636,7 @@ test("MCP projection uses immutable refs and exactly the canonical result/error 
       ["input:statement-record", firstRecords.statement_record],
       ["input:payload-record", firstRecords.payload_record],
       ["input:deployment-bundle", bundle],
+      ["input:readiness-context", localReadinessContext({ principal_binding: null })],
     ]);
     session.resolveInputRef = async (ref) => {
       if (!refs.has(ref)) throw new ManagementError("input-not-found", "Immutable input reference was not found.");
@@ -593,6 +657,11 @@ test("MCP projection uses immutable refs and exactly the canonical result/error 
     assert.equal(asResult(await tools.get("intelligence_management_list")!.handler({ collection: "catalog-records" })).operation, "list");
     assert.equal(asResult(await tools.get("intelligence_management_show")!.handler({ entity: "catalog-record", id: record.id })).operation, "show");
     assert.equal(asResult(await tools.get("intelligence_management_validate")!.handler({})).operation, "validate");
+    const readiness = asResult(await tools.get("intelligence_management_local_readiness")!.handler({
+      context_ref: "input:readiness-context",
+    }));
+    assert.equal(readiness.operation, "local-readiness");
+    assert.equal((readiness.data as { status: string }).status, "blocked");
 
     const explained = asResult(await tools.get("intelligence_management_explain_resolution")!.handler({
       resolver: "local",
@@ -711,6 +780,22 @@ test("CLI is a file-reference projection of the same canonical service", async (
 
     const validation = await runCli(["--db", db, "--owning-site", TARGET.id, "validate"]);
     assert.equal((validation.output as ManagementResult).operation, "validate");
+
+    const readinessContextPath = join(directory, "readiness-context.json");
+    await writeFile(readinessContextPath, JSON.stringify({
+      target_site_id: TARGET.id,
+      user_site_id: USER.id,
+      host_site_id: HOST.id,
+      principal_id: PRINCIPAL,
+      now: DECIDED_AT,
+    }));
+    const readiness = await runCli([
+      "--db", db, "--owning-site", TARGET.id,
+      "local-readiness", "--context", readinessContextPath,
+    ]);
+    assert.equal(readiness.code, 2);
+    assert.equal((readiness.output as ManagementResult).operation, "local-readiness");
+    assert.equal((readiness.output as ManagementResult).ok, false);
 
     const bundlePath = join(directory, "deployment-bundle.json");
     const deploymentDb = join(directory, "deployment.db");

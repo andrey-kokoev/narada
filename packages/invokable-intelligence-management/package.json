@@ -14,6 +14,14 @@
     "authority_owner": "@narada2/cli"
   },
   "exports": {
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "import": "./dist/worker.js"
+    },
+    "./local-readiness": {
+      "types": "./dist/local-readiness.d.ts",
+      "import": "./dist/local-readiness.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"

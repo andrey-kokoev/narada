@@ -34,6 +34,26 @@ test('session.submit normalizes explicit retry and replay controls at the public
   );
 });
 
+test('session status projects the NARS execution policy from the active runtime snapshot', () => {
+  const executionPolicy = {
+    schema: 'narada.nars.execution_policy.v1',
+    scope: 'session',
+    source: { kind: 'runtime-control', ref: 'runtime:session-test', revision: 2 },
+    tool_loop: { max_rounds: 12 },
+  };
+  const result = sessionCommandResult(
+    '/status',
+    '',
+    { health: () => ({ lifecycle_state: 'ready', operational_posture: 'healthy' }) },
+    { session: 'session-test', identity: 'agent-test', mcpScope: 'none' },
+    createDisabledIntelligenceToolGateway(),
+    null,
+    null,
+    executionPolicy,
+  );
+  assert.deepEqual(result.health.execution_policy, executionPolicy);
+});
+
 test('retry and replay controls rebuild the original intent payload instead of accumulating failed turns', () => {
   const context = buildProviderTurnContext({
     eventsPath: 'unused-for-explicit-lineage-mode',
@@ -75,6 +95,7 @@ test('supported control failures retain method-specific rejection codes', () => 
   assert.equal(requestRejectionCode('session.submit', 'provider_failed'), 'request_dispatch_failed');
   assert.equal(requestRejectionCode('session.health', 'health_failed'), 'session_control_failed');
   assert.equal(requestRejectionCode('runtime.intelligence.reconfigure', 'binding_failed'), 'runtime_reconfiguration_failed');
+  assert.equal(requestRejectionCode('runtime.execution_policy.reconfigure', 'binding_failed'), 'runtime_execution_policy_reconfiguration_failed');
   assert.equal(requestRejectionCode('legacy.mutate', 'unsupported_session_control'), 'unsupported_session_control');
   assert.equal(
     requestRejectionCode('session.submit', '$.mode: must be one of immediate, retry'),

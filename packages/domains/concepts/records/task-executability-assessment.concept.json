@@ -31,15 +31,21 @@
     "narada-core/packages/task-governance-core/src/task-executability-contract.ts"
   ],
   "docs": [
-    "docs/concepts/task-executability-assessment.md"
+    "docs/concepts/task-executability-assessment.md",
+    "docs/operations/task-executability-e2e-and-recovery.md"
   ],
   "tasks": ["2223", "2224", "2225", "2226", "2227", "2228", "2229", "2230"],
   "code_refs": [
     "narada-core/packages/task-governance-core/src/task-executability-contract.ts",
-    "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts"
+    "narada-core/packages/task-governance-core/src/task-lifecycle-store.ts",
+    "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts",
+    "mcp-surfaces/packages/site-loop-mcp/test/task-executability-cross-surface-e2e.test.ts",
+    "mcp-surfaces/packages/worker-delegation-mcp/test/external-provider-e2e.test.ts"
   ],
   "tests": [
-    "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts"
+    "narada-core/packages/task-governance-core/test/lib/task-executability-contract.test.ts",
+    "mcp-surfaces/packages/site-loop-mcp/test/task-executability-cross-surface-e2e.test.ts (deterministic cross-surface proof)",
+    "mcp-surfaces/packages/worker-delegation-mcp/test/external-provider-e2e.test.ts (opt-in bounded live provider proof)"
   ],
   "examples": [
     "on_create policy triggers an assessment request when a task is created",
@@ -52,6 +58,6 @@
     "embedding provider/model names in Task Lifecycle policy"
   ],
   "open_questions": [],
-  "confidence": { "cl": 0.95, "basis": "Contracts, policy resolution, digests, and tests are implemented; downstream storage, orchestration, and enforcement are pending as tasks 2224-2230." },
-  "reviewed_at": "2026-07-19T00:00:00.000Z"
+  "confidence": { "cl": 0.99, "basis": "Contracts, durable Task Lifecycle storage, Site Loop/NARS orchestration, delegated enforcement, restart recovery, deterministic cross-surface E2E, and an explicit bounded live-provider E2E path are implemented and documented; live provider execution remains opt-in." },
+  "reviewed_at": "2026-07-20T16:30:00.000Z"
 }

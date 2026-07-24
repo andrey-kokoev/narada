@@ -2,6 +2,7 @@
 
 import type {
   CanonicalCatalogRecord,
+  CanonicalCatalogSeed,
   InvocationIntent,
   MaterializationAdmission,
   MaterializationEnvelope,
@@ -23,6 +24,7 @@ import type {
   ManagementMutationContext,
   ManagementSession,
 } from "./service.js";
+import type { LocalReadinessContext } from "./local-readiness.js";
 
 export interface ManagementToolDefinition {
   name: string;
@@ -134,6 +136,26 @@ export function createManagementTools(session: ManagementSession): ManagementToo
       })),
     },
     {
+      name: "intelligence_management_admit_catalog_seed",
+      description: "Atomically admit a complete, residual-free canonical catalog seed with one explicit mutation context per record.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          seed_ref: { type: "string" },
+          record_contexts_ref: { type: "string" },
+          context: MUTATION_CONTEXT_SCHEMA,
+        },
+        required: ["seed_ref", "record_contexts_ref", "context"],
+      },
+      handler: (input) => wrap(async () => service.execute({
+        operation: "admit-catalog-seed",
+        seed: await resolveRef<CanonicalCatalogSeed>(session, input.seed_ref),
+        record_contexts: await resolveRef<Record<string, ManagementMutationContext>>(session, input.record_contexts_ref),
+        context: mutationContext(input.context),
+      })),
+    },
+    {
       name: "intelligence_management_show",
       description: "Show one canonical entity and its linked relations or materialization audit.",
       inputSchema: {
@@ -153,6 +175,20 @@ export function createManagementTools(session: ManagementSession): ManagementToo
       description: "Validate canonical registry, catalog, and materialized projections.",
       inputSchema: { type: "object", additionalProperties: false, properties: {} },
       handler: () => wrap(() => service.execute({ operation: "validate" })),
+    },
+    {
+      name: "intelligence_management_local_readiness",
+      description: "Run the read-only local intelligence readiness doctor for an explicit User Site principal binding and full access chain.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: { context_ref: { type: "string" } },
+        required: ["context_ref"],
+      },
+      handler: (input) => wrap(async () => service.execute({
+        operation: "local-readiness",
+        context: await resolveRef<LocalReadinessContext>(session, input.context_ref),
+      })),
     },
     {
       name: "intelligence_management_deploy",

@@ -7,6 +7,7 @@ import {
   buildKernelHealthProjection,
   buildKernelStartEvidence,
   createNarsToolRound,
+  normalizeNarsExecutionPolicy,
   NarsKernelContractError,
 } from './index.mjs';
 
@@ -49,6 +50,9 @@ export function createNarsNativeKernel({
     provider: runtimeContext.provider ?? null,
     model: runtimeContext.model ?? null,
     thinking: runtimeContext.thinking ?? null,
+    executionPolicy: normalizeNarsExecutionPolicy(runtimeContext.executionPolicy ?? runtimeContext.execution_policy, {
+      sourceKind: 'runtime-config',
+    }),
   };
   let closed = false;
   const compactError = (error, fallback) => ({
@@ -80,6 +84,7 @@ export function createNarsNativeKernel({
       provider: publicResourceId(currentConfig.provider),
       model: publicResourceId(currentConfig.model),
       thinking: typeof currentConfig.thinking === 'string' ? currentConfig.thinking.trim() || null : null,
+      executionPolicy: currentConfig.executionPolicy,
       kernelState: state,
       activeTurnId,
       capabilityProfile: {
@@ -117,6 +122,7 @@ export function createNarsNativeKernel({
       messages: input.messages ?? [],
       tools: [],
       settings: input.requestedOptions && typeof input.requestedOptions === 'object' ? input.requestedOptions : {},
+      execution_policy: input.executionPolicy ?? input.execution_policy ?? currentConfig.executionPolicy,
       provider_invocation: {
         plan: input.plan,
         model: input.model,
@@ -145,11 +151,13 @@ export function createNarsNativeKernel({
       if (closed) throw new NarsKernelContractError('native_kernel_closed', 'Native kernel is closed.');
       const normalized = assertNarsKernelStartContext(context);
       if (started) return started;
+      const hasExplicitExecutionPolicy = context?.execution_policy != null || context?.executionPolicy != null;
       state = 'starting';
       currentConfig = {
         provider: normalized.provider ?? currentConfig.provider,
         model: normalized.model ?? currentConfig.model,
         thinking: normalized.thinking ?? currentConfig.thinking,
+        executionPolicy: hasExplicitExecutionPolicy ? normalized.execution_policy : currentConfig.executionPolicy,
       };
       started = buildKernelStartEvidence({
         kernelKind: 'narada-native',
@@ -167,7 +175,10 @@ export function createNarsNativeKernel({
       if (closed) throw new NarsKernelContractError('native_kernel_closed', 'Native kernel is closed.');
       if (!started) throw new NarsKernelContractError('native_kernel_not_started', 'Native kernel has not started.');
       if (activeTurnId) throw new NarsKernelContractError('native_kernel_turn_active', `Turn '${activeTurnId}' is already active.`);
-      const normalizedTurn = assertNarsAdmittedTurn(turn);
+      const normalizedTurn = assertNarsAdmittedTurn({
+        ...(turn && typeof turn === 'object' ? turn : {}),
+        execution_policy: turn?.execution_policy ?? turn?.executionPolicy ?? currentConfig.executionPolicy,
+      });
       const sink = assertNarsKernelEventSink(eventSink);
       const gateway = assertNarsKernelCapabilityGateway(capabilityGateway);
       let admittedCatalog = [];
@@ -245,6 +256,8 @@ export function createNarsNativeKernel({
           turnAttempt: normalizedTurn.turn_attempt,
           turn_attempt: normalizedTurn.turn_attempt,
           abortSignal: toolRound.abort_signal,
+          executionPolicy: toolRound.execution_policy,
+          execution_policy: toolRound.execution_policy,
           tool_loop: toolRound.tool_loop,
           invocationEventSink: async (event) => emit(sink, { kind: 'kernel_provider_telemetry', source_event: event }),
           capabilityGateway: toolRound.capability_gateway,
@@ -289,26 +302,43 @@ export function createNarsNativeKernel({
     async reconfigure(request = {}) {
       if (closed) return { accepted: false, reason: 'native_kernel_closed' };
       if (activeTurnId) return { accepted: false, reason: 'runtime_not_at_clean_turn_boundary', active_turn_id: activeTurnId };
-      if (!request.admitted_plan || typeof request.admitted_plan !== 'object' || Array.isArray(request.admitted_plan)) {
+      const requestedExecutionPolicy = request.execution_policy ?? request.executionPolicy;
+      const hasExecutionPolicy = requestedExecutionPolicy != null;
+      const hasAdmittedPlan = request.admitted_plan && typeof request.admitted_plan === 'object' && !Array.isArray(request.admitted_plan);
+      if (!hasAdmittedPlan && !hasExecutionPolicy) {
         return { accepted: false, reason: 'admitted_plan_required' };
       }
-      const selected = request.admitted_plan.selected;
-      if (!selected || typeof selected !== 'object' || Array.isArray(selected)
-        || !publicResourceId(selected.inference_provider)
-        || !publicResourceId(selected.model)) {
-        return { accepted: false, reason: 'admitted_plan_binding_incomplete' };
-      }
-      currentConfig = {
-        provider: selected.inference_provider,
-        model: selected.model,
-        thinking: request.admitted_plan?.options?.thinking ?? currentConfig.thinking,
+      const nextExecutionPolicy = hasExecutionPolicy
+        ? normalizeNarsExecutionPolicy(requestedExecutionPolicy, {
+          sourceKind: 'runtime-reconfigure',
+        })
+        : currentConfig.executionPolicy;
+      let nextConfig = {
+        ...currentConfig,
+        executionPolicy: nextExecutionPolicy,
       };
+      if (hasAdmittedPlan) {
+        const selected = request.admitted_plan.selected;
+        if (!selected || typeof selected !== 'object' || Array.isArray(selected)
+          || !publicResourceId(selected.inference_provider)
+          || !publicResourceId(selected.model)) {
+          return { accepted: false, reason: 'admitted_plan_binding_incomplete' };
+        }
+        nextConfig = {
+          ...nextConfig,
+          provider: selected.inference_provider,
+          model: selected.model,
+          thinking: request.admitted_plan?.options?.thinking ?? nextConfig.thinking,
+        };
+      }
+      currentConfig = nextConfig;
       return {
         accepted: true,
         active: {
           provider: publicResourceId(currentConfig.provider),
           model: publicResourceId(currentConfig.model),
           thinking: typeof currentConfig.thinking === 'string' ? currentConfig.thinking.trim() || null : null,
+          ...(hasExecutionPolicy ? { execution_policy: currentConfig.executionPolicy } : {}),
         },
         reason: 'native_runtime_configuration_delegated_to_canonical_runtime',
       };

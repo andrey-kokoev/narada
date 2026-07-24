@@ -39,6 +39,17 @@ export function stripLegacyIntelligenceSelectionEnvironment(env = {}) {
   return scrubbed;
 }
 
+export function stripInheritedIntelligenceLaunchContextEnvironment(env = {}) {
+  const scrubbed = { ...env };
+  delete scrubbed.NARADA_INTELLIGENCE_REGISTRY_DB;
+  delete scrubbed.NARADA_INTELLIGENCE_TARGET_SITE;
+  delete scrubbed.NARADA_INTELLIGENCE_USER_SITE;
+  delete scrubbed.NARADA_INTELLIGENCE_HOST_SITE;
+  delete scrubbed.NARADA_INTELLIGENCE_PRINCIPAL_ID;
+  delete scrubbed.NARADA_INTELLIGENCE_KERNEL;
+  return scrubbed;
+}
+
 function isNarsOperatorSurface(carrierName) {
   return NARS_OPERATOR_SURFACE_KINDS.has(carrierName);
 }
@@ -333,24 +344,26 @@ export function buildCarrierEnvironmentProjection({
   dbPath,
   siteConfig = null,
   mcpScope = null,
+  intelligenceEnvironment = {},
   launchSessionId = null,
   processOwnership = null,
   processRole = null,
   createdByPid = null,
 }) {
   const projectedCarrierEnvironment = isNarsOperatorSurface(carrierName)
-    ? stripLegacyIntelligenceSelectionEnvironment(carrierEnvironment)
+    ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(carrierEnvironment))
     : carrierEnvironment;
   const projectedStartRequiredEnvironment = isNarsOperatorSurface(carrierName)
-    ? stripLegacyIntelligenceSelectionEnvironment(startResult.required_environment ?? {})
+    ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(startResult.required_environment ?? {}))
     : (startResult.required_environment ?? {});
   const projectedStartWouldSetEnvironment = isNarsOperatorSurface(carrierName)
-    ? stripLegacyIntelligenceSelectionEnvironment(startResult.would_set_environment ?? {})
+    ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(startResult.would_set_environment ?? {}))
     : (startResult.would_set_environment ?? {});
   const commonEnvironment = {
     ...projectedCarrierEnvironment,
     ...agentTuiEnvironment,
     ...runtimeEnvironment,
+    ...(isNarsOperatorSurface(carrierName) ? intelligenceEnvironment : {}),
     NARADA_AGENT_ID: identity,
     ...(startResult.role ? { NARADA_AGENT_ROLE: startResult.role } : {}),
     NARADA_AGENT_START_EVENT_ID: agentStartEventId,
@@ -400,6 +413,7 @@ export function buildCarrierSpawnEnvironmentDelta({
   siteConfig = null,
   codexMcpScope = null,
   mcpScope = null,
+  intelligenceEnvironment = {},
   launchSessionId = null,
   processOwnership = null,
   processRole = null,
@@ -425,6 +439,7 @@ export function buildCarrierSpawnEnvironmentDelta({
     dbPath,
     siteConfig,
     mcpScope,
+    intelligenceEnvironment,
     launchSessionId,
     processOwnership,
     processRole,
@@ -459,6 +474,7 @@ export function buildCarrierProcessEnvironment({
   dbPath,
   siteConfig,
   mcpScope,
+  intelligenceEnvironment = {},
   launchSessionId = null,
   processOwnership = null,
   processRole = null,
@@ -477,11 +493,12 @@ export function buildCarrierProcessEnvironment({
     ...(effectiveCreatedByPid ? { NARADA_CREATED_BY_PID: effectiveCreatedByPid } : {}),
   };
   const inheritedEnvironment = isNarsOperatorSurface(carrierName)
-    ? stripLegacyIntelligenceSelectionEnvironment(processEnvironment)
+    ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(processEnvironment))
     : processEnvironment;
   return {
     ...inheritedEnvironment,
     ...(carrierName === 'pi' ? {} : runtimeEnvironment),
+    ...(isNarsOperatorSurface(carrierName) ? intelligenceEnvironment : {}),
     NARADA_AGENT_ID: identity,
     ...(role ? { NARADA_AGENT_ROLE: role } : {}),
     NARADA_AGENT_START_EVENT_ID: agentStartEventId,
@@ -523,6 +540,7 @@ export function buildNarsLaunchPacket(carrierName, {
   siteMcpFabricPath = null,
   siteCarrierControlPath,
   siteCarrierSessionPath,
+  intelligenceKernelKind = null,
 }) {
   const matrixRow = operatorSurfaceLaunchMatrixRow(carrierName);
   if (!matrixRow || matrixRow.runtime_host_kind !== NARADA_AGENT_RUNTIME_SERVER_KIND) return null;
@@ -537,6 +555,7 @@ export function buildNarsLaunchPacket(carrierName, {
     carrier_runtime_kind: matrixRow.carrier_implementation_kind,
     launch_operator_surface_kind: matrixRow.operator_surface_kind,
     operator_surface_kind: matrixRow.operator_surface_kind,
+    intelligence_kernel_kind: intelligenceKernelKind ?? 'narada-native',
     control_transport: 'jsonl_sideband_file',
     carrier_relation: 'narada_agent_runtime_server',
     runtime_server: {

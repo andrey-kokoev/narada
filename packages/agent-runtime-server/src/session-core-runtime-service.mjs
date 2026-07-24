@@ -7,10 +7,14 @@ import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narad
 import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
+import { normalizeNarsExecutionPolicy } from '@narada2/nars-intelligence-kernel-contract';
 import { createRuntimeSessionBinding } from './runtime-session-binding.mjs';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
 import { createNarsRuntimeRequestRegistry } from './runtime-request-state.mjs';
-import { isNarsRuntimeServerMethod } from './runtime-control-contract.mjs';
+import {
+  NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD,
+  isNarsRuntimeServerMethod,
+} from './runtime-control-contract.mjs';
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 10_000;
 const HEARTBEAT_FRESH_MS = 30_000;
@@ -57,7 +61,7 @@ function buildLocalRuntimeSurfaceContract(runtimeContext, generatedAt = new Date
   });
 }
 
-export function sessionCommandResult(command, value, supervisor, runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime) {
+export function sessionCommandResult(command, value, supervisor, runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime, executionPolicy = null) {
   const resolved = resolveCommandInput(command, value);
   if (!resolved) throw new Error('unsupported_session_command');
   const summary = resolved.name === 'status'
@@ -71,7 +75,7 @@ export function sessionCommandResult(command, value, supervisor, runtimeContext,
     summary,
     terminal_state: 'completed',
     ...(resolved.name === 'status'
-      ? { health: projectRuntimeHealth(supervisor.health(), runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime) }
+      ? { health: projectRuntimeHealth(supervisor.health(), runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime, executionPolicy ?? runtimeContext.executionPolicy ?? runtimeContext.execution_policy ?? null) }
       : {}),
   };
 }
@@ -341,6 +345,7 @@ export function requestRejectionCode(method, message) {
   }
   if (method === 'session.submit') return 'request_dispatch_failed';
   if (method === 'runtime.intelligence.reconfigure') return 'runtime_reconfiguration_failed';
+  if (method === NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD) return 'runtime_execution_policy_reconfiguration_failed';
   if (SESSION_CONTROL_METHODS.has(method) || isNarsRuntimeServerMethod(method)) return 'session_control_failed';
   return 'unsupported_session_control';
 }
@@ -421,7 +426,7 @@ function parseRequest(line) {
   }
 }
 
-function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLifecycle = null, intelligenceRuntime = null) {
+function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLifecycle = null, intelligenceRuntime = null, executionPolicy = null) {
   // MCP authority is opt-in. A runtime that did not receive an explicit scope
   // must report disabled rather than silently projecting the composed fabric.
   const mcpScope = normalizeRuntimeMcpScope(runtimeContext?.mcpScope);
@@ -464,6 +469,10 @@ function projectRuntimeHealth(snapshot, runtimeContext, toolGateway, requestLife
       ?? runtimeContext.intelligenceKernelKind
       ?? null,
     kernel: intelligence.kernel ?? null,
+    execution_policy: executionPolicy
+      ?? runtimeContext.executionPolicy
+      ?? runtimeContext.execution_policy
+      ?? null,
     mcp_operational_state: mcpOperationalState,
     mcp_scope: mcpScope,
     mcp: {
@@ -542,6 +551,19 @@ export function createSessionCoreRuntimeService({
     ? heartbeatIntervalMs
     : 0;
   let supervisor = null;
+  const configuredExecutionPolicy = runtimeContext.executionPolicy
+    ?? runtimeContext.execution_policy
+    ?? runtimeContext.invocationSettings?.executionPolicy
+    ?? runtimeContext.invocationSettings?.execution_policy
+    ?? (runtimeContext.maxToolRounds == null && runtimeContext.max_tool_rounds == null
+      ? runtimeContext.invocationSettings?.maxToolRounds == null && runtimeContext.invocationSettings?.max_tool_rounds == null
+        ? null
+        : { maxToolRounds: runtimeContext.invocationSettings?.maxToolRounds ?? runtimeContext.invocationSettings?.max_tool_rounds }
+      : { maxToolRounds: runtimeContext.maxToolRounds ?? runtimeContext.max_tool_rounds });
+  let executionPolicy = normalizeNarsExecutionPolicy(configuredExecutionPolicy, {
+    sourceKind: configuredExecutionPolicy == null ? 'runtime-default' : 'runtime-config',
+  });
+  let executionPolicyReconfigurationInProgress = false;
   let authorityFailureReported = false;
   const notifyAuthorityHeartbeat = async (reason, at) => {
     if (typeof onAuthorityHeartbeat !== 'function') return;
@@ -591,7 +613,11 @@ export function createSessionCoreRuntimeService({
     runtimeContext,
     invokeIntelligenceFn: runtimeCall,
     toolGateway: intelligenceToolGateway,
+    executionPolicyProvider: () => executionPolicy,
     buildTurnContext: (input) => {
+      if (executionPolicyReconfigurationInProgress) {
+        throw new Error('runtime_execution_policy_reconfiguration_in_progress');
+      }
       return buildProviderTurnContext({ eventsPath: runtimeContext.eventsPath, input });
     },
   });
@@ -605,6 +631,62 @@ export function createSessionCoreRuntimeService({
     requestState.transition('running');
     try {
       if (isNarsRuntimeServerMethod(method)) {
+        if (method === NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD) {
+          const requestedPolicy = request?.params?.execution_policy ?? request?.params?.executionPolicy;
+          if (requestedPolicy == null) throw new Error('execution_policy_required');
+          const isRuntimeTurnBusy = () => Boolean(supervisor.activeTurnId)
+            || Number(supervisor.health().operator_input_queue?.pending_count ?? 0) > 0;
+          if (executionPolicyReconfigurationInProgress || isRuntimeTurnBusy()) {
+            const result = {
+              accepted: false,
+              terminal_state: 'rejected',
+              reason: 'runtime_not_at_clean_turn_boundary',
+              active_turn_id: supervisor.activeTurnId ?? null,
+            };
+            supervisor.core.appendEvent({
+              event: 'runtime_execution_policy_reconfiguration',
+              request_id: requestId,
+              ...result,
+            });
+            requestState.transition('completed', { terminal_state: result.terminal_state });
+            return false;
+          }
+          executionPolicyReconfigurationInProgress = true;
+          try {
+            const currentRevision = Number(executionPolicy?.source?.revision);
+            const normalizedPolicy = normalizeNarsExecutionPolicy(requestedPolicy, {
+              sourceKind: 'runtime-control',
+              sourceRef: `runtime:${runtimeContext.session}`,
+              revision: Number.isInteger(currentRevision) && currentRevision >= 1 ? currentRevision + 1 : 1,
+            });
+            const kernelResult = await intelligenceRuntime?.reconfigureExecutionPolicy?.(normalizedPolicy, { isBusy: isRuntimeTurnBusy });
+            if (kernelResult?.accepted === false) {
+              supervisor.core.appendEvent({
+                event: 'runtime_execution_policy_reconfiguration',
+                request_id: requestId,
+                ...kernelResult,
+              });
+              requestState.transition('completed', { terminal_state: 'rejected' });
+              return false;
+            }
+            executionPolicy = normalizedPolicy;
+            const result = {
+              accepted: true,
+              terminal_state: 'completed',
+              active: executionPolicy,
+              reason: 'execution_policy_updated_at_clean_turn_boundary',
+            };
+            supervisor.core.appendEvent({
+              event: 'runtime_execution_policy_reconfiguration',
+              request_id: requestId,
+              ...result,
+            });
+            requestState.transition('completed', { terminal_state: result.terminal_state });
+            return false;
+          } finally {
+            executionPolicyReconfigurationInProgress = false;
+          }
+        }
         if (!intelligenceRuntime?.reconfigure) throw new Error('runtime_intelligence_reconfiguration_unavailable');
         const result = await intelligenceRuntime.reconfigure(request?.params ?? {}, {
           isBusy: () => Boolean(supervisor.activeTurnId)
@@ -622,7 +704,7 @@ export function createSessionCoreRuntimeService({
         await writer.write({
           event: 'session_health',
           request_id: requestId,
-          ...projectRuntimeHealth(supervisor.health(), runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime),
+          ...projectRuntimeHealth(supervisor.health(), runtimeContext, intelligenceToolGateway, requestLifecycle, intelligenceRuntime, executionPolicy),
         });
         requestState.transition('completed');
         return false;
@@ -660,6 +742,7 @@ export function createSessionCoreRuntimeService({
           intelligenceToolGateway,
           requestLifecycle,
           intelligenceRuntime,
+          executionPolicy,
         );
         supervisor.core.appendEvent({
           event: 'carrier_command_executed',
@@ -796,6 +879,7 @@ export function createSessionCoreRuntimeService({
       operator_surface_kind: runtimeContext.operatorSurfaceKind ?? null,
       provider: initialIntelligence.latest_plan?.inference_provider?.id?.replace(/^inference-provider:/, '') ?? null,
       intelligence: initialIntelligence,
+      execution_policy: executionPolicy,
       mcp_scope: mcpScope,
       mcp_server_count: mcpScope === 'none' ? 0 : null,
       mcp_operational_state: mcpScope === 'none' ? 'disabled' : 'starting',

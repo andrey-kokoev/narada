@@ -173,6 +173,34 @@ test('controller activates canonical model/options constraints only at a clean t
   assert.deepEqual(fixture.calls[0].requestedOptions, { thinking: 'high', batch: false });
 });
 
+test('controller activates an execution policy only at a clean turn boundary', async () => {
+  let busy = true;
+  let received = null;
+  const controller = createNarsIntelligenceRuntimeController({
+    runtimeContext: { session: 'session-policy', intelligence: { principal: 'principal:policy' } },
+    gateway: { async invoke() { return planResult(); } },
+    isBusy: () => busy,
+    reconfigureExecutionPolicyFn: async (policy) => {
+      received = policy;
+      return { accepted: true, active: { execution_policy: policy } };
+    },
+  });
+  const policy = {
+    schema: 'narada.nars.execution_policy.v1',
+    scope: 'session',
+    source: { kind: 'runtime-control', ref: 'runtime:session-policy', revision: 2 },
+    tool_loop: { max_rounds: 12 },
+  };
+  const refused = await controller.reconfigureExecutionPolicy(policy);
+  assert.equal(refused.accepted, false);
+  assert.equal(refused.reason, 'runtime_not_at_clean_turn_boundary');
+  assert.equal(received, null);
+  busy = false;
+  const active = await controller.reconfigureExecutionPolicy(policy);
+  assert.equal(active.accepted, true);
+  assert.deepEqual(received, policy);
+});
+
 test('controller passes the privately admitted plan to the kernel switch', async () => {
   let switched = null;
   const controller = createNarsIntelligenceRuntimeController({

@@ -36,6 +36,8 @@ import { RegistryError } from "@narada2/invokable-intelligence-registry/store";
 import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
 import { resolveInvocation } from "@narada2/invokable-intelligence-resolver";
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+import { inspectLocalIntelligenceReadiness } from "./local-readiness.js";
+import type { LocalReadinessContext } from "./local-readiness.js";
 
 export const MANAGEMENT_RESULT_SCHEMA =
   "narada.invokable-intelligence.management-result.v1" as const;
@@ -64,6 +66,7 @@ export class ManagementError extends Error {
     this.code = code;
     this.evidence_refs = [...evidenceRefs];
   }
+
 }
 
 function requireCatalogRecordAdmission(
@@ -219,6 +222,11 @@ export interface ManagementValidateRequest {
   operation: "validate";
 }
 
+export interface ManagementLocalReadinessRequest {
+  operation: "local-readiness";
+  context: LocalReadinessContext;
+}
+
 export interface ManagementExplainResolutionRequest {
   operation: "explain-resolution";
   resolver: "local" | "cloudflare";
@@ -268,6 +276,7 @@ export type ManagementRequest =
   | ManagementListRequest
   | ManagementShowRequest
   | ManagementValidateRequest
+  | ManagementLocalReadinessRequest
   | ManagementExplainResolutionRequest
   | ManagementInspectMaterializationRequest
   | ManagementMutationRequest;
@@ -619,6 +628,11 @@ export class IntelligenceManagementService {
     }, diagnostics.length === 0);
   }
 
+  private async localReadiness(request: ManagementLocalReadinessRequest): Promise<ManagementResult> {
+    const readiness = await inspectLocalIntelligenceReadiness(this.session.store, request.context);
+    return result("local-readiness", readiness, readiness.status === "ready");
+  }
+
   private async explainResolution(request: ManagementExplainResolutionRequest): Promise<ManagementResult> {
     if (!request.context.clock?.instant || !Number.isFinite(Date.parse(request.context.clock.instant))) {
       throw new ManagementError("explicit-time-required", "Resolution explanation requires an explicit valid decision time.");
@@ -813,6 +827,7 @@ export class IntelligenceManagementService {
       case "list": return this.list(request);
       case "show": return this.show(request);
       case "validate": return this.validate();
+      case "local-readiness": return this.localReadiness(request);
       case "explain-resolution": return this.explainResolution(request);
       case "inspect-materialization":
       case "explain-materialization": return this.inspectMaterialization(request);

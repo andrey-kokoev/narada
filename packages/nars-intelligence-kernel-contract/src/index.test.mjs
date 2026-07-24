@@ -6,6 +6,7 @@ import {
   normalizeIntelligenceKernelKind,
   buildKernelHealthProjection,
   createNarsToolRound,
+  normalizeNarsExecutionPolicy,
   NARS_TOOL_LOOP_OWNER,
   NARS_TOOL_ROUND_SCHEMA,
   NarsKernelContractError,
@@ -16,6 +17,22 @@ const noCapabilityGateway = Object.freeze({
   toolCatalog: async () => [],
   invoke: async ({ toolName }) => ({ status: 'denied', admission_action: 'deny', execution_outcome: 'not_attempted', tool_name: toolName }),
   close: async () => {},
+});
+
+test('execution policy is a typed NARS snapshot and rejects unbounded values', () => {
+  assert.equal(normalizeNarsExecutionPolicy().tool_loop.max_rounds, 200);
+  const policy = normalizeNarsExecutionPolicy({
+    scope: 'session',
+    source: { kind: 'site-config', ref: 'config:default', revision: 4 },
+    tool_loop: { max_rounds: 12 },
+  });
+  assert.equal(policy.schema, 'narada.nars.execution_policy.v1');
+  assert.equal(policy.tool_loop.max_rounds, 12);
+  assert.equal(policy.source.revision, 4);
+  assert.equal(normalizeNarsExecutionPolicy({ tool_loop: { max_rounds: 500 } }).tool_loop.max_rounds, 500);
+  assert.throws(() => normalizeNarsExecutionPolicy({ schema: 'narada.other_policy.v1' }), /kernel_execution_policy_schema_invalid/);
+  assert.throws(() => normalizeNarsExecutionPolicy({ tool_loop: { max_rounds: 0 } }), /kernel_execution_policy_max_rounds_invalid/);
+  assert.throws(() => normalizeNarsExecutionPolicy({ tool_loop: { max_rounds: 501 } }), /kernel_execution_policy_max_rounds_invalid/);
 });
 
 test('kernel selection is independent from operator-surface selection', () => {
@@ -41,6 +58,31 @@ test('native kernel satisfies the representation-neutral contract', async () => 
   assert.ok(events.every((event) => event.kind !== 'assistant_message'));
   await kernel.close({ reason: 'test' });
   assert.equal((await kernel.inspect()).kernel_state, 'closed');
+});
+
+test('native kernel uses its configured execution policy when a turn omits a policy', async () => {
+  let providerInput = null;
+  const executionPolicy = {
+    schema: 'narada.nars.execution_policy.v1',
+    scope: 'session',
+    source: { kind: 'runtime-config', ref: 'config:test', revision: 3 },
+    tool_loop: { max_rounds: 12 },
+  };
+  const kernel = createNarsNativeKernel({
+    runtimeContext: { executionPolicy },
+    providerAdapter: {
+      invoke: async (input) => {
+        providerInput = input;
+        return { admission: 'acknowledged', response: { text: 'ok' } };
+      },
+    },
+  });
+  await kernel.start({ session_id: 'policy-session', agent_id: 'policy-agent' });
+  await kernel.runTurn({ turn_id: 'policy-turn', input_id: 'policy-input', messages: [] }, async () => {}, noCapabilityGateway);
+  assert.deepEqual(providerInput.executionPolicy, executionPolicy);
+  assert.deepEqual(providerInput.execution_policy, executionPolicy);
+  assert.equal(providerInput.tool_loop.execution_policy.tool_loop.max_rounds, 12);
+  await kernel.close({ reason: 'policy-test' });
 });
 
 test('native kernel requires and applies the resolver-admitted provider/model binding', async () => {

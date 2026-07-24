@@ -39,6 +39,8 @@ export interface InvocationExecutionAttempt {
   /** Immutable initial state. Later states are append-only transition records. */
   state: "created";
   created_at: string;
+  /** Immutable NARS-owned execution controls used for this attempt, when supplied. */
+  execution_policy?: Record<string, unknown>;
   lineage: {
     relation: "initial" | "retry-of" | "replay-of" | "resume-of";
     predecessor_attempt_id?: string;

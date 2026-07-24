@@ -41,8 +41,10 @@ test('hidden detached carrier start uses hidden process posture and exits parent
   const exits = [];
   const outputDir = mkdtempSync(join(tmpdir(), 'narada-agent-start-output-'));
   const child = new EventEmitter();
+  child.pid = 4242;
   child.unrefCalled = false;
   child.unref = () => { child.unrefCalled = true; };
+  const spawned = [];
 
   try {
     spawnCarrierProcessAndExit({
@@ -61,6 +63,9 @@ test('hidden detached carrier start uses hidden process posture and exits parent
           return child;
         },
       },
+      onSpawn(pid, spawnedChild) {
+        spawned.push({ pid, child: spawnedChild });
+      },
       onExit(code) {
         exits.push(code);
       },
@@ -78,6 +83,7 @@ test('hidden detached carrier start uses hidden process posture and exits parent
     assert.equal(typeof calls[0].options.stdio[2], 'number');
     assert.equal(calls[0].options.windowsHide, true);
     assert.equal(child.unrefCalled, true);
+    assert.deepEqual(spawned, [{ pid: 4242, child }]);
     assert.deepEqual(exits, [0]);
   } finally {
     rmSync(outputDir, { recursive: true, force: true });

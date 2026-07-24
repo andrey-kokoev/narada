@@ -23,8 +23,48 @@ function reportError(onError, error, line = null, diagnostic = null) {
 
 function requestFromControlLine(line) {
   const parsed = JSON.parse(line);
+  if (parsed && typeof parsed === 'object' && parsed.method === 'system_directive.deliver') {
+    return requestFromSystemDirectiveDelivery(parsed);
+  }
   if (parsed && typeof parsed === 'object' && isNarsSessionCoreMethod(parsed.method)) return parsed;
   return requestFromControlRecord(normalizeControlInputRecord(parsed, { transport: 'control_jsonl' }));
+}
+
+function requestFromSystemDirectiveDelivery(record) {
+  const params = record.params && typeof record.params === 'object' && !Array.isArray(record.params)
+    ? record.params
+    : {};
+  const directive = params.directive && typeof params.directive === 'object' && !Array.isArray(params.directive)
+    ? params.directive
+    : {};
+  const directiveId = typeof params.directive_id === 'string' && params.directive_id.trim()
+    ? params.directive_id.trim()
+    : typeof directive.directive_id === 'string' && directive.directive_id.trim()
+      ? directive.directive_id.trim()
+      : null;
+  const source = directive.source && typeof directive.source === 'object' && !Array.isArray(directive.source)
+    ? directive.source
+    : {};
+  const message = typeof params.message === 'string'
+    ? params.message
+    : typeof directive.content?.text === 'string'
+      ? directive.content.text
+      : '';
+  const eventId = `input_${directiveId ?? String(record.id ?? 'system_directive').replace(/[^A-Za-z0-9_-]+/g, '_')}`;
+  return {
+    id: record.id ?? eventId,
+    event_id: eventId,
+    method: 'session.submit',
+    source_kind: 'system',
+    source_id: typeof source.id === 'string' && source.id.trim() ? source.id.trim() : 'narada.site_loop',
+    transport: 'control_jsonl',
+    delivery_mode: 'admit_after_active_turn',
+    content: message,
+    directive_id: directiveId,
+    authority_ref: typeof params.authority_ref === 'string' && params.authority_ref.trim()
+      ? params.authority_ref.trim()
+      : directiveId,
+  };
 }
 
 function requestFromControlRecord(record) {

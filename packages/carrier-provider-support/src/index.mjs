@@ -2,6 +2,14 @@ export {
   codexAuthHome,
 } from './codex-subscription-auth.mjs';
 export { resolveCodexSubscriptionModelCatalog } from './codex-subscription-models.mjs';
+export {
+  CODEX_SUBSCRIPTION_READINESS_CACHE_TTL_MS,
+  CODEX_SUBSCRIPTION_READINESS_CACHE_TTL_ENV,
+  codexSubscriptionReadinessCacheKey,
+  codexSubscriptionReadinessCachePath,
+  deriveUserSiteRootFromRegistryPath,
+  probeCodexSubscriptionService,
+} from './codex-subscription-readiness.mjs';
 
 export {
   codexCommand,

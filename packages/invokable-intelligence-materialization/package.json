@@ -11,6 +11,10 @@
     "authority_owner": "@narada2/cli"
   },
   "exports": {
+    "./d1": {
+      "types": "./dist/d1-store.d.ts",
+      "import": "./dist/d1-store.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"

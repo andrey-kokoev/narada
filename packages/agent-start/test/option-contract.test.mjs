@@ -13,7 +13,9 @@ import {
   resolveCarrierCommand,
   resolveToolFabricAdapter,
   stripLegacyIntelligenceSelectionEnvironment,
+  stripInheritedIntelligenceLaunchContextEnvironment,
 } from '../src/carrier-launch-adapter.ts';
+import { loadIntelligenceLaunchContext } from '../src/intelligence-launch-context.ts';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -752,6 +754,14 @@ test('runtime spawn environment carries site-qualified identity binding lossless
 
 test('target site MCP fabric remains isolated from user site fabric', () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-mcp-isolation-'));
+  const userSiteRoot = mkdtempSync(join(tmpdir(), 'narada-agent-start-user-site-'));
+  mkdirSync(join(userSiteRoot, '.narada'), { recursive: true });
+  writeFileSync(join(userSiteRoot, '.narada', 'intelligence-launch-context.json'), JSON.stringify({
+    schema: 'narada.intelligence.launch_context.v1',
+    user_site_id: 'site:user',
+    host_site_id: 'site:pc',
+    principal_id: 'principal:andrey',
+  }), 'utf8');
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
@@ -767,7 +777,19 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
     },
   }, null, 2), 'utf8');
 
-  const output = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--target-site-root', siteRoot, '--mcp-scope', 'local-site', '--exec']);
+  const output = runOk([
+    '--carrier',
+    'agent-cli',
+    '--runtime',
+    'narada-agent-runtime-server',
+    '--target-site-root',
+    siteRoot,
+    '--target-site-id',
+    'target',
+    '--mcp-scope',
+    'local-site',
+    '--exec',
+  ], { NARADA_USER_SITE_ROOT: userSiteRoot });
   assert.equal(output.session_site_root, siteRoot);
   assert.equal(output.mcp_fabric.site_root, siteRoot);
   assert.deepEqual(output.mcp_fabric.server_names, ['narada-target-only']);
@@ -1035,6 +1057,85 @@ test('agent-tui selects the NARS runtime server and exposes attach discovery', (
   assert.equal(output.runtime_args.includes('--control-jsonl'), false);
   assert.equal(output.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(output.nars_events.attach_commands.agent_tui, 'agent-tui --attach <session_started.event_endpoint>');
+});
+
+test('NARS process projection carries launch context and rejects inherited context', () => {
+  const intelligenceEnvironment = {
+    NARADA_INTELLIGENCE_REGISTRY_DB: 'C:/Users/Andrey/Narada/.ai/intelligence-registry.db',
+    NARADA_INTELLIGENCE_TARGET_SITE: 'site:sonar',
+    NARADA_INTELLIGENCE_USER_SITE: 'site:andrey-user',
+    NARADA_INTELLIGENCE_HOST_SITE: 'site:andrey-pc',
+    NARADA_INTELLIGENCE_PRINCIPAL_ID: 'principal:andrey',
+  };
+  const env = buildCarrierProcessEnvironment({
+    processEnvironment: {
+      NARADA_INTELLIGENCE_TARGET_SITE: 'site:wrong',
+      NARADA_INTELLIGENCE_PRINCIPAL_ID: 'principal:wrong',
+      NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
+    },
+    carrierName: 'agent-cli',
+    identity: 'resident',
+    role: 'resident',
+    agentStartEventId: 'evt_context',
+    carrierSessionId: 'carrier_context',
+    targetSiteId: 'sonar',
+    operatorSurfaceKind: 'agent-cli',
+    environmentSiteRoot: 'D:/code/narada.sonar',
+    workspaceRoot: 'D:/code/narada.sonar',
+    dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    siteConfig: { schema: 'narada.nars.site_config.v1', site_id: 'sonar' },
+    intelligenceEnvironment,
+  });
+
+  const scrubbed = stripInheritedIntelligenceLaunchContextEnvironment({
+    ...env,
+    NARADA_INTELLIGENCE_TARGET_SITE: 'site:wrong',
+  });
+  assert.equal(scrubbed.NARADA_INTELLIGENCE_TARGET_SITE, undefined);
+  assert.deepEqual(
+    Object.fromEntries(Object.entries(env).filter(([key]) => key.startsWith('NARADA_INTELLIGENCE_'))),
+    intelligenceEnvironment,
+  );
+  assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, undefined);
+});
+
+test('User Site launch context resolves canonical loci from its non-secret document', () => {
+  const userSiteRoot = mkdtempSync(join(tmpdir(), 'narada-intelligence-launch-context-'));
+  mkdirSync(join(userSiteRoot, '.narada'), { recursive: true });
+  writeFileSync(join(userSiteRoot, '.narada', 'intelligence-launch-context.json'), JSON.stringify({
+    schema: 'narada.intelligence.launch_context.v1',
+    user_site_id: 'site:user',
+    host_site_id: 'site:pc',
+    principal_id: 'principal:andrey',
+    principal_binding: {
+      schema: 'narada.intelligence.principal_binding.v1',
+      actor: { principal_id: 'principal:andrey', auth_type: 'user-site-session' },
+      memberships: [{
+        registry: 'site-roster',
+        site_id: 'site:narada',
+        role: 'resident',
+        evidence_ref: 'evidence:option-contract-membership',
+      }],
+      evidence_refs: ['evidence:option-contract-membership'],
+    },
+  }), 'utf8');
+  const context = loadIntelligenceLaunchContext({
+    targetSiteId: 'narada',
+    sessionSiteRoot: userSiteRoot,
+    userSiteRoot,
+    registryDbPath: join(userSiteRoot, '.ai', 'intelligence-registry.db'),
+    processEnv: {},
+  });
+
+  assert.equal(context.status, 'ready');
+  assert.equal(context.target_site, 'site:narada');
+  assert.equal(context.user_site, 'site:user');
+  assert.equal(context.host_site, 'site:pc');
+  assert.equal(context.principal_id, 'principal:andrey');
+  assert.equal(context.principal_binding.actor.principal_id, 'principal:andrey');
+  assert.equal(context.principal_binding.memberships[0].role, 'resident');
+  assert.equal(JSON.parse(context.environment.NARADA_INTELLIGENCE_PRINCIPAL_BINDING).schema, 'narada.intelligence.principal_binding.v1');
+  assert.equal(context.environment.NARADA_INTELLIGENCE_TARGET_SITE, 'site:narada');
 });
 
 

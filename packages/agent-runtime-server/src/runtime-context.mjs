@@ -1,6 +1,12 @@
 import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { normalizeIntelligenceKernelKind } from '@narada2/nars-intelligence-kernel-contract';
+import {
+  NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS,
+  NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS,
+  NARS_EXECUTION_POLICY_MIN_MAX_ROUNDS,
+  normalizeIntelligenceKernelKind,
+  normalizeNarsExecutionPolicy,
+} from '@narada2/nars-intelligence-kernel-contract';
 
 function optionalString(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -44,6 +50,8 @@ export function createNarsRuntimeContext({
   eventsPath = null,
   intelligence = null,
   intelligenceKernelKind = null,
+  executionPolicy: directExecutionPolicy = null,
+  execution_policy: directExecutionPolicySnake = null,
   invocationSettings = {},
   ...rest
 } = {}) {
@@ -71,7 +79,25 @@ export function createNarsRuntimeContext({
     agent_identity_ref: agentIdentityRef,
     launch_session_id: optionalString(rest.launchSessionId),
   };
-  const maxToolRounds = normalizeMaxToolRounds(invocationSettings.maxToolRounds ?? process.env.NARADA_MAX_TOOL_ROUNDS);
+  const configuredExecutionPolicy = invocationSettings.executionPolicy
+    ?? invocationSettings.execution_policy
+    ?? directExecutionPolicy
+    ?? directExecutionPolicySnake;
+  const legacyMaxToolRounds = invocationSettings.maxToolRounds
+    ?? invocationSettings.max_tool_rounds
+    ?? process.env.NARADA_MAX_TOOL_ROUNDS;
+  const executionPolicy = configuredExecutionPolicy != null
+    ? normalizeNarsExecutionPolicy(configuredExecutionPolicy, { sourceKind: 'runtime-config' })
+    : normalizeNarsExecutionPolicy({
+      tool_loop: { max_rounds: normalizeLegacyMaxToolRounds(legacyMaxToolRounds) },
+      source: {
+        kind: legacyMaxToolRounds == null ? 'default' : invocationSettings.maxToolRounds != null || invocationSettings.max_tool_rounds != null
+          ? 'legacy-compatibility'
+          : 'legacy-env',
+        ref: legacyMaxToolRounds == null ? null : legacyMaxToolRounds === process.env.NARADA_MAX_TOOL_ROUNDS ? 'NARADA_MAX_TOOL_ROUNDS' : null,
+        revision: 1,
+      },
+    });
   const resolvedIntelligenceKernelKind = normalizeIntelligenceKernelKind(
     intelligenceKernelKind
       ?? intelligence?.intelligence_kernel_kind
@@ -104,7 +130,11 @@ export function createNarsRuntimeContext({
     intelligence: frozenIntelligenceContext(normalizedIntelligence),
     intelligenceKernelKind: resolvedIntelligenceKernelKind,
     intelligence_kernel_kind: resolvedIntelligenceKernelKind,
-    maxToolRounds,
+    executionPolicy,
+    execution_policy: executionPolicy,
+    // Compatibility projection. New callers must use executionPolicy; this
+    // alias remains only for older launchers and direct carrier fixtures.
+    maxToolRounds: executionPolicy.tool_loop.max_rounds,
     launchSessionId: optionalString(rest.launchSessionId),
     processOwnership: optionalString(rest.processOwnership),
     processRole: optionalString(rest.processRole),
@@ -112,12 +142,17 @@ export function createNarsRuntimeContext({
     invocationSettings: Object.freeze({
       goal: invocationSettings.goal ?? null,
       invocationScope,
+      executionPolicy,
+      execution_policy: executionPolicy,
     }),
   });
 }
 
-function normalizeMaxToolRounds(value) {
+function normalizeLegacyMaxToolRounds(value) {
   const numeric = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
-  if (!Number.isFinite(numeric)) return 8;
-  return Math.min(64, Math.max(1, Math.trunc(numeric)));
+  if (!Number.isFinite(numeric)) return NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS;
+  return Math.min(
+    NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS,
+    Math.max(NARS_EXECUTION_POLICY_MIN_MAX_ROUNDS, Math.trunc(numeric)),
+  );
 }

@@ -51,6 +51,19 @@ export function canonicalJson(value: unknown): string {
   return JSON.stringify(value);
 }
 
+/** Normalize the unordered provider tool catalog before it contributes to identity. */
+export function normalizeToolCatalog(tools: unknown): unknown {
+  if (!Array.isArray(tools)) return tools ?? null;
+  return [...tools].sort((left, right) => canonicalJson(left).localeCompare(canonicalJson(right)));
+}
+
+export function canonicalInvocationInput(messages: unknown, tools: unknown): unknown {
+  return {
+    messages: messages ?? null,
+    tools: normalizeToolCatalog(tools),
+  };
+}
+
 export async function sha256Digest(value: unknown): Promise<string> {
   const bytes = new TextEncoder().encode(canonicalJson(value));
   const digest = await globalThis.crypto.subtle.digest("SHA-256", bytes);

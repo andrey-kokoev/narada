@@ -1,6 +1,10 @@
 export const KERNEL_CONTRACT_SCHEMA = 'narada.nars.intelligence_kernel_contract.v1';
 export const KERNEL_HEALTH_SCHEMA = 'narada.nars.intelligence_kernel_health.v1';
 export const KERNEL_START_EVIDENCE_SCHEMA = 'narada.nars.intelligence_kernel_start_evidence.v1';
+export const NARS_EXECUTION_POLICY_SCHEMA = 'narada.nars.execution_policy.v1';
+export const NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS = 200;
+export const NARS_EXECUTION_POLICY_MIN_MAX_ROUNDS = 1;
+export const NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS = 500;
 
 /** Kernel selection is deliberately not the operator-surface selection. */
 export const INTELLIGENCE_KERNEL_KINDS = Object.freeze([
@@ -68,6 +72,92 @@ export class NarsKernelContractError extends Error {
     this.code = code;
     this.details = details;
   }
+}
+
+/**
+ * Normalize the NARS-owned execution policy that is snapshotted for one turn.
+ * Model/provider options do not belong here; this policy only describes
+ * runtime controls owned by NARS, currently the bounded carrier tool loop.
+ */
+export function normalizeNarsExecutionPolicy(value = null, {
+  defaultMaxRounds = NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS,
+  sourceKind = 'default',
+  sourceRef = null,
+  revision = 1,
+  scope = 'session',
+} = {}) {
+  const candidate = value == null
+    ? {}
+    : assertPlainRecord(value, 'kernel_execution_policy_invalid', 'Execution policy must be a plain record.');
+  if (candidate.schema != null && candidate.schema !== NARS_EXECUTION_POLICY_SCHEMA) {
+    throw new NarsKernelContractError(
+      'kernel_execution_policy_schema_invalid',
+      `Execution policy schema must be '${NARS_EXECUTION_POLICY_SCHEMA}'.`,
+      { schema: candidate.schema },
+    );
+  }
+  rejectUnknownKeys(candidate, new Set([
+    'schema', 'scope', 'source', 'tool_loop', 'toolLoop',
+    'max_rounds', 'maxRounds', 'max_tool_rounds', 'maxToolRounds', 'revision',
+  ]), 'kernel_execution_policy_field_unknown');
+  const toolLoop = candidate.tool_loop ?? candidate.toolLoop ?? null;
+  if (toolLoop != null) {
+    assertPlainRecord(toolLoop, 'kernel_execution_policy_tool_loop_invalid', 'Execution policy tool_loop must be a plain record.');
+    rejectUnknownKeys(toolLoop, new Set(['max_rounds', 'maxRounds']), 'kernel_execution_policy_tool_loop_field_unknown');
+  }
+  const rawMaxRounds = toolLoop?.max_rounds
+    ?? toolLoop?.maxRounds
+    ?? candidate.max_rounds
+    ?? candidate.maxRounds
+    ?? candidate.max_tool_rounds
+    ?? candidate.maxToolRounds
+    ?? defaultMaxRounds;
+  const maxRounds = Number(rawMaxRounds);
+  if (!Number.isInteger(maxRounds)
+    || maxRounds < NARS_EXECUTION_POLICY_MIN_MAX_ROUNDS
+    || maxRounds > NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS) {
+    throw new NarsKernelContractError(
+      'kernel_execution_policy_max_rounds_invalid',
+      `tool_loop.max_rounds must be an integer from ${NARS_EXECUTION_POLICY_MIN_MAX_ROUNDS} through ${NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS}.`,
+      { value: rawMaxRounds },
+    );
+  }
+  const sourceCandidate = candidate.source;
+  const source = sourceCandidate == null
+    ? {}
+    : typeof sourceCandidate === 'string'
+      ? { kind: sourceCandidate }
+      : assertPlainRecord(sourceCandidate, 'kernel_execution_policy_source_invalid', 'Execution policy source must be a plain record.');
+  if (sourceCandidate != null && typeof sourceCandidate !== 'string') {
+    rejectUnknownKeys(source, new Set(['kind', 'ref', 'revision']), 'kernel_execution_policy_source_field_unknown');
+  }
+  const normalizedScope = String(candidate.scope ?? scope ?? 'session').trim();
+  if (!normalizedScope) throw new NarsKernelContractError('kernel_execution_policy_scope_invalid', 'Execution policy scope must be non-empty.');
+  const normalizedSourceKind = String(source.kind ?? sourceKind ?? 'default').trim();
+  if (!normalizedSourceKind) throw new NarsKernelContractError('kernel_execution_policy_source_kind_invalid', 'Execution policy source kind must be non-empty.');
+  const normalizedSourceRef = source.ref ?? sourceRef ?? null;
+  if (normalizedSourceRef != null && (typeof normalizedSourceRef !== 'string' || !normalizedSourceRef.trim())) {
+    throw new NarsKernelContractError('kernel_execution_policy_source_ref_invalid', 'Execution policy source ref must be a non-empty string when present.');
+  }
+  const normalizedRevision = source.revision ?? candidate.revision ?? revision ?? 1;
+  if (!(Number.isInteger(normalizedRevision) && normalizedRevision >= 1)
+    && !(typeof normalizedRevision === 'string' && normalizedRevision.trim())) {
+    throw new NarsKernelContractError('kernel_execution_policy_revision_invalid', 'Execution policy revision must be a positive integer or non-empty string.');
+  }
+  return Object.freeze({
+    schema: NARS_EXECUTION_POLICY_SCHEMA,
+    scope: normalizedScope,
+    source: Object.freeze({
+      kind: normalizedSourceKind,
+      ref: normalizedSourceRef == null ? null : normalizedSourceRef.trim(),
+      revision: typeof normalizedRevision === 'string' ? normalizedRevision.trim() : normalizedRevision,
+    }),
+    tool_loop: Object.freeze({ max_rounds: maxRounds }),
+  });
+}
+
+export function assertNarsExecutionPolicy(value, options) {
+  return normalizeNarsExecutionPolicy(value, options);
 }
 
 export function isIntelligenceKernelKind(value) {
@@ -191,7 +281,7 @@ function normalizeToolDescriptor(value, index) {
 
 export function assertNarsKernelStartContext(context) {
   assertPlainRecord(context, 'kernel_start_context_invalid', 'Kernel start context must be a plain record.');
-  rejectUnknownKeys(context, new Set(['session_id', 'sessionId', 'agent_id', 'agentId', 'runtime_context', 'provider', 'model', 'thinking', 'tools']), 'kernel_start_context_field_unknown');
+  rejectUnknownKeys(context, new Set(['session_id', 'sessionId', 'agent_id', 'agentId', 'runtime_context', 'provider', 'model', 'thinking', 'tools', 'execution_policy', 'executionPolicy']), 'kernel_start_context_field_unknown');
   const sessionId = String(context.session_id ?? context.sessionId ?? '').trim();
   if (!sessionId) {
     throw new NarsKernelContractError('kernel_session_id_required', 'Kernel start requires a NARS session id.');
@@ -200,7 +290,14 @@ export function assertNarsKernelStartContext(context) {
   if (!agentId) {
     throw new NarsKernelContractError('kernel_agent_id_required', 'Kernel start requires a Narada agent id.');
   }
-  return { ...context, session_id: sessionId, agent_id: agentId };
+  return {
+    ...context,
+    session_id: sessionId,
+    agent_id: agentId,
+    execution_policy: normalizeNarsExecutionPolicy(context.execution_policy ?? context.executionPolicy, {
+      sourceKind: 'default',
+    }),
+  };
 }
 
 export function assertNarsAdmittedTurn(turn) {
@@ -211,6 +308,7 @@ export function assertNarsAdmittedTurn(turn) {
     'turn_attempt', 'turnAttempt', 'attempt', 'messages', 'tools', 'settings',
     'provider_invocation', 'provider_request_attempt', 'providerRequestAttempt', 'abortSignal',
     'metadata', 'authority_posture', 'admission_evidence', 'execution_evidence', 'correlation_key',
+    'execution_policy', 'executionPolicy',
   ]), 'kernel_turn_field_unknown');
   const turnId = String(turn.turn_id ?? turn.turnId ?? '').trim();
   if (!turnId) throw new NarsKernelContractError('kernel_turn_id_required', 'An admitted turn requires turn_id.');
@@ -266,6 +364,9 @@ export function assertNarsAdmittedTurn(turn) {
     messages: Array.isArray(turn.messages) ? turn.messages.map(normalizeMessage) : [],
     tools: Array.isArray(turn.tools) ? turn.tools.map(normalizeToolDescriptor) : [],
     settings: optionalPlainRecord(turn.settings, 'kernel_settings_invalid'),
+    execution_policy: normalizeNarsExecutionPolicy(turn.execution_policy ?? turn.executionPolicy, {
+      sourceKind: 'default',
+    }),
     ...(turn.provider_invocation == null ? {} : { provider_invocation: { ...turn.provider_invocation } }),
     ...(turn.provider_request_attempt == null && turn.providerRequestAttempt == null ? {} : {
       provider_request_attempt: Number(turn.provider_request_attempt ?? turn.providerRequestAttempt),
@@ -311,6 +412,7 @@ export function createNarsToolRound({
     input_event_id: sourceTurn.input_event_id,
     turn_attempt: sourceTurn.turn_attempt,
     provider_request_attempt: attempt,
+    execution_policy: sourceTurn.execution_policy,
     messages: Object.freeze([...sourceTurn.messages]),
     tools: Object.freeze([...sourceTurn.tools]),
     abort_signal: abortSignal,
@@ -320,6 +422,7 @@ export function createNarsToolRound({
       owner: NARS_TOOL_LOOP_OWNER,
       result_authority: 'nars-capability-gateway',
       terminal_authority: 'nars-session-core',
+      execution_policy: sourceTurn.execution_policy,
     }),
   });
 }
@@ -399,6 +502,7 @@ export function buildKernelHealthProjection({
   supportedCapabilities = [],
   supportedProviderFeatures = [],
   supportedThinkingLevels = [],
+  executionPolicy = null,
   toolPostureVersion = 'nars-gateway-only.v1',
   eventAdapterVersion = 'nars-pi-events.v1',
   sessionPosture = 'nars-journal-canonical.v1',
@@ -417,6 +521,7 @@ export function buildKernelHealthProjection({
     provider,
     model,
     thinking,
+    execution_policy: normalizeNarsExecutionPolicy(executionPolicy, { sourceKind: 'default' }),
     kernel_state: kernelState,
     active_turn_id: activeTurnId,
     provider_streaming: Boolean(providerStreaming),

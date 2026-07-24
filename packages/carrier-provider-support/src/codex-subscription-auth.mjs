@@ -7,7 +7,8 @@ function envValue(processEnv, name) {
 }
 
 function codexAuthHome({ processEnv = process.env, osHomedir = homedir } = {}) {
-  const explicit = envValue(processEnv, 'NARADA_CODEX_AUTH_HOME');
+  const explicit = envValue(processEnv, 'NARADA_CODEX_AUTH_HOME')
+    ?? envValue(processEnv, 'CODEX_HOME');
   if (explicit) return explicit;
   const userRoot = envValue(processEnv, 'USERPROFILE') ?? envValue(processEnv, 'HOME') ?? osHomedir?.() ?? null;
   return userRoot ? join(userRoot, '.codex') : null;

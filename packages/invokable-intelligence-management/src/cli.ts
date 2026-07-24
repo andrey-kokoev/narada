@@ -5,6 +5,7 @@ import { dirname } from "node:path";
 
 import type {
   CanonicalCatalogRecord,
+  CanonicalCatalogSeed,
   InvocationIntent,
   MaterializationAdmission,
   MaterializationEnvelope,
@@ -23,6 +24,7 @@ import {
   ManagementError,
   managementErrorResult,
 } from "./service.js";
+import type { LocalReadinessContext } from "./local-readiness.js";
 import type {
   ManagementCollection,
   ManagementMutationContext,
@@ -179,6 +181,11 @@ async function canonicalRequest(
     }
     case "validate":
       return { operation: "validate" };
+    case "local-readiness":
+      return {
+        operation: "local-readiness",
+        context: await jsonFlag<LocalReadinessContext>(flags, "context"),
+      };
     case "explain-resolution":
       return {
         operation: "explain-resolution",
@@ -190,6 +197,13 @@ async function canonicalRequest(
       return {
         operation: "admit-catalog-record",
         record: await jsonFlag<CanonicalCatalogRecord>(flags, "record"),
+        context: await jsonFlag<ManagementMutationContext>(flags, "context"),
+      };
+    case "admit-catalog-seed":
+      return {
+        operation: "admit-catalog-seed",
+        seed: await jsonFlag<CanonicalCatalogSeed>(flags, "seed"),
+        record_contexts: await jsonFlag<Record<string, ManagementMutationContext>>(flags, "record-contexts"),
         context: await jsonFlag<ManagementMutationContext>(flags, "context"),
       };
     case "materialize":
@@ -238,8 +252,10 @@ Canonical commands (all JSON output):
   list <collection> [--filter <file.json>] [--offset N] [--limit N]
   show resource|assertion|policy|catalog-record|materialization <id>
   validate
+  local-readiness --context <readiness-context.json>
   explain-resolution --resolver local|cloudflare --intent <file.json> --context <resolver-context.json>
   admit-catalog-record --record <file.json> --context <file.json>
+  admit-catalog-seed --seed <file.json> --record-contexts <file.json> --context <file.json>
   deploy --bundle <deployment-bundle.json>
   materialize|refresh --envelope <file.json> --admission <file.json> --statement-record <file.json> --payload-record <file.json> --context <file.json>
   reject-materialization --envelope <file.json> --admission <file.json> --context <file.json>

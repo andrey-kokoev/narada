@@ -61,8 +61,16 @@ export interface AdapterInvocation {
   turnId?: string;
   inputEventId?: string;
   requestId?: string;
+  runtimeRequestId?: string;
+  idempotencyKey?: string;
+  turnAttempt?: number;
+  /** NARS-owned execution policy snapshotted for this attempt. */
+  executionPolicy?: Record<string, unknown>;
+  execution_policy?: Record<string, unknown>;
   invocationScope?: unknown;
   invocationEventSink?: (event: unknown) => void | Promise<void>;
+  /** Ephemeral NARS capability gateway for the admitted turn; never persisted. */
+  capabilityGateway?: unknown;
 }
 
 export type AdmissionStatus = "acknowledged" | "not-acknowledged" | "uncertain";
@@ -112,8 +120,16 @@ export interface InvokeRequest {
   turnId?: string;
   inputEventId?: string;
   requestId?: string;
+  runtimeRequestId?: string;
+  idempotencyKey?: string;
+  turnAttempt?: number;
+  /** NARS-owned execution policy snapshotted for this turn and attempt. */
+  executionPolicy?: Record<string, unknown>;
+  execution_policy?: Record<string, unknown>;
   invocationScope?: unknown;
   invocationEventSink?: (event: unknown) => void | Promise<void>;
+  /** Ephemeral NARS capability gateway for the admitted turn; never persisted. */
+  capabilityGateway?: unknown;
 }
 
 export interface ResultPayloadPolicyInput {
@@ -595,6 +611,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
 
   async function invokeWithDigest(request: InvokeRequest, inputDigest: string): Promise<GatewayResult> {
       const startedClock = options.clock();
+      const executionPolicy = request.executionPolicy ?? request.execution_policy;
       const requiredCapabilities = [...(request.requiredCapabilities ?? [])]
         .sort((a, b) => a.family.localeCompare(b.family) || a.name.localeCompare(b.name));
       const intentId = request.intentId ?? deterministicId("intent", {
@@ -722,6 +739,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
         state: "created",
         created_at: startedClock.instant,
         lineage: attemptLineage(mode, predecessor),
+        ...(executionPolicy ? { execution_policy: executionPolicy } : {}),
       };
       await store.recordExecutionAttempt(attempt);
 
@@ -794,8 +812,13 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
               ...(request.turnId ? { turnId: request.turnId } : {}),
               ...(request.inputEventId ? { inputEventId: request.inputEventId } : {}),
               ...(request.requestId ? { requestId: request.requestId } : {}),
+              ...(request.runtimeRequestId ? { runtimeRequestId: request.runtimeRequestId } : {}),
+              ...(request.idempotencyKey ? { idempotencyKey: request.idempotencyKey } : {}),
+              ...(request.turnAttempt ? { turnAttempt: request.turnAttempt } : {}),
+              ...(executionPolicy ? { executionPolicy, execution_policy: executionPolicy } : {}),
               ...(request.invocationScope ? { invocationScope: request.invocationScope } : {}),
               ...(request.invocationEventSink ? { invocationEventSink: request.invocationEventSink } : {}),
+              ...(request.capabilityGateway !== undefined ? { capabilityGateway: request.capabilityGateway } : {}),
             });
           } catch (error) {
             adapterOutcome = {

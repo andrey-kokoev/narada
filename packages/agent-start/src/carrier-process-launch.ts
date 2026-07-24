@@ -59,7 +59,7 @@ export async function waitForEnterBeforeCarrier({
   }
 }
 
-export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptions = {}, aiProcessInvocation = null, executionMode = 'visible_inherited', hiddenOutputFiles = null, writeStderr = console.error, onExit = process.exit }) {
+export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptions = {}, aiProcessInvocation = null, executionMode = 'visible_inherited', hiddenOutputFiles = null, writeStderr = console.error, onSpawn = null, onExit = process.exit }) {
   let child;
   let stdoutFd = null;
   let stderrFd = null;
@@ -96,8 +96,20 @@ export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptio
       child.once('spawn', () => {
         if (finished) return;
         finished = true;
-        child.unref();
-        onExit(0);
+        try {
+          onSpawn?.(child.pid ?? null, child);
+          child.unref();
+          onExit(0);
+        } catch (error) {
+          try {
+            child.kill?.();
+          } catch {
+            // Preserve the admission failure; the child is already owned by
+            // the launcher and its bounded cleanup path is best effort.
+          }
+          writeStderr(`[FAIL] Runtime handoff admission failed: ${error instanceof Error ? error.message : String(error)}`);
+          onExit(1);
+        }
       });
       return;
     }

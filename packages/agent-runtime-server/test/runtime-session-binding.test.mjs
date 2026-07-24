@@ -32,6 +32,37 @@ test('runtime session binding delegates session state to session core and turns 
   assert.equal(binding.health().lifecycle_state, 'closed');
 });
 
+test('runtime session binding carries one typed execution policy snapshot into the provider call', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-policy-'));
+  let providerSettings = null;
+  const executionPolicy = {
+    schema: 'narada.nars.execution_policy.v1',
+    scope: 'session',
+    source: { kind: 'runtime-control', ref: 'runtime:binding-test', revision: 2 },
+    tool_loop: { max_rounds: 11 },
+  };
+  const binding = createRuntimeSessionBinding({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'session-policy',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+    },
+    executionPolicyProvider: () => executionPolicy,
+    invokeIntelligenceFn: async (_messages, _tools, settings) => {
+      providerSettings = settings;
+      return { content: 'policy observed' };
+    },
+    toolGateway: { toolCatalog: () => [], operationalState: () => 'healthy' },
+  });
+  binding.start();
+  await binding.submit({ event_id: 'input_policy', content: 'observe policy' });
+  assert.deepEqual(providerSettings.executionPolicy, executionPolicy);
+  assert.deepEqual(providerSettings.execution_policy, executionPolicy);
+  await binding.close();
+});
+
 test('an explicitly controlled canonical failure settles its queue item for a later retry', async () => {
   const root = mkdtempSync(join(tmpdir(), 'runtime-session-binding-explicit-failure-'));
   const failureResult = {
@@ -139,7 +170,7 @@ test('runtime session binding contains provider follow-up exhaustion as a failed
   binding.start();
   await binding.submit({ event_id: 'input_round_limit', content: 'loop forever' });
 
-  assert.equal(providerCalls, 8);
+  assert.equal(providerCalls, 200);
   assert.equal(binding.health().lifecycle_state, 'ready');
   assert.equal(binding.health().operator_input_queue.pending_count, 0);
   assert.equal(binding.core.turn('input_round_limit').turn_state, 'failed');
@@ -147,7 +178,7 @@ test('runtime session binding contains provider follow-up exhaustion as a failed
   assert.equal(binding.health().operational_posture, 'request_runtime_failures');
   const events = readFileSync(join(root, 'events.jsonl'), 'utf8');
   assert.match(events, /carrier_turn_failed/);
-  assert.match(events, /carrier_turn_tool_round_limit_exceeded:8/);
+  assert.match(events, /carrier_turn_tool_round_limit_exceeded:200/);
   assert.match(events, /"event_kind":"input_completed"/);
   await binding.close();
 });
@@ -376,6 +407,49 @@ test('session-core runtime classifies a supported reconfiguration failure distin
   await run;
   const events = rendered.trim().split(/\r?\n/).map((line) => JSON.parse(line));
   assert.equal(events.find((event) => event.event === 'session_control_rejected' && event.request_id === 'reconfigure-failed')?.code, 'runtime_reconfiguration_failed');
+});
+
+test('JSONL runtime applies an execution policy at a clean turn boundary and journals the snapshot', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'session-core-runtime-execution-policy-'));
+  const input = new PassThrough();
+  const output = new PassThrough();
+  let rendered = '';
+  let activePolicy = null;
+  output.on('data', (chunk) => { rendered += String(chunk); });
+  const requestedPolicy = {
+    schema: 'narada.nars.execution_policy.v1',
+    scope: 'session',
+    source: { kind: 'operator', ref: 'operator:test', revision: 5 },
+    tool_loop: { max_rounds: 13 },
+  };
+  const service = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1',
+      session: 'session-execution-policy',
+      sessionPath: join(root, 'session.json'),
+      eventsPath: join(root, 'events.jsonl'),
+      siteRoot: root,
+    },
+    intelligenceRuntime: {
+      reconfigureExecutionPolicy: async (policy) => {
+        activePolicy = policy;
+        return { accepted: true, active: { execution_policy: policy } };
+      },
+    },
+    invokeIntelligenceFn: async () => ({ content: 'unused' }),
+  });
+  const run = service.run({ input, output });
+  input.end([
+    JSON.stringify({ id: 'policy-1', method: 'runtime.execution_policy.reconfigure', params: { execution_policy: requestedPolicy } }),
+    JSON.stringify({ id: 'close-1', method: 'session.close' }),
+  ].join('\n') + '\n');
+  await run;
+  const events = rendered.trim().split(/\r?\n/).map((line) => JSON.parse(line));
+  assert.equal(activePolicy.tool_loop.max_rounds, 13);
+  assert.equal(events.find((event) => event.event === 'session_started')?.execution_policy?.tool_loop?.max_rounds, 200);
+  const reconfiguration = events.find((event) => event.event === 'runtime_execution_policy_reconfiguration' && event.request_id === 'policy-1');
+  assert.equal(reconfiguration?.accepted, true);
+  assert.equal(reconfiguration?.active?.tool_loop?.max_rounds, 13);
 });
 
 test('session-core turn persists carrier and gateway evidence for a provider tool call', async () => {

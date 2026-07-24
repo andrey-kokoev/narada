@@ -1,3 +1,4 @@
+import { NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS } from '@narada2/nars-intelligence-kernel-contract';
 import { createCarrierTurnAdapter } from '@narada2/carrier-runtime/carrier-turn-adapter';
 import { createNarsSessionSupervisor } from '@narada2/nars-session-core/session-supervisor';
 import { NarsIntelligenceInvocationError } from './intelligence-runtime-controller.mjs';
@@ -11,15 +12,17 @@ function isProviderFollowUpRoundLimitError(error) {
  * Transport-facing binding. The caller owns transport and process lifetime;
  * session lifecycle is delegated to nars-session-core and turns to the carrier.
  */
-export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelligenceFn, toolGateway = {}, buildTurnContext, handleControlRequest } = {}) {
+export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelligenceFn, toolGateway = {}, buildTurnContext, handleControlRequest, executionPolicyProvider = null } = {}) {
   if (typeof invokeIntelligenceFn !== 'function') throw new Error('runtime_session_binding_invoke_intelligence_required');
   const sessionId = runtimeContext.session;
   if (!sessionId || !runtimeContext.sessionPath || !runtimeContext.eventsPath) {
     throw new Error('runtime_session_binding_context_required');
   }
   const carrier = createCarrierTurnAdapter({
-    invokeIntelligence: ({ messages, tools, settings, abortSignal, turnId, inputEventId, runtimeRequestId, runtime_request_id, idempotencyKey, idempotency_key, turnAttempt, turn_attempt, invocationEventSink, toolGateway }) => invokeIntelligenceFn(messages, tools, {
+    invokeIntelligence: ({ messages, tools, settings, abortSignal, turnId, inputEventId, runtimeRequestId, runtime_request_id, idempotencyKey, idempotency_key, turnAttempt, turn_attempt, executionPolicy, execution_policy, invocationEventSink, toolGateway }) => invokeIntelligenceFn(messages, tools, {
       ...settings,
+      executionPolicy: executionPolicy ?? execution_policy,
+      execution_policy: executionPolicy ?? execution_policy,
       abortSignal,
       turnId,
       inputEventId,
@@ -90,9 +93,22 @@ export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelli
     handleControlRequest,
     buildTurnContext: (input) => {
       const turnContext = (buildTurnContext ?? defaultBuildTurnContext)(input);
+      const executionPolicy = turnContext.executionPolicy
+        ?? turnContext.execution_policy
+        ?? (typeof executionPolicyProvider === 'function' ? executionPolicyProvider() : null)
+        ?? runtimeContext.executionPolicy
+        ?? runtimeContext.execution_policy
+        ?? null;
       return {
         ...turnContext,
-        maxToolRounds: turnContext.maxToolRounds ?? runtimeContext.maxToolRounds ?? 8,
+        ...(executionPolicy ? { executionPolicy, execution_policy: executionPolicy } : {}),
+        maxToolRounds: turnContext.maxToolRounds
+          ?? executionPolicy?.tool_loop?.max_rounds
+          ?? runtimeContext.maxToolRounds
+          ?? runtimeContext.max_tool_rounds
+          ?? runtimeContext.invocationSettings?.maxToolRounds
+          ?? runtimeContext.invocationSettings?.max_tool_rounds
+          ?? NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS,
       };
     },
   });

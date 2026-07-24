@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, readFile, rm } from "node:fs/promises";
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
@@ -44,6 +44,52 @@ test("dry-run migration is deterministic and does not mutate", async () => {
   assert.equal(dry.counts.unchanged, 0);
   assert.equal((await store.listResources()).length, 0, "dry-run must not mutate");
   await store.close();
+});
+
+test("existing catalog is not rewritten when bootstrap source path or metadata changes", async () => {
+  const root = await (await import("node:fs/promises")).mkdtemp(join(tmpdir(), "narada-intelligence-bootstrap-provenance-"));
+  const sourceRoot = join(root, "sources");
+  const firstSource = join(sourceRoot, "legacy-provider-registry.json");
+  const secondSource = join(sourceRoot, "provider-registry.bootstrap.json");
+  const dbPath = join(root, ".ai", "intelligence-registry.db");
+  try {
+    const source = JSON.parse(await readFile(REAL_REGISTRY, "utf8")) as Record<string, unknown>;
+    await mkdir(sourceRoot, { recursive: true });
+    await writeFile(firstSource, JSON.stringify({
+      ...source,
+      description: "Frozen legacy provider-registry migration fixture; never runtime or selection authority.",
+    }));
+    await writeFile(secondSource, JSON.stringify({
+      ...source,
+      description: "Non-secret bootstrap input for first-time User Site catalog migration; never runtime or selection authority.",
+    }));
+
+    const first = await ensureIntelligenceCatalog({
+      siteRoot: root,
+      targetSiteId: "site:bootstrap-provenance-test",
+      userSiteId: "site:bootstrap-provenance-test",
+      hostSiteId: "site:bootstrap-host",
+      sourceRegistryPath: firstSource,
+      plannedAt: "2026-07-19T00:00:00Z",
+    });
+    assert.equal(first.status, "initialized");
+
+    const second = await ensureIntelligenceCatalog({
+      siteRoot: root,
+      targetSiteId: "site:bootstrap-provenance-test",
+      userSiteId: "site:bootstrap-provenance-test",
+      hostSiteId: "site:bootstrap-host",
+      sourceRegistryPath: secondSource,
+      plannedAt: "2026-07-20T00:00:00Z",
+    });
+    assert.equal(second.status, "already_ready");
+    assert.equal(second.mutation_performed, false);
+    assert.equal(second.counts.add, 0);
+    assert.equal(second.counts.update, 0);
+    assert.equal(second.catalog_record_count, first.catalog_record_count);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });
 
 test("User Site intelligence bootstrap is idempotent and creates a validated catalog from an empty root", async () => {

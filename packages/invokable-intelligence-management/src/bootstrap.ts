@@ -57,12 +57,42 @@ export async function ensureIntelligenceCatalog(
   const targetSite = siteRef(options.targetSiteId);
   const userSite = siteRef(options.userSiteId ?? targetSite);
   const hostSite = siteRef(options.hostSiteId ?? targetSite);
-  const plannedAt = options.plannedAt ?? (await stat(sourceRegistryPath)).mtime.toISOString();
 
   await mkdir(dirname(registryDbPath), { recursive: true });
-  const legacy = parseLegacyRegistry(JSON.parse(await readFile(sourceRegistryPath, "utf8")) as unknown);
   const store = await SqliteRegistryStore.open(registryDbPath);
   try {
+    const [existingCatalogRecords, existingResources, existingResiduals] = await Promise.all([
+      store.listCatalogRecords(),
+      store.listResources(),
+      store.listCatalogResiduals(),
+    ]);
+
+    // Bootstrap is a first-use initializer, not an update authority. Once a
+    // catalog exists, source moves or metadata edits must not rewrite its
+    // immutable envelopes during an unrelated launch.
+    if (existingCatalogRecords.length > 0) {
+      return {
+        schema: INTELLIGENCE_CATALOG_BOOTSTRAP_SCHEMA,
+        status: "already_ready",
+        mutation_performed: false,
+        site_root: siteRoot,
+        registry_db_path: registryDbPath,
+        source_registry_path: sourceRegistryPath,
+        target_site: targetSite,
+        user_site: userSite,
+        host_site: hostSite,
+        counts: {
+          add: 0,
+          update: 0,
+          unchanged: existingCatalogRecords.length + existingResiduals.length,
+        },
+        catalog_record_count: existingCatalogRecords.length,
+        resource_count: existingResources.length,
+      };
+    }
+
+    const plannedAt = options.plannedAt ?? (await stat(sourceRegistryPath)).mtime.toISOString();
+    const legacy = parseLegacyRegistry(JSON.parse(await readFile(sourceRegistryPath, "utf8")) as unknown);
     const plan = {
       targetSite,
       userSite,

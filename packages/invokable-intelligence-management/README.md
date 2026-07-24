@@ -52,6 +52,52 @@ Use `narada-intelligence help` for the complete collection and operation list. E
 
 The package temporarily retains the dry-run-by-default provider-registry migration used for cutover. It factorizes legacy provider entries into canonical inference providers, model providers, models, offerings, adapters, credential locators, routes, access records, policies, and provenance-bearing catalog records. It does not grant legacy configuration runtime authority. The migration surface is removed after verified zero-consumer cutover.
 
+User Site catalog bootstrap is first-use only: an empty registry is seeded once, and a registry that already contains catalog records is treated as ready without rewriting immutable records. Deliberate catalog changes belong to an explicit versioned migration, not to the launcher preflight path.
+
+## Local readiness and explicit principal binding
+
+Local launch readiness is a read-only doctor over the complete authority chain. It does not migrate a legacy provider registry, create a principal, infer identity from a name, or fabricate grants, consent, entitlements, quotas, budgets, governance, credentials, or route evidence. A service account or a present credential is not principal admission.
+
+The launch context must carry an explicit User Site binding for the principal embodied by the runtime. The binding is an authority input, not a provider/model selection mechanism:
+
+```json
+{
+  "schema": "narada.intelligence.launch_context.v1",
+  "user_site_id": "site:andrey-user",
+  "host_site_id": "site:andrey-pc",
+  "principal_id": "principal:andrey",
+  "principal_binding": {
+    "schema": "narada.intelligence.principal_binding.v1",
+    "actor": { "principal_id": "principal:andrey", "auth_type": "user-site-session" },
+    "memberships": [{
+      "registry": "site-roster",
+      "site_id": "site:target",
+      "role": "resident",
+      "evidence_ref": "evidence:principal-membership"
+    }],
+    "evidence_refs": ["evidence:principal-membership"]
+  }
+}
+```
+
+Run the doctor against an explicit readiness context before launching:
+
+```powershell
+narada-intelligence --db C:\Users\Andrey\Narada\.ai\intelligence-registry.db local-readiness --context C:\path\readiness-context.json
+```
+
+The doctor reports each chain separately and returns `ready` only when catalog integrity, Site admission, principal admission and binding, route access, consent, credential, grant, entitlement, quota, budget, and governance checks all pass. `blocked` and `ambiguous` results are actionable refusals; no missing authority is synthesized.
+
+When setup is required, use the explicit management admission operation with a complete, residual-free canonical seed and one mutation context per record:
+
+```powershell
+narada-intelligence --db C:\Users\Andrey\Narada\.ai\intelligence-registry.db admit-catalog-seed --seed canonical-seed.json --record-contexts record-contexts.json --context mutation-context.json
+```
+
+This mutation is a deliberate setup/management action. Launcher preflight never performs it. After setup, write or update the User Site launch context with the authoritative binding, rerun `local-readiness`, and only then launch the runtime. The launch context and readiness context may contain opaque evidence references, but never raw secrets.
+
+The runtime and agent-start preflight use the same explicit binding and readiness rules. A legacy migration can preserve historical records for inspection, but it cannot make local intelligence launchable by itself; a refusal such as `intelligence_local_readiness_blocked` is the correct result until the full authority chain is explicitly admitted.
+
 ## Temporary compatibility read
 
 `readLegacyCompatibilityProjection` serves only the exact

@@ -15,6 +15,14 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./conformance": {
+      "types": "./dist/conformance.d.ts",
+      "import": "./dist/conformance.js"
+    },
+    "./store": {
+      "types": "./dist/store.d.ts",
+      "import": "./dist/store.js"
+    },
     "./d1": {
       "types": "./dist/d1-store.d.ts",
       "import": "./dist/d1-store.js"

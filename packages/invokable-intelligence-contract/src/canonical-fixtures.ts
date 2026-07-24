@@ -410,7 +410,20 @@ export function buildCanonicalLocalTestSeed(options: CanonicalLocalTestSeedOptio
     },
   ];
   const access: CatalogAccessRecord[] = [
-    { schema: "narada.invokable-intelligence.principal.v1", id: ids.principal, kind: "human", authority: accessAuthority("principal", ids.principal) },
+    {
+      schema: "narada.invokable-intelligence.principal.v1",
+      id: ids.principal,
+      kind: "human",
+      authority: accessAuthority("principal", ids.principal),
+      admission_bindings: [{
+        id: "binding:andrey:site-roster",
+        kind: "site-membership",
+        registry: "site-roster",
+        site_id: ids.targetSite,
+        roles: ["resident"],
+        auth_types: ["user-site-session"],
+      }],
+    },
     { schema: "narada.invokable-intelligence.service-account.v1", id: ids.account, tenant_id: "tenant:local-api", inference_provider: inferenceProviderRef, owner: accessAuthority("account-owner", ids.userSite), region: "global", status: "active" },
     { schema: "narada.invokable-intelligence.credential-binding.v1", id: "credential-binding:local-api", account_id: ids.account, credential_locator: credentialRef, transport: { kind: "credential-handle", ref: "credential-handle:local-api", holder_site_id: ids.hostSite }, presence: "present", usability: "usable", observed_at: now, valid_until: validUntil, owner: accessAuthority("execution-site", ids.hostSite), evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
     { schema: "narada.invokable-intelligence.access-grant.v1", id: ids.grant, principal_id: ids.principal, account_id: ids.account, actions: ["invoke", "batch"], scope: { offering_ids: [ids.offering], route_ids: [ids.route], purposes: ["operator-chat", "carrier-turn"], target_site_ids: [ids.targetSite], topology_ids: [LOCAL_EXECUTION_TOPOLOGY.id] }, validity: { valid_from: VALID_FROM, valid_until: validUntil }, status: "active", granted_by: accessAuthority("account-owner", ids.userSite), principal_consent_ref: "authority-statement:andrey-local-consent", evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },

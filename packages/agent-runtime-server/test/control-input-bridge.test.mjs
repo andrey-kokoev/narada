@@ -105,6 +105,59 @@ test('control input bridge keeps sideband exhaustion open and delivers appended 
   }
 });
 
+test('control input bridge translates delivered system directives into admitted session input', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-control-input-directive-'));
+  const controlPath = join(root, 'control.jsonl');
+  const output = new PassThrough();
+  const lines = [];
+  output.setEncoding('utf8');
+  output.on('data', (chunk) => {
+    lines.push(...chunk.split('\n').map((line) => line.trim()).filter(Boolean));
+  });
+  const errors = [];
+  const bridge = createControlInputBridge({
+    path: controlPath,
+    output,
+    pollIntervalMs: 10,
+    onError: (error) => errors.push(error),
+  });
+  try {
+    await writeFile(controlPath, `${JSON.stringify({
+      id: 'directive-dir_control_bridge_test',
+      method: 'system_directive.deliver',
+      params: {
+        directive_id: 'dir_control_bridge_test',
+        directive: {
+          source: { kind: 'system', id: 'site-loop.test' },
+          content: { kind: 'work_ref', text: 'inspect the resident backlog' },
+          directive_id: 'dir_control_bridge_test',
+        },
+        message: 'Directive id: dir_control_bridge_test\n\ninspect the resident backlog',
+        authority_ref: 'dir_control_bridge_test',
+      },
+    })}\n`, 'utf8');
+    await bridge.start();
+    await waitFor(() => lines.length === 1);
+
+    const request = JSON.parse(lines[0]);
+    assert.equal(request.id, 'directive-dir_control_bridge_test');
+    assert.equal(request.event_id, 'input_dir_control_bridge_test');
+    assert.equal(request.method, 'session.submit');
+    assert.equal(request.source_kind, 'system');
+    assert.equal(request.source_id, 'site-loop.test');
+    assert.equal(request.transport, 'control_jsonl');
+    assert.equal(request.delivery_mode, 'admit_after_active_turn');
+    assert.equal(request.directive_id, 'dir_control_bridge_test');
+    assert.equal(request.authority_ref, 'dir_control_bridge_test');
+    assert.match(request.content, /inspect the resident backlog/);
+    assert.deepEqual(errors, []);
+  } finally {
+    bridge.close();
+    output.destroy();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('control input bridge exposes bounded diagnostics for malformed records', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-control-input-invalid-'));
   const controlPath = join(root, 'control.jsonl');

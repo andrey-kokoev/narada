@@ -9,6 +9,7 @@ import {
   createNarsToolRound,
   NarsKernelContractError,
   normalizeIntelligenceKernelKind,
+  normalizeNarsExecutionPolicy,
 } from '@narada2/nars-intelligence-kernel-contract';
 import { createNarsNativeKernel } from '@narada2/nars-intelligence-kernel-contract/native-kernel';
 import { createPiSdkHost } from './pi/pi-sdk-host.mjs';
@@ -99,6 +100,8 @@ function providerInputFromTurn(turn, signal, invocationEventSink, capabilityGate
     providerRequestAttempt: turn.provider_request_attempt ?? turn.providerRequestAttempt ?? null,
     provider_request_attempt: turn.provider_request_attempt ?? turn.providerRequestAttempt ?? null,
     abortSignal: toolRound.abort_signal,
+    executionPolicy: toolRound.execution_policy,
+    execution_policy: toolRound.execution_policy,
     tool_loop: toolRound.tool_loop,
     invocationEventSink,
     ...(capabilityGateway ? {
@@ -255,6 +258,9 @@ function createPiKernel({
     provider: runtimeContext.provider ?? runtimeConfig.provider ?? null,
     model: runtimeContext.model ?? runtimeConfig.model ?? null,
     thinking: runtimeContext.thinking ?? runtimeConfig.thinking ?? null,
+    executionPolicy: normalizeNarsExecutionPolicy(runtimeContext.executionPolicy ?? runtimeContext.execution_policy, {
+      sourceKind: 'runtime-config',
+    }),
   };
   let closed = false;
   let latestRecovery = null;
@@ -284,6 +290,7 @@ function createPiKernel({
       provider: publicResourceId(currentConfig.provider),
       model: publicResourceId(currentConfig.model),
       thinking: nonEmpty(currentConfig.thinking),
+      executionPolicy: currentConfig.executionPolicy,
       kernelState: state,
       activeTurnId,
       providerStreaming: Boolean(activeTurnId),
@@ -323,6 +330,7 @@ function createPiKernel({
     if (closed) throw new NarsKernelContractError('pi_kernel_closed', 'Pi kernel is closed.');
     const normalized = assertNarsKernelStartContext(context);
     if (startedContext) return startEvidence;
+    const hasExplicitExecutionPolicy = context?.execution_policy != null || context?.executionPolicy != null;
     state = 'starting';
     try {
       const admittedTools = kernelToolCatalog(normalized.tools ?? []);
@@ -330,6 +338,7 @@ function createPiKernel({
         provider: normalized.provider ?? currentConfig.provider,
         model: normalized.model ?? currentConfig.model,
         thinking: normalized.thinking ?? currentConfig.thinking,
+        executionPolicy: hasExplicitExecutionPolicy ? normalized.execution_policy : currentConfig.executionPolicy,
       };
       const isolation = createPiRuntimeIsolationConfig({
         provider: publicResourceId(currentConfig.provider),
@@ -396,7 +405,10 @@ function createPiKernel({
     if (closed) throw new NarsKernelContractError('pi_kernel_closed', 'Pi kernel is closed.');
     if (!startedContext) throw new NarsKernelContractError('pi_kernel_not_started', 'Pi kernel has not started.');
     if (activeTurnId) throw new NarsKernelContractError('pi_kernel_turn_active', `Turn '${activeTurnId}' is already active.`);
-    const normalizedTurn = assertNarsAdmittedTurn(turn);
+    const normalizedTurn = assertNarsAdmittedTurn({
+      ...(turn && typeof turn === 'object' ? turn : {}),
+      execution_policy: turn?.execution_policy ?? turn?.executionPolicy ?? currentConfig.executionPolicy,
+    });
     const sink = assertNarsKernelEventSink(eventSink);
     const gateway = assertNarsKernelCapabilityGateway(capabilityGateway);
     // Reserve the turn before any catalog/context/host await. NARS
@@ -760,6 +772,7 @@ function createPiKernel({
       settings: input.requestedOptions && typeof input.requestedOptions === 'object'
         ? input.requestedOptions
         : {},
+      execution_policy: input.executionPolicy ?? input.execution_policy ?? currentConfig.executionPolicy,
       provider_invocation: {
         plan: input.plan,
         model: input.model,
@@ -834,15 +847,26 @@ function createPiKernel({
     state = 'reconfiguring';
     try {
       const admittedPlan = request.admitted_plan ?? request.admittedPlan ?? null;
-      if (!admittedPlan || typeof admittedPlan !== 'object' || Array.isArray(admittedPlan)) {
+      const requestedExecutionPolicy = request.execution_policy ?? request.executionPolicy ?? null;
+      const hasExecutionPolicy = requestedExecutionPolicy != null;
+      const hasAdmittedPlan = admittedPlan != null;
+      if ((!hasAdmittedPlan || typeof admittedPlan !== 'object' || Array.isArray(admittedPlan)) && !hasExecutionPolicy) {
         state = 'ready';
         return { accepted: false, reason: 'admitted_plan_required' };
+      }
+      if (hasAdmittedPlan && (typeof admittedPlan !== 'object' || Array.isArray(admittedPlan))) {
+        state = 'ready';
+        return { accepted: false, reason: 'admitted_plan_invalid' };
       }
       const selected = admittedPlan?.selected && typeof admittedPlan.selected === 'object'
         ? admittedPlan.selected
         : {};
       const admittedProvider = selected.inference_provider ?? selected.inferenceProvider ?? null;
       const admittedModel = selected.model ?? null;
+      if (hasAdmittedPlan && (!admittedProvider || !admittedModel)) {
+        state = 'ready';
+        return { accepted: false, reason: 'admitted_plan_binding_incomplete' };
+      }
       const admittedThinking = typeof admittedPlan?.options?.thinking === 'string'
         ? admittedPlan.options.thinking
         : null;
@@ -850,6 +874,9 @@ function createPiKernel({
         provider: admittedProvider ?? currentConfig.provider,
         model: admittedModel ?? currentConfig.model,
         thinking: admittedThinking ?? currentConfig.thinking,
+        executionPolicy: hasExecutionPolicy
+          ? normalizeNarsExecutionPolicy(requestedExecutionPolicy, { sourceKind: 'runtime-reconfigure' })
+          : currentConfig.executionPolicy,
       };
       const isolation = createPiRuntimeIsolationConfig({
         provider: publicResourceId(next.provider),
@@ -870,10 +897,12 @@ function createPiKernel({
           ? { thinking: nonEmpty(next.thinking) }
           : {}),
       };
-      const result = await host.reconfigure(hostConfig);
+      const result = admittedProvider || admittedModel || admittedThinking
+        ? await host.reconfigure(hostConfig)
+        : null;
       currentConfig = next;
       state = 'ready';
-      return { accepted: true, active: { provider: publicResourceId(next.provider), model: publicResourceId(next.model), thinking: nonEmpty(next.thinking) }, host: { status: 'reconfigured', adapter_result_present: result != null } };
+      return { accepted: true, active: { provider: publicResourceId(next.provider), model: publicResourceId(next.model), thinking: nonEmpty(next.thinking), ...(hasExecutionPolicy ? { execution_policy: next.executionPolicy } : {}) }, host: { status: 'reconfigured', adapter_result_present: result != null } };
     } catch (error) {
       state = 'ready';
       lastError = compactError(error, 'pi_reconfigure_failed');

@@ -60,6 +60,8 @@ await runProcessTests([
     label: 'option-contract-shards',
     args: ['test/run-option-contract-shards.mjs'],
     cwd: packageRoot,
-    timeoutMs: 15000,
+    // The option shards each pay a cold launcher/module-load cost and run
+    // concurrently with the other package probes.
+    timeoutMs: 60000,
   },
 ]);

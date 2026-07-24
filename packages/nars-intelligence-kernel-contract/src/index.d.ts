@@ -4,6 +4,18 @@ export type RuntimeHostKind = 'narada-agent-runtime-server';
 export type NarsKernelState = 'created' | 'starting' | 'ready' | 'running' | 'cancelling' | 'reconfiguring' | 'recovering' | 'closed' | 'failed';
 export type NarsKernelTerminalState = 'completed' | 'failed' | 'interrupted' | 'refused';
 export type NarsJsonRecord = Readonly<Record<string, unknown>>;
+export interface NarsExecutionPolicy {
+  schema: 'narada.nars.execution_policy.v1';
+  scope: string;
+  source: {
+    kind: string;
+    ref: string | null;
+    revision: number | string;
+  };
+  tool_loop: {
+    max_rounds: number;
+  };
+}
 export type NarsKernelEventKind =
   | 'kernel_provider_request_started'
   | 'kernel_provider_request_completed'
@@ -123,6 +135,8 @@ export interface NarsAdmittedTurn {
   execution_evidence?: NarsJsonRecord;
   correlation_key?: string | null;
   request_id?: string | null;
+  execution_policy?: NarsExecutionPolicy;
+  executionPolicy?: NarsExecutionPolicy;
 }
 
 export interface NarsKernelEvent {
@@ -168,6 +182,7 @@ export interface NarsToolRound {
   input_event_id: string;
   turn_attempt: number;
   provider_request_attempt: number | null;
+  execution_policy: NarsExecutionPolicy;
   messages: readonly NarsMessageRecord[];
   tools: readonly NarsToolDescriptor[];
   abort_signal: AbortSignal | null;
@@ -177,6 +192,7 @@ export interface NarsToolRound {
     owner: 'nars-session-core-carrier';
     result_authority: 'nars-capability-gateway';
     terminal_authority: 'nars-session-core';
+    execution_policy: NarsExecutionPolicy;
   };
 }
 
@@ -188,6 +204,8 @@ export interface NarsKernelStartContext {
   model?: unknown;
   thinking?: string | null;
   tools?: readonly NarsToolDescriptor[];
+  execution_policy?: NarsExecutionPolicy;
+  executionPolicy?: NarsExecutionPolicy;
 }
 
 export interface NarsKernelStartEvidence {
@@ -237,7 +255,9 @@ export interface NarsKernelCancellationEvidence {
 }
 
 export interface NarsKernelReconfigurationRequest {
-  admitted_plan: NarsAdmittedPlan;
+  admitted_plan?: NarsAdmittedPlan;
+  execution_policy?: NarsExecutionPolicy;
+  executionPolicy?: NarsExecutionPolicy;
 }
 
 export interface NarsKernelReconfigurationEvidence {
@@ -256,6 +276,7 @@ export interface NarsKernelHealthProjection {
   provider: string | null;
   model: string | null;
   thinking: string | null;
+  execution_policy: NarsExecutionPolicy;
   kernel_state: NarsKernelState;
   active_turn_id: string | null;
   provider_streaming: boolean;
@@ -296,6 +317,10 @@ export const KERNEL_TERMINAL_STATES: readonly NarsKernelTerminalState[];
 export const NARS_KERNEL_EVENT_KINDS: readonly NarsKernelEventKind[];
 export const NARS_TOOL_ROUND_SCHEMA: 'narada.nars.tool_round.v1';
 export const NARS_TOOL_LOOP_OWNER: 'nars-session-core-carrier';
+export const NARS_EXECUTION_POLICY_SCHEMA: 'narada.nars.execution_policy.v1';
+export const NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS: 200;
+export const NARS_EXECUTION_POLICY_MIN_MAX_ROUNDS: 1;
+export const NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS: 500;
 export class NarsKernelContractError extends Error {
   code: string;
   details: Record<string, unknown>;
@@ -304,6 +329,20 @@ export function isIntelligenceKernelKind(value: unknown): value is IntelligenceK
 export function normalizeIntelligenceKernelKind(value: unknown, options?: { defaultKind?: IntelligenceKernelKind }): IntelligenceKernelKind;
 export function assertIntelligenceKernelKind(value: unknown, options?: { defaultKind?: IntelligenceKernelKind }): IntelligenceKernelKind;
 export function isOperatorSurfaceKind(value: unknown): value is OperatorSurfaceKind;
+export function normalizeNarsExecutionPolicy(value?: unknown, options?: {
+  defaultMaxRounds?: number;
+  sourceKind?: string;
+  sourceRef?: string | null;
+  revision?: number | string;
+  scope?: string;
+}): NarsExecutionPolicy;
+export function assertNarsExecutionPolicy(value?: unknown, options?: {
+  defaultMaxRounds?: number;
+  sourceKind?: string;
+  sourceRef?: string | null;
+  revision?: number | string;
+  scope?: string;
+}): NarsExecutionPolicy;
 export function assertNarsKernelStartContext(context: unknown): NarsKernelStartContext;
 export function assertNarsAdmittedTurn(turn: unknown): NarsAdmittedTurn;
 export function createNarsToolRound(options: {

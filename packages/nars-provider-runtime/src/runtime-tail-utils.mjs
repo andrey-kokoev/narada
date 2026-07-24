@@ -56,6 +56,6 @@ export function terminateChildProcess(child) {
   child.kill();
 }
 
-export function codexCommand() {
-  return resolveCodexCommand({ processEnv: process.env, platform: process.platform, exists: existsSync });
+export function codexCommand({ processEnv = process.env, platform = process.platform, exists = existsSync } = {}) {
+  return resolveCodexCommand({ processEnv, platform, exists });
 }

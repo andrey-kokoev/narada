@@ -37,7 +37,10 @@ const commands = shard(testNames, shardCount)
       testFile,
     ],
     cwd: packageRoot,
-    timeoutMs: 15000,
+    // Each shard pays the full tsx/launcher module-load cost concurrently;
+    // the cold first shard can exceed 15s on a loaded Windows host. Keep the
+    // timeout as an infrastructure ceiling rather than a flake generator.
+    timeoutMs: 45000,
   }));
 
 await runProcessTests(commands);

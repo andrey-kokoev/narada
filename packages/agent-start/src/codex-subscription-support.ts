@@ -150,6 +150,11 @@ export function codexSubscriptionPreflight(provider, {
       encoding: 'utf8',
       timeout: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
       windowsHide: true,
+      // This probe is deliberately non-interactive. Send an empty input
+      // frame through a pipe so Node closes stdin deterministically; Codex
+      // otherwise waits for another prompt and consumes the full timeout.
+      stdio: ['pipe', 'pipe', 'pipe'],
+      input: '',
       env,
     },
   });
