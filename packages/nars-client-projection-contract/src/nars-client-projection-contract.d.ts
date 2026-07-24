@@ -29,6 +29,7 @@ export const NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD: 'runtime.intelligence
 export const NARS_RUNTIME_SERVER_METHOD_LIST: readonly string[];
 export const NARS_RUNTIME_SERVER_METHODS: ReadonlySet<string>;
 export const AGENT_WEB_UI_NARS_METHOD_LIST: readonly string[];
+export const AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST: readonly string[];
 export const AGENT_WEB_UI_SESSION_COMMANDS: readonly string[];
 export const AGENT_WEB_UI_CARRIER_COMMANDS: readonly string[];
 export type AgentWebUiCommandKind = 'local_ui' | 'nars_protocol' | 'nars_session_command' | 'raw_protocol_frame';
@@ -78,6 +79,12 @@ export const NARS_CLIENT_EVENT_TONES: Readonly<Record<string, string>>;
 export const NARS_CLIENT_EVENT_LABELS: Readonly<Record<string, string>>;
 export const AGENT_WEB_UI_NARS_METHODS: ReadonlySet<string>;
 export const NARS_CLIENT_PROJECTION_REGISTRY: unknown;
+export const NARS_CLIENT_CONFORMANCE_FIXTURES: Readonly<{
+  schema: 'narada.nars.client_conformance_fixtures.v1';
+  scenarios: readonly string[];
+  canonical_events: readonly Readonly<Record<string, unknown>>[];
+  protocol_frames: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+}>;
 
 export interface NarsClientProjection {
   kind: string;
