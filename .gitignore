@@ -12,6 +12,8 @@ coverage/
 .idea/
 *.tmp
 *.temp
+*.tmp.*
+*.temp.*
 config.json
 .history
 codex-home/
@@ -33,6 +35,8 @@ inputs/
 .ai/runtime/
 .ai/mcp/
 .ai/operator-surface-send-queue/
+.ai/task-*-report.json
+task-*-report.json
 .feedback/
 .sop/
 .sop/
