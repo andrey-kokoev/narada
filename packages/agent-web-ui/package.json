@@ -31,8 +31,8 @@
     }
   },
   "exports": {
-    ".": "./src/agent-web-ui.js",
-    "./server": "./src/server.js",
+    ".": "./src/agent-web-ui.ts",
+    "./server": "./src/server.ts",
     "./package.json": "./package.json"
   },
   "files": [
@@ -46,18 +46,18 @@
     "build": "vite build",
     "postbuild": "node ../layers/cli/scripts/write-launch-artifact.mjs --target agent-web-ui --package-root . --site-root ../..",
     "pretest": "pnpm --filter @narada2/cloudflare-nars-projection build",
-    "test": "node --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs && pnpm run test:unit",
+    "test": "node --import tsx --test test/agent-web-ui.test.mjs test/agent-web-ui-projection.test.mjs test/agent-web-ui-protocol.test.mjs && pnpm run test:unit",
     "pretest:unit": "pnpm --filter @narada2/cloudflare-nars-projection build",
     "test:unit": "vitest run --config vitest.config.mjs",
     "test:unit:coverage": "vitest run --config vitest.config.mjs --coverage",
     "test:browser": "pnpm run test:e2e && pnpm run test:projection",
     "test:runtime:slash-commands": "pnpm run build && playwright test --config playwright.config.js test/e2e/live-slash-smoke.spec.js",
-    "test:live:external-nars-input": "pnpm --filter @narada2/cli build && pnpm run build && pnpm --dir ../../../mcp-surfaces --filter @narada2/nars-session-mcp build && pnpm --filter @narada2/cloudflare-nars-projection build && node test/live-launcher-affordance-e2e.mjs --scenario external_input",
-    "test:live:replay-reconnect": "pnpm --filter @narada2/cli build && pnpm run build && pnpm --dir ../../../mcp-surfaces --filter @narada2/nars-session-mcp build && node test/live-launcher-affordance-e2e.mjs --scenario replay_reconnect",
-    "test:live:intelligence-reconfiguration": "pnpm --filter @narada2/cli build && pnpm run build && node test/live-launcher-affordance-e2e.mjs --scenario intelligence_reconfiguration",
+    "test:live:external-nars-input": "pnpm --filter @narada2/cli build && pnpm run build && pnpm --dir ../../../mcp-surfaces --filter @narada2/nars-session-mcp build && pnpm --filter @narada2/cloudflare-nars-projection build && node --import tsx test/live-launcher-affordance-e2e.mjs --scenario external_input",
+    "test:live:replay-reconnect": "pnpm --filter @narada2/cli build && pnpm run build && pnpm --dir ../../../mcp-surfaces --filter @narada2/nars-session-mcp build && node --import tsx test/live-launcher-affordance-e2e.mjs --scenario replay_reconnect",
+    "test:live:intelligence-registry": "pnpm --filter @narada2/invokable-intelligence-contract build && pnpm --filter @narada2/invokable-intelligence-registry build && pnpm --filter @narada2/cli build && pnpm run build && node --import tsx test/live-launcher-affordance-e2e.mjs --scenario intelligence_registry",
     "test:live:speech-audio": "pnpm run build && node --test test/agent-web-ui-live-speech-audio-projection-e2e.mjs",
-    "test:live:launcher-affordance": "pnpm run build && node test/live-launcher-affordance-e2e.mjs",
-    "test:live:launcher-onboarding": "pnpm run build && node test/live-launcher-affordance-e2e.mjs",
+    "test:live:launcher-affordance": "pnpm run build && node --import tsx test/live-launcher-affordance-e2e.mjs",
+    "test:live:launcher-onboarding": "pnpm run build && node --import tsx test/live-launcher-affordance-e2e.mjs",
     "test:live:delegated-task": "pnpm run build && node test/live-delegated-task-launcher-e2e.mjs",
     "test:live:full-router-nars-provider": "pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/cli build && pnpm run build && node test/full-live-router-nars-provider-e2e.mjs",
     "test:all": "pnpm run test && pnpm run test:browser",
@@ -85,6 +85,8 @@
   "devDependencies": {
     "@narada2/agent-cli": "workspace:*",
     "@narada2/agent-runtime-server": "workspace:*",
+    "@narada2/invokable-intelligence-contract": "workspace:*",
+    "@narada2/invokable-intelligence-registry": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
     "@playwright/test": "^1.61.1",
     "@tailwindcss/vite": "^4.1.18",
@@ -97,6 +99,7 @@
     "postcss": "^8.5.16",
     "tailwindcss": "^4.1.18",
     "type-fest": "^4.41.0",
+    "tsx": "^4.7.0",
     "vite": "^8.1.5",
     "vitest": "^4.1.10",
     "vue-tsc": "^2.2.0"

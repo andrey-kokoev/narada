@@ -9,7 +9,7 @@ import { resolveInvocationPrincipalAdmission } from '@narada2/invokable-intellig
 import { SqliteMaterializationStore } from '@narada2/invokable-intelligence-materialization';
 import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 import { buildResolverContext, createLocalInvocationGateway } from '@narada2/invokable-intelligence-runtime';
-import { deterministicId, resolveInvocation } from '@narada2/invokable-intelligence-resolver';
+import { assembleCandidates, deterministicId, resolveInvocation } from '@narada2/invokable-intelligence-resolver';
 import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
 import { createCanonicalInvocationAdapter } from '@narada2/nars-provider-runtime/canonical-invocation-adapter';
 import {
@@ -37,6 +37,31 @@ const DISABLED_NARS_CAPABILITY_GATEWAY = Object.freeze({
 
 function nonEmpty(value) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function publicResourceId(value, prefix) {
+  const id = typeof value === 'string' ? value : value?.id;
+  if (typeof id !== 'string' || !id.trim()) return null;
+  return id.startsWith(prefix) ? id.slice(prefix.length) : id;
+}
+
+async function selectionChoicesFromCatalog(store) {
+  const [resources, routeRecords] = await Promise.all([
+    store.listResources(),
+    store.listCatalogRecords({ recordKind: 'route' }),
+  ]);
+  const routes = routeRecords
+    .map((record) => record.document)
+    .filter((document) => document?.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1');
+  const candidates = assembleCandidates(resources, routes);
+  return Object.freeze({
+    provider_choices: Object.freeze([...new Set(candidates
+      .map((candidate) => publicResourceId(candidate.inferenceProvider, 'inference-provider:'))
+      .filter(Boolean))].sort()),
+    model_choices: Object.freeze([...new Set(candidates
+      .map((candidate) => nonEmpty(candidate.offering.invocation_model_key))
+      .filter(Boolean))].sort()),
+  });
 }
 
 function runtimePiRpcConfig(env) {
@@ -338,6 +363,7 @@ export async function createLocalIntelligenceRuntime({
   try {
     materialization = inputMaterialization ?? await SqliteMaterializationStore.open(registryDbPath);
     await assertCanonicalSiteAdmission(store, sites, principal, intelligence.principalBinding);
+    const selectionChoices = await selectionChoicesFromCatalog(store);
     const observationSource = intelligence.topologyObservationSource ?? {
       authority_ref: `runtime:${runtimeContext.session}`,
       observation_validity_ms: 1000,
@@ -431,6 +457,7 @@ export async function createLocalIntelligenceRuntime({
       session_id: runtimeContext.session,
       agent_id: runtimeContext.identity,
       runtime_context: runtimeContext,
+      execution_policy: runtimeContext.executionPolicy ?? runtimeContext.execution_policy,
       tools: startupTools,
     });
     const invocationAdapter = Object.freeze({
@@ -533,6 +560,7 @@ export async function createLocalIntelligenceRuntime({
       kernel,
       kernel_kind: kernelKind,
       kernel_start_evidence: kernelStartEvidence,
+      selectionChoices,
       kernelHealth: () => kernel.health?.() ?? null,
       store,
       async preflightSelection({ requestedModel = null, requestedOptions = {} } = {}) {

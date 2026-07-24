@@ -101,7 +101,9 @@ export function createNarsIntelligenceRuntimeController({
   onTransition = () => {},
   kernelHealth = null,
   kernelStartEvidence = null,
+  selectionChoices = null,
   reconfigureKernel = null,
+  reconfigureExecutionPolicyFn = null,
   isBusy = () => false,
   close = async () => {},
 } = {}) {
@@ -119,8 +121,28 @@ export function createNarsIntelligenceRuntimeController({
   let lastReconfiguration = null;
   let nextRequestNumber = 1;
 
+  async function reconfigureExecutionPolicy(policy, options = {}) {
+    if (options.isBusy?.() ?? isBusy()) {
+      return {
+        accepted: false,
+        reason: 'runtime_not_at_clean_turn_boundary',
+      };
+    }
+    if (typeof reconfigureExecutionPolicyFn !== 'function') {
+      return {
+        accepted: true,
+        active: { execution_policy: policy },
+        reason: 'execution_policy_bound_by_session_runtime',
+      };
+    }
+    return reconfigureExecutionPolicyFn(policy);
+  }
+
   function snapshot() {
     const projectedKernelHealth = typeof kernelHealth === 'function' ? kernelHealth() : null;
+    const projectedSelectionChoices = typeof selectionChoices === 'function'
+      ? selectionChoices()
+      : selectionChoices ?? {};
     return {
       schema: 'narada.nars.intelligence_runtime_snapshot.v1',
       authority: 'invokable-intelligence-gateway',
@@ -135,6 +157,12 @@ export function createNarsIntelligenceRuntimeController({
       intelligence_kernel_kind: projectedKernelHealth?.kernel_kind ?? runtimeContext.intelligenceKernelKind ?? null,
       kernel: projectedKernelHealth,
       kernel_start_evidence: kernelStartEvidence,
+      provider_choices: Array.isArray(projectedSelectionChoices.provider_choices)
+        ? [...projectedSelectionChoices.provider_choices]
+        : [],
+      model_choices: Array.isArray(projectedSelectionChoices.model_choices)
+        ? [...projectedSelectionChoices.model_choices]
+        : [],
     };
   }
 
@@ -175,6 +203,9 @@ export function createNarsIntelligenceRuntimeController({
       ...(idempotencyKey ? { idempotencyKey } : {}),
       ...(overrides.turnAttempt || overrides.turn_attempt
         ? { turnAttempt: overrides.turnAttempt ?? overrides.turn_attempt }
+        : {}),
+      ...(overrides.executionPolicy || overrides.execution_policy
+        ? { executionPolicy: overrides.executionPolicy ?? overrides.execution_policy }
         : {}),
       ...(runtimeContext.invocationSettings?.invocationScope
         ? { invocationScope: runtimeContext.invocationSettings.invocationScope }
@@ -295,7 +326,7 @@ export function createNarsIntelligenceRuntimeController({
     }
   }
 
-  return Object.freeze({ callIntelligence, primePreflight, snapshot, reconfigure, close });
+  return Object.freeze({ callIntelligence, primePreflight, snapshot, reconfigure, reconfigureExecutionPolicy, close });
 }
 
 function intelligenceControllerResult(machine, extras = {}) {

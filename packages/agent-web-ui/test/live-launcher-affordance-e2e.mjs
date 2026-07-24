@@ -9,7 +9,8 @@ import { fileURLToPath } from 'node:url';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
 import { spawnTestChild } from '@narada2/process-launch-posture';
-import { startAgentWebUiServer } from '../src/server.js';
+import { startAgentWebUiServer } from '../src/server.ts';
+import { seedLiveIntelligenceRegistry } from './live-intelligence-registry-fixture.mjs';
 
 const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.mjs');
 
@@ -260,6 +261,7 @@ let agentCliOutput = null;
 let page = null;
 let projectionRemotePage = null;
 let provider = null;
+let intelligenceFixture = null;
 let narsSessionMcp = null;
 let projectionWorkerServer = null;
 let projectionWorkerEnvRef = null;
@@ -269,8 +271,11 @@ let projectionAssetServer = null;
 let projectionBridgePid = null;
 
 try {
-  if (!['launcher_affordance', 'external_input', 'intelligence_reconfiguration', 'replay_reconnect'].includes(scenario)) {
+  if (!['launcher_affordance', 'external_input', 'intelligence_registry', 'replay_reconnect'].includes(scenario)) {
     throw new Error(`unknown_live_e2e_scenario: ${scenario}`);
+  }
+  if (requestedSiteRoot) {
+    throw new Error('live_intelligence_registry_e2e_requires_test_owned_site_root');
   }
   // Keep the provider turn active long enough for the real Worker poll, bridge
   // WebSocket admission, and cancellation to cross the process boundary.
@@ -293,6 +298,10 @@ try {
     );
     projectionWorkerBaseUrl = await listenHttpServer(projectionWorkerServer);
   }
+  intelligenceFixture = await seedLiveIntelligenceRegistry(siteRoot, {
+    siteId,
+    endpointBaseUrl: provider.baseUrl,
+  });
   console.log(`live-e2e: starting real operator-surface runtime for ${agentId}`);
   runtimeProcess = spawnTestChild(process.execPath, [
     join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js'),
@@ -305,7 +314,6 @@ try {
     '--workspace-root', REPO_ROOT,
     '--agent', agentId,
     '--runtime', 'narada-agent-runtime-server',
-    '--intelligence-provider', 'kimi-code-api',
     '--mcp-scope', 'none',
     '--exec',
     '--format', 'human',
@@ -313,13 +321,15 @@ try {
     cwd: REPO_ROOT,
     env: {
       ...process.env,
-      NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
+      NARADA_USER_SITE_ROOT: siteRoot,
+      NARADA_INTELLIGENCE_CONTEXT_PATH: intelligenceFixture.contextPath,
+      NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
       NARADA_AI_API_KEY: 'live-e2e-fixture-key',
-      NARADA_AI_BASE_URL: provider.baseUrl,
-      NARADA_AI_MODEL: 'live-e2e-fixture-model',
+      NARADA_AI_BASE_URL: 'http://127.0.0.1:9/stale-provider',
+      NARADA_AI_MODEL: 'stale-env-model',
       KIMI_CODE_API_KEY: 'live-e2e-fixture-key',
       KIMI_CODE_API_BASE_URL: provider.baseUrl,
-      KIMI_CODE_MODEL: 'live-e2e-fixture-model',
+      KIMI_CODE_MODEL: 'stale-env-model',
       DEEPSEEK_API_KEY: 'live-e2e-fixture-key',
       DEEPSEEK_API_BASE_URL: provider.baseUrl,
       DEEPSEEK_MODEL: 'deepseek-fixture-model',
@@ -338,8 +348,8 @@ try {
     timeoutMs,
     label: 'runtime_start_event',
   });
-  assert.equal(startupEvent.provider, 'kimi-code-api');
-  assert.equal(startupEvent.model, 'live-e2e-fixture-model');
+  assert.equal(startupEvent.provider, intelligenceFixture.defaultProviderId);
+  // The durable startup event exposes the provider identity; the resolved model is asserted from NARS health below.
   assert.equal(startupEvent.mcp_scope, 'none');
   assert.equal(startupEvent.mcp_operational_state, 'disabled');
   const sessionAgentId = agentIdentityDisplay(startupEvent.agent_identity_ref, startupEvent.agent_id ?? agentId)
@@ -454,8 +464,8 @@ try {
       agentCliOutput,
     });
   }
-  if (scenario === 'intelligence_reconfiguration') {
-    await runIntelligenceReconfigurationScenario({ record, page, provider, timeoutMs });
+  if (scenario === 'intelligence_registry') {
+    await runIntelligenceRegistryScenario({ record, page, provider, timeoutMs, intelligenceFixture });
   }
   if (scenario === 'replay_reconnect') {
     await runReplayReconnectScenario({ record, page, narsSessionMcp, provider, timeoutMs });
@@ -532,13 +542,27 @@ function sessionRoots(root) {
 }
 
 async function waitForSessionRecord({ siteRoot, agentId, timeoutMs, runtimeProcess, runtimeOutput }) {
-  return waitFor(() => {
-    if (runtimeProcess.exitCode !== null && runtimeProcess.exitCode !== 0) {
-      throw new Error(`runtime_process_exited:${runtimeProcess.exitCode}:${runtimeOutput.all().slice(0, 4000)}`);
+  try {
+    return await waitFor(() => {
+      if (runtimeProcess.exitCode !== null && runtimeProcess.exitCode !== 0) {
+        throw new Error(`runtime_process_exited:${runtimeProcess.exitCode}:${runtimeOutput.all().slice(0, 4000)}`);
+      }
+      const record = findLatestSessionRecord(siteRoot, agentId);
+      return record?.event_endpoint && record?.health_endpoint ? record : false;
+    }, { timeoutMs, label: 'session_index_record' });
+  } catch (error) {
+    const output = runtimeOutput.all();
+    const resultPath = output.match(/Result:\s+([^\r\n]+\.json)/i)?.[1]?.trim() ?? null;
+    let resultArtifact = null;
+    if (resultPath && existsSync(resultPath)) {
+      try {
+        resultArtifact = readJsonFile(resultPath);
+      } catch (artifactError) {
+        resultArtifact = { read_error: artifactError instanceof Error ? artifactError.message : String(artifactError) };
+      }
     }
-    const record = findLatestSessionRecord(siteRoot, agentId);
-    return record?.event_endpoint && record?.health_endpoint ? record : false;
-  }, { timeoutMs, label: 'session_index_record' });
+    throw new Error(`${error instanceof Error ? error.message : String(error)}: runtime_output=${output.slice(0, 8000)}${resultArtifact ? `: runtime_result=${JSON.stringify(resultArtifact).slice(0, 12000)}` : ''}`);
+  }
 }
 
 function findLatestSessionRecord(siteRoot, agentId) {
@@ -890,137 +914,74 @@ async function closeNarsSession(eventEndpoint) {
   socket.close();
 }
 
-async function runIntelligenceReconfigurationScenario({ record, page, provider, timeoutMs }) {
-  const initialHealth = await waitForIntelligenceHealth(record.health_endpoint, {
-    provider: 'kimi-code-api',
-    model: 'live-e2e-fixture-model',
-    thinking: 'medium',
-  }, timeoutMs, 'initial_intelligence_health');
+async function runIntelligenceRegistryScenario({ record, page, provider, timeoutMs, intelligenceFixture }) {
+  const health = await waitFor(async () => {
+    const response = await fetch(record.health_endpoint, { cache: 'no-store' });
+    const candidate = await response.json();
+    const plan = candidate?.intelligence?.latest_plan;
+    return candidate?.status === 'healthy'
+      && plan?.inference_provider?.id === `inference-provider:${intelligenceFixture.defaultProviderId}`
+      && plan?.model?.id === intelligenceFixture.defaultModelId
+      ? candidate
+      : false;
+  }, { timeoutMs, label: 'canonical_intelligence_health' });
+
+  const plan = health.intelligence.latest_plan;
+  assert.equal(plan.inference_provider.id, `inference-provider:${intelligenceFixture.defaultProviderId}`);
+  assert.equal(plan.model.id, intelligenceFixture.defaultModelId);
+  assert.equal(plan.endpoint.id, intelligenceFixture.defaultEndpointId);
+  assert.equal(plan.options.thinking, 'low');
+  assert.deepEqual(health.intelligence.provider_choices, intelligenceFixture.providerChoices);
+  assert.deepEqual(health.intelligence.model_choices, intelligenceFixture.modelChoices);
+
   const controls = await page.waitForExpression(`(() => {
-    const selectors = {
-      provider: document.querySelector('select.intelligence-provider-select'),
-      model: document.querySelector('select.intelligence-model-select'),
-      thinking: document.querySelector('select.intelligence-thinking-select'),
+    const providerControl = document.querySelector('[aria-label="Provider"]');
+    const modelControl = document.querySelector('[aria-label="Model"]');
+    if (!(providerControl instanceof HTMLSelectElement)) return false;
+    if (!(modelControl instanceof HTMLSelectElement)) return false;
+    const expected = {
+      provider: ${JSON.stringify(intelligenceFixture.defaultProviderId)},
+      model: ${JSON.stringify(intelligenceFixture.defaultInvocationModelKey)},
+      providerChoices: ${JSON.stringify(intelligenceFixture.providerChoices)},
+      modelChoices: ${JSON.stringify(intelligenceFixture.modelChoices)},
     };
-    if (Object.values(selectors).some((control) => !(control instanceof HTMLSelectElement))) return false;
-    return Object.fromEntries(Object.entries(selectors).map(([key, control]) => [
-      key,
-      Array.from(control.options).map((option) => option.value),
-    ]));
+    const providerChoices = Array.from(providerControl.options, (option) => option.value);
+    const modelChoices = Array.from(modelControl.options, (option) => option.value);
+    return providerControl.value === expected.provider
+      && modelControl.value === expected.model
+      && JSON.stringify(providerChoices) === JSON.stringify(expected.providerChoices)
+      && JSON.stringify(modelChoices) === JSON.stringify(expected.modelChoices)
+      ? { provider: providerControl.value, model: modelControl.value, providerChoices, modelChoices }
+      : false;
   })()`, timeoutMs);
-  const launchConfig = await page.waitForExpression(`(() => {
-    const element = document.querySelector('#nars-config');
-    if (!element?.textContent) return null;
-    return JSON.parse(element.textContent);
-  })()`, timeoutMs);
-  assert.ok(
-    launchConfig?.admittedMethods?.includes('runtime.intelligence.reconfigure'),
-    `local agent-web-ui must admit runtime reconfiguration: ${JSON.stringify(launchConfig)}`,
-  );
-  await page.evaluate(`(() => {
-    if (window.__liveE2eOriginalWebSocketSend) return;
-    window.__liveE2eFrames = [];
-    window.__liveE2eOriginalWebSocketSend = WebSocket.prototype.send;
-    WebSocket.prototype.send = function(data) {
-      try { window.__liveE2eFrames.push(JSON.parse(String(data))); } catch {}
-      return window.__liveE2eOriginalWebSocketSend.call(this, data);
-    };
-  })()`);
-
-  assert.ok(controls.thinking.includes('high'), `thinking selector must advertise high: ${JSON.stringify(controls)}`);
-  assert.ok(controls.model.some((value) => value !== initialHealth.intelligence.model), `model selector must advertise an alternate model: ${JSON.stringify(controls)}`);
-  assert.ok(controls.provider.includes('deepseek-api'), `provider selector must advertise deepseek-api: ${JSON.stringify(controls)}`);
-
-  const thinkingTarget = 'high';
-  await changeIntelligenceSelector({
-    page,
-    record,
-    selector: 'select.intelligence-thinking-select',
-    value: thinkingTarget,
-    target: { thinking: thinkingTarget },
-    timeoutMs,
-    label: 'thinking_reconfiguration',
+  assert.deepEqual(controls, {
+    provider: intelligenceFixture.defaultProviderId,
+    model: intelligenceFixture.defaultInvocationModelKey,
+    providerChoices: intelligenceFixture.providerChoices,
+    modelChoices: intelligenceFixture.modelChoices,
   });
 
-  const modelTarget = controls.model.find((value) => value !== initialHealth.intelligence.model);
-  await changeIntelligenceSelector({
-    page,
-    record,
-    selector: 'select.intelligence-model-select',
-    value: modelTarget,
-    target: { model: modelTarget },
-    timeoutMs,
-    label: 'model_reconfiguration',
-  });
-
-  const providerTarget = 'deepseek-api';
-  const finalHealth = await changeIntelligenceSelector({
-    page,
-    record,
-    selector: 'select.intelligence-provider-select',
-    value: providerTarget,
-    target: { provider: providerTarget },
-    timeoutMs,
-    label: 'provider_runtime_reconfiguration',
-  });
-
-  const requestCountBeforeFinalTurn = provider.requests.length;
-  const finalPrompt = 'verify the final intelligence binding';
-  await page.fill('#operator-input', finalPrompt);
+  const requestCountBeforeTurn = provider.requests.length;
+  const prompt = 'verify the canonical registry intelligence binding';
+  await page.fill('#operator-input', prompt);
   await page.click('.composer-submit');
-  await waitFor(() => provider.requests.length > requestCountBeforeFinalTurn, {
+  await waitFor(() => provider.requests.length > requestCountBeforeTurn, {
     timeoutMs,
-    label: 'final_reconfigured_provider_request',
+    label: 'canonical_registry_provider_request',
   });
-  await page.waitForExpression(`document.body.textContent.includes(${JSON.stringify(responseText())})`, timeoutMs);
-  const finalRequest = provider.requests.at(-1);
-  assert.equal(finalRequest?.model, finalHealth.intelligence.model);
-  assert.ok(JSON.stringify(finalRequest?.messages ?? '').includes(finalPrompt));
+  await page.waitForExpression(
+    `document.body.textContent.includes(${JSON.stringify(responseText())})`,
+    timeoutMs,
+  );
+  const request = provider.requests.at(-1);
+  assert.equal(request?.model, intelligenceFixture.defaultInvocationModelKey);
+  assert.ok(JSON.stringify(request?.messages ?? '').includes(prompt));
 }
 
 function responseText() {
   return 'Live launcher fixture response';
 }
 
-async function changeIntelligenceSelector({ page, record, selector, value, target, timeoutMs, label }) {
-  const baselineSequence = Math.max(0, ...readJsonlFile(record.events_path).map((event) => Number(event.event_sequence ?? event.sequence ?? 0)));
-  await page.selectOption(selector, value);
-
-  const browserFrame = await page.waitForExpression(`(() => {
-    const target = ${JSON.stringify(target)};
-    return (window.__liveE2eFrames ?? []).find((frame) => (
-      frame?.method === 'runtime.intelligence.reconfigure'
-      && Object.entries(target).every(([key, expected]) => frame.params?.[key] === expected)
-    )) || false;
-  })()`, timeoutMs);
-  assert.equal(browserFrame.method, 'runtime.intelligence.reconfigure');
-
-  const reconfiguration = await waitFor(() => {
-    const event = readJsonlFile(record.events_path).find((candidate) => (
-      Number(candidate.event_sequence ?? candidate.sequence ?? 0) > baselineSequence
-      && candidate.event === 'runtime_intelligence_reconfiguration'
-      && candidate.terminal_state === 'active'
-      && Object.entries(target).every(([key, expected]) => candidate.active?.[key] === expected)
-    ));
-    return event || false;
-  }, { timeoutMs, label: `${label}_event` });
-
-  const health = await waitForIntelligenceHealth(record.health_endpoint, target, timeoutMs, `${label}_health`);
-  await page.waitForExpression(`document.querySelector(${JSON.stringify(selector)})?.value === ${JSON.stringify(value)}`, timeoutMs);
-  assert.equal(reconfiguration.active?.[Object.keys(target)[0]], Object.values(target)[0]);
-  return health;
-}
-
-async function waitForIntelligenceHealth(endpoint, target, timeoutMs, label) {
-  let latest = null;
-  await waitFor(async () => {
-    const response = await fetch(endpoint, { cache: 'no-store' });
-    latest = await response.json();
-    const intelligence = latest?.intelligence ?? {};
-    return Object.entries(target).every(([key, expected]) => intelligence[key] === expected);
-  }, { timeoutMs, label });
-  return latest;
-}
 
 async function runExternalInputProjectionScenario({
   record,

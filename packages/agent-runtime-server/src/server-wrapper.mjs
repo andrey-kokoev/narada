@@ -210,6 +210,7 @@ async function loadRuntimeDependencies(runtimeContext = {}) {
       close: intelligenceRuntime.close,
       kernelHealth: intelligenceRuntime.kernelHealth,
       kernelStartEvidence: intelligenceRuntime.kernel_start_evidence ?? null,
+      selectionChoices: intelligenceRuntime.selectionChoices,
       reconfigureKernel: intelligenceRuntime.kernel?.reconfigure
         ? (target, admittedPlan) => intelligenceRuntime.kernel.reconfigure({
             // The kernel contract consumes the canonical admitted plan
@@ -217,6 +218,9 @@ async function loadRuntimeDependencies(runtimeContext = {}) {
             // plan in an invocation envelope.
             ...(admittedPlan ? { admitted_plan: admittedPlan.plan ?? admittedPlan } : {}),
           })
+        : null,
+      reconfigureExecutionPolicyFn: intelligenceRuntime.kernel?.reconfigure
+        ? (executionPolicy) => intelligenceRuntime.kernel.reconfigure({ execution_policy: executionPolicy })
         : null,
       onTransition: (event) => appendRuntimeEvent(event),
     });

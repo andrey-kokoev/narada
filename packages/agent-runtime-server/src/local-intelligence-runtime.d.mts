@@ -100,6 +100,10 @@ export interface LocalIntelligenceRuntime {
   kernel: NarsIntelligenceKernelLike & { invoke(input: Record<string, unknown>): Promise<unknown>; health?: () => Record<string, unknown> };
   kernel_kind: string;
   kernel_start_evidence: Record<string, unknown>;
+  selectionChoices: {
+    provider_choices: readonly string[];
+    model_choices: readonly string[];
+  };
   kernelHealth: () => Record<string, unknown> | null;
   preflightSelection(input?: {
     requestedModel?: ResourceRef | null;
