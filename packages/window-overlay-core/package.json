@@ -1,0 +1,35 @@
+{
+  "name": "@narada2/window-overlay-core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "reusable_windows_overlay_mechanics",
+    "authority_owner": "@narada2/window-overlay-core",
+    "presentation_only": false
+  },
+  "bin": {"narada-window-overlay-core": "./src/cli.mjs"},
+  "exports": {
+    ".": {"types": "./src/index.d.ts", "default": "./src/index.mjs"},
+    "./host": "./src/window-surface-overlay.ps1",
+    "./inspect": "./src/Inspect-WindowSurfaceOverlay.ps1",
+    "./install": "./src/Install-WindowSurfaceOverlay.ps1",
+    "./start": "./src/Start-WindowSurfaceOverlay.ps1",
+    "./stop": "./src/Stop-WindowSurfaceOverlay.ps1",
+    "./package.json": "./package.json"
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "test": "node --test src/window-overlay-core.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
+  },
+  "description": "Reusable Windows overlay-window mechanics for Narada operator surfaces",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/window-overlay-core"
+  },
+  "devDependencies": {"@types/node": "^22.0.0", "typescript": "^5.3.0"},
+  "engines": {"node": ">=22.0.0"}
+}

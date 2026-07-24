@@ -1,0 +1,36 @@
+{
+  "name": "@narada2/operator-console-overlay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "operator_console_overlay_specialization",
+    "surface": "operator_console",
+    "authority_owner": "@narada2/cli",
+    "presentation_only": true
+  },
+  "bin": {"narada-operator-console-overlay": "./src/cli.mjs"},
+  "exports": {
+    ".": {"types": "./src/index.d.ts", "default": "./src/index.mjs"},
+    "./package.json": "./package.json"
+  },
+  "files": ["src", "README.md"],
+  "scripts": {
+    "test": "node --test src/operator-console-overlay.test.mjs",
+    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
+  },
+  "dependencies": {
+    "@narada2/operator-console-contract": "workspace:*",
+    "@narada2/operator-router": "workspace:*",
+    "@narada2/window-overlay-core": "workspace:*"
+  },
+  "devDependencies": {"@types/node": "^22.0.0", "typescript": "^5.3.0"},
+  "description": "Operator Console specialization of the reusable Windows overlay mechanics",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/operator-console-overlay"
+  },
+  "engines": {"node": ">=22.0.0"}
+}
