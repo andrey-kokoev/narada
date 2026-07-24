@@ -197,6 +197,17 @@ Expected results:
 Low-level serve commands with port 0 remain available and label their URLs as
 direct diagnostic endpoints.
 
+The stable Console projection is independently controllable even when its
+owning terminal is no longer visible:
+
+    narada console stop
+    narada console restart --no-open
+
+These commands authenticate to the Router's admin inventory, use the
+projection's recorded owner PID and process identity, and leave the shared
+Router running. A stale route is removable after its owner has exited; an
+identity mismatch is refused rather than guessed.
+
 ## Current State
 
 - `@narada2/operator-router` owns the stable loopback listener, singleton lock,
@@ -206,6 +217,9 @@ direct diagnostic endpoints.
   and that path is diagnostic by contract.
 - `narada console serve` registers the Console projection at `/` and keeps
   `--port 0` as explicitly labeled diagnostic mode.
+- `narada console stop` and `narada console restart` own recovery when the
+  original Console terminal is unavailable; they do not treat the shared
+  Router as a Console-owned child.
 - `narada agent-web-ui attach` defaults to the router, registers a session HTTP
   route and an exact event-WebSocket route, and returns a stable
   `/sessions/<session-id>/` URL. When `--session latest` is used, selection is

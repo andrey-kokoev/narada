@@ -121,6 +121,8 @@ Cross-cutting runtime, contract, MCP, carrier, NARS, agent, operator, and UI pac
 | `@narada2/cloudflare-site-registry` | `packages/cloudflare-site-registry` | Carrier-embedded Cloudflare D1 site registry runtime |
 | `@narada2/site-registry-cloudflare` | `packages/site-registry-cloudflare` | Hosted Cloudflare Worker read-model surface for Site Registry and telemetry |
 | `@narada2/operator-surface-carriers` / `@narada2/window-surface-overlay` / `@narada2/windows-operator-surface` | `packages/operator-surface-carriers`, `packages/window-surface-overlay`, `packages/windows-operator-surface` | Windows operator-surface machinery |
+| `@narada2/window-overlay-core` | `packages/window-overlay-core` | Reusable WPF overlay process, persisted window preferences, versioned document renderer, and safe overlay actions |
+| `@narada2/operator-console-overlay` | `packages/operator-console-overlay` | Operator Console specialization of the generic overlay; does not own console/router lifecycle |
 | `@narada2/mcp-shell-windows` | `packages/mcp-shell-windows` | Packaged shell MCP server |
 | `@narada2/invokable-intelligence-contract` | `packages/invokable-intelligence-contract` | Versioned invokable-intelligence ontology: typed resources, qualified capability assertions, typed policies, invocation Intent→Plan→Attempt→Evidence contracts (#2180) |
 | `@narada2/invokable-intelligence-registry` | `packages/invokable-intelligence-registry` | Portable intelligence registry storage: one store contract over node:sqlite and Cloudflare D1, typed relational schema, supersession history, shared conformance suite (#2181) |

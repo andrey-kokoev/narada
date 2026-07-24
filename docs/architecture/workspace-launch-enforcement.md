@@ -47,6 +47,34 @@ and records per-child rollback evidence. The CLI then writes a best-effort,
 redacted failure artifact into the User Site; an artifact write failure is
 reported as `write_failed`, never silently swallowed.
 
+### NARS Session Authority
+
+The Site-local NARS session index is discovery and history; it is not the
+singleton lock. Every executable `narada-agent-runtime-server` start receives
+an admission from the NARS session-authority SQLite database at
+`.ai/runtime/session-authority.sqlite` before the runtime is materialized. The
+admission is bound to the normalized `(authority_scope, site_id,
+local_agent_id)` principal and carries a private lifecycle owner token,
+monotonically increasing epoch, lease, and exact session handoff. The runtime must activate
+and heartbeat that admission; a fenced or expired admission cannot continue.
+
+If the authority database has no record but the legacy session index still
+contains a live matching session, the launcher refuses with
+`session_authority_legacy_duplicate` and includes the exact candidate and
+attach handoff when there is one unambiguous candidate. It never chooses the
+newest or oldest session. Repair is explicit:
+
+```powershell
+narada nars session reconcile --site-root <site-root> --agent <local-agent-id> --keep-session <session-id>
+narada nars session reconcile --site-root <site-root> --agent <local-agent-id> --keep-session <session-id> --apply
+```
+
+The first command is a plan. `--apply` only records reconciliation after all
+matching sessions are inactive; it does not adopt a running legacy process.
+The next start must pass through launcher admission. This boundary prevents
+the previously observed duplicate healthy-session ambiguity across launcher,
+NARS, and Web UI attachment.
+
 The earlier durable execution-attempt store, the `recoverable` /
 `recovery_requested` / `recovered` states, restart recovery of detached
 projections, and the `narada launcher workspace-recover` command were removed

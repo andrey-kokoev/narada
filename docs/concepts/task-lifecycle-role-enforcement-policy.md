@@ -65,3 +65,7 @@ User Site config uses Site schema because the User Site is a Narada Site:
 ## Observability
 
 Claim, continue, read, show, and workboard surfaces should expose the resolved `role_policy` object. That object includes the effective value and the resolution chain, so an operator can see why a mismatch blocked, warned, or passed.
+
+## Related Executability Recovery
+
+Task role policy is orthogonal to Task Executability Assessment. The former governs who may claim or continue work; the latter governs whether the task/environment packet is executable. Their E2E proof covers executable-path and lifecycle/recovery mechanics, not task correctness; recovery ownership is documented in [`../operations/task-executability-e2e-and-recovery.md`](../operations/task-executability-e2e-and-recovery.md).

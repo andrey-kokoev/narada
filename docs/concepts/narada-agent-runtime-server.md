@@ -225,6 +225,32 @@ Example request shape:
 {"method":"session.submit","params":{"content":"run startup sequence"}}
 ```
 
+An automation caller that owns retry, resume, or replay semantics uses the
+top-level `@narada2/invokable-intelligence-contract` control under
+`params.intelligence_invocation`:
+
+```json
+{
+  "method": "session.submit",
+  "params": {
+    "content": "run startup sequence",
+    "intelligence_invocation": {
+      "schema": "narada.invokable-intelligence.invocation-control.v1",
+      "intent_id": "intent:startup-sequence",
+      "operation_id": "operation:startup-sequence:retry-1",
+      "mode": "retry",
+      "allow_replan": true
+    }
+  }
+}
+```
+
+`retry`, `resume`, and `replay` require both identities. Reusing an operation
+identity is idempotent readback; a new operation identity under the same
+intent appends a lineage-bearing attempt. The control cannot select a
+provider, endpoint, adapter, or model. Those remain runtime resolver outcomes
+from canonical Site-governed state.
+
 Example event shapes:
 
 ```json

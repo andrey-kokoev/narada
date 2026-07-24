@@ -27,6 +27,26 @@ not accept secrets or replace `narada onboarding` as the mutation authority.
 The browser is a projection client. It does not invent routes, replace the
 route authority, or bypass the CLI-owned server.
 
+## Projection Lifecycle
+
+The stable Operator Router is host-owned and may outlive the terminal that
+started the Console projection. The projection itself has first-class CLI
+lifecycle commands:
+
+```powershell
+narada console stop
+narada console restart
+```
+
+`stop` discovers the authenticated `operator-console` route, verifies the
+recorded owner process before terminating it, and removes the route. If the
+owner has already exited, it removes only the stale route. It never stops the
+shared Operator Router. `restart` performs the same bounded stop and then
+starts a fresh projection on the stable port. Use `--no-open` when only the
+server should be restarted. A process-identity refusal is intentional: do
+not force-kill an unrelated process whose PID was reused; inspect the route
+diagnostics instead.
+
 ## Sites and Agents
 
 Each Site box identifies its explicit Site kind and admitted agents. The dot
@@ -109,6 +129,10 @@ means refresh, browser history, and a copied Registry URL reopen the same
 canonical Site selection. If the selected record disappears during refresh,
 the query is removed rather than pointing at a nonexistent record.
 
+## Task Executability Recovery
+
+The operator does not repair an assessment by editing SQLite or retrying until a verdict changes. Run the deterministic proof and follow the bounded recovery steps in [`../operations/task-executability-e2e-and-recovery.md`](../operations/task-executability-e2e-and-recovery.md). That proof checks executable-path and lifecycle/recovery mechanics, not task correctness. A live provider check is explicit and optional; an exit-code `2` skip means its external authority was not configured.
+
 ## Verification
 
 Run the focused checks from `D:\code\narada`:
@@ -118,6 +142,7 @@ pnpm --filter @narada2/operator-console-ui test
 pnpm --filter @narada2/cloudflare-nars-projection test
 pnpm --filter @narada2/cloudflare-nars-projection typecheck
 pnpm --filter @narada2/cli exec vitest run --silent=true test/commands/console-server.test.ts
+pnpm --filter @narada2/cli exec node --import tsx --test test/commands/console-projection-lifecycle.test.ts
 pnpm --filter @narada2/cli build
 ```
 

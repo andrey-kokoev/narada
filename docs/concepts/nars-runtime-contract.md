@@ -6,7 +6,7 @@ This document defines the implementation-facing shape of the Narada Agent Runtim
 
 The concept document [`narada-agent-runtime-server.md`](narada-agent-runtime-server.md) defines what NARS is. This document defines the contract implementation code should converge on: package ownership, launch boundary, session protocol, event shape, carrier adapter boundary, and verification expectations.
 
-The full target for session discovery, liveness, attachment, and recovery is [`nars-session-management.md`](nars-session-management.md). The general authority/projection/surface topology is [`narada-runtime-projection-graph.md`](narada-runtime-projection-graph.md). The target for Cloudflare-hosted remote browser projection of local NARS sessions is [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md), with the narrower gateway slice in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md).
+The full target for session discovery, liveness, attachment, and recovery is [`nars-session-management.md`](nars-session-management.md). The general authority/projection/surface topology is [`narada-runtime-projection-graph.md`](narada-runtime-projection-graph.md). The target for Cloudflare-hosted remote browser projection of local NARS sessions is [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md), with the narrower gateway slice in [`nars-remote-projection-gateway.md`](nars-remote-projection-gateway.md). NARS is only an execution/recovery participant in Task Executability Assessment. Its evidence covers runtime-path and recovery behavior, not task correctness; the cross-surface proof and ownership boundary are documented in [`../operations/task-executability-e2e-and-recovery.md`](../operations/task-executability-e2e-and-recovery.md).
 
 NARS is the Narada-owned runtime server contract for durable, machine-addressable agent sessions. It is not a synonym for Codex, `agent-cli`, a terminal, a transcript, or a model SDK.
 
@@ -177,6 +177,28 @@ Current session-core control methods:
 | `session.recovery` | Inspect the current recovery recommendation and recovery handoffs. |
 | `session.cancel` | Request cancellation of active work. |
 | `session.close` | Close a session with terminal evidence. |
+
+`session.submit` may carry `params.intelligence_invocation` under the public
+`narada.invokable-intelligence.invocation-control.v1` schema owned by
+`@narada2/invokable-intelligence-contract`. The admitted fields are
+`intent_id`, `operation_id`, `mode`, and `allow_replan`; unknown fields fail
+closed. Modes are `immediate`, `queued-batch`, `delayed`, `retry`, `resume`,
+and `replay`. Retry, resume, and replay require both identities. Reusing one
+operation id returns its durable result without provider redispatch, while a
+new operation id under the same intent creates an immutable attempt with
+`retry-of`, `resume-of`, or `replay-of` lineage.
+
+Explicit intent controls bind the intent payload to the current submitted
+content rather than accumulated failed-turn history. The live MCP tool
+catalog is execution context, not part of the stable intent payload digest.
+An explicitly controlled provider failure or resolver refusal is a terminal
+turn result and settles that queue item, allowing the caller's next explicit
+retry or replay to be admitted. Uncontrolled legacy failures retain the
+session recovery behavior.
+
+The invocation control contains no provider, endpoint, adapter, credential,
+or model selector. Selection remains a per-invocation resolver decision over
+canonical Site-governed records and fresh topology evidence.
 
 The local event-stream transport also admits `session.events.subscribe` and `session.events.read` for replay and live delivery. They are transport controls, not JSONL turn controls.
 

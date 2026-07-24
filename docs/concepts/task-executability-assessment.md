@@ -57,3 +57,7 @@ In strict mode, an operator may admit a one-shot override scoped to an actor, re
 ## Shoshin Posture
 
 The default evaluator profile is named `shoshin-v1` to emphasize a beginner's-mind stance: the evaluator does not assume hidden context, prior conversation, or task-local self-exemption. It inspects only the canonical task packet and the bounded declared Site environment.
+
+## Proof Boundary And Recovery
+
+The deterministic cross-surface proof and the optional live-provider proof are documented in [`../operations/task-executability-e2e-and-recovery.md`](../operations/task-executability-e2e-and-recovery.md). The deterministic proof covers the executable path and lifecycle/recovery mechanics: request admission, assessment currency, dispatch enforcement, restart/no-NARS recovery, and resource ownership. It does not prove task correctness, implementation correctness, output correctness, or business success. Live provider execution is explicit, bounded, and only adds evidence about the configured provider/runtime path; it never changes the assessment verdict or becomes a correctness proof. Task correctness remains the responsibility of task-specific tests, review, and operator judgment.
