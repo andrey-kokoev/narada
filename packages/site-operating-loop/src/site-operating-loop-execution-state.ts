@@ -24,24 +24,24 @@ const TRANSITIONS = Object.freeze({
 
 const TERMINAL_STATES = new Set(['completed', 'failed', 'cancelled']);
 
-export function createSiteOperatingLoopExecutionLifecycle(initialState = 'scheduled') {
+export function createSiteOperatingLoopExecutionLifecycle(initialState: any = 'scheduled'): any {
   assertState(initialState);
   return { schema: SITE_OPERATING_LOOP_EXECUTION_STATE_SCHEMA, state: initialState, history: [initialState] };
 }
 
-export function canTransitionSiteOperatingLoopExecution(from, to) {
+export function canTransitionSiteOperatingLoopExecution(from: any, to: any): boolean {
   assertState(from);
   assertState(to);
-  return from === to || TRANSITIONS[from].includes(to);
+  return from === to || (TRANSITIONS as Record<string, readonly string[]>)[from].includes(to);
 }
 
-export function assertSiteOperatingLoopExecutionTransition(from, to) {
+export function assertSiteOperatingLoopExecutionTransition(from: any, to: any): void {
   if (!canTransitionSiteOperatingLoopExecution(from, to)) {
     throw new Error(`invalid_site_operating_loop_execution_transition: ${from}->${to}`);
   }
 }
 
-export function transitionSiteOperatingLoopExecution(lifecycle, nextState) {
+export function transitionSiteOperatingLoopExecution(lifecycle: any, nextState: any): any {
   assertState(lifecycle?.state);
   assertSiteOperatingLoopExecutionTransition(lifecycle.state, nextState);
   return lifecycle.state === nextState
@@ -53,12 +53,12 @@ export function transitionSiteOperatingLoopExecution(lifecycle, nextState) {
     };
 }
 
-export function isTerminalSiteOperatingLoopExecutionState(state) {
+export function isTerminalSiteOperatingLoopExecutionState(state: any): boolean {
   assertState(state);
   return TERMINAL_STATES.has(state);
 }
 
-export function siteOperatingLoopExecutionLifecycleFromRunState(state) {
+export function siteOperatingLoopExecutionLifecycleFromRunState(state: any): any {
   const mapped = {
     requested: 'scheduled',
     locking: 'admitted',
@@ -72,7 +72,7 @@ export function siteOperatingLoopExecutionLifecycleFromRunState(state) {
   return createSiteOperatingLoopExecutionLifecycle(mapped ?? 'scheduled');
 }
 
-function assertState(state) {
+function assertState(state: any): void {
   if (!SITE_OPERATING_LOOP_EXECUTION_STATES.includes(state)) {
     throw new Error(`unsupported_site_operating_loop_execution_state: ${state}`);
   }

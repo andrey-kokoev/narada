@@ -9,19 +9,19 @@ import {
   recordLoopHealthSuccess,
   recordLoopStep,
   releaseLoopLock,
-} from './site-loop-store.mjs';
+} from './site-loop-store.js';
 import {
   canTransitionSiteOperatingLoopRun,
   createSiteOperatingLoopRunLifecycle,
   transitionSiteOperatingLoopRunLifecycle,
-} from './site-operating-loop-state.mjs';
+} from './site-operating-loop-state.js';
 import {
   canTransitionSiteOperatingLoopExecution,
   createSiteOperatingLoopExecutionLifecycle,
   transitionSiteOperatingLoopExecution,
-} from './site-operating-loop-execution-state.mjs';
+} from './site-operating-loop-execution-state.js';
 
-export async function runSiteOperatingLoop(store, {
+export async function runSiteOperatingLoop(store: any, {
   loopId,
   runId = makeRunId(),
   ownerId = DEFAULT_SITE_OPERATING_LOOP_OWNER_ID,
@@ -30,11 +30,11 @@ export async function runSiteOperatingLoop(store, {
   steps = [],
   summarize = null,
   signal = null,
-} = {}) {
+}: any = {}): Promise<any> {
   if (!loopId) throw new Error('loopId is required');
   const startedAt = new Date().toISOString();
   const recordedSteps = [];
-  const resultsByStepId = {};
+  const resultsByStepId: Record<string, unknown> = {};
   let lock = null;
   let failedStep = null;
   let lifecycle = createSiteOperatingLoopRunLifecycle();
@@ -157,7 +157,7 @@ export async function runSiteOperatingLoop(store, {
   } catch (error) {
     const finishedAt = new Date().toISOString();
     const payload = errorToPayload(error);
-    const aborted = signal?.aborted === true || error?.name === 'AbortError' || error?.code === 'ABORT_ERR';
+    const aborted = signal?.aborted === true || (error as any)?.name === 'AbortError' || (error as any)?.code === 'ABORT_ERR';
     const terminalState = aborted ? 'aborted' : 'failed';
     if (canTransitionSiteOperatingLoopRun(lifecycle.state, terminalState)) {
       lifecycle = transitionSiteOperatingLoopRunLifecycle(lifecycle, terminalState);
@@ -216,13 +216,13 @@ export async function runSiteOperatingLoop(store, {
 }
 
 function createSiteOperatingLoopAbortError() {
-  const error = new Error('site_operating_loop_aborted');
+  const error: any = new Error('site_operating_loop_aborted');
   error.name = 'AbortError';
   error.code = 'ABORT_ERR';
   return error;
 }
 
-export async function runSiteOperatingLoopStep(store, {
+export async function runSiteOperatingLoopStep(store: any, {
   loopId = null,
   runId,
   dryRun = false,
@@ -230,7 +230,7 @@ export async function runSiteOperatingLoopStep(store, {
   priorSteps = [],
   resultsByStepId = {},
   signal = null,
-} = {}) {
+}: any = {}): Promise<any> {
   if (!runId) throw new Error('runId is required');
   if (!step?.stepId) throw new Error('step.stepId is required');
   const startedAt = new Date().toISOString();
@@ -275,12 +275,12 @@ export async function runSiteOperatingLoopStep(store, {
   }
 }
 
-function makeRunId() {
+function makeRunId(): string {
   const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
   return `site_loop_run_${stamp}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-function createStepContext({ loopId, runId, dryRun, step, priorSteps, resultsByStepId, startedAt }) {
+function createStepContext({ loopId, runId, dryRun, step, priorSteps, resultsByStepId, startedAt }: any): any {
   return {
     schema: 'narada.site_operating_loop.step_context.v1',
     loopId,
@@ -300,8 +300,8 @@ function createStepContext({ loopId, runId, dryRun, step, priorSteps, resultsByS
   };
 }
 
-function publicStep(step) {
-  const out = {
+function publicStep(step: any): any {
+  const out: Record<string, any> = {
     step_id: step.step_id,
     status: step.status,
     started_at: step.started_at,
@@ -315,13 +315,13 @@ function publicStep(step) {
   return out;
 }
 
-function stepError(step) {
-  const error = new Error(step.error?.message ?? `Site Operating Loop step failed: ${step.step_id}`);
+function stepError(step: any): any {
+  const error: any = new Error(step.error?.message ?? `Site Operating Loop step failed: ${step.step_id}`);
   error.step = step;
   return error;
 }
 
-function errorToPayload(error) {
+function errorToPayload(error: any): any {
   return {
     message: error instanceof Error ? error.message : String(error),
     name: error instanceof Error ? error.name : 'Error',

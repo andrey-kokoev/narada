@@ -29,17 +29,17 @@ export const SITE_OPERATING_LOOP_RUNTIME_HOST_TRANSITIONS = Object.freeze({
 const transitionSets = new Map(Object.entries(SITE_OPERATING_LOOP_RUNTIME_HOST_TRANSITIONS)
   .map(([state, nextStates]) => [state, new Set(nextStates)]));
 
-export function isSiteOperatingLoopRuntimeHostState(state) {
+export function isSiteOperatingLoopRuntimeHostState(state: any): boolean {
   return SITE_OPERATING_LOOP_RUNTIME_HOST_STATES.includes(state);
 }
 
-export function canTransitionSiteOperatingLoopRuntimeHost(previousState, nextState) {
+export function canTransitionSiteOperatingLoopRuntimeHost(previousState: any, nextState: any): boolean {
   if (!isSiteOperatingLoopRuntimeHostState(nextState)) return false;
   if (previousState === nextState) return true;
   return transitionSets.get(previousState)?.has(nextState) ?? false;
 }
 
-export function assertSiteOperatingLoopRuntimeHostTransition(previousState, nextState) {
+export function assertSiteOperatingLoopRuntimeHostTransition(previousState: any, nextState: any): any {
   if (!canTransitionSiteOperatingLoopRuntimeHost(previousState, nextState)) {
     throw new Error(`invalid_site_operating_loop_runtime_host_transition:${previousState}:${nextState}`);
   }
@@ -54,7 +54,7 @@ export function createSiteOperatingLoopRuntimeHostStateMachine({
   history = null,
   now = () => new Date().toISOString(),
   onTransition = () => {},
-} = {}) {
+}: any = {}): any {
   if (!isSiteOperatingLoopRuntimeHostState(initialState)) {
     throw new Error(`invalid_site_operating_loop_runtime_host_state:${initialState}`);
   }
@@ -81,7 +81,7 @@ export function createSiteOperatingLoopRuntimeHostStateMachine({
     metadata: { ...metadata },
   });
 
-  const transition = (nextState, details = {}) => {
+  const transition = (nextState: any, details: any = {}) => {
     assertSiteOperatingLoopRuntimeHostTransition(state, nextState);
     const previousState = state;
     if (state !== nextState) {

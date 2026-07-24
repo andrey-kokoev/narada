@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   browserOpenCommand,
   createOperatorProjectionOpenRequest,
@@ -9,6 +13,7 @@ import {
   executeOperatorProjectionOpenRequest,
   normalizeHiddenCommand,
   openBrowserUrl,
+  processSupervisorEntrypoint,
   runGovernedCommand,
   runGovernedCommandSync,
   spawnHiddenPostureProcess,
@@ -18,7 +23,12 @@ import {
   spawnTestChild,
   startElevatedOrOperatorPrompt,
   startOperatorTerminal,
-} from './index.mjs';
+} from './index.js';
+
+const nativeSupervisorPath = processSupervisorEntrypoint();
+const nativeSupervisorAvailable = process.platform === 'win32'
+  && nativeSupervisorPath !== null
+  && existsSync(nativeSupervisorPath);
 
 test('browserOpenCommand uses hidden helper-compatible Windows command', () => {
   assert.deepEqual(browserOpenCommand('http://127.0.0.1:3000', { platform: 'win32' }), {
@@ -29,11 +39,11 @@ test('browserOpenCommand uses hidden helper-compatible Windows command', () => {
 });
 
 test('spawnOperatorTerminal keeps visible terminal posture explicit', () => {
-  let observed = null;
-  const child = new EventEmitter();
+  let observed: any = null;
+  const child: any = new EventEmitter();
   const result = spawnOperatorTerminal('node', ['x'], {
     cwd: 'C:/tmp',
-    spawnImpl: (command, args, options) => {
+    spawnImpl: (command: any, args: any, options: any) => {
       observed = { command, args, options };
       return child;
     },
@@ -48,10 +58,10 @@ test('spawnOperatorTerminal keeps visible terminal posture explicit', () => {
 });
 
 test('runGovernedCommandSync forces hidden synchronous execution posture', () => {
-  let observed = null;
+  let observed: any = null;
   const result = runGovernedCommandSync('pwsh', ['-NoProfile'], {
     encoding: 'utf8',
-    spawnSyncImpl: (command, args, options) => {
+    spawnSyncImpl: (command: any, args: any, options: any) => {
       observed = { command, args, options };
       return { status: 0, signal: null, output: [], pid: 3, stdout: '', stderr: '' };
     },
@@ -73,10 +83,10 @@ test('execFileGovernedSync returns captured stdout through governed posture', ()
 });
 
 test('named hidden posture wrappers set their posture centrally', () => {
-  const calls = [];
-  const spawnImpl = (command, args, options) => {
+  const calls: any[] = [];
+  const spawnImpl = (command: any, args: any, options: any) => {
     calls.push({ command, args, options });
-    const child = new EventEmitter();
+    const child: any = new EventEmitter();
     child.unref = () => {};
     return child;
   };
@@ -115,10 +125,10 @@ test('hidden posture normalizes Windows batch files through hidden cmd', () => {
 });
 
 test('openBrowserUrl forces hidden detached ignored-stdio launch posture', async () => {
-  let observed = null;
-  const spawnImpl = (command, args, options) => {
+  let observed: any = null;
+  const spawnImpl = (command: any, args: any, options: any) => {
     observed = { command, args, options };
-    const child = new EventEmitter();
+    const child: any = new EventEmitter();
     child.pid = 1234;
     child.unref = () => {};
     queueMicrotask(() => child.emit('spawn'));
@@ -183,7 +193,7 @@ test('OperatorProjectionOpenRequest refuses missing target and unsupported proje
 });
 
 test('OperatorProjectionOpenRequest executes through injected browser opener', async () => {
-  const calls = [];
+  const calls: any[] = [];
   const result = await executeOperatorProjectionOpenRequest({
     target_ref: 'file:///tmp/index.html',
     caller: { package: '@narada2/process-launch-posture', command: 'test' },
@@ -215,10 +225,10 @@ test('spawnHiddenPostureProcess refuses visible-only posture names', () => {
 });
 
 test('spawnHiddenPostureProcess admits hidden operator projection host posture', () => {
-  let observed = null;
+  let observed: any = null;
   const child = spawnHiddenPostureProcess('node', ['server.mjs'], {
     posture: 'operator_projection_host',
-    spawnImpl: (command, args, options) => {
+    spawnImpl: (command: any, args: any, options: any) => {
       observed = { command, args, options };
       return { once() {}, unref() {} };
     },
@@ -231,10 +241,10 @@ test('spawnHiddenPostureProcess admits hidden operator projection host posture',
 });
 
 test('spawnHiddenPostureProcess admits hidden agent runtime server posture', () => {
-  let observed = null;
+  let observed: any = null;
   const child = spawnHiddenPostureProcess('node', ['agent-runtime-server.mjs'], {
     posture: 'agent_runtime_server',
-    spawnImpl: (command, args, options) => {
+    spawnImpl: (command: any, args: any, options: any) => {
       observed = { command, args, options };
       return { once() {}, unref() {} };
     },
@@ -247,9 +257,9 @@ test('spawnHiddenPostureProcess admits hidden agent runtime server posture', () 
 });
 
 test('startOperatorTerminal makes visibility explicit', () => {
-  let observed = null;
+  let observed: any = null;
   const output = startOperatorTerminal('wt', ['new-tab'], {
-    spawnSyncImpl: (command, args, options) => {
+    spawnSyncImpl: (command: any, args: any, options: any) => {
       observed = { command, args, options };
       return { status: 0, signal: null, output: [], pid: 1, stdout: Buffer.alloc(0), stderr: Buffer.alloc(0) };
     },
@@ -261,3 +271,157 @@ test('startOperatorTerminal makes visibility explicit', () => {
   assert.equal(observed.options.stdio, 'inherit');
 });
 
+test('Windows supervisor preserves stdio and writes identity evidence', { skip: !nativeSupervisorAvailable }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'narada-process-supervisor-'));
+  const identityPath = join(dir, 'identity.json');
+  const supervisor = spawn(nativeSupervisorPath!, [
+    '--identity-path', identityPath,
+    '--parent-pid', String(process.pid),
+    '--',
+    process.execPath,
+    '--input-type=module',
+    '-e',
+    "process.stdin.setEncoding('utf8'); process.stdin.on('data', (chunk) => process.stdout.write('echo:' + chunk));",
+  ], { stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+
+  try {
+    const live = await waitForJson(identityPath, (value) => value.state === 'live', 3_000);
+    assert.equal(live.schema, 'narada.process_supervisor.identity.v1');
+    assert.equal(live.supervisor_pid, supervisor.pid);
+    assert.equal(live.parent_pid, process.pid);
+    assert.equal(typeof live.managed_child_pid, 'number');
+
+    supervisor.stdin.write('ping');
+    const echoed = await readUntil(supervisor.stdout, 'echo:ping', 3_000, () => supervisor.kill());
+    supervisor.stdin.end();
+    assert.equal(echoed, 'echo:ping');
+    const [code] = await waitForExit(supervisor, 3_000);
+    assert.equal(code, 0);
+
+    const closed = await waitForJson(identityPath, (value) => value.state === 'closed', 3_000);
+    assert.equal(closed.managed_child_pid, live.managed_child_pid);
+  } finally {
+    if (supervisor.exitCode === null) supervisor.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('Windows supervisor terminates the managed child when its parent exits', { skip: !nativeSupervisorAvailable }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'narada-process-supervisor-parent-loss-'));
+  const identityPath = join(dir, 'identity.json');
+  const parent = spawn(process.execPath, ['-e', 'setInterval(() => {}, 10_000)'], {
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  const supervisor = spawn(nativeSupervisorPath!, [
+    '--identity-path', identityPath,
+    '--parent-pid', String(parent.pid),
+    '--',
+    process.execPath,
+    '-e',
+    'setInterval(() => {}, 10_000)',
+  ], { stdio: 'ignore', windowsHide: true });
+
+  try {
+    const live = await waitForJson(identityPath, (value) => value.state === 'live', 3_000);
+    assert.equal(typeof live.managed_child_pid, 'number');
+    parent.kill();
+    await waitForExit(parent, 3_000);
+    await waitForExit(supervisor, 3_000);
+    await waitFor(() => !isProcessAlive(live.managed_child_pid), 3_000);
+  } finally {
+    if (supervisor.exitCode === null) supervisor.kill();
+    if (parent.exitCode === null) parent.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+async function waitFor<T>(predicate: () => T | Promise<T>, timeoutMs: number): Promise<T> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await predicate();
+    if (value) return value;
+    await new Promise((resolve) => setTimeout(resolve, 25));
+  }
+  throw new Error(`timed out after ${timeoutMs}ms`);
+}
+
+async function waitForJson(path: string, predicate: (value: any) => boolean, timeoutMs: number): Promise<any> {
+  return waitFor(() => {
+    try {
+      const value = JSON.parse(readFileSync(path, 'utf8'));
+      return predicate(value) ? value : null;
+    } catch {
+      return null;
+    }
+  }, timeoutMs);
+}
+
+function waitForExit(child: ReturnType<typeof spawn>, timeoutMs: number): Promise<[number | null, NodeJS.Signals | null]> {
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve([child.exitCode, child.signalCode]);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      cleanup();
+      reject(new Error(`child ${child.pid ?? 'unknown'} did not exit within ${timeoutMs}ms`));
+    }, timeoutMs);
+    const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+      cleanup();
+      resolve([code, signal]);
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      child.off('exit', onExit);
+      child.off('error', onError);
+    };
+    child.once('exit', onExit);
+    child.once('error', onError);
+  });
+}
+
+function readUntil(
+  stream: NodeJS.ReadableStream,
+  expected: string,
+  timeoutMs: number,
+  onTimeout: () => void,
+): Promise<string> {
+  stream.setEncoding('utf8');
+  return new Promise((resolve, reject) => {
+    let value = '';
+    const timer = setTimeout(() => {
+      cleanup();
+      onTimeout();
+      reject(new Error(`stream did not contain ${expected}`));
+    }, timeoutMs);
+    const onData = (chunk: string) => {
+      value += chunk;
+      if (value.includes(expected)) {
+        cleanup();
+        resolve(value);
+      }
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      clearTimeout(timer);
+      stream.off('data', onData);
+      stream.off('error', onError);
+    };
+    stream.on('data', onData);
+    stream.once('error', onError);
+  });
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

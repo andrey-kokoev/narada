@@ -8,17 +8,17 @@ import {
   siteOperatingLoopTriggerLifecycleFromStatus,
   transitionSiteOperatingLoopHealthLifecycle,
   transitionSiteOperatingLoopTriggerLifecycle,
-} from './site-operating-loop-state.mjs';
-import { siteOperatingLoopExecutionLifecycleFromRunState } from './site-operating-loop-execution-state.mjs';
+} from './site-operating-loop-state.js';
+import { siteOperatingLoopExecutionLifecycleFromRunState } from './site-operating-loop-execution-state.js';
 import {
   createSiteOperatingLoopRuntimeHostStateMachine,
-} from './runtime-host-state.mjs';
+} from './runtime-host-state.js';
 
 export const DEFAULT_SITE_OPERATING_LOOP_ID = 'site.operating-loop';
 export const DEFAULT_SITE_OPERATING_LOOP_OWNER_ID = 'site-operating-loop';
 
-export function ensureSiteLoopTables(db) {
-  const repairs = [];
+export function ensureSiteLoopTables(db: any): any {
+  const repairs: Array<Record<string, unknown>> = [];
   db.exec(`
     CREATE TABLE IF NOT EXISTS site_loop_runs (
       run_id TEXT PRIMARY KEY,
@@ -229,7 +229,7 @@ export function ensureSiteLoopTables(db) {
   };
 }
 
-function parseRuntimeHostRow(row) {
+function parseRuntimeHostRow(row: any): any {
   const storedLifecycle = parseJson(row.lifecycle_json);
   const lifecycle = storedLifecycle
     && typeof storedLifecycle === 'object'
@@ -273,7 +273,7 @@ function parseRuntimeHostRow(row) {
   };
 }
 
-export function recordDirectiveOutcome(store, {
+export function recordDirectiveOutcome(store: any, {
   loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
   directiveId,
   outcome,
@@ -287,7 +287,7 @@ export function recordDirectiveOutcome(store, {
   eventAt = null,
   observedAt = null,
   recordedAt = null,
-} = {}) {
+}: any = {}): any {
   const finalRecordedAt = recordedAt ?? at ?? new Date().toISOString();
   const finalObservedAt = observedAt ?? finalRecordedAt;
   const finalEventAt = eventAt ?? finalObservedAt;
@@ -330,12 +330,12 @@ export function recordDirectiveOutcome(store, {
   return getDirectiveOutcome(store, { outcomeId });
 }
 
-export function getDirectiveOutcome(store, { outcomeId } = {}) {
+export function getDirectiveOutcome(store: any, { outcomeId }: any = {}): any {
   const row = store.db.prepare('SELECT * FROM directive_outcomes WHERE outcome_id = ?').get(outcomeId);
   return row ? parseDirectiveOutcomeRow(row) : null;
 }
 
-export function getLatestDirectiveOutcome(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, directiveId } = {}) {
+export function getLatestDirectiveOutcome(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, directiveId }: any = {}): any {
   const row = store.db.prepare(`
     SELECT * FROM directive_outcome_latest
     WHERE loop_id = ? AND directive_id = ?
@@ -344,7 +344,7 @@ export function getLatestDirectiveOutcome(store, { loopId = DEFAULT_SITE_OPERATI
   return row ? parseDirectiveOutcomeRow(row) : null;
 }
 
-export function listDirectiveOutcomes(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, outcome = null, limit = 50 } = {}) {
+export function listDirectiveOutcomes(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, outcome = null, limit = 50 }: any = {}): any {
   const max = Math.max(1, Math.min(500, Number(limit ?? 50)));
   const rows = outcome
     ? store.db.prepare(`
@@ -362,14 +362,14 @@ export function listDirectiveOutcomes(store, { loopId = DEFAULT_SITE_OPERATING_L
   return rows.map(parseDirectiveOutcomeRow);
 }
 
-export function getDirectiveOutcomeSummary(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID } = {}) {
+export function getDirectiveOutcomeSummary(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID }: any = {}): any {
   const rows = store.db.prepare(`
     SELECT directive_id, outcome, recorded_at
     FROM directive_outcome_latest
     WHERE loop_id = ?
     ORDER BY observed_at DESC, recorded_at DESC
   `).all(loopId);
-  const counts = {};
+  const counts: Record<string, number> = {};
   for (const row of rows) counts[String(row.outcome)] = (counts[String(row.outcome)] ?? 0) + 1;
   return {
     schema: 'narada.site_operating_loop.directive_outcome_summary.v1',
@@ -379,13 +379,13 @@ export function getDirectiveOutcomeSummary(store, { loopId = DEFAULT_SITE_OPERAT
   };
 }
 
-export function acquireLoopLock(store, {
+export function acquireLoopLock(store: any, {
   loopId,
   runId,
   ownerId = DEFAULT_SITE_OPERATING_LOOP_OWNER_ID,
   ttlMs = 5 * 60 * 1000,
   now = new Date(),
-} = {}) {
+}: any = {}): any {
   const nowIso = now.toISOString();
   const expiresAt = new Date(now.getTime() + ttlMs).toISOString();
   store.db.exec('BEGIN IMMEDIATE');
@@ -440,7 +440,7 @@ export function acquireLoopLock(store, {
   }
 }
 
-export function releaseLoopLock(store, { loopId, runId } = {}) {
+export function releaseLoopLock(store: any, { loopId, runId }: any = {}): any {
   const row = store.db.prepare('SELECT run_id FROM site_loop_locks WHERE loop_id = ?').get(loopId);
   if (!row) return { status: 'not_held', loop_id: loopId, run_id: runId };
   if (String(row.run_id) !== runId) {
@@ -450,7 +450,7 @@ export function releaseLoopLock(store, { loopId, runId } = {}) {
   return { status: 'released', loop_id: loopId, run_id: runId };
 }
 
-export function getLoopLock(store, loopId) {
+export function getLoopLock(store: any, loopId: any): any {
   const row = store.db.prepare('SELECT * FROM site_loop_locks WHERE loop_id = ?').get(loopId);
   if (!row) return null;
   return {
@@ -465,7 +465,7 @@ export function getLoopLock(store, loopId) {
   };
 }
 
-export function recordLoopHealthSuccess(store, { loopId, runId, at = new Date().toISOString(), lifecycle = null } = {}) {
+export function recordLoopHealthSuccess(store: any, { loopId, runId, at = new Date().toISOString(), lifecycle = null }: any = {}): any {
   const previous = getLoopHealth(store, loopId);
   const currentLifecycle = lifecycle ?? previous.lifecycle ?? createSiteOperatingLoopHealthLifecycle();
   const healthLifecycle = transitionSiteOperatingLoopHealthLifecycle(currentLifecycle, 'healthy');
@@ -489,7 +489,7 @@ export function recordLoopHealthSuccess(store, { loopId, runId, at = new Date().
   return getLoopHealth(store, loopId);
 }
 
-export function recordLoopHealthFailure(store, {
+export function recordLoopHealthFailure(store: any, {
   loopId,
   runId,
   failingStep = null,
@@ -497,7 +497,7 @@ export function recordLoopHealthFailure(store, {
   forcedStatus = null,
   at = new Date().toISOString(),
   lifecycle = null,
-} = {}) {
+}: any = {}): any {
   const previous = getLoopHealth(store, loopId);
   const consecutiveFailures = Number(previous?.consecutive_failures ?? 0) + 1;
   const status = forcedStatus ?? (consecutiveFailures >= 3 ? 'critical' : 'degraded');
@@ -521,7 +521,7 @@ export function recordLoopHealthFailure(store, {
   return getLoopHealth(store, loopId);
 }
 
-export function getLoopHealth(store, loopId) {
+export function getLoopHealth(store: any, loopId: any): any {
   const row = store.db.prepare('SELECT * FROM site_loop_health WHERE loop_id = ?').get(loopId);
   const attention = getLoopAttentionSummary(store, { loopId });
   const unresolvedBacklog = getLoopUnresolvedBacklogSummary(store, { loopId });
@@ -570,7 +570,7 @@ export function getLoopHealth(store, loopId) {
   };
 }
 
-export function beginLoopRun(store, run) {
+export function beginLoopRun(store: any, run: any): any {
   const lifecycle = run.lifecycle ?? siteOperatingLoopRunLifecycleFromStatus(run.status);
   store.db.prepare(`
     INSERT INTO site_loop_runs (run_id, loop_id, status, dry_run, started_at, summary_json, error_json, lifecycle_json, execution_lifecycle_json)
@@ -588,14 +588,14 @@ export function beginLoopRun(store, run) {
   );
 }
 
-export function finishLoopRun(store, runId, {
+export function finishLoopRun(store: any, runId: any, {
   status,
   finished_at,
   summary = null,
   error = null,
   lifecycle = null,
   execution_lifecycle = null,
-}) {
+}: any = {}): void {
   store.db.prepare(`
     UPDATE site_loop_runs
     SET status = ?, finished_at = ?, summary_json = ?, error_json = ?,
@@ -613,7 +613,7 @@ export function finishLoopRun(store, runId, {
   );
 }
 
-export function recordLoopStep(store, step) {
+export function recordLoopStep(store: any, step: any): any {
   store.db.prepare(`
     INSERT INTO site_loop_step_runs (
       step_run_id, run_id, step_id, status, started_at, finished_at,
@@ -634,7 +634,7 @@ export function recordLoopStep(store, step) {
   );
 }
 
-export function listLoopRuns(store, { limit = 10, loopId = null } = {}) {
+export function listLoopRuns(store: any, { limit = 10, loopId = null }: any = {}): any {
   const rows = loopId
     ? store.db.prepare(`
         SELECT * FROM site_loop_runs
@@ -650,7 +650,7 @@ export function listLoopRuns(store, { limit = 10, loopId = null } = {}) {
   return rows.map(parseRunRow);
 }
 
-export function getLoopRun(store, runId) {
+export function getLoopRun(store: any, runId: any): any {
   const run = store.db.prepare('SELECT * FROM site_loop_runs WHERE run_id = ?').get(runId);
   if (!run) return null;
   const steps = store.db.prepare(`
@@ -661,7 +661,7 @@ export function getLoopRun(store, runId) {
   return { ...parseRunRow(run), steps };
 }
 
-export function getLoopStatus(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID } = {}) {
+export function getLoopStatus(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID }: any = {}): any {
   const latest = store.db.prepare(`
     SELECT * FROM site_loop_runs
     WHERE loop_id = ?
@@ -678,7 +678,7 @@ export function getLoopStatus(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID }
     schema: 'narada.site_operating_loop.status.v1',
     loop_id: loopId,
     latest: latest ? parseRunRow(latest) : null,
-    counts: Object.fromEntries(counts.map((row) => [row.status, row.count])),
+    counts: Object.fromEntries(counts.map((row: any) => [row.status, row.count])),
     health: getLoopHealth(store, loopId),
     lock: getLoopLock(store, loopId),
     runtime_host: getSiteOperatingLoopRuntimeHost(store, loopId),
@@ -688,7 +688,7 @@ export function getLoopStatus(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID }
   };
 }
 
-export function getLoopControl(store, loopId) {
+export function getLoopControl(store: any, loopId: any): any {
   const row = store.db.prepare('SELECT * FROM site_loop_control WHERE loop_id = ?').get(loopId);
   if (!row) {
     return {
@@ -710,7 +710,7 @@ export function getLoopControl(store, loopId) {
   };
 }
 
-export function setLoopControl(store, { loopId, paused = false, mode = paused ? 'paused' : 'running', reason = null, at = new Date().toISOString() } = {}) {
+export function setLoopControl(store: any, { loopId, paused = false, mode = paused ? 'paused' : 'running', reason = null, at = new Date().toISOString() }: any = {}): any {
   store.db.prepare(`
     INSERT INTO site_loop_control (loop_id, paused, mode, reason, updated_at)
     VALUES (?, ?, ?, ?, ?)
@@ -723,19 +723,19 @@ export function setLoopControl(store, { loopId, paused = false, mode = paused ? 
   return getLoopControl(store, loopId);
 }
 
-export function getSiteOperatingLoopRuntimeHost(store, loopId = DEFAULT_SITE_OPERATING_LOOP_ID) {
+export function getSiteOperatingLoopRuntimeHost(store: any, loopId: any = DEFAULT_SITE_OPERATING_LOOP_ID): any {
   const row = store.db.prepare('SELECT * FROM site_loop_runtime_hosts WHERE loop_id = ?').get(loopId);
   return row ? parseRuntimeHostRow(row) : null;
 }
 
-export function claimSiteOperatingLoopRuntimeHost(store, {
+export function claimSiteOperatingLoopRuntimeHost(store: any, {
   loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
   ownerId = DEFAULT_SITE_OPERATING_LOOP_OWNER_ID,
   runtimeId = null,
   leaseTtlMs = 5 * 60_000,
   metadata = {},
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   if (!loopId) throw new Error('loopId is required');
   if (!ownerId) throw new Error('ownerId is required');
   const ttl = normalizePositiveMilliseconds(leaseTtlMs, 'leaseTtlMs');
@@ -747,8 +747,10 @@ export function claimSiteOperatingLoopRuntimeHost(store, {
   try {
     const existing = store.db.prepare('SELECT * FROM site_loop_runtime_hosts WHERE loop_id = ?').get(loopId);
     const existingState = existing?.runtime_host_state ? String(existing.runtime_host_state) : null;
-    const existingLeaseActive = existing?.lease_expires_at && parseTimestampMs(existing.lease_expires_at, 'lease_expires_at') > nowMs;
-    if (existing && ['created', 'binding', 'ready', 'serving', 'closing'].includes(existingState) && existingLeaseActive) {
+    const existingLeaseActive = existing?.lease_expires_at
+      ? parseTimestampMs(String(existing.lease_expires_at), 'lease_expires_at') > nowMs
+      : false;
+    if (existing && ['created', 'binding', 'ready', 'serving', 'closing'].includes(existingState ?? '') && existingLeaseActive) {
       throw new Error(`site_operating_loop_runtime_host_already_owned:${loopId}:${existing.runtime_id}:${existing.owner_id}`);
     }
     if (existing && runtimeId && String(runtimeId) !== String(existing.runtime_id)) {
@@ -817,13 +819,13 @@ export function claimSiteOperatingLoopRuntimeHost(store, {
   };
 }
 
-export function assertSiteOperatingLoopRuntimeHostAuthority(store, {
+export function assertSiteOperatingLoopRuntimeHostAuthority(store: any, {
   loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
   runtimeId,
   authorityEpoch,
   ownerId,
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   const host = getSiteOperatingLoopRuntimeHost(store, loopId);
   if (!host || String(host.runtime_id) !== String(runtimeId)
     || Number(host.authority_epoch) !== Number(authorityEpoch)
@@ -838,14 +840,14 @@ export function assertSiteOperatingLoopRuntimeHostAuthority(store, {
   return host;
 }
 
-export function heartbeatSiteOperatingLoopRuntimeHost(store, {
+export function heartbeatSiteOperatingLoopRuntimeHost(store: any, {
   loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
   runtimeId,
   authorityEpoch,
   ownerId,
   leaseTtlMs = 5 * 60_000,
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   const ttl = normalizePositiveMilliseconds(leaseTtlMs, 'leaseTtlMs');
   const nowMs = parseTimestampMs(at, 'at');
   assertSiteOperatingLoopRuntimeHostAuthority(store, { loopId, runtimeId, authorityEpoch, ownerId, at });
@@ -857,7 +859,7 @@ export function heartbeatSiteOperatingLoopRuntimeHost(store, {
   return assertSiteOperatingLoopRuntimeHostAuthority(store, { loopId, runtimeId, authorityEpoch, ownerId, at });
 }
 
-export function transitionSiteOperatingLoopRuntimeHost(store, {
+export function transitionSiteOperatingLoopRuntimeHost(store: any, {
   loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
   runtimeId,
   authorityEpoch,
@@ -866,7 +868,7 @@ export function transitionSiteOperatingLoopRuntimeHost(store, {
   details = {},
   leaseTtlMs = 5 * 60_000,
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   const ttl = normalizePositiveMilliseconds(leaseTtlMs, 'leaseTtlMs');
   const host = assertSiteOperatingLoopRuntimeHostAuthority(store, { loopId, runtimeId, authorityEpoch, ownerId, at });
   const storedLifecycle = parseJson(host.lifecycle_json);
@@ -939,7 +941,7 @@ export function transitionSiteOperatingLoopRuntimeHost(store, {
   };
 }
 
-export function recordLoopRuntimeEvent(store, event) {
+export function recordLoopRuntimeEvent(store: any, event: any): any {
   const loopId = event?.loop_id ?? event?.loopId ?? DEFAULT_SITE_OPERATING_LOOP_ID;
   const occurredAt = event?.timestamp ?? event?.occurred_at ?? new Date().toISOString();
   const eventName = event?.event ? String(event.event) : 'unknown';
@@ -961,12 +963,12 @@ export function recordLoopRuntimeEvent(store, event) {
   return getLoopRuntimeEvent(store, { eventId });
 }
 
-export function getLoopRuntimeEvent(store, { eventId } = {}) {
+export function getLoopRuntimeEvent(store: any, { eventId }: any = {}): any {
   const row = store.db.prepare('SELECT * FROM site_loop_runtime_events WHERE event_id = ?').get(eventId);
   return row ? parseRuntimeEventRow(row) : null;
 }
 
-export function listLoopRuntimeEvents(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, afterEventId = null, limit = 50 } = {}) {
+export function listLoopRuntimeEvents(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, afterEventId = null, limit = 50 }: any = {}): any {
   const max = Math.max(1, Math.min(500, Number(limit ?? 50)));
   let rows;
   if (afterEventId) {
@@ -996,7 +998,7 @@ export function listLoopRuntimeEvents(store, { loopId = DEFAULT_SITE_OPERATING_L
   };
 }
 
-export function admitLoopTrigger(store, {
+export function admitLoopTrigger(store: any, {
   loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
   kind,
   source = null,
@@ -1004,7 +1006,7 @@ export function admitLoopTrigger(store, {
   payload = null,
   triggerId = null,
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   if (!kind) throw new Error('kind is required');
   const finalTriggerId = triggerId ?? `looptrg_${hashStable({ loopId, kind, source, sourceRef, payload, at, nonce: randomUUID() }).slice(0, 32)}`;
   const trigger = {
@@ -1026,12 +1028,12 @@ export function admitLoopTrigger(store, {
   return getLoopTrigger(store, { triggerId: finalTriggerId });
 }
 
-export function getLoopTrigger(store, { triggerId } = {}) {
+export function getLoopTrigger(store: any, { triggerId }: any = {}): any {
   const row = store.db.prepare('SELECT * FROM site_loop_triggers WHERE trigger_id = ?').get(triggerId);
   return row ? parseTriggerRow(row) : null;
 }
 
-export function listLoopTriggers(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, status = null, limit = 50 } = {}) {
+export function listLoopTriggers(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, status = null, limit = 50 }: any = {}): any {
   const max = Math.max(1, Math.min(500, Number(limit ?? 50)));
   const rows = status
     ? store.db.prepare(`
@@ -1055,7 +1057,7 @@ export function listLoopTriggers(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_I
   };
 }
 
-export function claimNextLoopTrigger(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, runId = null, at = new Date().toISOString() } = {}) {
+export function claimNextLoopTrigger(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, runId = null, at = new Date().toISOString() }: any = {}): any {
   store.db.exec('BEGIN IMMEDIATE');
   try {
     const row = store.db.prepare(`
@@ -1089,13 +1091,13 @@ export function claimNextLoopTrigger(store, { loopId = DEFAULT_SITE_OPERATING_LO
   }
 }
 
-export function finishLoopTrigger(store, {
+export function finishLoopTrigger(store: any, {
   triggerId,
   status,
   runId = null,
   result = null,
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   if (!triggerId) throw new Error('triggerId is required');
   if (!['completed', 'failed', 'skipped'].includes(status)) throw new Error('invalid trigger finish status');
   const existing = getLoopTrigger(store, { triggerId });
@@ -1112,7 +1114,7 @@ export function finishLoopTrigger(store, {
   return getLoopTrigger(store, { triggerId });
 }
 
-export function recordLoopClassificationObservation(store, { loopId, directiveId, classification, observation, at = new Date().toISOString() } = {}) {
+export function recordLoopClassificationObservation(store: any, { loopId, directiveId, classification, observation, at = new Date().toISOString() }: any = {}): any {
   const observationId = `loopobs_${hashStable({ loopId, directiveId, classification, at }).slice(0, 32)}`;
   store.db.prepare(`
     INSERT OR IGNORE INTO site_loop_classification_observations (
@@ -1122,7 +1124,7 @@ export function recordLoopClassificationObservation(store, { loopId, directiveId
   return { observation_id: observationId, loop_id: loopId, directive_id: directiveId, classification, observed_at: at };
 }
 
-export function countRecentLoopClassificationObservations(store, { loopId, directiveId, classification, limit = 3 } = {}) {
+export function countRecentLoopClassificationObservations(store: any, { loopId, directiveId, classification, limit = 3 }: any = {}): any {
   const rows = store.db.prepare(`
     SELECT observation_id
     FROM site_loop_classification_observations
@@ -1133,7 +1135,7 @@ export function countRecentLoopClassificationObservations(store, { loopId, direc
   return rows.length;
 }
 
-export function countRecentConsecutiveLoopClassificationObservations(store, { loopId, directiveId, classification, limit = 3 } = {}) {
+export function countRecentConsecutiveLoopClassificationObservations(store: any, { loopId, directiveId, classification, limit = 3 }: any = {}): any {
   const rows = store.db.prepare(`
     SELECT classification
     FROM site_loop_classification_observations
@@ -1149,7 +1151,7 @@ export function countRecentConsecutiveLoopClassificationObservations(store, { lo
   return count;
 }
 
-export function getLoopEscalation(store, { loopId, directiveId, classification } = {}) {
+export function getLoopEscalation(store: any, { loopId, directiveId, classification }: any = {}): any {
   const row = store.db.prepare(`
     SELECT * FROM site_loop_escalations
     WHERE loop_id = ? AND directive_id = ? AND classification = ?
@@ -1170,7 +1172,7 @@ export function getLoopEscalation(store, { loopId, directiveId, classification }
   };
 }
 
-export function recordLoopEscalation(store, { loopId, directiveId, classification, envelopeId, escalation, at = new Date().toISOString() } = {}) {
+export function recordLoopEscalation(store: any, { loopId, directiveId, classification, envelopeId, escalation, at = new Date().toISOString() }: any = {}): any {
   const escalationId = `loopesc_${hashStable({ loopId, directiveId, classification }).slice(0, 32)}`;
   const escalationJson = stringifyJson(escalation);
   store.db.prepare(`
@@ -1197,7 +1199,7 @@ export function recordLoopEscalation(store, { loopId, directiveId, classificatio
   return getLoopEscalation(store, { loopId, directiveId, classification });
 }
 
-export function listLoopAttention(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, status = null, limit = 50 } = {}) {
+export function listLoopAttention(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID, status = null, limit = 50 }: any = {}): any {
   const max = Math.max(1, Math.min(500, Number(limit ?? 50)));
   const clauses = ['loop_id = ?'];
   const params = [loopId];
@@ -1215,7 +1217,7 @@ export function listLoopAttention(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_
   return rows.map(parseEscalationRow);
 }
 
-export function getLoopAttention(store, { attentionId } = {}) {
+export function getLoopAttention(store: any, { attentionId }: any = {}): any {
   const row = store.db.prepare(`
     SELECT * FROM site_loop_escalations
     WHERE envelope_id = ? OR escalation_id = ?
@@ -1224,12 +1226,12 @@ export function getLoopAttention(store, { attentionId } = {}) {
   return row ? parseEscalationRow(row) : null;
 }
 
-export function acknowledgeLoopAttention(store, {
+export function acknowledgeLoopAttention(store: any, {
   attentionId,
   reason,
   acknowledgedBy = 'operator',
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   const existing = getLoopAttention(store, { attentionId });
   if (!existing) return { status: 'not_found', attention_id: attentionId };
   store.db.prepare(`
@@ -1243,20 +1245,20 @@ export function acknowledgeLoopAttention(store, {
   return { status: 'acknowledged', attention: getLoopAttention(store, { attentionId }) };
 }
 
-export function getLoopAttentionSummary(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID } = {}) {
+export function getLoopAttentionSummary(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID }: any = {}): any {
   const rows = store.db.prepare(`
     SELECT status, COUNT(*) AS count
     FROM site_loop_escalations
     WHERE loop_id = ?
     GROUP BY status
   `).all(loopId);
-  const counts = Object.fromEntries(rows.map((row) => [String(row.status), Number(row.count ?? 0)]));
+  const counts = Object.fromEntries(rows.map((row: any) => [String(row.status), Number(row.count ?? 0)]));
   const severityRows = store.db.prepare(`
     SELECT escalation_json
     FROM site_loop_escalations
     WHERE loop_id = ? AND status = 'opened'
   `).all(loopId);
-  const openBySeverity = {};
+  const openBySeverity: Record<string, number> = {};
   for (const row of severityRows) {
     const escalation = parseJson(row.escalation_json);
     const severity = String(escalation?.severity ?? 'warning');
@@ -1272,7 +1274,7 @@ export function getLoopAttentionSummary(store, { loopId = DEFAULT_SITE_OPERATING
   };
 }
 
-export function getLoopUnresolvedBacklogSummary(store, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID } = {}) {
+export function getLoopUnresolvedBacklogSummary(store: any, { loopId = DEFAULT_SITE_OPERATING_LOOP_ID }: any = {}): any {
   const unresolvedStatuses = new Set(['received', 'carrier_accepted', 'delivery_stale', 'action_stale', 'blocked_no_carrier']);
   const rows = store.db.prepare(`
     SELECT directive_id, outcome, observed_at, recorded_at
@@ -1281,13 +1283,13 @@ export function getLoopUnresolvedBacklogSummary(store, { loopId = DEFAULT_SITE_O
     ORDER BY observed_at DESC, recorded_at DESC
   `).all(loopId);
   const unresolved = rows
-    .map((row) => ({
+    .map((row: any) => ({
       directive_id: String(row.directive_id),
       status: String(row.outcome),
       observed_at: String(row.observed_at ?? row.recorded_at),
     }))
-    .filter((item) => unresolvedStatuses.has(item.status));
-  const counts = {};
+    .filter((item: { status: string }) => unresolvedStatuses.has(item.status));
+  const counts: Record<string, number> = {};
   for (const item of unresolved) counts[item.status] = (counts[item.status] ?? 0) + 1;
   return {
     schema: 'narada.site_operating_loop.unresolved_backlog_summary.v1',
@@ -1298,13 +1300,13 @@ export function getLoopUnresolvedBacklogSummary(store, { loopId = DEFAULT_SITE_O
   };
 }
 
-export function resolveDirectiveOutcome(store, {
+export function resolveDirectiveOutcome(store: any, {
   loopId = DEFAULT_SITE_OPERATING_LOOP_ID,
   directiveId,
   reason = 'operator_cleanup',
   resolvedBy = 'operator',
   at = new Date().toISOString(),
-} = {}) {
+}: any = {}): any {
   if (!directiveId) {
     return { schema: 'narada.site_operating_loop.directive_outcome_resolve.v1', status: 'refused', reason: 'directive_id_required' };
   }
@@ -1341,7 +1343,7 @@ export function resolveDirectiveOutcome(store, {
   };
 }
 
-function parseDirectiveOutcomeRow(row) {
+function parseDirectiveOutcomeRow(row: any): any {
   return {
     schema: 'narada.site_operating_loop.directive_outcome.v1',
     outcome_id: String(row.outcome_id),
@@ -1360,7 +1362,7 @@ function parseDirectiveOutcomeRow(row) {
   };
 }
 
-function backfillDirectiveOutcomeLatest(db) {
+function backfillDirectiveOutcomeLatest(db: any): void {
   const rows = db.prepare(`
     SELECT * FROM directive_outcomes
     ORDER BY COALESCE(observed_at, recorded_at) ASC, recorded_at ASC, rowid ASC
@@ -1374,7 +1376,7 @@ function backfillDirectiveOutcomeLatest(db) {
   }
 }
 
-function upsertDirectiveOutcomeLatest(db, row) {
+function upsertDirectiveOutcomeLatest(db: any, row: any): void {
   const existing = db.prepare(`
     SELECT outcome, observed_at, recorded_at
     FROM directive_outcome_latest
@@ -1415,7 +1417,7 @@ function upsertDirectiveOutcomeLatest(db, row) {
   );
 }
 
-function compareOutcomeLatest(next, existing) {
+function compareOutcomeLatest(next: any, existing: any): number {
   const nextObserved = Date.parse(next.observed_at ?? next.recorded_at ?? '');
   const existingObserved = Date.parse(existing.observed_at ?? existing.recorded_at ?? '');
   if (Number.isFinite(nextObserved) && Number.isFinite(existingObserved) && nextObserved !== existingObserved) {
@@ -1432,7 +1434,7 @@ function compareOutcomeLatest(next, existing) {
   return 0;
 }
 
-function outcomePrecedence(outcome) {
+function outcomePrecedence(outcome: any): number {
   return {
     pending: 10,
     leased: 20,
@@ -1448,7 +1450,7 @@ function outcomePrecedence(outcome) {
   }[String(outcome)] ?? 0;
 }
 
-function parseEscalationRow(row) {
+function parseEscalationRow(row: any): any {
   const escalation = parseJson(row.escalation_json);
   return {
     schema: 'narada.site_operating_loop.attention.v1',
@@ -1468,15 +1470,15 @@ function parseEscalationRow(row) {
   };
 }
 
-function ensureColumn(db, table, column, type, repairs = null) {
+function ensureColumn(db: any, table: any, column: any, type: any, repairs: any = null): void {
   if (!tableExists(db, table)) return;
-  const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((row) => row.name);
+  const columns = db.prepare(`PRAGMA table_info(${table})`).all().map((row: any) => row.name);
   if (columns.includes(column)) return;
   db.prepare(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`).run();
   repairs?.push({ kind: 'column_added', table, column, type });
 }
 
-function tableExists(db, table) {
+function tableExists(db: any, table: any): boolean {
   const row = db.prepare(`
     SELECT name
     FROM sqlite_master
@@ -1485,7 +1487,7 @@ function tableExists(db, table) {
   return Boolean(row);
 }
 
-function parseRunRow(row) {
+function parseRunRow(row: any): any {
   const lifecycle = parseLifecycle(row.lifecycle_json, siteOperatingLoopRunLifecycleFromStatus(row.status));
   const executionLifecycle = parseLifecycle(
     row.execution_lifecycle_json,
@@ -1511,7 +1513,7 @@ function parseRunRow(row) {
   };
 }
 
-function parseStepRow(row) {
+function parseStepRow(row: any): any {
   return {
     step_run_id: row.step_run_id,
     run_id: row.run_id,
@@ -1526,7 +1528,7 @@ function parseStepRow(row) {
   };
 }
 
-function parseRuntimeEventRow(row) {
+function parseRuntimeEventRow(row: any): any {
   const event = parseJson(row.event_json) ?? {};
   return {
     ...event,
@@ -1541,7 +1543,7 @@ function parseRuntimeEventRow(row) {
   };
 }
 
-function parseTriggerRow(row) {
+function parseTriggerRow(row: any): any {
   const trigger = parseJson(row.trigger_json) ?? {};
   const lifecycle = parseLifecycle(row.lifecycle_json, siteOperatingLoopTriggerLifecycleFromStatus(row.status));
   return {
@@ -1565,18 +1567,18 @@ function parseTriggerRow(row) {
   };
 }
 
-function parseLifecycle(value, fallback) {
+function parseLifecycle(value: any, fallback: any): any {
   const lifecycle = parseJson(value);
   if (!lifecycle || typeof lifecycle !== 'object' || Array.isArray(lifecycle)) return fallback;
   if (typeof lifecycle.schema !== 'string' || typeof lifecycle.state !== 'string' || !Array.isArray(lifecycle.history)) return fallback;
   return lifecycle;
 }
 
-function stringifyJson(value) {
+function stringifyJson(value: any): any {
   return value === undefined ? null : JSON.stringify(value);
 }
 
-function parseJson(value) {
+function parseJson(value: any): any {
   if (value == null) return null;
   try {
     return JSON.parse(value);
@@ -1585,17 +1587,17 @@ function parseJson(value) {
   }
 }
 
-function hashStable(value) {
+function hashStable(value: any): string {
   return createHash('sha256').update(JSON.stringify(value)).digest('hex');
 }
 
-function normalizePositiveMilliseconds(value, name) {
+function normalizePositiveMilliseconds(value: any, name: any): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`invalid_positive_milliseconds:${name}:${value}`);
   return Math.floor(parsed);
 }
 
-function parseTimestampMs(value, name) {
+function parseTimestampMs(value: any, name: any): number {
   const parsed = Date.parse(String(value));
   if (!Number.isFinite(parsed)) throw new Error(`invalid_timestamp:${name}:${value}`);
   return parsed;

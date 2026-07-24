@@ -52,46 +52,46 @@ const HEALTH_TRANSITIONS = Object.freeze({
   critical: Object.freeze(['healthy', 'degraded']),
 });
 
-export function createSiteOperatingLoopRunLifecycle(initialState = 'requested') {
+export function createSiteOperatingLoopRunLifecycle(initialState: any = 'requested'): any {
   assertState(SITE_OPERATING_LOOP_RUN_STATES, initialState, 'run');
   return evidence(SITE_OPERATING_LOOP_RUN_STATE_SCHEMA, initialState);
 }
 
-export function createSiteOperatingLoopTriggerLifecycle(initialState = 'pending') {
+export function createSiteOperatingLoopTriggerLifecycle(initialState: any = 'pending'): any {
   assertState(SITE_OPERATING_LOOP_TRIGGER_STATES, initialState, 'trigger');
   return evidence(SITE_OPERATING_LOOP_TRIGGER_STATE_SCHEMA, initialState);
 }
 
-export function createSiteOperatingLoopHealthLifecycle(initialState = 'unknown') {
+export function createSiteOperatingLoopHealthLifecycle(initialState: any = 'unknown'): any {
   assertState(SITE_OPERATING_LOOP_HEALTH_STATES, initialState, 'health');
   return evidence(SITE_OPERATING_LOOP_HEALTH_STATE_SCHEMA, initialState);
 }
 
-export function transitionSiteOperatingLoopRunLifecycle(lifecycle, nextState) {
+export function transitionSiteOperatingLoopRunLifecycle(lifecycle: any, nextState: any): any {
   return transition(lifecycle, nextState, SITE_OPERATING_LOOP_RUN_STATES, RUN_TRANSITIONS, SITE_OPERATING_LOOP_RUN_STATE_SCHEMA, 'run');
 }
 
-export function transitionSiteOperatingLoopTriggerLifecycle(lifecycle, nextState) {
+export function transitionSiteOperatingLoopTriggerLifecycle(lifecycle: any, nextState: any): any {
   return transition(lifecycle, nextState, SITE_OPERATING_LOOP_TRIGGER_STATES, TRIGGER_TRANSITIONS, SITE_OPERATING_LOOP_TRIGGER_STATE_SCHEMA, 'trigger');
 }
 
-export function transitionSiteOperatingLoopHealthLifecycle(lifecycle, nextState) {
+export function transitionSiteOperatingLoopHealthLifecycle(lifecycle: any, nextState: any): any {
   return transition(lifecycle, nextState, SITE_OPERATING_LOOP_HEALTH_STATES, HEALTH_TRANSITIONS, SITE_OPERATING_LOOP_HEALTH_STATE_SCHEMA, 'health');
 }
 
-export function canTransitionSiteOperatingLoopRun(from, to) {
+export function canTransitionSiteOperatingLoopRun(from: any, to: any): boolean {
   return canTransition(from, to, SITE_OPERATING_LOOP_RUN_STATES, RUN_TRANSITIONS, 'run');
 }
 
-export function canTransitionSiteOperatingLoopTrigger(from, to) {
+export function canTransitionSiteOperatingLoopTrigger(from: any, to: any): boolean {
   return canTransition(from, to, SITE_OPERATING_LOOP_TRIGGER_STATES, TRIGGER_TRANSITIONS, 'trigger');
 }
 
-export function canTransitionSiteOperatingLoopHealth(from, to) {
+export function canTransitionSiteOperatingLoopHealth(from: any, to: any): boolean {
   return canTransition(from, to, SITE_OPERATING_LOOP_HEALTH_STATES, HEALTH_TRANSITIONS, 'health');
 }
 
-export function siteOperatingLoopRunLifecycleFromStatus(status) {
+export function siteOperatingLoopRunLifecycleFromStatus(status: any): any {
   const state = {
     requested: 'requested',
     locking: 'locking',
@@ -105,21 +105,21 @@ export function siteOperatingLoopRunLifecycleFromStatus(status) {
   return createSiteOperatingLoopRunLifecycle(state);
 }
 
-export function siteOperatingLoopTriggerLifecycleFromStatus(status) {
+export function siteOperatingLoopTriggerLifecycleFromStatus(status: any): any {
   const normalized = String(status);
   return createSiteOperatingLoopTriggerLifecycle(
     ['pending', 'claimed', 'completed', 'failed', 'skipped'].includes(normalized) ? normalized : 'pending',
   );
 }
 
-export function siteOperatingLoopHealthLifecycleFromStatus(status) {
+export function siteOperatingLoopHealthLifecycleFromStatus(status: any): any {
   const normalized = String(status);
   return createSiteOperatingLoopHealthLifecycle(
     ['healthy', 'degraded', 'critical'].includes(normalized) ? normalized : 'unknown',
   );
 }
 
-function transition(lifecycle, nextState, states, transitions, schema, kind) {
+function transition(lifecycle: any, nextState: any, states: any, transitions: any, schema: any, kind: any): any {
   assertState(states, nextState, kind);
   assertState(states, lifecycle.state, kind);
   if (lifecycle.state !== nextState && !transitions[lifecycle.state].includes(nextState)) {
@@ -130,16 +130,16 @@ function transition(lifecycle, nextState, states, transitions, schema, kind) {
     : evidence(schema, nextState, [...lifecycle.history, nextState]);
 }
 
-function canTransition(from, to, states, transitions, kind) {
+function canTransition(from: any, to: any, states: any, transitions: any, kind: any): boolean {
   assertState(states, from, kind);
   assertState(states, to, kind);
   return from === to || transitions[from].includes(to);
 }
 
-function evidence(schema, state, history = [state]) {
+function evidence(schema: any, state: any, history: any = [state]): any {
   return { schema, state, history };
 }
 
-function assertState(states, state, kind) {
+function assertState(states: any, state: any, kind: any): void {
   if (!states.includes(state)) throw new Error(`unsupported_site_operating_loop_${kind}_state: ${state}`);
 }

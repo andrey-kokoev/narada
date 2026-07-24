@@ -5,14 +5,15 @@
   "type": "module",
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "default": "./src/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
+    "build": "node --import tsx scripts/build.ts",
+    "test": "node --import tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Process launch posture contracts",
   "license": "MIT",

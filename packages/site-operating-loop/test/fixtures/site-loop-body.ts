@@ -1,4 +1,4 @@
-export function createSiteOperatingLoopSteps({ cycleIndex, trigger }) {
+export function createSiteOperatingLoopSteps({ cycleIndex, trigger }: any): any[] {
   return [
     {
       stepId: 'observe-trigger',
@@ -21,10 +21,10 @@ export function createSiteOperatingLoopSteps({ cycleIndex, trigger }) {
   ];
 }
 
-export function summarizeSiteOperatingLoopRun({ steps, trigger }) {
+export function summarizeSiteOperatingLoopRun({ steps, trigger }: any): any {
   return {
     step_count: steps.length,
     trigger_id: trigger?.trigger_id ?? null,
-    decision: steps.find((step) => step.step_id === 'decide-dispatch')?.evidence?.decision ?? null,
+    decision: steps.find((step: any) => step.step_id === 'decide-dispatch')?.evidence?.decision ?? null,
   };
 }

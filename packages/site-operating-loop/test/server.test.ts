@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DatabaseSync } from 'node:sqlite';
-import { ensureSiteLoopTables, getLoopStatus, recordLoopRuntimeEvent } from '../src/site-loop-store.mjs';
-import { startSiteOperatingLoopRuntime } from '../src/runtime.mjs';
-import { createSiteOperatingLoopHttpServer, listenSiteOperatingLoopHttpServer } from '../src/server.mjs';
+import { ensureSiteLoopTables, getLoopStatus, recordLoopRuntimeEvent } from '../src/site-loop-store.js';
+import { startSiteOperatingLoopRuntime } from '../src/runtime.js';
+import { createSiteOperatingLoopHttpServer, listenSiteOperatingLoopHttpServer } from '../src/server.js';
 
 function openTestStore() {
   const db = new DatabaseSync(':memory:');
@@ -38,13 +38,13 @@ test('HTTP server exposes health status runs and events for a loop', async () =>
     assert.deepEqual(status.runtime_host.lifecycle_history, ['created', 'binding', 'ready', 'serving', 'closing', 'stopped']);
 
     const events = await getJson(`${listening.base_url}/events`);
-    const runtimeEvents = events.events.filter((event) => [
+    const runtimeEvents = events.events.filter((event: any) => [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ].includes(event.event));
-    assert.deepEqual(runtimeEvents.map((event) => event.event), [
+    assert.deepEqual(runtimeEvents.map((event: any) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
@@ -84,6 +84,7 @@ test('HTTP live event stream stays open and emits newly recorded events', async 
     });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('content-type'), 'text/event-stream; charset=utf-8');
+    assert.ok(response.body);
     const reader = response.body.getReader();
     const firstChunk = await readChunkText(reader);
     assert.match(firstChunk, /: connected/);
@@ -164,18 +165,18 @@ test('HTTP server returns 404 for unknown paths', async () => {
   }
 });
 
-async function getJson(url) {
+async function getJson(url: any): Promise<any> {
   const response = await fetch(url);
   assert.equal(response.status, 200, `${url} returned ${response.status}`);
   return await response.json();
 }
 
-async function readChunkText(reader) {
+async function readChunkText(reader: any): Promise<string> {
   const { value } = await reader.read();
   return Buffer.from(value ?? new Uint8Array()).toString('utf8');
 }
 
-async function readUntil(reader, pattern, timeoutMs) {
+async function readUntil(reader: any, pattern: RegExp, timeoutMs: number): Promise<string> {
   const deadline = Date.now() + timeoutMs;
   let text = '';
   while (Date.now() < deadline) {

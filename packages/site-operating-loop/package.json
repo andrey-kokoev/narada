@@ -4,48 +4,64 @@
   "description": "Narada Site Operating Loop substrate",
   "private": true,
   "type": "module",
-  "main": "./dist/site-loop-store.mjs",
+  "main": "./dist/src/site-loop-store.js",
+  "types": "./dist/src/site-loop-store.d.ts",
   "scripts": {
-    "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.mjs"
+    "build": "node --import tsx scripts/build.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts"
   },
   "bin": {
-    "narada-site-loop": "./dist/bin/narada-site-loop.mjs"
+    "narada-site-loop": "./dist/bin/narada-site-loop.js"
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"
   },
   "exports": {
     ".": {
-      "import": "./dist/site-loop-store.mjs"
+      "types": "./dist/src/site-loop-store.d.ts",
+      "import": "./dist/src/site-loop-store.js"
     },
     "./site-loop-store": {
-      "import": "./dist/site-loop-store.mjs"
+      "types": "./dist/src/site-loop-store.d.ts",
+      "import": "./dist/src/site-loop-store.js"
     },
     "./runner": {
-      "import": "./dist/runner.mjs"
+      "types": "./dist/src/runner.d.ts",
+      "import": "./dist/src/runner.js"
     },
     "./runtime": {
-      "import": "./dist/runtime.mjs"
+      "types": "./dist/src/runtime.d.ts",
+      "import": "./dist/src/runtime.js"
     },
     "./server": {
-      "import": "./dist/server.mjs"
+      "types": "./dist/src/server.d.ts",
+      "import": "./dist/src/server.js"
     },
     "./loop-module": {
-      "import": "./dist/loop-module.mjs"
+      "types": "./dist/src/loop-module.d.ts",
+      "import": "./dist/src/loop-module.js"
     },
     "./policy": {
-      "import": "./dist/policy.mjs"
+      "types": "./dist/src/policy.d.ts",
+      "import": "./dist/src/policy.js"
     },
     "./state": {
-      "import": "./dist/site-operating-loop-state.mjs"
+      "types": "./dist/src/site-operating-loop-state.d.ts",
+      "import": "./dist/src/site-operating-loop-state.js"
     },
     "./execution-state": {
-      "import": "./dist/site-operating-loop-execution-state.mjs"
+      "types": "./dist/src/site-operating-loop-execution-state.d.ts",
+      "import": "./dist/src/site-operating-loop-execution-state.js"
     },
     "./runtime-host-state": {
-      "import": "./dist/runtime-host-state.mjs"
+      "types": "./dist/src/runtime-host-state.d.ts",
+      "import": "./dist/src/runtime-host-state.js"
     }
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0"
   },
   "license": "MIT",
   "repository": {

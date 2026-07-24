@@ -5,7 +5,7 @@ import {
   isTerminalSiteOperatingLoopExecutionState,
   siteOperatingLoopExecutionLifecycleFromRunState,
   transitionSiteOperatingLoopExecution,
-} from '../src/site-operating-loop-execution-state.mjs';
+} from '../src/site-operating-loop-execution-state.js';
 
 test('Site loop execution records admission, waiting, retry, and completion', () => {
   let lifecycle = createSiteOperatingLoopExecutionLifecycle();

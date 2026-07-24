@@ -1,6 +1,6 @@
 export const SITE_OPERATING_LOOP_MODULE_CONTRACT_SCHEMA = 'narada.site_operating_loop.module_contract.v1';
 
-export function resolveSiteOperatingLoopModule(module, { moduleRef = null } = {}) {
+export function resolveSiteOperatingLoopModule(module: any, { moduleRef = null }: any = {}): any {
   const createSteps = module?.createSiteOperatingLoopSteps ?? module?.createSteps;
   const prepareRun = module?.prepareSiteOperatingLoopRun ?? module?.prepareRun ?? null;
   const errors = [];
@@ -22,7 +22,7 @@ export function resolveSiteOperatingLoopModule(module, { moduleRef = null } = {}
   };
 }
 
-export async function createValidatedSiteOperatingLoopSteps(moduleContract, context) {
+export async function createValidatedSiteOperatingLoopSteps(moduleContract: any, context: any): Promise<any> {
   if (moduleContract?.status !== 'ok' || typeof moduleContract.createSteps !== 'function') {
     throw new Error('invalid Site Operating Loop module contract');
   }
@@ -34,7 +34,7 @@ export async function createValidatedSiteOperatingLoopSteps(moduleContract, cont
   return steps;
 }
 
-export function validateSiteOperatingLoopSteps(steps) {
+export function validateSiteOperatingLoopSteps(steps: any): any {
   const errors = [];
   if (!Array.isArray(steps)) {
     return {

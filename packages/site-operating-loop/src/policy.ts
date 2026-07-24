@@ -35,16 +35,16 @@ export const DEFAULT_SITE_OPERATING_LOOP_POLICY = {
   attention: {},
 };
 
-export function operatingLoopPolicyPath(cwd) {
+export function operatingLoopPolicyPath(cwd: any): any {
   return join(siteControlRoot(cwd), 'capabilities', 'operating-loop-policy.json');
 }
 
-function siteControlRoot(siteRoot) {
+function siteControlRoot(siteRoot: any): any {
   const root = resolve(siteRoot);
   return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
-export function loadSiteOperatingLoopPolicy(cwd, options = {}) {
+export function loadSiteOperatingLoopPolicy(cwd: any, options: any = {}): any {
   const path = options.path ?? operatingLoopPolicyPath(cwd);
   const defaults = options.defaults ?? DEFAULT_SITE_OPERATING_LOOP_POLICY;
   const loaded = existsSync(path) ? readPolicy(path, defaults.schema) : {};
@@ -76,8 +76,8 @@ export function loadSiteOperatingLoopPolicy(cwd, options = {}) {
   };
 }
 
-export function validateSiteOperatingLoopPolicy(policy, options = {}) {
-  const errors = [];
+export function validateSiteOperatingLoopPolicy(policy: any, options: any = {}): any {
+  const errors: string[] = [];
   const expectedSchema = options.expectedSchema ?? SITE_OPERATING_LOOP_POLICY_SCHEMA;
   if (policy?.schema !== expectedSchema) errors.push('schema_mismatch');
   if (options.expectedLoopId && policy?.loop_id !== options.expectedLoopId) errors.push('unsupported_loop_id');
@@ -85,7 +85,7 @@ export function validateSiteOperatingLoopPolicy(policy, options = {}) {
     ['supervise_interval_ms', 1_000],
     ['lock_ttl_ms', 30_000],
     ['busy_turn_timeout_ms', 30_000],
-  ]) {
+  ] as Array<[string, number]>) {
     const value = Number(policy?.cadence?.[key]);
     if (!Number.isFinite(value) || value < min) errors.push(`invalid_cadence:${key}`);
   }
@@ -106,8 +106,8 @@ export function validateSiteOperatingLoopPolicy(policy, options = {}) {
     ['rate_limits.max_directives_per_cycle', 1],
     ['rate_limits.max_restarts_per_window', 0],
     ['rate_limits.restart_window_ms', 60_000],
-  ]) {
-    const value = path.split('.').reduce((cursor, key) => cursor?.[key], policy);
+  ] as Array<[string, number]>) {
+    const value = path.split('.').reduce((cursor: any, key: string) => cursor?.[key], policy);
     if (!Number.isFinite(Number(value)) || Number(value) < min) errors.push(`invalid_policy_number:${path}`);
   }
   if (typeof policy?.quiet_hours?.enabled !== 'boolean') errors.push('invalid_quiet_hours:enabled');
@@ -122,7 +122,7 @@ export function validateSiteOperatingLoopPolicy(policy, options = {}) {
   };
 }
 
-export function currentQuietHoursState(policy, options = {}) {
+export function currentQuietHoursState(policy: any, options: any = {}): any {
   const quiet = policy?.quiet_hours ?? {};
   if (quiet.enabled !== true) {
     return {
@@ -160,7 +160,7 @@ export function currentQuietHoursState(policy, options = {}) {
   };
 }
 
-export function mergeSiteOperatingLoopPolicy(base, override) {
+export function mergeSiteOperatingLoopPolicy(base: any, override: any): any {
   return {
     ...base,
     ...override,
@@ -191,7 +191,7 @@ export function mergeSiteOperatingLoopPolicy(base, override) {
   };
 }
 
-function readPolicy(path, fallbackSchema) {
+function readPolicy(path: any, fallbackSchema: any): any {
   try {
     return JSON.parse(readFileSync(path, 'utf8'));
   } catch (error) {
@@ -202,7 +202,7 @@ function readPolicy(path, fallbackSchema) {
   }
 }
 
-function parseClockMinutes(value) {
+function parseClockMinutes(value: any): any {
   const match = /^(\d{1,2}):(\d{2})$/.exec(String(value ?? ''));
   if (!match) return null;
   const hours = Number(match[1]);
@@ -211,7 +211,7 @@ function parseClockMinutes(value) {
   return hours * 60 + minutes;
 }
 
-function localClockMinutes(now, timezone) {
+function localClockMinutes(now: any, timezone: any): number {
   try {
     const parts = new Intl.DateTimeFormat('en-US', {
       timeZone: timezone || 'UTC',

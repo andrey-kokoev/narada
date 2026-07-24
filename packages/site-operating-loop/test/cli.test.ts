@@ -8,25 +8,29 @@ import { test } from 'node:test';
 import { runHiddenPostureCommandSync, spawnTestChild } from '@narada2/process-launch-posture';
 
 const packageRoot = new URL('..', import.meta.url);
-const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.mjs', import.meta.url));
-const storePath = new URL('../src/site-loop-store.mjs', import.meta.url);
+const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.ts', import.meta.url));
+const storePath = new URL('../src/site-loop-store.js', import.meta.url);
+
+function text(value: string | Buffer | null | undefined): string {
+  return value == null ? '' : value.toString();
+}
 
 test('CLI help does not require a store module', () => {
-  const child = runHiddenPostureCommandSync(process.execPath, [cliPath, 'help'], {
+  const child = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath, 'help'], {
     cwd: packageRoot,
     encoding: 'utf8',
     posture: 'test_child',
   });
 
-  assert.equal(child.status, 0, child.stderr);
-  const parsed = JSON.parse(child.stdout);
+  assert.equal(child.status, 0, text(child.stderr));
+  const parsed = JSON.parse(text(child.stdout));
   assert.equal(parsed.schema, 'narada.site_operating_loop.cli_help.v1');
   assert.ok(parsed.commands.includes('run'));
 });
 
 test('CLI supervise emits startup evidence before a forever runtime exits', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'narada-site-loop-supervise-'));
-  let child = null;
+  let child: any = null;
   try {
     const dbFile = join(dir, 'site-loop.sqlite').replace(/\\/g, '/');
     const storeModulePath = join(dir, 'store.mjs');
@@ -49,6 +53,8 @@ test('CLI supervise emits startup evidence before a forever runtime exits', asyn
     `, 'utf8');
 
     child = spawnTestChild(process.execPath, [
+      '--import',
+      'tsx',
       cliPath,
       'supervise',
       '--store-module',
@@ -65,7 +71,6 @@ test('CLI supervise emits startup evidence before a forever runtime exits', asyn
       '10000',
     ], {
       cwd: packageRoot,
-      encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
     });
 
@@ -86,7 +91,7 @@ test('CLI supervise emits startup evidence before a forever runtime exits', asyn
   }
 });
 
-function readFirstStdoutLine(child, timeoutMs) {
+function readFirstStdoutLine(child: any, timeoutMs: any): Promise<string> {
   child.stdout.setEncoding('utf8');
   let buffer = '';
   return new Promise((resolve, reject) => {
@@ -94,7 +99,7 @@ function readFirstStdoutLine(child, timeoutMs) {
       cleanup();
       reject(new Error('timed out waiting for supervise startup stdout'));
     }, timeoutMs);
-    const onData = (chunk) => {
+    const onData = (chunk: any) => {
       buffer += chunk;
       const newline = buffer.indexOf('\n');
       if (newline >= 0) {
@@ -102,7 +107,7 @@ function readFirstStdoutLine(child, timeoutMs) {
         resolve(buffer.slice(0, newline));
       }
     };
-    const onError = (error) => {
+    const onError = (error: any) => {
       cleanup();
       reject(error);
     };
@@ -148,8 +153,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       }
     `, 'utf8');
 
-    const trigger = runHiddenPostureCommandSync(process.execPath, [
-      cliPath,
+    const trigger = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
       'trigger',
       '--store-module',
       storeModulePath,
@@ -167,12 +171,11 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       posture: 'test_child',
     });
 
-    assert.equal(trigger.status, 0, trigger.stderr);
-    const triggerResult = JSON.parse(trigger.stdout);
+    assert.equal(trigger.status, 0, text(trigger.stderr));
+    const triggerResult = JSON.parse(text(trigger.stdout));
     assert.equal(triggerResult.status, 'pending');
 
-    const child = runHiddenPostureCommandSync(process.execPath, [
-      cliPath,
+    const child = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
       'run',
       '--store-module',
       storeModulePath,
@@ -187,16 +190,15 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       posture: 'test_child',
     });
 
-    assert.equal(child.status, 0, child.stderr);
-    const parsed = JSON.parse(child.stdout);
+    assert.equal(child.status, 0, text(child.stderr));
+    const parsed = JSON.parse(text(child.stdout));
     assert.equal(parsed.schema, 'narada.site_operating_loop.runtime.v1');
     assert.equal(parsed.status, 'ok');
     assert.equal(parsed.cycle_count, 1);
     assert.equal(parsed.cycles[0].run.steps[0].step_id, 'cli-cycle');
     assert.equal(parsed.cycles[0].run.steps[0].evidence.trigger_id, triggerResult.trigger_id);
 
-    const triggers = runHiddenPostureCommandSync(process.execPath, [
-      cliPath,
+    const triggers = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
       'triggers',
       '--store-module',
       storeModulePath,
@@ -208,12 +210,11 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       posture: 'test_child',
     });
 
-    assert.equal(triggers.status, 0, triggers.stderr);
-    const triggersResult = JSON.parse(triggers.stdout);
+    assert.equal(triggers.status, 0, text(triggers.stderr));
+    const triggersResult = JSON.parse(text(triggers.stdout));
     assert.equal(triggersResult.triggers[0].status, 'completed');
 
-    const events = runHiddenPostureCommandSync(process.execPath, [
-      cliPath,
+    const events = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
       'events',
       '--store-module',
       storeModulePath,
@@ -225,24 +226,23 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       posture: 'test_child',
     });
 
-    assert.equal(events.status, 0, events.stderr);
-    const eventResult = JSON.parse(events.stdout);
-    const runtimeEvents = eventResult.events.filter((event) => [
+    assert.equal(events.status, 0, text(events.stderr));
+    const eventResult = JSON.parse(text(events.stdout));
+    const runtimeEvents = eventResult.events.filter((event: any) => [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ].includes(event.event));
-    assert.deepEqual(runtimeEvents.map((event) => event.event), [
+    assert.deepEqual(runtimeEvents.map((event: any) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ]);
-    assert.ok(eventResult.events.some((event) => event.event === 'runtime_host_lifecycle_transition'));
+    assert.ok(eventResult.events.some((event: any) => event.event === 'runtime_host_lifecycle_transition'));
 
-    const health = runHiddenPostureCommandSync(process.execPath, [
-      cliPath,
+    const health = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
       'health',
       '--store-module',
       storeModulePath,
@@ -254,12 +254,11 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       posture: 'test_child',
     });
 
-    assert.equal(health.status, 0, health.stderr);
-    const healthResult = JSON.parse(health.stdout);
+    assert.equal(health.status, 0, text(health.stderr));
+    const healthResult = JSON.parse(text(health.stdout));
     assert.equal(healthResult.status, 'healthy');
 
-    const serve = runHiddenPostureCommandSync(process.execPath, [
-      cliPath,
+    const serve = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
       'serve',
       '--store-module',
       storeModulePath,
@@ -274,13 +273,12 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       posture: 'test_child',
     });
 
-    assert.equal(serve.status, 0, serve.stderr);
-    const serveResult = JSON.parse(serve.stdout);
+    assert.equal(serve.status, 0, text(serve.stderr));
+    const serveResult = JSON.parse(text(serve.stdout));
     assert.equal(serveResult.status, 'listening');
     assert.match(serveResult.base_url, /^http:\/\/127\.0\.0\.1:\d+$/);
 
-    const supervise = runHiddenPostureCommandSync(process.execPath, [
-      cliPath,
+    const supervise = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
       'supervise',
       '--store-module',
       storeModulePath,
@@ -297,8 +295,8 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       posture: 'test_child',
     });
 
-    assert.equal(supervise.status, 0, supervise.stderr);
-    const superviseResult = JSON.parse(supervise.stdout);
+    assert.equal(supervise.status, 0, text(supervise.stderr));
+    const superviseResult = JSON.parse(text(supervise.stdout));
     assert.equal(superviseResult.schema, 'narada.site_operating_loop.supervisor.v1');
     assert.equal(superviseResult.server.status, 'listening');
     assert.equal(superviseResult.runtime.cycle_count, 1);

@@ -8,16 +8,16 @@ import {
   listLoopRuns,
   listLoopTriggers,
   setLoopControl,
-} from './site-loop-store.mjs';
+} from './site-loop-store.js';
 
 export const SITE_OPERATING_LOOP_HTTP_SERVER_SCHEMA = 'narada.site_operating_loop.http_server.v1';
 
-export function createSiteOperatingLoopHttpServer(store, {
+export function createSiteOperatingLoopHttpServer(store: any, {
   loopId,
   allowOrigin = null,
   streamPollMs = 1000,
   streamHeartbeatMs = 15_000,
-} = {}) {
+}: any = {}): any {
   if (!loopId) throw new Error('loopId is required');
 
   return createServer(async (request, response) => {
@@ -98,7 +98,7 @@ export function createSiteOperatingLoopHttpServer(store, {
   });
 }
 
-async function handlePost({ request, response, url, store, loopId, allowOrigin }) {
+async function handlePost({ request, response, url, store, loopId, allowOrigin }: any): Promise<void> {
   if (url.pathname === '/triggers') {
     const body = await readJsonBody(request);
     if (!body.kind) {
@@ -134,8 +134,8 @@ async function handlePost({ request, response, url, store, loopId, allowOrigin }
   }
 }
 
-export async function listenSiteOperatingLoopHttpServer(server, { host = '127.0.0.1', port = 0 } = {}) {
-  await new Promise((resolve, reject) => {
+export async function listenSiteOperatingLoopHttpServer(server: any, { host = '127.0.0.1', port = 0 }: any = {}): Promise<any> {
+  await new Promise<void>((resolve, reject) => {
     server.once('error', reject);
     server.listen(port, host, () => {
       server.off('error', reject);
@@ -152,14 +152,14 @@ export async function listenSiteOperatingLoopHttpServer(server, { host = '127.0.
   };
 }
 
-function sendJson(response, statusCode, body, { allowOrigin }) {
+function sendJson(response: any, statusCode: any, body: any, { allowOrigin }: any): void {
   response.statusCode = statusCode;
   response.setHeader('content-type', 'application/json; charset=utf-8');
   if (allowOrigin) response.setHeader('access-control-allow-origin', allowOrigin);
   response.end(`${JSON.stringify(body, null, 2)}\n`);
 }
 
-async function readJsonBody(request, { optional = false } = {}) {
+async function readJsonBody(request: any, { optional = false }: any = {}): Promise<any> {
   const chunks = [];
   for await (const chunk of request) chunks.push(Buffer.from(chunk));
   const text = Buffer.concat(chunks).toString('utf8').trim();
@@ -168,7 +168,7 @@ async function readJsonBody(request, { optional = false } = {}) {
   return JSON.parse(text);
 }
 
-function sendEventStreamSnapshot(response, events, { allowOrigin }) {
+function sendEventStreamSnapshot(response: any, events: any, { allowOrigin }: any): void {
   response.statusCode = 200;
   response.setHeader('content-type', 'text/event-stream; charset=utf-8');
   response.setHeader('cache-control', 'no-cache');
@@ -181,7 +181,7 @@ function sendEventStreamSnapshot(response, events, { allowOrigin }) {
   response.end();
 }
 
-function sendLiveEventStream({ request, response, store, loopId, afterEventId, limit, allowOrigin, pollMs, heartbeatMs }) {
+function sendLiveEventStream({ request, response, store, loopId, afterEventId, limit, allowOrigin, pollMs, heartbeatMs }: any): void {
   response.statusCode = 200;
   response.setHeader('content-type', 'text/event-stream; charset=utf-8');
   response.setHeader('cache-control', 'no-cache');
@@ -220,7 +220,7 @@ function sendLiveEventStream({ request, response, store, loopId, afterEventId, l
   flush();
 }
 
-function writeSseEvent(response, event) {
+function writeSseEvent(response: any, event: any): void {
   response.write(`event: ${event.event}\n`);
   response.write(`id: ${event.event_id}\n`);
   response.write(`data: ${JSON.stringify(event)}\n\n`);

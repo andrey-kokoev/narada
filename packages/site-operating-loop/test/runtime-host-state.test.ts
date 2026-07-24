@@ -9,12 +9,12 @@ import {
   getSiteOperatingLoopRuntimeHost,
   heartbeatSiteOperatingLoopRuntimeHost,
   transitionSiteOperatingLoopRuntimeHost,
-} from '../src/site-loop-store.mjs';
+} from '../src/site-loop-store.js';
 import {
   assertSiteOperatingLoopRuntimeHostTransition,
   canTransitionSiteOperatingLoopRuntimeHost,
   createSiteOperatingLoopRuntimeHostStateMachine,
-} from '../src/runtime-host-state.mjs';
+} from '../src/runtime-host-state.js';
 
 function openTestStore() {
   const db = new DatabaseSync(':memory:');
@@ -29,12 +29,12 @@ function openTestStore() {
 }
 
 test('Site Operating Runtime Host FSM is distinct from Loop Run lifecycle', () => {
-  const records = [];
+  const records: any[] = [];
   const host = createSiteOperatingLoopRuntimeHostStateMachine({
     runtimeId: 'site-runtime-test',
     authorityEpoch: 7,
     now: () => '2026-07-23T00:00:00.000Z',
-    onTransition: (record) => records.push(record),
+    onTransition: (record: any) => records.push(record),
   });
 
   assert.equal(host.snapshot().runtime_host_state, 'created');

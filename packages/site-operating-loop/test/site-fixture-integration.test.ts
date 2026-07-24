@@ -7,9 +7,9 @@ import { test } from 'node:test';
 import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 
 const packageRoot = new URL('..', import.meta.url);
-const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.mjs', import.meta.url));
-const storeModulePath = fileURLToPath(new URL('./fixtures/site-loop-store.mjs', import.meta.url));
-const loopModulePath = fileURLToPath(new URL('./fixtures/site-loop-body.mjs', import.meta.url));
+const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.ts', import.meta.url));
+const storeModulePath = fileURLToPath(new URL('./fixtures/site-loop-store.ts', import.meta.url));
+const loopModulePath = fileURLToPath(new URL('./fixtures/site-loop-body.ts', import.meta.url));
 
 test('Site-owned loop fixture runs end-to-end through generic supervise surface', () => {
   const dir = mkdtempSync(join(tmpdir(), 'narada-site-loop-site-fixture-'));
@@ -62,7 +62,7 @@ test('Site-owned loop fixture runs end-to-end through generic supervise surface'
       '--run-id',
       runId,
     ], env);
-    assert.deepEqual(shown.run.steps.map((step) => step.step_id), ['observe-trigger', 'decide-dispatch']);
+    assert.deepEqual(shown.run.steps.map((step: any) => step.step_id), ['observe-trigger', 'decide-dispatch']);
     assert.equal(shown.run.summary.trigger_id, trigger.trigger_id);
     assert.equal(shown.run.summary.decision, 'dispatch_admitted');
 
@@ -84,32 +84,33 @@ test('Site-owned loop fixture runs end-to-end through generic supervise surface'
       '--loop-id',
       'fixture.site-loop',
     ], env);
-    const runtimeEvents = events.events.filter((event) => [
+    const runtimeEvents = events.events.filter((event: any) => [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ].includes(event.event));
-    assert.deepEqual(runtimeEvents.map((event) => event.event), [
+    assert.deepEqual(runtimeEvents.map((event: any) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ]);
-    assert.ok(events.events.some((event) => event.event === 'runtime_host_lifecycle_transition'));
-    assert.equal(events.events.find((event) => event.event === 'cycle_completed').trigger_id, trigger.trigger_id);
+    assert.ok(events.events.some((event: any) => event.event === 'runtime_host_lifecycle_transition'));
+    assert.equal(events.events.find((event: any) => event.event === 'cycle_completed').trigger_id, trigger.trigger_id);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 });
 
-function runCli(args, env) {
-  const child = runHiddenPostureCommandSync(process.execPath, [cliPath, ...args], {
+function runCli(args: any, env: any): any {
+  const child = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath, ...args], {
     cwd: packageRoot,
     env,
     encoding: 'utf8',
     posture: 'test_child',
   });
-  assert.equal(child.status, 0, child.stderr || child.stdout);
-  return JSON.parse(child.stdout);
+  const output = (value: string | Buffer | null | undefined): string => value == null ? '' : value.toString();
+  assert.equal(child.status, 0, output(child.stderr) || output(child.stdout));
+  return JSON.parse(output(child.stdout));
 }

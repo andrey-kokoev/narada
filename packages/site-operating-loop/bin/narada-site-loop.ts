@@ -9,10 +9,10 @@ import {
   listLoopRuns,
   listLoopTriggers,
   setLoopControl,
-} from '../src/site-loop-store.mjs';
-import { startSiteOperatingLoopRuntime } from '../src/runtime.mjs';
-import { createSiteOperatingLoopHttpServer, listenSiteOperatingLoopHttpServer } from '../src/server.mjs';
-import { resolveSiteOperatingLoopModule } from '../src/loop-module.mjs';
+} from '../src/site-loop-store.js';
+import { startSiteOperatingLoopRuntime } from '../src/runtime.js';
+import { createSiteOperatingLoopHttpServer, listenSiteOperatingLoopHttpServer } from '../src/server.js';
+import { resolveSiteOperatingLoopModule } from '../src/loop-module.js';
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0] ?? 'status';
@@ -102,13 +102,13 @@ try {
       runtimeLeaseTtlMs: Number(args.runtimeLeaseTtlMs ?? 5 * 60_000),
       maxCycles: args.forever ? 'forever' : Number(args.maxCycles ?? (args.once ? 1 : 1)),
       prepareRun: loopContract.prepareRun,
-      createSteps: (context) => loopContract.createSteps({
+      createSteps: (context: any) => loopContract.createSteps({
         ...context,
         siteRoot: args.siteRoot ?? process.cwd(),
         args,
       }),
       summarize: loopContract.summarize,
-      onEvent: jsonlEvents ? (event) => console.log(JSON.stringify(event)) : null,
+      onEvent: jsonlEvents ? (event: any) => console.log(JSON.stringify(event)) : null,
     });
   } else if (command === 'supervise') {
     if (!args.loopModule) fail('missing_required_arg: --loop-module <module>');
@@ -153,14 +153,14 @@ try {
         runtimeLeaseTtlMs: Number(args.runtimeLeaseTtlMs ?? 5 * 60_000),
         maxCycles: args.forever || (!args.once && args.maxCycles == null) ? 'forever' : Number(args.maxCycles ?? 1),
         prepareRun: loopContract.prepareRun,
-        createSteps: (context) => loopContract.createSteps({
+        createSteps: (context: any) => loopContract.createSteps({
           ...context,
           siteRoot: args.siteRoot ?? process.cwd(),
           args,
         }),
         summarize: loopContract.summarize,
         signal: abortController.signal,
-        onEvent: jsonlEvents ? (event) => console.log(JSON.stringify(event)) : null,
+        onEvent: jsonlEvents ? (event: any) => console.log(JSON.stringify(event)) : null,
       });
     } finally {
       process.off('SIGINT', stop);
@@ -195,8 +195,8 @@ try {
   store.close?.();
 }
 
-function parseArgs(argv) {
-  const parsed = { _: [] };
+function parseArgs(argv: any): any {
+  const parsed: Record<string, any> = { _: [] };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--store-module') parsed.storeModule = argv[++i];
@@ -229,7 +229,7 @@ function parseArgs(argv) {
   return parsed;
 }
 
-function fail(reason) {
+function fail(reason: any): never {
   console.error(JSON.stringify({
     schema: 'narada.site_operating_loop.cli_error.v1',
     status: 'refused',
@@ -238,7 +238,7 @@ function fail(reason) {
   process.exit(2);
 }
 
-async function loadLoopModule(loopModulePath) {
+async function loadLoopModule(loopModulePath: any): Promise<any> {
   const loopModule = await import(pathToFileURL(loopModulePath).href);
   const contract = resolveSiteOperatingLoopModule(loopModule, { moduleRef: loopModulePath });
   if (contract.status !== 'ok') fail(`invalid_loop_module_contract: ${contract.errors.join(',')}`);
@@ -256,7 +256,7 @@ function helpResult() {
   };
 }
 
-function parseJsonArg(value, fallback) {
+function parseJsonArg(value: any, fallback: any): any {
   if (value == null) return fallback;
   try {
     return JSON.parse(value);

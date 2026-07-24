@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import {
   DEFAULT_SITE_OPERATING_LOOP_POLICY,
   validateSiteOperatingLoopPolicy,
-} from '../src/policy.mjs';
+} from '../src/policy.js';
 
 test('default policy disables unavailable fallback carrier', () => {
   assert.equal(DEFAULT_SITE_OPERATING_LOOP_POLICY.carrier.preferred, 'narada-agent-runtime-server');

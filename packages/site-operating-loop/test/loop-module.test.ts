@@ -4,7 +4,7 @@ import {
   createValidatedSiteOperatingLoopSteps,
   resolveSiteOperatingLoopModule,
   validateSiteOperatingLoopSteps,
-} from '../src/loop-module.mjs';
+} from '../src/loop-module.js';
 
 test('resolves valid Site Operating Loop module contract', async () => {
   const contract = resolveSiteOperatingLoopModule({

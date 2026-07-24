@@ -8,14 +8,14 @@ import {
   heartbeatSiteOperatingLoopRuntimeHost,
   recordLoopRuntimeEvent,
   transitionSiteOperatingLoopRuntimeHost,
-} from './site-loop-store.mjs';
-import { validateSiteOperatingLoopSteps } from './loop-module.mjs';
-import { runSiteOperatingLoop } from './runner.mjs';
+} from './site-loop-store.js';
+import { validateSiteOperatingLoopSteps } from './loop-module.js';
+import { runSiteOperatingLoop } from './runner.js';
 
 export const SITE_OPERATING_LOOP_RUNTIME_SCHEMA = 'narada.site_operating_loop.runtime.v1';
 export const SITE_OPERATING_LOOP_RUNTIME_EVENT_SCHEMA = 'narada.site_operating_loop.runtime_event.v1';
 
-export async function startSiteOperatingLoopRuntime(store, {
+export async function startSiteOperatingLoopRuntime(store: any, {
   loopId,
   ownerId = DEFAULT_SITE_OPERATING_LOOP_OWNER_ID,
   runtimeId = null,
@@ -32,21 +32,21 @@ export async function startSiteOperatingLoopRuntime(store, {
   onEvent = null,
   recordEvents = true,
   metadata = {},
-} = {}) {
+}: any = {}): Promise<any> {
   if (!loopId) throw new Error('loopId is required');
   if (typeof createSteps !== 'function') throw new Error('createSteps is required');
 
   const startedAt = new Date().toISOString();
   const boundedMaxCycles = normalizeMaxCycles(maxCycles);
   const runtimeHostLeaseTtlMs = normalizePositiveMilliseconds(runtimeLeaseTtlMs, 'runtimeLeaseTtlMs');
-  let host = null;
-  let heartbeatTimer = null;
-  let leaseError = null;
+  let host: any = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  let leaseError: any = null;
   const cycles = [];
   let cycleIndex = 0;
   let stoppedReason = null;
 
-  const transitionHost = async (nextState, details = {}) => {
+  const transitionHost = async (nextState: any, details: any = {}): Promise<void> => {
     const transition = transitionSiteOperatingLoopRuntimeHost(store, {
       loopId,
       runtimeId: host.runtime_id,
@@ -60,7 +60,7 @@ export async function startSiteOperatingLoopRuntime(store, {
     if (typeof onEvent === 'function') await onEvent(transition.event);
   };
 
-  const assertRuntimeAuthority = (at = new Date().toISOString()) => {
+  const assertRuntimeAuthority = (at: any = new Date().toISOString()): any => {
     if (leaseError) throw leaseError;
     host = assertSiteOperatingLoopRuntimeHostAuthority(store, {
       loopId,
@@ -285,7 +285,7 @@ export async function startSiteOperatingLoopRuntime(store, {
       try {
         if (!['failed', 'closing', 'stopped'].includes(host.runtime_host_state)) {
           await transitionHost('failed', {
-            reason: String(error?.message ?? error),
+            reason: String((error as any)?.message ?? error),
           });
         }
         if (host.runtime_host_state === 'failed') {
@@ -305,7 +305,7 @@ export async function startSiteOperatingLoopRuntime(store, {
   }
 }
 
-async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun, createSteps, summarize, signal, context }) {
+async function runCycle(store: any, { loopId, ownerId, dryRun, lockTtlMs, prepareRun, createSteps, summarize, signal, context }: any): Promise<any> {
   try {
     const prepared = typeof prepareRun === 'function' ? await prepareRun(context) : null;
     const preparedContext = { ...context, prepared };
@@ -329,7 +329,7 @@ async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun,
       steps,
       signal,
       summarize: typeof summarize === 'function'
-        ? (runContext) => summarize({ ...runContext, ...preparedContext })
+        ? (runContext: any) => summarize({ ...runContext, ...preparedContext })
         : null,
     });
   } catch (error) {
@@ -344,7 +344,7 @@ async function runCycle(store, { loopId, ownerId, dryRun, lockTtlMs, prepareRun,
   }
 }
 
-async function runFactoryFailure(store, { loopId, ownerId, dryRun, lockTtlMs, error, signal }) {
+async function runFactoryFailure(store: any, { loopId, ownerId, dryRun, lockTtlMs, error, signal }: any): Promise<any> {
   return await runSiteOperatingLoop(store, {
     loopId,
     ownerId,
@@ -360,20 +360,20 @@ async function runFactoryFailure(store, { loopId, ownerId, dryRun, lockTtlMs, er
   });
 }
 
-function normalizeMaxCycles(value) {
+function normalizeMaxCycles(value: any): number {
   if (value === 'forever' || value === Infinity) return Infinity;
   const parsed = Number(value ?? 1);
   if (!Number.isFinite(parsed)) return 1;
   return Math.max(1, Math.floor(parsed));
 }
 
-function normalizePositiveMilliseconds(value, name) {
+function normalizePositiveMilliseconds(value: any, name: any): number {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed <= 0) throw new Error(`invalid_positive_milliseconds:${name}:${value}`);
   return Math.floor(parsed);
 }
 
-async function emitRuntimeEvent(store, { onEvent, recordEvents }, event) {
+async function emitRuntimeEvent(store: any, { onEvent, recordEvents }: any, event: any): Promise<void> {
   const payload = {
     schema: SITE_OPERATING_LOOP_RUNTIME_EVENT_SCHEMA,
     ...event,
@@ -382,7 +382,7 @@ async function emitRuntimeEvent(store, { onEvent, recordEvents }, event) {
   if (typeof onEvent === 'function') await onEvent(recorded);
 }
 
-function defaultWait(ms, { signal } = {}) {
+function defaultWait(ms: any, { signal }: any = {}): Promise<void> {
   if (ms <= 0) return Promise.resolve();
   return new Promise((resolve) => {
     const timer = setTimeout(resolve, ms);

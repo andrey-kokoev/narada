@@ -12,9 +12,9 @@ import {
   listLoopRuntimeEvents,
   listLoopTriggers,
   setLoopControl,
-} from '../src/site-loop-store.mjs';
-import { runSiteOperatingLoop } from '../src/runner.mjs';
-import { startSiteOperatingLoopRuntime } from '../src/runtime.mjs';
+} from '../src/site-loop-store.js';
+import { runSiteOperatingLoop } from '../src/runner.js';
+import { startSiteOperatingLoopRuntime } from '../src/runtime.js';
 
 function openTestStore() {
   const db = new DatabaseSync(':memory:');
@@ -31,14 +31,14 @@ function openTestStore() {
 test('runtime executes bounded cycles with Site-provided steps', async () => {
   const store = openTestStore();
   try {
-    const events = [];
+    const events: any[] = [];
     const result = await startSiteOperatingLoopRuntime(store, {
       loopId: 'test.loop',
       intervalMs: 0,
       maxCycles: 2,
       wait: async () => {},
-      onEvent: (event) => events.push(event),
-      createSteps: ({ cycleIndex }) => [{
+      onEvent: (event: any) => events.push(event),
+      createSteps: ({ cycleIndex }: any) => [{
         stepId: `cycle-${cycleIndex}`,
         execute: () => ({ cycleIndex }),
       }],
@@ -46,18 +46,18 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
 
     assert.equal(result.status, 'ok');
     assert.equal(result.cycle_count, 2);
-    assert.deepEqual(result.cycles.map((cycle) => cycle.status), ['ok', 'ok']);
-    assert.deepEqual(result.cycles.map((cycle) => cycle.run.lifecycle_state), ['completed', 'completed']);
-    assert.deepEqual(result.cycles.map((cycle) => cycle.run.execution_lifecycle_state), ['completed', 'completed']);
+    assert.deepEqual(result.cycles.map((cycle: any) => cycle.status), ['ok', 'ok']);
+    assert.deepEqual(result.cycles.map((cycle: any) => cycle.run.lifecycle_state), ['completed', 'completed']);
+    assert.deepEqual(result.cycles.map((cycle: any) => cycle.run.execution_lifecycle_state), ['completed', 'completed']);
     assert.deepEqual(result.cycles[0].run.execution_lifecycle_history, ['scheduled', 'admitted', 'running', 'completed']);
-    assert.deepEqual(result.cycles.map((cycle) => cycle.run.steps[0].step_id), ['cycle-1', 'cycle-2']);
-    const runtimeEvents = events.filter((event) => [
+    assert.deepEqual(result.cycles.map((cycle: any) => cycle.run.steps[0].step_id), ['cycle-1', 'cycle-2']);
+    const runtimeEvents = events.filter((event: any) => [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
       'runtime_stopped',
     ].includes(event.event));
-    assert.deepEqual(runtimeEvents.map((event) => event.event), [
+    assert.deepEqual(runtimeEvents.map((event: any) => event.event), [
       'runtime_started',
       'cycle_started',
       'cycle_completed',
@@ -67,8 +67,8 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     ]);
     assert.deepEqual(result.runtime_host_lifecycle_history, ['created', 'binding', 'ready', 'serving', 'closing', 'stopped']);
     assert.equal(result.runtime_host_state, 'stopped');
-    assert.ok(events.some((event) => event.event === 'runtime_host_lifecycle_transition'));
-    assert.ok(events.every((event) => event.event_id));
+    assert.ok(events.some((event: any) => event.event === 'runtime_host_lifecycle_transition'));
+    assert.ok(events.every((event: any) => event.event_id));
 
     const status = getLoopStatus(store, { loopId: 'test.loop' });
     assert.equal(status.counts.ok, 2);
@@ -78,11 +78,11 @@ test('runtime executes bounded cycles with Site-provided steps', async () => {
     const storedEvents = listLoopRuntimeEvents(store, { loopId: 'test.loop', limit: 20 });
     assert.equal(storedEvents.count, events.length);
     assert.equal(storedEvents.events[0].event, 'runtime_host_claimed');
-    assert.deepEqual(storedEvents.events.map((event) => event.event), events.map((event) => event.event));
+    assert.deepEqual(storedEvents.events.map((event: any) => event.event), events.map((event: any) => event.event));
 
-    const runtimeStarted = storedEvents.events.find((event) => event.event === 'runtime_started');
+    const runtimeStarted = storedEvents.events.find((event: any) => event.event === 'runtime_started');
     const afterFirst = listLoopRuntimeEvents(store, { loopId: 'test.loop', afterEventId: runtimeStarted.event_id, limit: 10 });
-    assert.deepEqual(afterFirst.events.map((event) => event.event), [
+    assert.deepEqual(afterFirst.events.map((event: any) => event.event), [
       'runtime_host_lifecycle_transition',
       'cycle_started',
       'cycle_completed',
@@ -193,7 +193,7 @@ test('runtime claims pending trigger and completes it with run evidence', async 
     const result = await startSiteOperatingLoopRuntime(store, {
       loopId: 'test.loop',
       maxCycles: 1,
-      createSteps: ({ trigger }) => [{
+      createSteps: ({ trigger }: any) => [{
         stepId: 'trigger-step',
         execute: () => ({ trigger_id: trigger.trigger_id, kind: trigger.kind }),
       }],
@@ -220,12 +220,12 @@ test('runtime prepares one cycle before creating Site steps and summary', async 
     const result = await startSiteOperatingLoopRuntime(store, {
       loopId: 'test.loop',
       maxCycles: 1,
-      prepareRun: ({ loopId, cycleIndex }) => ({ token: `${loopId}:${cycleIndex}` }),
-      createSteps: ({ prepared }) => [{
+      prepareRun: ({ loopId, cycleIndex }: any) => ({ token: `${loopId}:${cycleIndex}` }),
+      createSteps: ({ prepared }: any) => [{
         stepId: 'prepared-step',
         execute: () => ({ token: prepared.token }),
       }],
-      summarize: ({ prepared, steps }) => ({ token: prepared.token, step_count: steps.length }),
+      summarize: ({ prepared, steps }: any) => ({ token: prepared.token, step_count: steps.length }),
     });
 
     assert.equal(result.status, 'ok');
@@ -246,16 +246,16 @@ test('runtime passes prior step results and context to later steps', async () =>
       createSteps: () => [
         {
           stepId: 'observe',
-          execute: ({ loopId, runId }) => ({ loopId, runId, value: 7 }),
-          outputRefs: (stepResult, context) => [{ kind: 'observation', ref: `${context.step_id}:${stepResult.value}` }],
+          execute: ({ loopId, runId }: any) => ({ loopId, runId, value: 7 }),
+          outputRefs: (stepResult: any, context: any) => [{ kind: 'observation', ref: `${context.step_id}:${stepResult.value}` }],
         },
         {
           stepId: 'decide',
-          execute: ({ resultsByStepId, priorSteps }) => ({
+          execute: ({ resultsByStepId, priorSteps }: any) => ({
             doubled: resultsByStepId.observe.value * 2,
             prior_step_count: priorSteps.length,
           }),
-          inputRefs: (_stepResult, context) => [{ kind: 'step', ref: context.priorSteps[0].step_id }],
+          inputRefs: (_stepResult: any, context: any) => [{ kind: 'step', ref: context.priorSteps[0].step_id }]
         },
       ],
     });

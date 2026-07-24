@@ -59,6 +59,7 @@ task-*-report.json
 .narada/local-filesystem-mcp/patch-outcomes/
 .narada/local-history-workspace.json
 packages/*/target/
+packages/*/native/target/
 packages/*/.narada/
 packages/*/.ai/runtime/
 packages/*/.tmp-*.db

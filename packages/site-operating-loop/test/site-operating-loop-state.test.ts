@@ -9,7 +9,7 @@ import {
   transitionSiteOperatingLoopHealthLifecycle,
   transitionSiteOperatingLoopRunLifecycle,
   transitionSiteOperatingLoopTriggerLifecycle,
-} from '../src/site-operating-loop-state.mjs';
+} from '../src/site-operating-loop-state.js';
 
 test('operating loop run lifecycle records locking and completion', () => {
   let lifecycle = createSiteOperatingLoopRunLifecycle();
