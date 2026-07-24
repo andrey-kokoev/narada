@@ -646,7 +646,12 @@ function outputStatus(value, isError) {
 function fitInlineJson(value, limit) {
   let text = JSON.stringify(value);
   if (text.length <= limit) return text;
-  const minimal = { truncated: true, output_ref: value.output_ref, reader_tool: value.reader_tool };
+  const minimal = {
+    ...(typeof value.status === 'string' ? { status: value.status } : {}),
+    truncated: true,
+    output_ref: value.output_ref,
+    reader_tool: value.reader_tool,
+  };
   text = JSON.stringify(minimal);
   if (text.length <= limit) return text;
   return text.slice(0, limit);
