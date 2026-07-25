@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { formatAgentStartResult, formatAgentStartWaitPrompt } from './agent-start-renderer.mjs';
+import { formatAgentStartResult, formatAgentStartWaitPrompt } from './agent-start-renderer.js';
 
 test('formats agent-start preamble with redacted API keys and startup sequence', () => {
   const text = formatAgentStartResult({

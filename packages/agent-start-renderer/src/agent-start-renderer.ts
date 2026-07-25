@@ -10,88 +10,142 @@ const ansi = {
   red: '\x1b[31m',
 };
 
-function color(code, value, colorEnabled) {
+type JsonRecord = Record<string, unknown>;
+
+interface McpFabric extends JsonRecord {
+  source?: unknown;
+  site_root?: unknown;
+  files?: unknown[];
+  server_names?: unknown[];
+  skipped?: unknown[];
+}
+
+interface LauncherContracts extends JsonRecord {
+  launch_result_artifact?: JsonRecord | null;
+  operator_projection_open_request?: JsonRecord | null;
+  authority_runtime_host_selection?: JsonRecord | null;
+  operator_surface_attachment?: JsonRecord | null;
+  mcp_fabric_injection_plan?: JsonRecord | null;
+  launch_selection_session?: JsonRecord | null;
+  intelligence_provider_readiness_check?: JsonRecord | null;
+  operator_terminal_projection_plan?: JsonRecord | null;
+  launch_failure_rendering?: JsonRecord | null;
+  runtime_health_posture?: JsonRecord | null;
+}
+
+interface AgentStartResult extends JsonRecord {
+  agent_start_event?: unknown;
+  identity?: unknown;
+  agent_identity_ref?: JsonRecord | null;
+  role?: unknown;
+  runtime?: unknown;
+  runtime_substrate_kind?: unknown;
+  tool_fabric_adapter_kind?: unknown;
+  resume_command?: unknown;
+  required_environment?: Record<string, string | undefined>;
+  runtime_authority_selection?: JsonRecord | null;
+  capability_policy?: JsonRecord | null;
+  mcp_fabric?: McpFabric | null;
+  startup_command?: { name?: unknown; arguments?: unknown; display?: unknown } | null;
+  launcher_contracts?: LauncherContracts | null;
+  runtime_health_posture?: JsonRecord | null;
+  startup_sequence?: Array<{ tool?: unknown; arguments?: unknown }>;
+  exec?: boolean;
+  launch_result_path?: unknown;
+}
+
+interface FormatOptions {
+  colorEnabled?: boolean;
+  runtime?: unknown;
+  dryRun?: boolean;
+}
+
+function color(code: string | null | undefined, value: unknown, colorEnabled: boolean): string {
   return colorEnabled && code ? `${code}${value}${ansi.reset}` : String(value);
 }
 
-function header(label, colorEnabled) {
+function header(label: unknown, colorEnabled: boolean): string {
   return color(`${ansi.bold}${ansi.blue}`, label, colorEnabled);
 }
 
-function key(label, colorEnabled) {
+function key(label: unknown, colorEnabled: boolean): string {
   return color(ansi.dim, label, colorEnabled);
 }
 
-function value(text, colorEnabled) {
+function value(text: unknown, colorEnabled: boolean): string {
   return color(ansi.cyan, text ?? '', colorEnabled);
 }
 
-function policyValue(text, colorEnabled) {
+function policyValue(text: unknown, colorEnabled: boolean): string {
   if (text === 'forbidden') return color(ansi.red, text, colorEnabled);
   if (text === 'mcp_only') return color(ansi.yellow, text, colorEnabled);
   return value(text ?? '<unspecified>', colorEnabled);
 }
 
-function line(field, text, colorEnabled) {
+function line(field: string, text: unknown, colorEnabled: boolean): string {
   return `${key(`${field}:`, colorEnabled)} ${value(text, colorEnabled)}`;
 }
 
-function section(title, bodyLines, colorEnabled) {
+function section(title: string, bodyLines: unknown[], colorEnabled: boolean): string[] {
   if (!Array.isArray(bodyLines)) return [];
   return [header(`${title}:`, colorEnabled), ...bodyLines.map((bodyLine) => `  ${bodyLine}`)];
 }
 
-function formatList(values = [], colorEnabled) {
+function formatList(values: unknown[] = [], colorEnabled: boolean): string {
   return values.length > 0 ? values.map((item) => value(item, colorEnabled)).join(', ') : value('[]', colorEnabled);
 }
 
-function formatSkippedMcpFabricEntry(entry) {
+function formatSkippedMcpFabricEntry(entry: unknown): string {
   if (!entry || typeof entry !== 'object') return renderOperatorValue(entry);
+  const record = entry as JsonRecord;
   return [
-    entry.locus ? `locus=${entry.locus}` : null,
-    entry.server_name ? `server=${entry.server_name}` : null,
-    entry.file ? `file=${entry.file}` : null,
-    entry.reason ? `reason=${entry.reason}` : null,
-  ].filter(Boolean).join('; ') || renderOperatorObjectSummary(entry) || renderOperatorValue(entry, { mode: 'block' });
+    record.locus ? `locus=${record.locus}` : null,
+    record.server_name ? `server=${record.server_name}` : null,
+    record.file ? `file=${record.file}` : null,
+    record.reason ? `reason=${record.reason}` : null,
+  ].filter(Boolean).join('; ') || renderOperatorObjectSummary(record) || renderOperatorValue(record, { mode: 'block' });
 }
 
-function parseSiteConfig(result) {
+function parseSiteConfig(result: AgentStartResult): JsonRecord | null {
   const raw = result.required_environment?.NARADA_SITE_CONFIG;
   if (!raw || typeof raw !== 'string') return null;
   try {
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed as JsonRecord : null;
   } catch {
     return null;
   }
 }
 
-function formatMcpScopePolicy(result, mcpFabric) {
+function formatMcpScopePolicy(result: AgentStartResult, mcpFabric: McpFabric): string | null {
   const siteConfig = parseSiteConfig(result);
   const scope = siteConfig?.mcp_scope ?? (typeof mcpFabric.source === 'string' && mcpFabric.source.startsWith('mcp-scope:')
     ? mcpFabric.source.slice('mcp-scope:'.length)
     : null);
-  const loci = Array.isArray(siteConfig?.mcp_loci) ? siteConfig.mcp_loci : [];
+  const loci = Array.isArray(siteConfig?.mcp_loci)
+    ? siteConfig.mcp_loci.filter((entry): entry is string => typeof entry === 'string')
+    : [];
   if (!scope && loci.length === 0) return null;
   return [scope ? `scope=${scope}` : null, loci.length > 0 ? `loci=${loci.join(', ')}` : null].filter(Boolean).join('; ');
 }
 
-function formatLaunchFailureRendering(failure) {
+function formatLaunchFailureRendering(failure: unknown): string {
   if (!failure || typeof failure !== 'object') return 'n/a';
-  const status = failure.status ?? null;
-  const reason = failure.reason_code ?? null;
+  const record = failure as JsonRecord;
+  const status = record.status ?? null;
+  const reason = record.reason_code ?? null;
   if (status && reason && status !== reason) return `${status}; reason=${reason}`;
   if (status) return String(status);
   if (reason) return `reason=${reason}`;
   return renderOperatorObjectSummary(failure) || 'n/a';
 }
 
-function summarizeContractObject(contract, colorEnabled) {
+function summarizeContractObject(contract: unknown, colorEnabled: boolean): string {
   if (!contract || typeof contract !== 'object') return value('n/a', colorEnabled);
   return value(renderOperatorObjectSummary(contract) || 'empty', colorEnabled);
 }
 
-export function formatAgentStartResult(result, options = {}) {
+export function formatAgentStartResult(result: AgentStartResult, options: FormatOptions = {}): string {
   const colorEnabled = options.colorEnabled ?? false;
   const runtime = options.runtime ?? result.runtime;
   const dryRun = options.dryRun ?? false;
@@ -226,8 +280,11 @@ export function formatAgentStartResult(result, options = {}) {
 
   if (result.runtime_health_posture) {
     const posture = result.runtime_health_posture;
-    const health = posture.dimensions?.health;
-    const events = posture.dimensions?.events;
+    const dimensions = posture.dimensions && typeof posture.dimensions === 'object'
+      ? posture.dimensions as JsonRecord
+      : {};
+    const health = dimensions.health && typeof dimensions.health === 'object' ? dimensions.health as JsonRecord : null;
+    const events = dimensions.events && typeof dimensions.events === 'object' ? dimensions.events as JsonRecord : null;
     lines.push(...section('runtime_health_posture', [
       `${key('status=', colorEnabled)}${value(posture.status ?? 'unknown', colorEnabled)}`,
       `${key('health=', colorEnabled)}${value(health ? `${health.status ?? 'unknown'} ${health.http_path ?? ''}`.trim() : 'n/a', colorEnabled)}`,
@@ -245,7 +302,7 @@ export function formatAgentStartResult(result, options = {}) {
   return `${lines.join('\n')}\n`;
 }
 
-export function formatAgentStartWaitPrompt(agentId, runtimeName, options = {}) {
+export function formatAgentStartWaitPrompt(agentId: string, runtimeName: string, options: { agentIdentityRef?: unknown } = {}): string {
   const displayIdentity = agentIdentityDisplay(options.agentIdentityRef, agentId) ?? agentId;
   return `Press Enter to start ${runtimeName} for ${displayIdentity}...`;
 }
