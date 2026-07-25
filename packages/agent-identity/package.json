@@ -14,15 +14,16 @@
   },
   "exports": {
     ".": {
-      "types": "./src/index.d.ts",
-      "import": "./src/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
-  "types": "./src/index.d.ts",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/index.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Agent identity projection contracts",
   "license": "MIT",

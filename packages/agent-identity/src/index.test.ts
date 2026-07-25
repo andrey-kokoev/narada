@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { agentIdentityRefMatchesRequest, buildAgentIdentityRef, buildAgentIdentityRefV2, normalizeAgentIdentityRef, normalizeAgentIdentityRefV2, renderOperatorObjectSummary, renderOperatorValue, resolveAgentIdentityRef } from './index.mjs';
+import { agentIdentityRefMatchesRequest, buildAgentIdentityRef, buildAgentIdentityRefV2, normalizeAgentIdentityRef, normalizeAgentIdentityRefV2, renderOperatorObjectSummary, renderOperatorValue, resolveAgentIdentityRef } from './index.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const packageRoot = dirname(__dirname);
@@ -71,6 +71,7 @@ test('builds v2 identity refs with explicit identity scope', () => {
 test('resolves prefixed legacy agent id into v2 identity ref', () => {
   const resolved = resolveAgentIdentityRef('smart-scheduling.resident', { role: 'resident' });
   assert.equal(resolved.status, 'resolved');
+  if (resolved.status !== 'resolved') throw new Error('expected_resolved_identity');
   assert.deepEqual(resolved.value, {
     schema: 'narada.agent_identity_ref.v2',
     identity_scope: { kind: 'narada_site', site_id: 'smart-scheduling' },
@@ -86,36 +87,45 @@ test('resolves prefixed legacy agent id into v2 identity ref', () => {
 test('resolves local legacy agent id only with site context', () => {
   const resolved = resolveAgentIdentityRef('resident', { site_id: 'sonar', role: 'resident' });
   assert.equal(resolved.status, 'resolved');
+  if (resolved.status !== 'resolved') throw new Error('expected_resolved_identity');
   assert.deepEqual(resolved.value.identity_scope, { kind: 'narada_site', site_id: 'sonar' });
   assert.equal(resolved.value.local_agent_id, 'resident');
   assert.equal(resolved.value.canonical_agent_id, 'sonar.resident');
   assert.equal(resolved.value.legacy_agent_id, 'resident');
-  assert.equal(resolveAgentIdentityRef('resident').code, 'identity_scope_required');
+  const refused = resolveAgentIdentityRef('resident');
+  assert.equal(refused.status, 'refused');
+  if (refused.status !== 'refused') throw new Error('expected_refused_identity');
+  assert.equal(refused.code, 'identity_scope_required');
 });
 
 test('resolves v1 object and current v2 object through explicit resolver', () => {
   const v1 = buildAgentIdentityRef('resident', 'resident', 'sonar');
   const resolvedV1 = resolveAgentIdentityRef(v1);
   assert.equal(resolvedV1.status, 'resolved');
+  if (resolvedV1.status !== 'resolved') throw new Error('expected_resolved_identity');
   assert.equal(resolvedV1.value.schema, 'narada.agent_identity_ref.v2');
   assert.equal(resolvedV1.value.legacy_agent_id, 'resident');
   assert.equal(resolvedV1.value.canonical_agent_id, 'sonar.resident');
   assert.deepEqual(normalizeAgentIdentityRef(resolvedV1.value), v1);
   assert.deepEqual(normalizeAgentIdentityRefV2(v1), resolvedV1.value);
   assert.deepEqual(normalizeAgentIdentityRefV2(resolvedV1.value), resolvedV1.value);
-  assert.deepEqual(normalizeAgentIdentityRefV2(resolvedV1.value).identity_scope, { kind: 'narada_site', site_id: 'sonar' });
-  assert.deepEqual(normalizeAgentIdentityRefV2(resolvedV1.value).display, 'sonar.resident');
+  const normalizedV2 = normalizeAgentIdentityRefV2(resolvedV1.value);
+  assert.ok(normalizedV2);
+  assert.deepEqual(normalizedV2.identity_scope, { kind: 'narada_site', site_id: 'sonar' });
+  assert.deepEqual(normalizedV2.display, 'sonar.resident');
 
   const current = buildAgentIdentityRefV2({ identity_scope: { kind: 'narada_site', site_id: 'sonar' }, local_agent_id: 'resident' });
-  assert.deepEqual(resolveAgentIdentityRef(current).value, current);
+  const resolvedCurrent = resolveAgentIdentityRef(current);
+  assert.equal(resolvedCurrent.status, 'resolved');
+  if (resolvedCurrent.status !== 'resolved') throw new Error('expected_resolved_identity');
+  assert.deepEqual(resolvedCurrent.value, current);
   assert.deepEqual(normalizeAgentIdentityRefV2(current), current);
 });
 
 test('agent identity display has one source implementation', () => {
   const definitionPattern = new RegExp(`(?:function|const|let|var)\\s+${'agentIdentityDisplay'}\\b`);
   const allowedImplementations = new Set([
-    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.mjs')),
-    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.d.ts')),
+    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.ts')),
   ]);
   const matches = [];
   for (const filePath of sourceFiles(join(repoRoot, 'packages'))) {
@@ -140,9 +150,8 @@ test('operator renderable values avoid object-object leakage', () => {
 
 test('operator identity rendering does not hand-roll identity-ref fallback chains', () => {
   const allowedPaths = new Set([
-    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.mjs')),
-    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.d.ts')),
-    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.test.mjs')),
+    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.ts')),
+    normalizePath(join(repoRoot, 'packages', 'agent-identity', 'src', 'index.test.ts')),
   ]);
   const suspiciousFieldChain = /display[\s\S]{0,240}canonical_agent_id[\s\S]{0,240}source_agent_id[\s\S]{0,240}local_agent_id/u;
   const suspiciousRefRead = /stringField\(ref, ['"]display['"]\)|ref\.(?:display|canonical_agent_id|source_agent_id|local_agent_id)/u;
@@ -160,7 +169,7 @@ test('operator identity rendering does not hand-roll identity-ref fallback chain
   assert.deepEqual(matches, [], 'identity-ref display fallback chains must use @narada2/agent-identity');
 });
 
-function* sourceFiles(root) {
+function* sourceFiles(root: string): Generator<string, void, unknown> {
   if (!existsSync(root)) return;
   for (const entry of readdirSync(root)) {
     if (entry === 'node_modules' || entry === 'dist' || entry === '.git' || entry === 'coverage') continue;
@@ -174,6 +183,6 @@ function* sourceFiles(root) {
   }
 }
 
-function normalizePath(value) {
+function normalizePath(value: unknown): string {
   return String(value).replaceAll('\\', '/').toLowerCase();
 }
