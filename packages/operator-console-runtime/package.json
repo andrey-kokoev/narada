@@ -1,0 +1,47 @@
+{
+  "name": "@narada2/operator-console-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "narada": {
+    "package_role": "operator_console_runtime_lifecycle",
+    "authority_owner": "@narada2/operator-console-runtime",
+    "surface": "operator_console",
+    "presentation_only": false
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@narada2/operator-router": "workspace:*",
+    "@narada2/process-launch-posture": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "description": "Readiness, singleton lifecycle, and diagnostics for the local Operator Console runtime",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "directory": "packages/operator-console-runtime"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

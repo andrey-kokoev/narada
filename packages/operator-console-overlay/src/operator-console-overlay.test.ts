@@ -1,12 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { OPERATOR_CONSOLE_PATH } from '@narada2/operator-console-contract';
-import { OPERATOR_CONSOLE_OVERLAY_ID, createOperatorConsoleOverlayDocument, operatorConsoleUrl } from './index.mjs';
+import { OPERATOR_CONSOLE_OVERLAY_ID, createOperatorConsoleOverlayDocument, operatorConsoleUrl, startOperatorConsoleOverlay } from './index.js';
 
 test('uses the stable Operator Router default without owning router lifecycle', () => {
   assert.equal(operatorConsoleUrl({
     env: { NARADA_OPERATOR_CONSOLE_URL: '', NARADA_OPERATOR_CONSOLE_HOST: '127.0.0.1', NARADA_OPERATOR_CONSOLE_PORT: '61729' },
   }), 'http://127.0.0.1:61729');
+});
+
+test('does not create an overlay until the local runtime is ready', async () => {
+  let overlayStarted = false;
+  await assert.rejects(
+    startOperatorConsoleOverlay({
+      url: 'http://127.0.0.1:61729',
+      ensure_runtime: async () => {
+        throw new Error('runtime_not_ready');
+      },
+      start_overlay: async () => {
+        overlayStarted = true;
+        return { status: 'started' };
+      },
+    }),
+    /runtime_not_ready/,
+  );
+  assert.equal(overlayStarted, false);
+});
+
+test('starts a local overlay only after runtime readiness succeeds', async () => {
+  const order: string[] = [];
+  const result = await startOperatorConsoleOverlay({
+    url: 'http://127.0.0.1:61729',
+    ensure_runtime: async () => {
+      order.push('runtime');
+      return { status: 'ready', url: 'http://127.0.0.1:61729' };
+    },
+    start_overlay: async () => {
+      order.push('overlay');
+      return { status: 'started' };
+    },
+  });
+  assert.deepEqual(order, ['runtime', 'overlay']);
+  assert.equal(result.runtime.status, 'ready');
 });
 
 test('specializes only the document and keeps generic action semantics', () => {
@@ -33,5 +68,5 @@ test('specializes only the document and keeps generic action semantics', () => {
 
 test('does not expose local restart for a remote console URL', () => {
   const document = createOperatorConsoleOverlayDocument({ url: 'https://console.example.test' });
-  assert.equal(document.actions.some((action) => action.kind === 'restart'), false);
+  assert.equal(document.actions.some((action: any) => action.kind === 'restart'), false);
 });

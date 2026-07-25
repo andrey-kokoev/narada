@@ -264,8 +264,20 @@ function routerStateRootCandidates(options: EnsureOperatorRouterOptions, primary
   const explicitStateRoot = options.state_root !== undefined
     || Boolean(process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT?.trim());
   if (explicitStateRoot) return [primaryStateRoot];
-  const legacyStateRoot = join(homedir(), '.narada', 'operator-router');
-  return [...new Set([primaryStateRoot, legacyStateRoot])];
+  // `os.homedir()` is the right production answer, but test runners,
+  // multi-profile shells, and launcher-launched child processes can provide
+  // a different USERPROFILE/HOME boundary. Probe those explicit process
+  // homes as well so a router started by the previous user-local layout can
+  // still be authenticated during the migration to LOCALAPPDATA.
+  const legacyHomeRoots = [
+    process.env.USERPROFILE?.trim(),
+    process.env.HOME?.trim(),
+    homedir(),
+  ].filter((value): value is string => Boolean(value));
+  return [...new Set([
+    primaryStateRoot,
+    ...legacyHomeRoots.map((homeRoot) => join(homeRoot, '.narada', 'operator-router')),
+  ])];
 }
 
 async function resolveRegistrationToken(

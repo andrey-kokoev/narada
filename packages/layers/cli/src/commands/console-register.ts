@@ -1,5 +1,4 @@
-import type { Command } from 'commander';
-import { randomUUID } from 'node:crypto';
+import { Option, type Command } from 'commander';
 import {
   consoleStatusCommand,
   consoleAttentionCommand,
@@ -9,20 +8,16 @@ import {
 } from './console.js';
 import { DEFAULT_OPERATOR_CONSOLE_PORT, createConsoleServer } from './console-server.js';
 import {
-  ensureOperatorRouter,
-  readOperatorRouterRoutes,
-  registerOperatorRouteSet,
-  routeProjectionMatchesIdentity,
-} from '@narada2/operator-router';
-import {
   OPERATOR_CONSOLE_LAUNCH_PATH,
-  OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS,
   OPERATOR_CONSOLE_ONBOARDING_PATH,
   OPERATOR_CONSOLE_REGISTRY_PATH,
 } from '@narada2/operator-console-contract';
+import {
+  restartOperatorConsoleRuntime,
+  serveOperatorConsoleRuntime,
+} from '@narada2/operator-console-runtime';
 import {silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { openOperatorConsoleWorkspace } from '../lib/operator-console-browser.js';
-import { stopOperatorConsoleProjection } from './console-projection-lifecycle.js';
 import {
   emitFormatterBackedCommandResult,
   emitLongLivedCommandStartup,
@@ -100,8 +95,23 @@ export function registerConsoleCommands(program: Command): void {
       const port = opts.port ? Number.parseInt(String(opts.port), 10) : 0;
       if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('operator_console_restart_requires_stable_port');
       emitLongLivedCommandStartup(['Operator Console restart: stopping the current projection...']);
-      await stopOperatorConsoleProjection({ host, port });
-      await runConsoleServe(opts);
+      const restarted = await restartOperatorConsoleRuntime({
+        host,
+        port,
+        timeout_ms: 15_000,
+      });
+      const workspaceUrl = restarted.started.url;
+      const browserOutcome = await openOperatorConsoleWorkspace(workspaceUrl, { shouldOpen: opts.open !== false });
+      emitLongLivedCommandStartup([
+        `Operator Router: ${restarted.started.router_url ?? workspaceUrl}`,
+        `Operator Workspace: ${workspaceUrl}`,
+        formatBrowserOutcome(browserOutcome, workspaceUrl),
+        `Operator Console Site Registry: ${restarted.started.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
+        `Operator Console Site Runtime: ${restarted.started.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
+        `Operator Console First Use: ${restarted.started.url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
+        `Operator Console API base: ${restarted.started.url}/console`,
+        'Operator Console projection: started in a detached runtime host',
+      ]);
     });
 
   consoleCmd
@@ -152,6 +162,7 @@ export function registerConsoleCommands(program: Command): void {
     .option('--port <port>', `Stable Operator Router port (0 for diagnostic ephemeral mode)`, String(DEFAULT_OPERATOR_CONSOLE_PORT))
     .option('--open', 'Open the Operator Workspace in the default browser after startup', true)
     .option('--no-open', 'Do not open the Operator Workspace in the default browser', false)
+    .addOption(new Option('--runtime-instance <nonce>', 'Internal Operator Console runtime identity nonce').hideHelp())
     .action(runConsoleServe);
 }
 
@@ -183,89 +194,35 @@ async function runConsoleServe(opts: CommanderOptionValues): Promise<void> {
     return;
   }
 
-  const router = await ensureOperatorRouter({ host, port });
-  const routerRoutes = await readOperatorRouterRoutes({ url: router.url });
-  const existingProjection = routerRoutes.routes?.find((route) => route.route_id === 'operator-console');
-  if (existingProjection && !routeProjectionMatchesIdentity(existingProjection, {
-    route_id: 'operator-console',
-    route_class: 'operator-console',
-    public_path: '/',
-    route_mode: 'prefix',
-  })) {
-    throw new Error('operator_router_projection_identity_conflict:operator-console');
-  }
-  if (existingProjection?.state === 'healthy') {
-    const workspaceUrl = `${router.url}/`;
-    const browserOutcome = await openOperatorConsoleWorkspace(workspaceUrl, { shouldOpen: opts.open !== false });
-    emitLongLivedCommandStartup([
-      `Operator Router: ${router.url}/`,
-      `Operator Workspace: ${workspaceUrl}`,
-      formatBrowserOutcome(browserOutcome, workspaceUrl),
-      `Operator Console Site Registry: ${router.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
-      `Operator Console Site Runtime: ${router.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
-      `Operator Console First Use: ${router.url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
-      `Operator Console API base: ${router.url}/console`,
-      `Operator Router ownership: ${router.ownership}`,
-      'Operator Console projection: attached',
-      'This command is attached to the existing projection; its owner remains responsible for lifecycle.',
-    ]);
-    return;
-  }
-
-  const server = await createConsoleServer({ host, port: 0, ingressMode: 'router', operatorRouterUrl: router.url });
-  const backendUrl = await server.start();
-  const ownerId = `operator-console:${process.pid}`;
-  const instanceNonce = randomUUID().replace(/-/g, '');
-  const admin = { url: router.url, registration_token: router.registration_token };
-  let routeSet: Awaited<ReturnType<typeof registerOperatorRouteSet>> | null = null;
-  try {
-    routeSet = await registerOperatorRouteSet({
-      admin,
-      renew_interval_ms: 30_000,
-      routes: [{
-        route_id: 'operator-console',
-        route_class: 'operator-console',
-        public_path: '/',
-        route_mode: 'prefix',
-        target_url: backendUrl,
-        health_url: `${backendUrl}/health`,
-        owner_id: ownerId,
-        process_evidence: { instance_nonce: instanceNonce, pid: process.pid, started_at: new Date().toISOString() },
-        protocols: ['http'],
-        methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
-        timeout_ms: OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS,
-        lease_ms: 60 * 60 * 1000,
-        reconstruction: { kind: 'explicit', site_root: null, site_id: null, session_id: null },
-      }],
-    });
-  } catch (error) {
-    await server.stop();
-    throw error;
-  }
-  const workspaceUrl = `${router.url}/`;
-  const browserOutcome = await openOperatorConsoleWorkspace(workspaceUrl, { shouldOpen: opts.open !== false });
-  emitLongLivedCommandStartup([
-    `Operator Router: ${router.url}/`,
-    `Operator Workspace: ${workspaceUrl}`,
-    formatBrowserOutcome(browserOutcome, workspaceUrl),
-    `Operator Console Site Registry: ${router.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
-    `Operator Console Site Runtime: ${router.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
-    `Operator Console First Use: ${router.url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
-    `Operator Console API base: ${router.url}/console`,
-    `Operator Router ownership: ${router.ownership}`,
-    'Operator Console projection: started',
-    'Press Ctrl+C to stop',
-  ]);
+  const runtime = await serveOperatorConsoleRuntime({
+    host,
+    port,
+    instance_nonce: opts.runtimeInstance as string | undefined,
+    create_backend: async (routerUrl) => {
+      const server = await createConsoleServer({ host, port: 0, ingressMode: 'router', operatorRouterUrl: routerUrl });
+      const url = await server.start();
+      return { url, stop: () => server.stop() };
+    },
+    open_workspace: (workspaceUrl) => openOperatorConsoleWorkspace(workspaceUrl, { shouldOpen: opts.open !== false }),
+    on_startup: ({ url, router_url, ownership, process_pid, browser_result }) => {
+      emitLongLivedCommandStartup([
+        `Operator Router: ${router_url}/`,
+        `Operator Workspace: ${url}`,
+        formatBrowserOutcome(browser_result, url),
+        `Operator Console Site Registry: ${router_url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
+        `Operator Console Site Runtime: ${router_url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
+        `Operator Console First Use: ${router_url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
+        `Operator Console API base: ${router_url}/console`,
+        `Operator Router ownership: ${ownership}`,
+        ownership === 'attached' ? 'Operator Console projection: attached' : 'Operator Console projection: started',
+        `Operator Console runtime process: ${process_pid}`,
+        'Press Ctrl+C to stop',
+      ]);
+    },
+  });
+  if (runtime.ownership === 'attached') return;
   const stopProjection = async (): Promise<void> => {
-    try {
-      await routeSet?.stop();
-    } finally {
-      try {
-        await server.stop();
-      } finally {
-        await stopOwnedOperatorRouter(router);
-      }
-    }
+    await runtime.stop();
     exitLongLivedCommandSuccessfully();
   };
   process.once('SIGINT', stopProjection);
@@ -273,30 +230,12 @@ async function runConsoleServe(opts: CommanderOptionValues): Promise<void> {
 }
 
 function formatBrowserOutcome(
-  outcome: Awaited<ReturnType<typeof openOperatorConsoleWorkspace>>,
+  outcome: unknown,
   workspaceUrl: string,
 ): string {
-  if (outcome.status === 'opened') return `Operator Workspace browser: opened ${workspaceUrl}`;
-  if (outcome.status === 'suppressed') return `Operator Workspace browser: not opened (${outcome.admission_reason})`;
-  return `Operator Workspace browser: unavailable (${outcome.error ?? outcome.admission_reason}); use ${workspaceUrl}`;
-}
-
-async function stopOwnedOperatorRouter(
-  router: Awaited<ReturnType<typeof ensureOperatorRouter>>,
-): Promise<void> {
-  if (router.ownership !== 'started' || !router.child || router.child.exitCode !== null) return;
-  const child = router.child;
-  child.kill();
-  await new Promise<void>((resolve) => {
-    if (child.exitCode !== null || child.signalCode !== null) {
-      resolve();
-      return;
-    }
-    const timer = setTimeout(resolve, 5_000);
-    timer.unref?.();
-    child.once('exit', () => {
-      clearTimeout(timer);
-      resolve();
-    });
-  });
+  if (!outcome || typeof outcome !== 'object') return `Operator Workspace browser: unavailable (no browser result); use ${workspaceUrl}`;
+  const result = outcome as { status?: string; admission_reason?: string; error?: string };
+  if (result.status === 'opened') return `Operator Workspace browser: opened ${workspaceUrl}`;
+  if (result.status === 'suppressed') return `Operator Workspace browser: not opened (${result.admission_reason ?? 'suppressed'})`;
+  return `Operator Workspace browser: unavailable (${result.error ?? result.admission_reason ?? 'unknown'}); use ${workspaceUrl}`;
 }

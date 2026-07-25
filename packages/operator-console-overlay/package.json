@@ -9,22 +9,37 @@
     "authority_owner": "@narada2/cli",
     "presentation_only": true
   },
-  "bin": {"narada-operator-console-overlay": "./src/cli.mjs"},
+  "bin": {
+    "narada-operator-console-overlay": "./dist/cli.js"
+  },
   "exports": {
-    ".": {"types": "./src/index.d.ts", "default": "./src/index.mjs"},
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
     "./package.json": "./package.json"
   },
-  "files": ["src", "README.md"],
+  "files": [
+    "dist/",
+    "README.md"
+  ],
   "scripts": {
-    "test": "node --test src/operator-console-overlay.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs"
+    "prebuild": "pnpm --filter @narada2/operator-console-contract build && pnpm --filter @narada2/process-launch-posture build && pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/operator-console-runtime build",
+    "pretest": "pnpm run build",
+    "test": "node --import tsx --test src/operator-console-overlay.test.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada2/operator-console-contract": "workspace:*",
+    "@narada2/operator-console-runtime": "workspace:*",
     "@narada2/operator-router": "workspace:*",
     "@narada2/window-overlay-core": "workspace:*"
   },
-  "devDependencies": {"@types/node": "^22.0.0", "typescript": "^5.3.0"},
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.3.0"
+  },
   "description": "Operator Console specialization of the reusable Windows overlay mechanics",
   "license": "MIT",
   "repository": {
@@ -32,5 +47,7 @@
     "url": "git+https://github.com/andrey-kokoev/narada.git",
     "directory": "packages/operator-console-overlay"
   },
-  "engines": {"node": ">=22.0.0"}
+  "engines": {
+    "node": ">=22.0.0"
+  }
 }

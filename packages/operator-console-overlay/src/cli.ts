@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-import { refreshOperatorConsoleOverlay, startOperatorConsoleOverlay, stopOperatorConsoleOverlay, inspectOperatorConsoleOverlay } from './index.mjs';
+
+type AnyRecord = Record<string, any>;
+import { refreshOperatorConsoleOverlay, startOperatorConsoleOverlay, stopOperatorConsoleOverlay, inspectOperatorConsoleOverlay } from './index.js';
 
 const args = process.argv.slice(2);
 const command = args.shift() || 'inspect';
-const valueOf = (name, fallback = undefined) => {
+const valueOf = (name: string, fallback: string | undefined = undefined): string | undefined => {
   const index = args.indexOf(name);
   return index === -1 ? fallback : args[index + 1];
 };
-const options = {
+const options: AnyRecord = {
   url: valueOf('--url'),
   title: valueOf('--title'),
   stateRoot: valueOf('--state-root'),
