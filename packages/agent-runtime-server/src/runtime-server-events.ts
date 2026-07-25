@@ -1,0 +1,305 @@
+import { agentIdentityDisplay } from '@narada2/agent-identity';
+
+function isSessionLifecycleEvent(event: any) {
+  return event?.event === 'session_started' || event?.event === 'session_status' || event?.event === 'session_closed';
+}
+
+function eventAgentDisplay(event: any) {
+  return agentIdentityDisplay(event?.agent_identity_ref, stringField(event, 'agent_id') ?? 'unknown') ?? 'unknown';
+}
+
+function stringField(record: any, field: any) {
+  if (!record || typeof record !== 'object') return null;
+  const value: any = record[field];
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+function identityProjectionFields(event: any) {
+  const fields: any = {
+    agent_id: event?.agent_id ?? null,
+  };
+  if (event?.agent_identity_ref && typeof event.agent_identity_ref === 'object') fields.agent_identity_ref = event.agent_identity_ref;
+  return fields;
+}
+
+function wrapperEventEnvelope(event: any, eventName: any, { includeRequestId = false, includeSourceEvent = false }: any = {}) {
+  return {
+    schema: 'narada.agent_runtime_server.wrapper_event.v1',
+    event: eventName,
+    timestamp: event.timestamp ?? new Date().toISOString(),
+    ...(includeSourceEvent ? { source_event: event.event } : {}),
+    ...(includeRequestId ? { request_id: event.request_id ?? null } : {}),
+    ...identityProjectionFields(event),
+    session_id: event.session_id ?? null,
+  };
+}
+
+function formatAgentWebUiLaunchCommand(event: any) {
+  const eventEndpoint: any = event?.event_endpoint ? String(event.event_endpoint) : null;
+  if (!eventEndpoint) return null;
+  const parts: any = ['narada-agent-web-ui', '--event-endpoint', eventEndpoint];
+  const healthEndpoint: any = event?.health_endpoint ? String(event.health_endpoint) : null;
+  if (healthEndpoint) parts.push('--health-endpoint', healthEndpoint);
+  return parts.join(' ');
+}
+
+export function formatHostStatusEvent(event: any) {
+  if (!event || event.event !== 'session_started') return [];
+  const launchCommand: any = formatAgentWebUiLaunchCommand(event);
+  const provider: any = event.provider ?? event.intelligence?.provider ?? 'unknown';
+  const model: any = event.model ?? event.intelligence?.model ?? 'unknown';
+  const mcpScope: any = event.mcp_scope ?? event.mcp?.scope ?? null;
+  const mcpState: any = event.mcp_operational_state ?? event.mcp?.operational_state ?? 'unknown';
+  const mcpCount: any = event.mcp_server_count ?? event.mcp?.server_count ?? null;
+  const mcpLine: any = mcpScope === 'none'
+    ? '  MCP      disabled (scope=none)'
+    : `  MCP      ${mcpCount ?? 'pending'} servers, ${mcpState}${mcpScope ? ` (scope=${mcpScope})` : ''}`;
+  return [
+    `agent-runtime-server: ${eventAgentDisplay(event)}`,
+    `  Session ${event.session_id ?? 'unknown'}`,
+    `  Surface ${event.operator_surface_kind ?? event.launch_operator_surface_kind ?? 'unknown'}`,
+    `  Provider ${provider}`,
+    `  Model    ${model}`,
+    mcpLine,
+    `  Health   ${event.health_endpoint ?? 'not configured'}`,
+    `  Events   ${event.event_endpoint ?? 'not configured'}`,
+    launchCommand
+      ? `  Launch   ${launchCommand}`
+      : '  Input    attach an operator surface such as agent-web-ui',
+  ];
+}
+
+export function formatStartupMcpSummary(event: any) {
+  if (!event || event.event !== 'session_started') return null;
+  if (event.mcp_operational_state == null) return null;
+  if (event.mcp_operational_state === 'healthy') return null;
+  const parts: any = [`MCP state=${event.mcp_operational_state}`];
+  if (event.mcp_startup_failure_count > 0 && event.mcp_startup_failure_summary) {
+    parts.push(`startup=${event.mcp_startup_failure_summary}`);
+  }
+  if (event.mcp_runtime_fault_count > 0 && event.mcp_runtime_fault_summary) {
+    parts.push(`runtime=${event.mcp_runtime_fault_summary}`);
+  }
+  return `[agent-runtime-server] ${parts.join(' | ')}`;
+}
+
+export function formatStartupMcpEvent(event: any) {
+  if (!event || event.event !== 'session_started') return null;
+  if (event.mcp_operational_state == null) return null;
+  if (event.mcp_operational_state === 'healthy') return null;
+  return {
+    ...wrapperEventEnvelope(event, 'mcp_startup_status'),
+    mcp_operational_state: event.mcp_operational_state ?? null,
+    mcp_startup_failure_count: event.mcp_startup_failure_count ?? 0,
+    mcp_startup_failure_summary: event.mcp_startup_failure_summary ?? '0',
+    mcp_runtime_fault_count: event.mcp_runtime_fault_count ?? 0,
+    mcp_runtime_fault_summary: event.mcp_runtime_fault_summary ?? '0',
+  };
+}
+
+export function formatRuntimeMcpFaultSummary(event: any) {
+  if (!event || event.event !== 'carrier_diagnostic_recorded') return null;
+  if (event.diagnostic_code !== 'mcp_runtime_fault') return null;
+  const serverName: any = event.server_name ?? 'unknown';
+  const toolName: any = event.tool_name ?? '<missing>';
+  const errorCode: any = event.error_code ? ` ${event.error_code}` : '';
+  return `[agent-runtime-server] MCP runtime fault ${serverName}:${toolName}${errorCode}`;
+}
+
+export function formatRuntimeMcpFaultEvent(event: any) {
+  if (!event || event.event !== 'carrier_diagnostic_recorded') return null;
+  if (event.diagnostic_code !== 'mcp_runtime_fault') return null;
+  return {
+    ...wrapperEventEnvelope(event, 'mcp_runtime_fault'),
+    diagnostic_code: event.diagnostic_code,
+    server_name: event.server_name ?? 'unknown',
+    tool_name: event.tool_name ?? '<missing>',
+    error_code: event.error_code ?? null,
+  };
+}
+
+export function formatRuntimeProjectionFailureSummary(event: any) {
+  if (!event || event.event !== 'runtime_projection_failure') return null;
+  const projection: any = event.projection ?? 'unknown';
+  const state: any = event.request_state ?? event.terminal_state ?? 'failed';
+  const error: any = event.error_code ?? event.error ?? 'unknown_error';
+  return `[agent-runtime-server] Runtime projection failure ${projection} ${state} ${String(error).slice(0, 240)}`;
+}
+
+export function formatRuntimeProjectionFailureEvent(event: any) {
+  if (!event || event.event !== 'runtime_projection_failure') return null;
+  return {
+    ...wrapperEventEnvelope(event, 'runtime_projection_failure', { includeRequestId: true }),
+    projection: event.projection ?? null,
+    request_state: event.request_state ?? null,
+    terminal_state: event.terminal_state ?? null,
+    error_code: event.error_code ?? null,
+    error: event.error ?? null,
+  };
+}
+
+export function formatRuntimeOutputFailureSummary(event: any) {
+  if (!event || event.event !== 'runtime_output_failure') return null;
+  const code: any = event.error_code ?? 'runtime_output_failure';
+  const error: any = event.error ?? 'unknown_error';
+  return `[agent-runtime-server] Runtime output failure ${String(code).slice(0, 120)} ${String(error).slice(0, 240)}`;
+}
+
+export function formatRuntimeOutputFailureEvent(event: any) {
+  if (!event || event.event !== 'runtime_output_failure') return null;
+  return {
+    ...wrapperEventEnvelope(event, 'runtime_output_failure'),
+    error_code: event.error_code ?? null,
+    error: event.error ?? null,
+    line_length: event.line_length ?? null,
+  };
+}
+
+export function formatControlInputBridgeErrorSummary(event: any) {
+  if (!event || event.event !== 'runtime_control_input_bridge_error') return null;
+  const code: any = event.error_code ?? 'control_input_bridge_error';
+  return `[agent-runtime-server] Control-input bridge error ${String(code).slice(0, 240)}`;
+}
+
+export function formatControlInputBridgeErrorEvent(event: any) {
+  if (!event || event.event !== 'runtime_control_input_bridge_error') return null;
+  return {
+    ...wrapperEventEnvelope(event, 'control_input_bridge_error'),
+    control_path: event.control_path ?? null,
+    error_code: event.error_code ?? null,
+    error: event.error ?? null,
+    error_at: event.error_at ?? null,
+  };
+}
+
+export function formatSessionWorkflowSummary(event: any) {
+  if (!event || !isSessionLifecycleEvent(event)) return null;
+  if (!event.recommended_action || event.recommended_action === 'review_session_summary') return null;
+  if (!event.recommended_command) return null;
+  return `[agent-runtime-server] Session workflow ${event.recommended_action_display ?? event.recommended_action} | command=${event.recommended_command}`;
+}
+
+export function formatSessionOperationsSummary(event: any) {
+  if (!event || event.event !== 'session_operations') return null;
+  if (!event.operation?.operation_event_summary) return null;
+  const command: any = event.handoffs?.session_operations ?? 'narada-agent-cli --session-operations';
+  return `[agent-runtime-server] Session operations: ${event.operation.operation_event_summary} | command=${command}`;
+}
+
+export function formatSessionWorkflowEvent(event: any) {
+  if (!event || !isSessionLifecycleEvent(event)) return null;
+  if (!event.recommended_action || event.recommended_action === 'review_session_summary') return null;
+  if (!event.recommended_command) return null;
+  return {
+    ...wrapperEventEnvelope(event, 'session_workflow_recommendation', { includeRequestId: true, includeSourceEvent: true }),
+    operational_posture: event.operational_posture ?? null,
+    operational_posture_display: event.operational_posture_display ?? null,
+    recommended_action: event.recommended_action ?? null,
+    recommended_action_display: event.recommended_action_display ?? null,
+    recommended_command: event.recommended_command ?? null,
+    recovery_kind: event.recovery_kind ?? null,
+    recovery_kind_display: event.recovery_kind_display ?? null,
+    recovery_primary_command: event.recovery_primary_command ?? null,
+    recovery_followup_command: event.recovery_followup_command ?? null,
+    handoffs: event.handoffs ?? null,
+  };
+}
+
+export function formatSessionOperationsEvent(event: any) {
+  if (!event || event.event !== 'session_operations') return null;
+  return {
+    ...wrapperEventEnvelope(event, 'session_operations_snapshot', { includeRequestId: true, includeSourceEvent: true }),
+    terminal_state: event.terminal_state ?? null,
+    active_turn_state: event.active_turn_state ?? null,
+    active_turn_id: event.active_turn_id ?? null,
+    mcp_operational_state: event.mcp_operational_state ?? null,
+    mcp_preflight_operational_state: event.mcp_preflight_operational_state ?? null,
+    request_posture: event.request_posture ?? null,
+    request_posture_display: event.request_posture_display ?? null,
+    operational_posture: event.operational_posture ?? null,
+    operational_posture_display: event.operational_posture_display ?? null,
+    recommended_action: event.recommended_action ?? null,
+    recommended_action_display: event.recommended_action_display ?? null,
+    recommended_command: event.recommended_command ?? null,
+    recovery_kind: event.recovery_kind ?? null,
+    recovery_kind_display: event.recovery_kind_display ?? null,
+    recovery_primary_command: event.recovery_primary_command ?? null,
+    recovery_followup_command: event.recovery_followup_command ?? null,
+    handoffs: event.handoffs ?? null,
+    operation: event.operation ?? null,
+    event_summary: event.event_summary ?? null,
+    session_path: event.session_path ?? null,
+    events_path: event.events_path ?? null,
+    session_event_count: event.session_event_count ?? null,
+    last_event_kind: event.last_event_kind ?? null,
+    last_event_at: event.last_event_at ?? null,
+  };
+}
+
+export function formatPreflightWorkflowSummary(event: any) {
+  if (!event || !isSessionLifecycleEvent(event)) return null;
+  if (!event.mcp_preflight_recommended_action || event.mcp_preflight_recommended_action === 'start_session') return null;
+  if (!event.mcp_preflight_recommended_command) return null;
+  return `[agent-runtime-server] Preflight workflow ${event.mcp_preflight_recommended_action_display ?? event.mcp_preflight_recommended_action} | command=${event.mcp_preflight_recommended_command}`;
+}
+
+export function formatPreflightWorkflowEvent(event: any) {
+  if (!event || !isSessionLifecycleEvent(event)) return null;
+  if (!event.mcp_preflight_recommended_action || event.mcp_preflight_recommended_action === 'start_session') return null;
+  if (!event.mcp_preflight_recommended_command) return null;
+  return {
+    ...wrapperEventEnvelope(event, 'preflight_workflow_recommendation', { includeRequestId: true, includeSourceEvent: true }),
+    mcp_preflight_operational_state: event.mcp_preflight_operational_state ?? null,
+    mcp_preflight_recommended_action: event.mcp_preflight_recommended_action ?? null,
+    mcp_preflight_recommended_action_display: event.mcp_preflight_recommended_action_display ?? null,
+    mcp_preflight_recommended_command: event.mcp_preflight_recommended_command ?? null,
+    mcp_preflight_recovery_kind: event.mcp_preflight_recovery_kind ?? null,
+    mcp_preflight_recovery_kind_display: event.mcp_preflight_recovery_kind_display ?? null,
+    mcp_preflight_recovery_primary_command: event.mcp_preflight_recovery_primary_command ?? null,
+    mcp_preflight_recovery_followup_command: event.mcp_preflight_recovery_followup_command ?? null,
+    mcp_preflight_handoffs: event.mcp_preflight_handoffs ?? null,
+  };
+}
+
+export function formatWrapperStatusEvent(event: any) {
+  if (!event || (!isSessionLifecycleEvent(event) && event.event !== 'session_operations')) return null;
+  return {
+    ...wrapperEventEnvelope(event, 'session_status_snapshot', { includeRequestId: true, includeSourceEvent: true }),
+    terminal_state: event.terminal_state ?? null,
+    ...identityProjectionFields(event),
+    session_id: event.session_id ?? null,
+    active_turn_state: event.active_turn_state ?? null,
+    active_turn_id: event.active_turn_id ?? null,
+    mcp_operational_state: event.mcp_operational_state ?? null,
+    mcp_startup_failure_count: event.mcp_startup_failure_count ?? 0,
+    mcp_startup_failure_summary: event.mcp_startup_failure_summary ?? '0',
+    mcp_runtime_fault_count: event.mcp_runtime_fault_count ?? 0,
+    mcp_runtime_fault_summary: event.mcp_runtime_fault_summary ?? '0',
+    mcp_preflight_operational_state: event.mcp_preflight_operational_state ?? null,
+    mcp_preflight_recommended_action: event.mcp_preflight_recommended_action ?? null,
+    mcp_preflight_recommended_action_display: event.mcp_preflight_recommended_action_display ?? null,
+    mcp_preflight_recommended_command: event.mcp_preflight_recommended_command ?? null,
+    mcp_preflight_recovery_kind: event.mcp_preflight_recovery_kind ?? null,
+    mcp_preflight_recovery_kind_display: event.mcp_preflight_recovery_kind_display ?? null,
+    mcp_preflight_recovery_primary_command: event.mcp_preflight_recovery_primary_command ?? null,
+    mcp_preflight_recovery_followup_command: event.mcp_preflight_recovery_followup_command ?? null,
+    mcp_preflight_handoffs: event.mcp_preflight_handoffs ?? null,
+    request_outcome_total: event.request_outcome_total ?? 0,
+    request_posture: event.request_posture ?? 'clean',
+    request_posture_display: event.request_posture_display ?? 'clean',
+    operational_posture: event.operational_posture ?? null,
+    operational_posture_display: event.operational_posture_display ?? null,
+    recommended_action: event.recommended_action ?? null,
+    recommended_action_display: event.recommended_action_display ?? null,
+    recommended_command: event.recommended_command ?? null,
+    recovery_kind: event.recovery_kind ?? null,
+    recovery_kind_display: event.recovery_kind_display ?? null,
+    recovery_primary_command: event.recovery_primary_command ?? null,
+    recovery_followup_command: event.recovery_followup_command ?? null,
+    handoffs: event.handoffs ?? null,
+    session_event_count: event.session_event_count ?? 0,
+    last_event_kind: event.last_event_kind ?? null,
+    last_event_at: event.last_event_at ?? null,
+    last_terminal_state: event.last_terminal_state ?? null,
+  };
+}

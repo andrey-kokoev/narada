@@ -1,0 +1,115 @@
+import { NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS } from '@narada2/nars-intelligence-kernel-contract';
+import { createCarrierTurnAdapter } from '@narada2/carrier-runtime/carrier-turn-adapter';
+import { createNarsSessionSupervisor } from '@narada2/nars-session-core/session-supervisor';
+import { NarsIntelligenceInvocationError } from './intelligence-runtime-controller.js';
+
+function isProviderFollowUpRoundLimitError(error: any) {
+  const message: any = error instanceof Error ? error.message : String(error);
+  return /(?:provider_follow_up_round_limit_exceeded|carrier_turn_tool_round_limit_exceeded)(?::\d+)?$/.test(message);
+}
+
+/**
+ * Transport-facing binding. The caller owns transport and process lifetime;
+ * session lifecycle is delegated to nars-session-core and turns to the carrier.
+ */
+export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelligenceFn, toolGateway = {}, buildTurnContext, handleControlRequest, executionPolicyProvider = null }: any = {}) {
+  if (typeof invokeIntelligenceFn !== 'function') throw new Error('runtime_session_binding_invoke_intelligence_required');
+  const sessionId: any = runtimeContext.session;
+  if (!sessionId || !runtimeContext.sessionPath || !runtimeContext.eventsPath) {
+    throw new Error('runtime_session_binding_context_required');
+  }
+  const carrier: any = createCarrierTurnAdapter({
+    invokeIntelligence: ({ messages, tools, settings, abortSignal, turnId, inputEventId, runtimeRequestId, runtime_request_id, idempotencyKey, idempotency_key, turnAttempt, turn_attempt, executionPolicy, execution_policy, invocationEventSink, toolGateway }: any) => invokeIntelligenceFn(messages, tools, {
+      ...settings,
+      executionPolicy: executionPolicy ?? execution_policy,
+      execution_policy: executionPolicy ?? execution_policy,
+      abortSignal,
+      turnId,
+      inputEventId,
+      runtimeRequestId: runtimeRequestId ?? runtime_request_id,
+      runtime_request_id: runtimeRequestId ?? runtime_request_id,
+      idempotencyKey: idempotencyKey ?? idempotency_key,
+      idempotency_key: idempotencyKey ?? idempotency_key,
+      turnAttempt: turnAttempt ?? turn_attempt,
+      turn_attempt: turnAttempt ?? turn_attempt,
+      invocationEventSink,
+      capabilityGateway: toolGateway,
+    }),
+  });
+  const sessionCarrier: any = {
+    runTurn: async (...args: any[]) => {
+      try {
+        return await carrier.runTurn(...args);
+      } catch (error) {
+        // A provider boundary that ended with admission-unknown is terminal
+        // for a live queue item. Keeping it pending would make the queue
+        // silently submit a request that may already have been accepted by
+        // the provider. An explicit retry carries its own invocation
+        // lineage and is admitted separately. Startup recovery is different:
+        // it must retain the pending item until the durable invocation record
+        // can be reconciled, so recovery continues to fail closed here.
+        if (error instanceof NarsIntelligenceInvocationError
+          && error.result?.outcome?.kind === 'admission-unknown'
+          && args[0]?.recoveryReplay !== true) {
+          return {
+            terminal_state: 'failed',
+            error: error.message,
+          };
+        }
+        // An explicitly controlled canonical attempt owns its retry/replay
+        // semantics above the session queue. Its provider/refusal outcome is a
+        // terminal turn result, so the admitted input must not remain at the
+        // head of the recovery queue and replay itself before the caller's
+        // next explicit attempt.
+        if (error instanceof NarsIntelligenceInvocationError && args[0]?.settings?.intentId) {
+          return {
+            terminal_state: error.result?.kind === 'refusal' ? 'refused' : 'failed',
+            error: error.message,
+          };
+        }
+        // A bounded provider loop is a terminal turn outcome, not a runtime process failure.
+        if (!isProviderFollowUpRoundLimitError(error)) throw error;
+        return {
+          terminal_state: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        };
+      }
+    },
+  };
+  const defaultBuildTurnContext: any = (input: any) => ({
+    turnId: input.event_id,
+    messages: [{ role: 'user', content: input.content }],
+  });
+  return createNarsSessionSupervisor({
+    sessionCoreOptions: {
+      sessionId,
+      agentId: runtimeContext.identity ?? null,
+      sessionPath: runtimeContext.sessionPath,
+      eventsPath: runtimeContext.eventsPath,
+      siteRoot: runtimeContext.siteRoot ?? null,
+    },
+    carrier: sessionCarrier,
+    toolGateway,
+    handleControlRequest,
+    buildTurnContext: (input: any) => {
+      const turnContext: any = (buildTurnContext ?? defaultBuildTurnContext)(input);
+      const executionPolicy: any = turnContext.executionPolicy
+        ?? turnContext.execution_policy
+        ?? (typeof executionPolicyProvider === 'function' ? executionPolicyProvider() : null)
+        ?? runtimeContext.executionPolicy
+        ?? runtimeContext.execution_policy
+        ?? null;
+      return {
+        ...turnContext,
+        ...(executionPolicy ? { executionPolicy, execution_policy: executionPolicy } : {}),
+        maxToolRounds: turnContext.maxToolRounds
+          ?? executionPolicy?.tool_loop?.max_rounds
+          ?? runtimeContext.maxToolRounds
+          ?? runtimeContext.max_tool_rounds
+          ?? runtimeContext.invocationSettings?.maxToolRounds
+          ?? runtimeContext.invocationSettings?.max_tool_rounds
+          ?? NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS,
+      };
+    },
+  });
+}

@@ -24,37 +24,37 @@
     "runtime_dependency_owner": "nars-session-core owns session control and durability; this package owns the scoped capability-gateway binding; nars-provider-runtime supplies provider execution"
   },
   "bin": {
-    "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.mjs"
+    "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.ts"
   },
   "exports": {
-    ".": "./src/server-wrapper.mjs",
-    "./runtime-session-binding": "./src/runtime-session-binding.mjs",
-    "./session-core-runtime-service": "./src/session-core-runtime-service.mjs",
-    "./runtime-context": "./src/runtime-context.mjs",
-    "./control-input-bridge": "./src/control-input-bridge.mjs",
-    "./runtime-host-state": "./src/runtime-host-state.mjs",
-    "./runtime-request-state": "./src/runtime-request-state.mjs",
-    "./health-projection-request-state": "./src/health-projection-request-state.mjs",
-    "./runtime-control-contract": "./src/runtime-control-contract.mjs",
-    "./intelligence-runtime-reconfiguration-state": "./src/intelligence-runtime-reconfiguration-state.mjs",
-    "./intelligence-runtime-controller": "./src/intelligence-runtime-controller.mjs",
+    ".": "./src/server-wrapper.ts",
+    "./runtime-session-binding": "./src/runtime-session-binding.ts",
+    "./session-core-runtime-service": "./src/session-core-runtime-service.ts",
+    "./runtime-context": "./src/runtime-context.ts",
+    "./control-input-bridge": "./src/control-input-bridge.ts",
+    "./runtime-host-state": "./src/runtime-host-state.ts",
+    "./runtime-request-state": "./src/runtime-request-state.ts",
+    "./health-projection-request-state": "./src/health-projection-request-state.ts",
+    "./runtime-control-contract": "./src/runtime-control-contract.ts",
+    "./intelligence-runtime-reconfiguration-state": "./src/intelligence-runtime-reconfiguration-state.ts",
+    "./intelligence-runtime-controller": "./src/intelligence-runtime-controller.ts",
     "./local-intelligence-runtime": {
-      "types": "./src/local-intelligence-runtime.d.mts",
-      "import": "./src/local-intelligence-runtime.mjs"
+      "types": "./src/local-intelligence-runtime.d.d.ts",
+      "import": "./src/local-intelligence-runtime.ts"
     },
-    "./local-topology-observer": "./src/local-topology-observer.mjs",
-    "./runtime-server-events": "./src/runtime-server-events.mjs",
-    "./task-executability-dispatch": "./src/task-executability-dispatch.mjs",
-    "./test-fixtures": "./src/test-fixtures.mjs",
+    "./local-topology-observer": "./src/local-topology-observer.ts",
+    "./runtime-server-events": "./src/runtime-server-events.ts",
+    "./task-executability-dispatch": "./src/task-executability-dispatch.ts",
+    "./test-fixtures": "./src/test-fixtures.ts",
     "./agent-cli-windows-wrapper-template": "./templates/Start-AgentCliSession.ps1",
-    "./package.json": "./package.json"
+    "./package.json": "./package.tson"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs src/*.test.mjs",
-    "test:e2e:pty": "node test/pty-e2e.mjs",
-    "test:live:pi-client-kernel": "node test/live-pi-client-kernel-substitutability-fixture-e2e.mjs --enable-live-e2e",
-    "test:live:codex-provider-admission": "pnpm --filter @narada2/cli build && node test/live-codex-provider-admission-e2e.mjs --enable-live-codex",
-    "typecheck": "tsc --noEmit --module NodeNext --moduleResolution NodeNext --allowJs --checkJs false bin/narada-agent-runtime-server.mjs src/server-wrapper.mjs src/runtime-context.mjs src/local-intelligence-runtime.mjs src/local-topology-observer.mjs src/control-input-bridge.mjs src/runtime-host-state.mjs src/runtime-request-state.mjs src/health-projection-request-state.mjs src/runtime-session-binding.mjs src/session-core-runtime-service.mjs src/runtime-server-events.mjs src/runtime-control-contract.mjs src/intelligence-runtime-reconfiguration-state.mjs src/intelligence-runtime-controller.mjs src/test-fixtures.mjs src/lifecycle-hooks.mjs"
+    "test": "node --import tsx --test test/*.test.ts src/*.test.ts",
+    "test:e2e:pty": "node --import tsx test/pty-e2e.ts",
+    "test:live:pi-client-kernel": "node --import tsx test/live-pi-client-kernel-substitutability-fixture-e2e.ts --enable-live-e2e",
+    "test:live:codex-provider-admission": "pnpm --filter @narada2/cli build && node --import tsx test/live-codex-provider-admission-e2e.ts --enable-live-codex",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",
