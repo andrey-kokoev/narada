@@ -14,19 +14,19 @@ import {
   waitForEvent,
   waitForNewEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
   console.log('agent-pi-tui provider/auth faults live e2e skipped (pass --enable-live-e2e)');
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
-let authFailureActive = true;
-let malformedResponseActive = true;
+const productionLaunch: any = process.argv.includes('--production-launch');
+let authFailureActive: any = true;
+let malformedResponseActive: any = true;
 
-const provider = await startFixtureProvider({
-  responseFor: ({ prompt }) => {
+const provider: any = await startFixtureProvider({
+  responseFor: ({ prompt }: any) => {
     if (prompt === 'GAP_AUTH_FAILURE' && authFailureActive) {
       return {
         status: 401,
@@ -36,7 +36,7 @@ const provider = await startFixtureProvider({
     if (prompt === 'GAP_PROVIDER_MALFORMED' && malformedResponseActive) {
       return { status: 200, rawBody: '{malformed-provider-response' };
     }
-    const content = prompt === 'GAP_AUTH_RECOVERY'
+    const content: any = prompt === 'GAP_AUTH_RECOVERY'
       ? 'GAP_AUTH_RECOVERY_ASSISTANT'
       : prompt === 'GAP_MALFORMED_RECOVERY'
         ? 'GAP_MALFORMED_RECOVERY_ASSISTANT'
@@ -45,12 +45,12 @@ const provider = await startFixtureProvider({
   },
 });
 
-let site = null;
-let runtime = null;
-let pi = null;
-let result = { status: 'failed' };
+let site: any = null;
+let runtime: any = null;
+let pi: any = null;
+let result: any = { status: 'failed' };
 
-function isTurnFailure(event) {
+function isTurnFailure(event: any) {
   return (event.event === 'carrier_turn_failed' || event.event === 'turn_failed')
     && (event.error || event.terminal_status === 'failed' || event.terminal_state === 'failed');
 }
@@ -66,29 +66,29 @@ try {
   pi = spawnPi(site, runtime, { name: 'agent-pi-tui-provider-faults' });
   await pi.waitForText(['live', 'connected', 'replaying'], 'provider_faults_attach');
 
-  let previousEventCount = readEvents(site.eventsPath).length;
+  let previousEventCount: any = readEvents(site.eventsPath).length;
   await pi.submit('GAP_AUTH_FAILURE');
   await waitForNewEvent(site.eventsPath, previousEventCount, isTurnFailure, 'auth_failure_durable');
-  assert.equal(readEvents(site.eventsPath).some((event) => event.event === 'assistant_message' && event.content === 'GAP_AUTH_FAILURE_ASSISTANT'), false);
-  assert.equal(provider.requests.filter((request) => request.prompt === 'GAP_AUTH_FAILURE').length >= 1, true);
+  assert.equal(readEvents(site.eventsPath).some((event: any) => event.event === 'assistant_message' && event.content === 'GAP_AUTH_FAILURE_ASSISTANT'), false);
+  assert.equal(provider.requests.filter((request: any) => request.prompt === 'GAP_AUTH_FAILURE').length >= 1, true);
 
   authFailureActive = false;
   previousEventCount = readEvents(site.eventsPath).length;
   await pi.submit('GAP_AUTH_RECOVERY');
-  await waitForNewEvent(site.eventsPath, previousEventCount, (event) => event.event === 'assistant_message' && event.content === 'GAP_AUTH_RECOVERY_ASSISTANT', 'auth_recovery_assistant');
+  await waitForNewEvent(site.eventsPath, previousEventCount, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_AUTH_RECOVERY_ASSISTANT', 'auth_recovery_assistant');
 
   previousEventCount = readEvents(site.eventsPath).length;
   await pi.submit('GAP_PROVIDER_MALFORMED');
   await waitForNewEvent(site.eventsPath, previousEventCount, isTurnFailure, 'malformed_provider_failure');
-  assert.equal(readEvents(site.eventsPath).some((event) => event.event === 'assistant_message' && event.content === 'GAP_PROVIDER_MALFORMED_ASSISTANT'), false);
-  assert.equal(provider.requests.filter((request) => request.prompt === 'GAP_PROVIDER_MALFORMED').length >= 1, true);
+  assert.equal(readEvents(site.eventsPath).some((event: any) => event.event === 'assistant_message' && event.content === 'GAP_PROVIDER_MALFORMED_ASSISTANT'), false);
+  assert.equal(provider.requests.filter((request: any) => request.prompt === 'GAP_PROVIDER_MALFORMED').length >= 1, true);
 
   malformedResponseActive = false;
   previousEventCount = readEvents(site.eventsPath).length;
   await pi.submit('GAP_MALFORMED_RECOVERY');
-  await waitForNewEvent(site.eventsPath, previousEventCount, (event) => event.event === 'assistant_message' && event.content === 'GAP_MALFORMED_RECOVERY_ASSISTANT', 'malformed_recovery_assistant');
+  await waitForNewEvent(site.eventsPath, previousEventCount, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_MALFORMED_RECOVERY_ASSISTANT', 'malformed_recovery_assistant');
 
-  const failureEvents = readEvents(site.eventsPath).filter(isTurnFailure);
+  const failureEvents: any = readEvents(site.eventsPath).filter(isTurnFailure);
   assert.ok(failureEvents.length >= 2);
   result = {
     schema: 'narada.agent_pi_tui.provider_auth_faults_e2e.v1',
@@ -121,7 +121,7 @@ try {
   console.error(JSON.stringify({
     site_root: site?.siteRoot,
     events: site ? readEvents(site.eventsPath).slice(-40) : [],
-    provider_requests: provider.requests.map((request) => ({ prompt: request.prompt, completed: request.completed, aborted: request.aborted })),
+    provider_requests: provider.requests.map((request: any) => ({ prompt: request.prompt, completed: request.completed, aborted: request.aborted })),
     runtime_output: runtime?.output?.(),
     pi_text: pi?.text?.(),
   }, null, 2));

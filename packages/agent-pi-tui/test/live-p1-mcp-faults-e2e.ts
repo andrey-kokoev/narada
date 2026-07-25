@@ -15,20 +15,20 @@ import {
   waitFor,
   waitForEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
   console.log('agent-pi-tui MCP-fault live e2e skipped (pass --enable-live-e2e)');
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
+const productionLaunch: any = process.argv.includes('--production-launch');
 
 await loadPty();
-const provider = await startFixtureProvider({
-  responseFor: ({ prompt, body }) => {
-    const hasToolResult = (body.messages ?? []).some((message) => message?.role === 'tool' || message?.role === 'toolResult');
-    if (!hasToolResult && ['GAP_MCP_STARTUP', 'GAP_MCP_DISCONNECT', 'GAP_MCP_TIMEOUT', 'GAP_MCP_MALFORMED'].some((marker) => prompt === marker)) {
+const provider: any = await startFixtureProvider({
+  responseFor: ({ prompt, body }: any) => {
+    const hasToolResult: any = (body.messages ?? []).some((message: any) => message?.role === 'tool' || message?.role === 'toolResult');
+    if (!hasToolResult && ['GAP_MCP_STARTUP', 'GAP_MCP_DISCONNECT', 'GAP_MCP_TIMEOUT', 'GAP_MCP_MALFORMED'].some((marker: any) => prompt === marker)) {
       return {
         choices: [{ message: { role: 'assistant', content: null, tool_calls: [{
           id: `mcp-fault-${prompt}`,
@@ -57,18 +57,18 @@ const provider = await startFixtureProvider({
   },
 });
 
-const invalidMcpCommand = `narada-mcp-missing-${Date.now()}`;
-const disconnectMarker = join(process.env.TEMP ?? process.cwd(), `agent-pi-tui-mcp-disconnect-${Date.now()}.marker`);
-const malformedMarker = join(process.env.TEMP ?? process.cwd(), `agent-pi-tui-mcp-malformed-${Date.now()}.marker`);
-let sites = [];
-let runtimes = [];
-let pis = [];
-let result = { status: 'failed' };
+const invalidMcpCommand: any = `narada-mcp-missing-${Date.now()}`;
+const disconnectMarker: any = join(process.env.TEMP ?? process.cwd(), `agent-pi-tui-mcp-disconnect-${Date.now()}.marker`);
+const malformedMarker: any = join(process.env.TEMP ?? process.cwd(), `agent-pi-tui-mcp-malformed-${Date.now()}.marker`);
+let sites: any = [];
+let runtimes: any = [];
+let pis: any = [];
+let result: any = { status: 'failed' };
 
-const eventName = (event) => event?.event ?? event?.kind ?? event?.event_kind ?? null;
+const eventName: any = (event: any) => event?.event ?? event?.kind ?? event?.event_kind ?? null;
 
-function isToolFailureEvent(event) {
-  const kind = eventName(event);
+function isToolFailureEvent(event: any) {
+  const kind: any = eventName(event);
   return (
     (kind === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status !== 'completed')
     || (['tool_execution_failed', 'tool_execution_interrupted'].includes(kind) && event.tool_name === 'fixture_echo')
@@ -79,7 +79,7 @@ function isToolFailureEvent(event) {
   );
 }
 
-async function closeCase(site, runtime, pi) {
+async function closeCase(site: any, runtime: any, pi: any) {
   await pi?.kill?.().catch(() => {});
   await stopRuntime(runtime, { hard: false }).catch(() => {});
   await cleanupSite(site).catch(() => {});
@@ -87,7 +87,7 @@ async function closeCase(site, runtime, pi) {
 try {
   // A configured child that cannot start must degrade the gateway and remain
   // fail-closed: the unavailable tool must not be advertised or dispatched.
-  const startupSite = await createLiveSite({
+  const startupSite: any = await createLiveSite({
     provider,
     sessionId: `agent-pi-tui-mcp-startup-${Date.now()}`,
     agentId: `agent-pi-tui-mcp-startup-${Date.now()}.resident`,
@@ -96,24 +96,24 @@ try {
   });
   sites.push(startupSite);
   if (!productionLaunch) {
-    const startupRuntime = await startRuntime(startupSite, { allowDegraded: true, direct: true });
+    const startupRuntime: any = await startRuntime(startupSite, { allowDegraded: true, direct: true });
     runtimes.push(startupRuntime);
-    const startupPi = spawnPi(startupSite, startupRuntime, { name: 'agent-pi-tui-mcp-startup' });
+    const startupPi: any = spawnPi(startupSite, startupRuntime, { name: 'agent-pi-tui-mcp-startup' });
     pis.push(startupPi);
     await startupPi.waitForText(['live', 'connected', 'replaying'], 'mcp_startup_attach');
     await startupPi.submit('GAP_MCP_STARTUP');
-    await waitForEvent(startupSite.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_MCP_STARTUP_ASSISTANT', 'mcp_startup_assistant');
-    const startupEvents = readEvents(startupSite.eventsPath);
-    const eventName = (event) => event.event ?? event.kind;
-    assert.equal(startupEvents.some((event) => eventName(event) === 'carrier_tool_requested' && event.tool_name === 'fixture_echo'), false, 'an unavailable startup tool must not be advertised or dispatched');
-    assert.equal(startupEvents.some((event) => eventName(event) === 'tool_execution_completed' && event.tool_name === 'fixture_echo'), false);
-    assert.equal(startupEvents.some((event) => eventName(event) === 'tool_execution_refused' && event.tool_name === 'fixture_echo'), false);
-    const startupFailure = await waitForEvent(startupSite.eventsPath, (event) => eventName(event) === 'capability_gateway_lifecycle_transition' && event.lifecycle_state === 'degraded' && Number(event.startup_failure_count) > 0, 'mcp_startup_degraded');
+    await waitForEvent(startupSite.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_MCP_STARTUP_ASSISTANT', 'mcp_startup_assistant');
+    const startupEvents: any = readEvents(startupSite.eventsPath);
+    const eventName: any = (event: any) => event.event ?? event.kind;
+    assert.equal(startupEvents.some((event: any) => eventName(event) === 'carrier_tool_requested' && event.tool_name === 'fixture_echo'), false, 'an unavailable startup tool must not be advertised or dispatched');
+    assert.equal(startupEvents.some((event: any) => eventName(event) === 'tool_execution_completed' && event.tool_name === 'fixture_echo'), false);
+    assert.equal(startupEvents.some((event: any) => eventName(event) === 'tool_execution_refused' && event.tool_name === 'fixture_echo'), false);
+    const startupFailure: any = await waitForEvent(startupSite.eventsPath, (event: any) => eventName(event) === 'capability_gateway_lifecycle_transition' && event.lifecycle_state === 'degraded' && Number(event.startup_failure_count) > 0, 'mcp_startup_degraded');
     assert.equal(startupFailure.operational_state, 'startup_degraded');
-    const startupHealth = await waitFor(async () => {
-      const response = await fetch(startupRuntime.healthEndpoint);
+    const startupHealth: any = await waitFor(async () => {
+      const response: any = await fetch(startupRuntime.healthEndpoint);
       if (!response.ok) return false;
-      const health = await response.json();
+      const health: any = await response.json();
       return health.mcp_operational_state === 'startup_degraded' ? health : false;
     }, 'mcp_startup_health_degraded');
     assert.equal(startupHealth.mcp_operational_state, 'startup_degraded');
@@ -123,8 +123,8 @@ try {
     // it materializes a runtime session; that is a launcher refusal, not the
     // direct runtime's startup-degraded posture. Assert the refusal explicitly
     // and continue with production-bound fault cases below.
-    let startupRefusal = null;
-    let startupRuntime = null;
+    let startupRefusal: any = null;
+    let startupRuntime: any = null;
     try {
       startupRuntime = await startRuntime(startupSite, { allowDegraded: true, direct: false });
     } catch (error) {
@@ -135,13 +135,13 @@ try {
     }
     assert.ok(startupRefusal, 'production launch must refuse a missing MCP executable');
     assert.match(String(startupRefusal), /runtime_session_index_record_timeout|runtime_launcher_exited/);
-    assert.equal(readEvents(startupSite.eventsPath).some((event) => event.event === 'session_started'), false);
+    assert.equal(readEvents(startupSite.eventsPath).some((event: any) => event.event === 'session_started'), false);
   }
 
   // The child exits after receiving a real tools/call. The production gateway
   // must restart it and complete the same invocation once, without Pi or the
   // carrier fabricating a second tool request.
-  const disconnectSite = await createLiveSite({
+  const disconnectSite: any = await createLiveSite({
     provider,
     sessionId: `agent-pi-tui-mcp-disconnect-${Date.now()}`,
     agentId: `agent-pi-tui-mcp-disconnect-${Date.now()}.resident`,
@@ -149,23 +149,23 @@ try {
     mcpDisconnectMarker: disconnectMarker,
   });
   sites.push(disconnectSite);
-  const disconnectRuntime = await startRuntime(disconnectSite, { direct: !productionLaunch });
+  const disconnectRuntime: any = await startRuntime(disconnectSite, { direct: !productionLaunch });
   runtimes.push(disconnectRuntime);
-  const disconnectPi = spawnPi(disconnectSite, disconnectRuntime, { name: 'agent-pi-tui-mcp-disconnect' });
+  const disconnectPi: any = spawnPi(disconnectSite, disconnectRuntime, { name: 'agent-pi-tui-mcp-disconnect' });
   pis.push(disconnectPi);
   await disconnectPi.waitForText(['live', 'connected', 'replaying'], 'mcp_disconnect_attach');
   await disconnectPi.submit('GAP_MCP_DISCONNECT');
   await waitFor(() => existsSync(disconnectMarker), 'mcp_child_disconnect_observed');
-  await waitForEvent(disconnectSite.eventsPath, (event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'completed', 'mcp_disconnect_tool_recovered');
-  await waitForEvent(disconnectSite.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_MCP_DISCONNECT_ASSISTANT', 'mcp_disconnect_assistant');
-  assert.equal(readEvents(disconnectSite.eventsPath).filter((event) => event.event === 'carrier_tool_requested' && event.tool_name === 'fixture_echo').length, 1);
-  assert.equal(readEvents(disconnectSite.eventsPath).filter((event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo').length, 1);
+  await waitForEvent(disconnectSite.eventsPath, (event: any) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'completed', 'mcp_disconnect_tool_recovered');
+  await waitForEvent(disconnectSite.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_MCP_DISCONNECT_ASSISTANT', 'mcp_disconnect_assistant');
+  assert.equal(readEvents(disconnectSite.eventsPath).filter((event: any) => event.event === 'carrier_tool_requested' && event.tool_name === 'fixture_echo').length, 1);
+  assert.equal(readEvents(disconnectSite.eventsPath).filter((event: any) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo').length, 1);
   await closeCase(disconnectSite, disconnectRuntime, disconnectPi);
 
   // A bounded MCP request timeout must settle the real invocation without
   // turning a delayed child response into a successful tool completion. The
   // later Pi turn proves the session remains usable after the timeout.
-  const timeoutSite = await createLiveSite({
+  const timeoutSite: any = await createLiveSite({
     provider,
     sessionId: `agent-pi-tui-mcp-timeout-${Date.now()}`,
     agentId: `agent-pi-tui-mcp-timeout-${Date.now()}.resident`,
@@ -174,25 +174,25 @@ try {
     mcpRequestTimeoutMs: 100,
   });
   sites.push(timeoutSite);
-  const timeoutRuntime = await startRuntime(timeoutSite, { direct: !productionLaunch });
+  const timeoutRuntime: any = await startRuntime(timeoutSite, { direct: !productionLaunch });
   runtimes.push(timeoutRuntime);
-  const timeoutPi = spawnPi(timeoutSite, timeoutRuntime, { name: 'agent-pi-tui-mcp-timeout' });
+  const timeoutPi: any = spawnPi(timeoutSite, timeoutRuntime, { name: 'agent-pi-tui-mcp-timeout' });
   pis.push(timeoutPi);
   await timeoutPi.waitForText(['live', 'connected', 'replaying'], 'mcp_timeout_attach');
   await timeoutPi.submit('GAP_MCP_TIMEOUT');
-  const timeoutFailure = await waitForEvent(timeoutSite.eventsPath, isToolFailureEvent, 'mcp_request_timeout');
-  await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
-  const timeoutEvents = readEvents(timeoutSite.eventsPath);
-  assert.equal(timeoutEvents.some((event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'completed'), false);
-  assert.equal(timeoutEvents.filter((event) => event.event === 'carrier_tool_requested' && event.tool_name === 'fixture_echo').length, 1);
+  const timeoutFailure: any = await waitForEvent(timeoutSite.eventsPath, isToolFailureEvent, 'mcp_request_timeout');
+  await new Promise((resolvePromise: any) => setTimeout(resolvePromise, 250));
+  const timeoutEvents: any = readEvents(timeoutSite.eventsPath);
+  assert.equal(timeoutEvents.some((event: any) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'completed'), false);
+  assert.equal(timeoutEvents.filter((event: any) => event.event === 'carrier_tool_requested' && event.tool_name === 'fixture_echo').length, 1);
   await timeoutPi.submit('GAP_MCP_TIMEOUT_RECOVERY');
-  await waitForEvent(timeoutSite.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'fixture:GAP_MCP_TIMEOUT_RECOVERY', 'mcp_timeout_recovery_assistant');
+  await waitForEvent(timeoutSite.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'fixture:GAP_MCP_TIMEOUT_RECOVERY', 'mcp_timeout_recovery_assistant');
   await closeCase(timeoutSite, timeoutRuntime, timeoutPi);
 
   // Malformed JSON-RPC stdout is a distinct child-boundary failure from a
   // child that is absent or exits. The gateway must not admit the malformed
   // response as a successful tool result, and a later turn must recover.
-  const malformedSite = await createLiveSite({
+  const malformedSite: any = await createLiveSite({
     provider,
     sessionId: `agent-pi-tui-mcp-malformed-${Date.now()}`,
     agentId: `agent-pi-tui-mcp-malformed-${Date.now()}.resident`,
@@ -202,24 +202,24 @@ try {
     mcpRequestTimeoutMs: 100,
   });
   sites.push(malformedSite);
-  const malformedRuntime = await startRuntime(malformedSite, { direct: !productionLaunch });
+  const malformedRuntime: any = await startRuntime(malformedSite, { direct: !productionLaunch });
   runtimes.push(malformedRuntime);
-  const malformedPi = spawnPi(malformedSite, malformedRuntime, { name: 'agent-pi-tui-mcp-malformed' });
+  const malformedPi: any = spawnPi(malformedSite, malformedRuntime, { name: 'agent-pi-tui-mcp-malformed' });
   pis.push(malformedPi);
   await malformedPi.waitForText(['live', 'connected', 'replaying'], 'mcp_malformed_attach');
   await malformedPi.submit('GAP_MCP_MALFORMED');
   await waitFor(() => existsSync(malformedMarker), 'mcp_malformed_stdout_observed');
-  const malformedFailure = await waitForEvent(malformedSite.eventsPath, isToolFailureEvent, 'mcp_malformed_response');
-  const malformedEvents = readEvents(malformedSite.eventsPath);
-  assert.equal(malformedEvents.some((event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'completed'), false);
+  const malformedFailure: any = await waitForEvent(malformedSite.eventsPath, isToolFailureEvent, 'mcp_malformed_response');
+  const malformedEvents: any = readEvents(malformedSite.eventsPath);
+  assert.equal(malformedEvents.some((event: any) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'completed'), false);
   await malformedPi.submit('GAP_MCP_MALFORMED_RECOVERY');
-  await waitForEvent(malformedSite.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'fixture:GAP_MCP_MALFORMED_RECOVERY', 'mcp_malformed_recovery_assistant');
+  await waitForEvent(malformedSite.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'fixture:GAP_MCP_MALFORMED_RECOVERY', 'mcp_malformed_recovery_assistant');
   await closeCase(malformedSite, malformedRuntime, malformedPi);
 
   // A slow MCP response is cancelled from the real Pi PTY. The child call is
   // interrupted, no assistant completion is admitted, and a later ordinary
   // Pi turn remains usable.
-  const cancelSite = await createLiveSite({
+  const cancelSite: any = await createLiveSite({
     provider,
     sessionId: `agent-pi-tui-mcp-cancel-${Date.now()}`,
     agentId: `agent-pi-tui-mcp-cancel-${Date.now()}.resident`,
@@ -228,20 +228,20 @@ try {
     mcpRequestTimeoutMs: 5000,
   });
   sites.push(cancelSite);
-  const cancelRuntime = await startRuntime(cancelSite, { direct: !productionLaunch });
+  const cancelRuntime: any = await startRuntime(cancelSite, { direct: !productionLaunch });
   runtimes.push(cancelRuntime);
-  const cancelPi = spawnPi(cancelSite, cancelRuntime, { name: 'agent-pi-tui-mcp-cancel' });
+  const cancelPi: any = spawnPi(cancelSite, cancelRuntime, { name: 'agent-pi-tui-mcp-cancel' });
   pis.push(cancelPi);
   await cancelPi.waitForText(['live', 'connected', 'replaying'], 'mcp_cancel_attach');
   await cancelPi.submit('GAP_MCP_CANCEL');
-  await waitForEvent(cancelSite.eventsPath, (event) => eventName(event) === 'carrier_tool_requested' && event.tool_name === 'fixture_echo', 'mcp_cancel_tool_requested');
+  await waitForEvent(cancelSite.eventsPath, (event: any) => eventName(event) === 'carrier_tool_requested' && event.tool_name === 'fixture_echo', 'mcp_cancel_tool_requested');
   await cancelPi.submit('/interrupt');
-  await waitForEvent(cancelSite.eventsPath, (event) => eventName(event) === 'tool_execution_interrupted' && event.tool_name === 'fixture_echo', 'mcp_cancel_tool_interrupted');
-  await waitForEvent(cancelSite.eventsPath, (event) => eventName(event) === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'interrupted', 'mcp_cancel_tool_completed');
-  await waitForEvent(cancelSite.eventsPath, (event) => eventName(event) === 'turn_interrupted', 'mcp_cancel_turn_interrupted');
-  assert.equal(readEvents(cancelSite.eventsPath).some((event) => eventName(event) === 'assistant_message' && event.content === 'GAP_MCP_CANCEL_ASSISTANT'), false);
+  await waitForEvent(cancelSite.eventsPath, (event: any) => eventName(event) === 'tool_execution_interrupted' && event.tool_name === 'fixture_echo', 'mcp_cancel_tool_interrupted');
+  await waitForEvent(cancelSite.eventsPath, (event: any) => eventName(event) === 'carrier_tool_completed' && event.tool_name === 'fixture_echo' && event.status === 'interrupted', 'mcp_cancel_tool_completed');
+  await waitForEvent(cancelSite.eventsPath, (event: any) => eventName(event) === 'turn_interrupted', 'mcp_cancel_turn_interrupted');
+  assert.equal(readEvents(cancelSite.eventsPath).some((event: any) => eventName(event) === 'assistant_message' && event.content === 'GAP_MCP_CANCEL_ASSISTANT'), false);
   await cancelPi.submit('GAP_MCP_CANCEL_RECOVERY');
-  await waitForEvent(cancelSite.eventsPath, (event) => eventName(event) === 'assistant_message' && event.content === 'fixture:GAP_MCP_CANCEL_RECOVERY', 'mcp_cancel_recovery_assistant');
+  await waitForEvent(cancelSite.eventsPath, (event: any) => eventName(event) === 'assistant_message' && event.content === 'fixture:GAP_MCP_CANCEL_RECOVERY', 'mcp_cancel_recovery_assistant');
 
   result = {
     schema: 'narada.agent_pi_tui.mcp_faults_e2e.v1',
@@ -283,10 +283,10 @@ try {
 } catch (error) {
   console.error(error instanceof Error ? error.stack : String(error));
   console.error(JSON.stringify({
-    sites: sites.map((site) => ({ site_root: site.siteRoot, events: readEvents(site.eventsPath).slice(-60) })),
-    runtimes: runtimes.map((runtime) => runtime.output?.()),
-    pis: pis.map((pi) => pi.text?.()),
-    provider_requests: provider.requests.map((request) => ({ prompt: request.prompt, body: request.body })),
+    sites: sites.map((site: any) => ({ site_root: site.siteRoot, events: readEvents(site.eventsPath).slice(-60) })),
+    runtimes: runtimes.map((runtime: any) => runtime.output?.()),
+    pis: pis.map((pi: any) => pi.text?.()),
+    provider_requests: provider.requests.map((request: any) => ({ prompt: request.prompt, body: request.body })),
   }, null, 2));
   process.exitCode = 1;
 } finally {

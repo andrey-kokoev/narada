@@ -129,13 +129,13 @@ function terminalOf(kind: string, event: NarsEvent): boolean {
 
 export function piRowViewModelFromNarsEvent(event: NarsEvent, options: ProjectionAdapterOptions = {}): PiRowViewModel | null {
   const projection = projectNarsClientEvent(event);
-  if (!shouldProjectNarsClientProjection(projection, options)) return null;
+  if (!projection || !shouldProjectNarsClientProjection(projection, options)) return null;
   const projectionClass = classifyNarsClientEventProjection(projection) as ProjectionClass;
   const kind = String(projection.kind ?? event.event ?? 'unknown');
   const pending = pendingOf(kind, event);
   const terminal = terminalOf(kind, event);
   return {
-    renderKey: renderKeyOf(projection, event),
+    renderKey: renderKeyOf(projection as any, event),
     projectionClass,
     kind,
     ...(identityOf(event, kind) ? { identity: identityOf(event, kind) } : {}),

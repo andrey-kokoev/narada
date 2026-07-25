@@ -1,24 +1,24 @@
 import { appendFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 
-const logPath = process.env.PI_RPC_FIXTURE_AMBIENT_LOG ?? process.argv[2] ?? null;
-const version = 'pi-ambient-isolation-1.0.0';
+const logPath: any = process.env.PI_RPC_FIXTURE_AMBIENT_LOG ?? process.argv[2] ?? null;
+const version: any = 'pi-ambient-isolation-1.0.0';
 
-function log(record) {
+function log(record: any) {
   if (logPath) appendFileSync(logPath, `${JSON.stringify(record)}\n`);
 }
 
-function send(record) {
+function send(record: any) {
   process.stdout.write(`${JSON.stringify(record)}\n`);
 }
 
-function latestUser(params) {
-  const messages = Array.isArray(params?.messages) ? params.messages : [];
-  const message = [...messages].reverse().find((entry) => entry?.role === 'user');
+function latestUser(params: any) {
+  const messages: any = Array.isArray(params?.messages) ? params.messages : [];
+  const message: any = [...messages].reverse().find((entry: any) => entry?.role === 'user');
   return typeof message?.content === 'string' ? message.content : '';
 }
 
-function respond(id, content) {
+function respond(id: any, content: any) {
   send({
     id,
     result: {
@@ -30,16 +30,16 @@ function respond(id, content) {
 }
 
 process.stdin.setEncoding('utf8');
-let buffer = '';
-process.stdin.on('data', (chunk) => {
+let buffer: any = '';
+process.stdin.on('data', (chunk: any) => {
   buffer += chunk;
   while (true) {
-    const newline = buffer.indexOf('\n');
+    const newline: any = buffer.indexOf('\n');
     if (newline < 0) break;
-    const line = buffer.slice(0, newline).trim();
+    const line: any = buffer.slice(0, newline).trim();
     buffer = buffer.slice(newline + 1);
     if (!line) continue;
-    const request = JSON.parse(line);
+    const request: any = JSON.parse(line);
     if (request.method === 'start') {
       log({
         type: 'startup',
@@ -57,7 +57,7 @@ process.stdin.on('data', (chunk) => {
         pi_home: process.env.PI_HOME ?? null,
         pi_config: process.env.PI_CONFIG ?? null,
         pi_profile: process.env.PI_PROFILE ?? null,
-        relative_decoy_exists: existsSync(join(process.cwd(), '.pi', 'skills', 'ambient-decoy.mjs')),
+        relative_decoy_exists: existsSync(join(process.cwd(), '.pi', 'skills', 'ambient-decoy.js')),
       });
       send({
         id: request.id,
@@ -73,7 +73,7 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (request.method === 'turn') {
-      const prompt = latestUser(request.params);
+      const prompt: any = latestUser(request.params);
       log({ type: 'turn', prompt, cwd: process.cwd() });
       respond(request.id, `PI_AMBIENT_ISOLATION_${prompt}`);
       continue;

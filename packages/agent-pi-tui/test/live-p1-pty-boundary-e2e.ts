@@ -13,18 +13,18 @@ import {
   waitFor,
   waitForEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
   console.log('agent-pi-tui PTY-boundary live e2e skipped (pass --enable-live-e2e)');
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
+const productionLaunch: any = process.argv.includes('--production-launch');
 
 await loadPty();
-const provider = await startFixtureProvider({
-  responseFor: ({ prompt }) => ({
+const provider: any = await startFixtureProvider({
+  responseFor: ({ prompt }: any) => ({
     choices: [{ message: { role: 'assistant', content: prompt.includes('GAP_UNICODE')
       ? 'GAP_UNICODE_ASSISTANT'
       : prompt.includes('GAP_PASTE')
@@ -33,10 +33,10 @@ const provider = await startFixtureProvider({
   }),
 });
 
-let site = null;
-let runtime = null;
-let pi = null;
-let result = { status: 'failed' };
+let site: any = null;
+let runtime: any = null;
+let pi: any = null;
+let result: any = { status: 'failed' };
 
 try {
   site = await createLiveSite({
@@ -49,7 +49,7 @@ try {
   await pi.waitForText(['live', 'connected', 'replaying'], 'pty_boundary_attach');
   pi.resize(96, 24);
 
-  const beforeLocal = readEvents(site.eventsPath).length;
+  const beforeLocal: any = readEvents(site.eventsPath).length;
   await pi.submit('/view raw');
   pi.write('\u000f');
   pi.write('\u0004');
@@ -62,29 +62,29 @@ try {
   // The PTY output is an append-only capture, so overlay disappearance cannot
   // be inferred from text absence. Give the real app one render cycle before
   // continuing with the conversation boundary.
-  await new Promise((resolvePromise) => setTimeout(resolvePromise, 300));
-  await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
-  const afterLocal = readEvents(site.eventsPath).slice(beforeLocal);
-  assert.equal(afterLocal.some((event) => event.event === 'user_message'), false, 'PTY-local controls must not create durable conversation input');
+  await new Promise((resolvePromise: any) => setTimeout(resolvePromise, 300));
+  await new Promise((resolvePromise: any) => setTimeout(resolvePromise, 250));
+  const afterLocal: any = readEvents(site.eventsPath).slice(beforeLocal);
+  assert.equal(afterLocal.some((event: any) => event.event === 'user_message'), false, 'PTY-local controls must not create durable conversation input');
 
   await pi.submit('GAP_UNICODE_こんにちは_🙂');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'user_message' && event.content === 'GAP_UNICODE_こんにちは_🙂', 'pty_unicode_user');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_UNICODE_ASSISTANT', 'pty_unicode_assistant');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'user_message' && event.content === 'GAP_UNICODE_こんにちは_🙂', 'pty_unicode_user');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_UNICODE_ASSISTANT', 'pty_unicode_assistant');
 
   // Exercise bracketed paste through the actual node-pty input stream. The
   // Pi app strips only the bracket markers; the pasted text still crosses the
   // normal composer/submit boundary.
   pi.write('\u001b[200~GAP_PASTE\u001b[201~');
   pi.write('\r');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'user_message' && event.content === 'GAP_PASTE', 'pty_bracketed_paste_user');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_PASTE_ASSISTANT', 'pty_bracketed_paste_assistant');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'user_message' && event.content === 'GAP_PASTE', 'pty_bracketed_paste_user');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_PASTE_ASSISTANT', 'pty_bracketed_paste_assistant');
 
-  const beforeDetach = readEvents(site.eventsPath).length;
+  const beforeDetach: any = readEvents(site.eventsPath).length;
   pi.write('\u0003');
   await waitFor(() => pi.exited(), 'pty_ctrl_c_exit');
-  const afterDetach = readEvents(site.eventsPath).slice(beforeDetach);
-  assert.equal(afterDetach.some((event) => event.event === 'session_closed'), false, 'Ctrl+C detach must not close the NARS session');
-  assert.equal(readEvents(site.eventsPath).some((event) => event.event === 'session_closed'), false, 'terminal exit must not mint session_closed');
+  const afterDetach: any = readEvents(site.eventsPath).slice(beforeDetach);
+  assert.equal(afterDetach.some((event: any) => event.event === 'session_closed'), false, 'Ctrl+C detach must not close the NARS session');
+  assert.equal(readEvents(site.eventsPath).some((event: any) => event.event === 'session_closed'), false, 'terminal exit must not mint session_closed');
   assert.match(pi.text(), /connected|live|replaying/i);
 
   result = {

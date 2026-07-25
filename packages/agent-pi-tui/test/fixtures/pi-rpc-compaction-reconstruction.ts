@@ -1,25 +1,25 @@
 import { appendFileSync } from 'node:fs';
 
-const reportPath = process.env.PI_RPC_FIXTURE_COMPACTION_REPORT ?? process.argv[2] ?? null;
-const version = 'pi-compaction-reconstruction-1.0.0';
+const reportPath: any = process.env.PI_RPC_FIXTURE_COMPACTION_REPORT ?? process.argv[2] ?? null;
+const version: any = 'pi-compaction-reconstruction-1.0.0';
 
-function log(record) {
+function log(record: any) {
   if (reportPath) appendFileSync(reportPath, `${JSON.stringify(record)}\n`);
 }
 
-function send(record) {
+function send(record: any) {
   process.stdout.write(`${JSON.stringify(record)}\n`);
 }
 
-function latestUser(params) {
-  const messages = Array.isArray(params?.messages) ? params.messages : [];
-  const message = [...messages].reverse().find((entry) => entry?.role === 'user');
+function latestUser(params: any) {
+  const messages: any = Array.isArray(params?.messages) ? params.messages : [];
+  const message: any = [...messages].reverse().find((entry: any) => entry?.role === 'user');
   return typeof message?.content === 'string' ? message.content : '';
 }
 
-function respond(id, content, extra = {}) {
-  const { narada_compaction: compaction, ...resultExtra } = extra;
-  const response = {
+function respond(id: any, content: any, extra: any = {}) {
+  const { narada_compaction: compaction, ...resultExtra }: any = extra;
+  const response: any = {
     choices: [{ message: { role: 'assistant', content } }],
     ...(compaction ? { narada_compaction: compaction } : {}),
   };
@@ -36,16 +36,16 @@ function respond(id, content, extra = {}) {
 }
 
 process.stdin.setEncoding('utf8');
-let buffer = '';
-process.stdin.on('data', (chunk) => {
+let buffer: any = '';
+process.stdin.on('data', (chunk: any) => {
   buffer += chunk;
   while (true) {
-    const newline = buffer.indexOf('\n');
+    const newline: any = buffer.indexOf('\n');
     if (newline < 0) break;
-    const line = buffer.slice(0, newline).trim();
+    const line: any = buffer.slice(0, newline).trim();
     buffer = buffer.slice(newline + 1);
     if (!line) continue;
-    const request = JSON.parse(line);
+    const request: any = JSON.parse(line);
     if (request.method === 'start') {
       log({ type: 'start', cwd: process.cwd() });
       send({
@@ -62,9 +62,9 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (request.method === 'turn') {
-      const prompt = latestUser(request.params);
-      const messages = JSON.stringify(request.params?.messages ?? []);
-      const reconstructed = messages.includes('GAP_COMPACTION_ASSISTANT');
+      const prompt: any = latestUser(request.params);
+      const messages: any = JSON.stringify(request.params?.messages ?? []);
+      const reconstructed: any = messages.includes('GAP_COMPACTION_ASSISTANT');
       log({ type: 'turn', prompt, reconstructed_context: reconstructed, message_count: request.params?.messages?.length ?? 0 });
       if (prompt.includes('GAP_COMPACTION')) {
         respond(request.id, 'GAP_COMPACTION_ASSISTANT', {

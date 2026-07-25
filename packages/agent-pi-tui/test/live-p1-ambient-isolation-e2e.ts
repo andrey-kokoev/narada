@@ -17,27 +17,27 @@ import {
   waitFor,
   waitForEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
   console.log('agent-pi-tui ambient isolation live e2e skipped (pass --enable-live-e2e)');
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
-const fixturePath = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'test', 'fixtures', 'pi-rpc-ambient-isolation.mjs');
+const productionLaunch: any = process.argv.includes('--production-launch');
+const fixturePath: any = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'test', 'fixtures', 'pi-rpc-ambient-isolation.js');
 
 await loadPty();
-const provider = await startFixtureProvider({
-  responseFor: ({ prompt }) => ({
+const provider: any = await startFixtureProvider({
+  responseFor: ({ prompt }: any) => ({
     choices: [{ message: { role: 'assistant', content: `fixture:${prompt}` } }],
   }),
 });
 
-let site = null;
-let runtime = null;
-let pi = null;
-let result = { status: 'failed' };
+let site: any = null;
+let runtime: any = null;
+let pi: any = null;
+let result: any = { status: 'failed' };
 
 try {
   site = await createLiveSite({
@@ -54,10 +54,10 @@ try {
       PI_PROFILE: 'ambient-pi-profile',
     },
   });
-  const decoyPath = join(site.siteRoot, '.pi', 'skills', 'ambient-decoy.mjs');
+  const decoyPath: any = join(site.siteRoot, '.pi', 'skills', 'ambient-decoy.js');
   await mkdir(join(site.siteRoot, '.pi', 'skills'), { recursive: true });
   await writeFile(decoyPath, 'export default { ambient: true };', 'utf8');
-  const reportPath = join(site.siteRoot, '.ai', 'runtime', 'pi-rpc-ambient-report.jsonl');
+  const reportPath: any = join(site.siteRoot, '.ai', 'runtime', 'pi-rpc-ambient-report.jsonl');
   site.env.NARADA_PI_RPC_COMMAND = process.execPath;
   site.env.NARADA_PI_RPC_ARGS = JSON.stringify([fixturePath, reportPath]);
   site.env.NARADA_PI_VERSION = 'pi-ambient-isolation-1.0.0';
@@ -68,13 +68,13 @@ try {
   await pi.submit('GAP_AMBIENT');
   await waitForEvent(
     site.eventsPath,
-    (event) => event.event === 'assistant_message' && event.content === 'PI_AMBIENT_ISOLATION_GAP_AMBIENT',
+    (event: any) => event.event === 'assistant_message' && event.content === 'PI_AMBIENT_ISOLATION_GAP_AMBIENT',
     'ambient_assistant',
   );
-  const report = await waitFor(() => {
+  const report: any = await waitFor(() => {
     if (!existsSync(reportPath)) return false;
-    const records = readFileSync(reportPath, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-    return records.find((entry) => entry.type === 'startup') ?? false;
+    const records: any = readFileSync(reportPath, 'utf8').split(/\r?\n/).filter(Boolean).map((line: any) => JSON.parse(line));
+    return records.find((entry: any) => entry.type === 'startup') ?? false;
   }, 'ambient_child_report');
   assert.notEqual(report.cwd, site.siteRoot);
   assert.match(report.cwd, /narada-pi-rpc/i);
@@ -94,8 +94,8 @@ try {
     'pi_profile',
   ]) assert.equal(report[key], null, `ambient child received ${key}`);
   assert.equal(report.relative_decoy_exists, false);
-  const eventLog = readEvents(site.eventsPath);
-  assert.ok(eventLog.some((event) => event.event === 'assistant_message' && event.content === 'PI_AMBIENT_ISOLATION_GAP_AMBIENT'));
+  const eventLog: any = readEvents(site.eventsPath);
+  assert.ok(eventLog.some((event: any) => event.event === 'assistant_message' && event.content === 'PI_AMBIENT_ISOLATION_GAP_AMBIENT'));
 
   result = {
     schema: 'narada.agent_pi_tui.ambient_isolation_e2e.v1',

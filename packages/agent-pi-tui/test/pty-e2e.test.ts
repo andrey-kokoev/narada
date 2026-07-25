@@ -66,8 +66,8 @@ class FixtureClient {
 }
 
 function appFixture(): { app: PiTuiApp; client: FixtureClient } {
-  const client = new FixtureClient();
-  const app = new PiTuiApp({
+  const client: any = new FixtureClient();
+  const app: any = new PiTuiApp({
     client: client as unknown as NarsAttachClient,
     projection: undefined,
   });
@@ -76,17 +76,17 @@ function appFixture(): { app: PiTuiApp; client: FixtureClient } {
 
 describe('agent-pi-tui terminal acceptance', () => {
   it('renders an initial frame, preserves composer input, and keeps streamed rows stable', () => {
-    const { app, client } = appFixture();
+    const { app, client }: any = appFixture();
     app.setViewportRows(10);
-    const initial = app.renderLines(80);
+    const initial: any = app.renderLines(80);
     expect(initial.length).toBeGreaterThan(0);
-    expect(initial.some((line) => line.includes('>'))).toBe(true);
+    expect(initial.some((line: any) => line.includes('>'))).toBe(true);
 
     app.handleInput('\u001b[200~hello NARS\u001b[201~');
     expect(app.state.snapshot().composerDraft).toBe('hello NARS');
     client.emit({ event: 'assistant_message_stream', event_id: 'stream-1', event_sequence: 1, request_id: 'turn-1', content: 'hello' });
     client.emit({ event: 'assistant_message_stream', event_id: 'stream-2', event_sequence: 2, request_id: 'turn-1', content: 'hello world' });
-    const rendered = app.renderLines(80);
+    const rendered: any = app.renderLines(80);
     expect(rendered.join('\n')).toContain('hello world');
     expect(app.transcript.allRows()).toHaveLength(1);
     expect(app.state.snapshot().composerDraft).toBe('hello NARS');
@@ -94,14 +94,14 @@ describe('agent-pi-tui terminal acceptance', () => {
   });
 
   it('does not steal an operator-controlled transcript position on new events', () => {
-    const { app, client } = appFixture();
+    const { app, client }: any = appFixture();
     app.setViewportRows(8);
     for (let sequence = 1; sequence <= 8; sequence += 1) {
       client.emit({ event: 'user_message', event_id: `event-${sequence}`, event_sequence: sequence, content: `message ${sequence}` });
     }
     app.state.scrollBy(2, app.transcript.rows('conversation').length, 4);
     expect(app.state.snapshot().scrollMode).toBe('operator_controlled');
-    const before = app.state.snapshot().scrollOffset;
+    const before: any = app.state.snapshot().scrollOffset;
     client.emit({ event: 'user_message', event_id: 'event-9', event_sequence: 9, content: 'new message' });
     app.renderLines(80);
     expect(app.state.snapshot().scrollOffset).toBe(before);
@@ -109,7 +109,7 @@ describe('agent-pi-tui terminal acceptance', () => {
   });
 
   it('loads the pi-tui substrate without loading a Pi runtime', async () => {
-    const substrate = await loadPiTuiSubstrate();
+    const substrate: any = await loadPiTuiSubstrate();
     expect(typeof substrate.TUI).toBe('function');
     expect(typeof substrate.ProcessTerminal).toBe('function');
     expect(typeof substrate.Editor).toBe('function');

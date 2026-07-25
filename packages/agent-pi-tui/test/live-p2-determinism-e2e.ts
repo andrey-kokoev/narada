@@ -12,25 +12,25 @@ import {
   stopRuntime,
   waitForEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
   console.log('agent-pi-tui determinism live e2e skipped (pass --enable-live-e2e)');
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
+const productionLaunch: any = process.argv.includes('--production-launch');
 
 await loadPty();
-const provider = await startFixtureProvider({
-  responseFor: ({ prompt }) => ({
+const provider: any = await startFixtureProvider({
+  responseFor: ({ prompt }: any) => ({
     choices: [{ message: { role: 'assistant', content: prompt === 'GAP_DETERMINISTIC'
       ? 'GAP_DETERMINISTIC_ASSISTANT'
       : `fixture:${prompt}` } }],
   }),
 });
 
-const volatileKeys = new Set([
+const volatileKeys: any = new Set([
   'agent_id', 'attempt_id', 'authority_runtime_id', 'control_path', 'created_at',
   'correlation_key', 'digest', 'endpoint', 'event_endpoint', 'event_id', 'event_sequence', 'events_path',
   'generated_at', 'health_endpoint', 'id', 'input_event_id', 'intent_id', 'invocation_id',
@@ -40,20 +40,20 @@ const volatileKeys = new Set([
   'owner_site_root', 'workspace_root', 'runtime_pid', 'runtime_pids', 'client_pid', 'client_pids',
 ]);
 
-function canonical(value, key = null) {
+function canonical(value: any, key: any = null): any {
   if (key && (volatileKeys.has(key) || key.endsWith('_id') || key.endsWith('_at') || key.endsWith('_digest'))) return undefined;
-  if (Array.isArray(value)) return value.map((entry) => canonical(entry)).filter((entry) => entry !== undefined);
+  if (Array.isArray(value)) return value.map((entry: any) => canonical(entry)).filter((entry: any) => entry !== undefined);
   if (!value || typeof value !== 'object') return value;
   return Object.fromEntries(Object.entries(value)
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([entryKey, entryValue]) => [entryKey, canonical(entryValue, entryKey)])
-    .filter(([, entryValue]) => entryValue !== undefined));
+    .sort(([left]: any, [right]: any) => left.localeCompare(right))
+    .map(([entryKey, entryValue]: any) => [entryKey, canonical(entryValue, entryKey)])
+    .filter(([, entryValue]: any) => entryValue !== undefined));
 }
 
-async function runOnce(label) {
-  let site = null;
-  let runtime = null;
-  let pi = null;
+async function runOnce(label: any) {
+  let site: any = null;
+  let runtime: any = null;
+  let pi: any = null;
   try {
     site = await createLiveSite({
       provider,
@@ -64,10 +64,10 @@ async function runOnce(label) {
     pi = spawnPi(site, runtime, { name: `agent-pi-tui-determinism-${label}` });
     await pi.waitForText(['live', 'connected', 'replaying'], `${label}_attach`);
     await pi.submit('GAP_DETERMINISTIC');
-    await waitForEvent(site.eventsPath, (event) => event.event === 'user_message' && event.content === 'GAP_DETERMINISTIC', `${label}_user`);
-    await waitForEvent(site.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_DETERMINISTIC_ASSISTANT', `${label}_assistant`);
+    await waitForEvent(site.eventsPath, (event: any) => event.event === 'user_message' && event.content === 'GAP_DETERMINISTIC', `${label}_user`);
+    await waitForEvent(site.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_DETERMINISTIC_ASSISTANT', `${label}_assistant`);
     await pi.waitForText('GAP_DETERMINISTIC_ASSISTANT', `${label}_assistant_projection`);
-    const evidence = await recordLiveEvidence({
+    const evidence: any = await recordLiveEvidence({
       scenario: `p2-determinism-${label}`,
       site,
       runtime,
@@ -79,8 +79,8 @@ async function runOnce(label) {
       posture: productionLaunch ? 'partial-production-launch' : 'fixture-boundary',
     });
     return {
-      events: readEvents(site.eventsPath).map((event) => canonical(event)),
-      providerRequests: provider.requests.filter((request) => request.prompt === 'GAP_DETERMINISTIC').length,
+      events: readEvents(site.eventsPath).map((event: any) => canonical(event)),
+      providerRequests: provider.requests.filter((request: any) => request.prompt === 'GAP_DETERMINISTIC').length,
       evidence,
     };
   } finally {
@@ -90,10 +90,10 @@ async function runOnce(label) {
   }
 }
 
-let result = { status: 'failed' };
+let result: any = { status: 'failed' };
 try {
-  const first = await runOnce('first');
-  const second = await runOnce('second');
+  const first: any = await runOnce('first');
+  const second: any = await runOnce('second');
   assert.equal(first.providerRequests, 1);
   assert.equal(second.providerRequests, 2);
   assert.deepEqual(second.events, first.events, 'same admitted input must produce the same canonical event projection');

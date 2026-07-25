@@ -4,7 +4,7 @@ import { fuzzyFilter } from '../src/input/fuzzy-selector.js';
 
 describe('agent-pi-tui input boundary', () => {
   it('keeps ordinary input on the canonical session.submit path', () => {
-    const result = classifyOperatorInput('hello NARS');
+    const result: any = classifyOperatorInput('hello NARS');
     expect(result.kind).toBe('conversation');
     if (result.kind !== 'conversation') throw new Error('expected conversation');
     expect(result.frame.method).toBe('session.submit');
@@ -12,7 +12,7 @@ describe('agent-pi-tui input boundary', () => {
   });
 
   it('uses the canonical intelligence reconfigure method for model controls', () => {
-    const result = classifyOperatorInput('/model gpt-test');
+    const result: any = classifyOperatorInput('/model gpt-test');
     expect(result.kind).toBe('known_slash');
     if (result.kind !== 'known_slash' || !result.frame) throw new Error('expected protocol frame');
     expect(result.frame.method).toBe('runtime.intelligence.reconfigure');
@@ -21,12 +21,12 @@ describe('agent-pi-tui input boundary', () => {
 
   it('does not forward unknown slash or shell input', () => {
     expect(classifyOperatorInput('/does-not-exist').kind).toBe('unknown_slash');
-    const shell = classifyOperatorInput('!Get-ChildItem');
+    const shell: any = classifyOperatorInput('!Get-ChildItem');
     expect(shell.kind).toBe('unavailable_shell');
   });
 
   it('keeps presentation commands local', () => {
-    const result = classifyOperatorInput('/view operations');
+    const result: any = classifyOperatorInput('/view operations');
     expect(result).toMatchObject({ kind: 'known_slash', local: { kind: 'view', view: 'operations' } });
   });
 

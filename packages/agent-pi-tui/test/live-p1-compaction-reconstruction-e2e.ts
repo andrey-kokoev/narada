@@ -16,27 +16,27 @@ import {
   waitFor,
   waitForEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
   console.log('agent-pi-tui compaction/reconstruction live e2e skipped (pass --enable-live-e2e)');
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
-const fixturePath = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'test', 'fixtures', 'pi-rpc-compaction-reconstruction.mjs');
-const providerResponse = async ({ prompt }) => ({
+const productionLaunch: any = process.argv.includes('--production-launch');
+const fixturePath: any = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'test', 'fixtures', 'pi-rpc-compaction-reconstruction.js');
+const providerResponse: any = async ({ prompt }: any) => ({
   choices: [{ message: { role: 'assistant', content: `fixture:${prompt}` } }],
 });
 
-const provider = await startFixtureProvider({ responseFor: providerResponse });
-let site = null;
-let runtime = null;
-let restartedRuntime = null;
-let pi = null;
-let restartedPi = null;
-let originalSessionId = null;
-let result = { status: 'failed' };
+const provider: any = await startFixtureProvider({ responseFor: providerResponse });
+let site: any = null;
+let runtime: any = null;
+let restartedRuntime: any = null;
+let pi: any = null;
+let restartedPi: any = null;
+let originalSessionId: any = null;
+let result: any = { status: 'failed' };
 
 try {
   await loadPty();
@@ -46,7 +46,7 @@ try {
     sessionId: `agent-pi-tui-compaction-${Date.now()}`,
     agentId: `agent-pi-tui-compaction-${Date.now()}.resident`,
   });
-  const reportPath = join(site.siteRoot, '.ai', 'runtime', 'pi-rpc-compaction-report.jsonl');
+  const reportPath: any = join(site.siteRoot, '.ai', 'runtime', 'pi-rpc-compaction-report.jsonl');
   site.env.NARADA_PI_RPC_COMMAND = process.execPath;
   site.env.NARADA_PI_RPC_ARGS = JSON.stringify([fixturePath, reportPath]);
   site.env.NARADA_PI_VERSION = 'pi-compaction-reconstruction-1.0.0';
@@ -56,19 +56,19 @@ try {
   pi = spawnPi(site, runtime, { name: 'agent-pi-tui-compaction' });
   await pi.waitForText(['live', 'connected', 'replaying'], 'compaction_attach');
   await pi.submit('GAP_COMPACTION');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_COMPACTION_ASSISTANT', 'compaction_assistant');
-  const compactionEvent = await waitForEvent(
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_COMPACTION_ASSISTANT', 'compaction_assistant');
+  const compactionEvent: any = await waitForEvent(
     site.eventsPath,
-    (event) => event.event === 'pi_compaction_evidence' && event.canonical_history_deleted === false,
+    (event: any) => event.event === 'pi_compaction_evidence' && event.canonical_history_deleted === false,
     'compaction_evidence',
   );
   assert.equal(compactionEvent.accepted_by_nars, false);
-  const eventsBeforeRestart = readEvents(site.eventsPath);
-  assert.ok(eventsBeforeRestart.some((event) => event.event === 'user_message' && event.content === 'GAP_COMPACTION'));
+  const eventsBeforeRestart: any = readEvents(site.eventsPath);
+  assert.ok(eventsBeforeRestart.some((event: any) => event.event === 'user_message' && event.content === 'GAP_COMPACTION'));
 
   await pi.kill();
   await stopRuntime(runtime, { hard: true });
-  const initialRuntime = runtime;
+  const initialRuntime: any = runtime;
   runtime = null;
 
   restartedRuntime = await startRuntime(site, {
@@ -79,18 +79,18 @@ try {
   restartedPi = spawnPi(site, restartedRuntime, { name: 'agent-pi-tui-compaction-restarted' });
   await restartedPi.waitForText(['live', 'connected', 'replaying'], 'compaction_restarted_attach');
   await restartedPi.submit('GAP_RECONSTRUCTION');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_RECONSTRUCTION_ASSISTANT', 'reconstructed_assistant');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_RECONSTRUCTION_ASSISTANT', 'reconstructed_assistant');
 
-  const report = await waitFor(() => {
+  const report: any = await waitFor(() => {
     if (!existsSync(reportPath)) return false;
-    const records = readFileSync(reportPath, 'utf8').split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
-    return records.find((entry) => entry.type === 'turn' && entry.prompt === 'GAP_RECONSTRUCTION') ?? false;
+    const records: any = readFileSync(reportPath, 'utf8').split(/\r?\n/).filter(Boolean).map((line: any) => JSON.parse(line));
+    return records.find((entry: any) => entry.type === 'turn' && entry.prompt === 'GAP_RECONSTRUCTION') ?? false;
   }, 'reconstruction_report');
   assert.equal(report.reconstructed_context, true);
-  const finalEvents = readEvents(site.eventsPath);
-  assert.ok(finalEvents.some((event) => event.event === 'assistant_message' && event.content === 'GAP_COMPACTION_ASSISTANT'));
-  assert.ok(finalEvents.some((event) => event.event === 'assistant_message' && event.content === 'GAP_RECONSTRUCTION_ASSISTANT'));
-  assert.equal(finalEvents.filter((event) => event.event === 'session_started').map((event) => event.session_id ?? event.runtime_session_id).filter(Boolean).every((id) => id === originalSessionId), true);
+  const finalEvents: any = readEvents(site.eventsPath);
+  assert.ok(finalEvents.some((event: any) => event.event === 'assistant_message' && event.content === 'GAP_COMPACTION_ASSISTANT'));
+  assert.ok(finalEvents.some((event: any) => event.event === 'assistant_message' && event.content === 'GAP_RECONSTRUCTION_ASSISTANT'));
+  assert.equal(finalEvents.filter((event: any) => event.event === 'session_started').map((event: any) => event.session_id ?? event.runtime_session_id).filter(Boolean).every((id: any) => id === originalSessionId), true);
 
   result = {
     schema: 'narada.agent_pi_tui.compaction_reconstruction_e2e.v1',

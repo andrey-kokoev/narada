@@ -1,34 +1,34 @@
 import { appendFileSync, existsSync } from 'node:fs';
 
-const requestLogFile = process.env.PI_RPC_FIXTURE_REQUEST_LOG ?? process.argv[3] ?? null;
-const artifactPath = process.env.PI_RPC_FIXTURE_ARTIFACT_PATH ?? process.argv[2] ?? null;
-const holdReleasePath = process.env.PI_RPC_FIXTURE_HOLD_RELEASE_PATH ?? process.argv[4] ?? null;
-const malformed = process.env.PI_RPC_FIXTURE_MALFORMED === '1';
-let failureIssued = false;
-let toolTurn = null;
-let holdTurn = null;
-let nextToolCall = 1;
+const requestLogFile: any = process.env.PI_RPC_FIXTURE_REQUEST_LOG ?? process.argv[3] ?? null;
+const artifactPath: any = process.env.PI_RPC_FIXTURE_ARTIFACT_PATH ?? process.argv[2] ?? null;
+const holdReleasePath: any = process.env.PI_RPC_FIXTURE_HOLD_RELEASE_PATH ?? process.argv[4] ?? null;
+const malformed: any = process.env.PI_RPC_FIXTURE_MALFORMED === '1';
+let failureIssued: any = false;
+let toolTurn: any = null;
+let holdTurn: any = null;
+let nextToolCall: any = 1;
 
-function log(record) {
+function log(record: any) {
   if (requestLogFile) appendFileSync(requestLogFile, `${JSON.stringify(record)}\n`);
 }
 
-function send(record) {
+function send(record: any) {
   process.stdout.write(`${JSON.stringify(record)}\n`);
 }
 
-function latestUser(params) {
-  const messages = Array.isArray(params?.messages) ? params.messages : [];
-  const message = [...messages].reverse().find((entry) => entry?.role === 'user');
+function latestUser(params: any) {
+  const messages: any = Array.isArray(params?.messages) ? params.messages : [];
+  const message: any = [...messages].reverse().find((entry: any) => entry?.role === 'user');
   if (typeof message?.content === 'string') return message.content;
   if (Array.isArray(message?.content)) {
-    return message.content.map((part) => typeof part === 'string' ? part : part?.type === 'text' ? part.text : '').join('');
+    return message.content.map((part: any) => typeof part === 'string' ? part : part?.type === 'text' ? part.text : '').join('');
   }
   return '';
 }
 
-function respond(id, content, extra = {}) {
-  const { narada_stream: stream, narada_artifacts: artifacts, ...resultExtra } = extra;
+function respond(id: any, content: any, extra: any = {}) {
+  const { narada_stream: stream, narada_artifacts: artifacts, ...resultExtra }: any = extra;
   send({
     id,
     result: {
@@ -46,8 +46,8 @@ function respond(id, content, extra = {}) {
   });
 }
 
-function emitTool(turnId, toolName, argumentsValue) {
-  const callId = `pi-four-tool-${nextToolCall++}`;
+function emitTool(turnId: any, toolName: any, argumentsValue: any) {
+  const callId: any = `pi-four-tool-${nextToolCall++}`;
   send({
     type: 'event',
     event: {
@@ -61,7 +61,7 @@ function emitTool(turnId, toolName, argumentsValue) {
   return callId;
 }
 
-function completeTurn(id, prompt) {
+function completeTurn(id: any, prompt: any) {
   if (prompt.includes('PI_LIVE_STREAM')) {
     send({ type: 'event', event: { kind: 'assistant_token', id: `partial:${id}`, sequence: 1, content: 'PI_LIVE_STREAM_PARTIAL' } });
     send({ type: 'event', event: { kind: 'assistant_token', id: `final:${id}`, sequence: 2, content: 'PI_LIVE_STREAM_FINAL', done: true } });
@@ -89,16 +89,16 @@ function completeTurn(id, prompt) {
 }
 
 process.stdin.setEncoding('utf8');
-let buffer = '';
-process.stdin.on('data', (chunk) => {
+let buffer: any = '';
+process.stdin.on('data', (chunk: any) => {
   buffer += chunk;
   while (true) {
-    const newline = buffer.indexOf('\n');
+    const newline: any = buffer.indexOf('\n');
     if (newline < 0) break;
-    const line = buffer.slice(0, newline).trim();
+    const line: any = buffer.slice(0, newline).trim();
     buffer = buffer.slice(newline + 1);
     if (!line) continue;
-    let request;
+    let request: any;
     try {
       request = JSON.parse(line);
     } catch {
@@ -110,7 +110,7 @@ process.stdin.on('data', (chunk) => {
       process.stdout.write('{not-json}\n');
       continue;
     }
-    const params = request.params ?? {};
+    const params: any = request.params ?? {};
     if (request.type === 'tool_result' && toolTurn) {
       if (toolTurn.stage === 0) {
         toolTurn.stage = 1;
@@ -122,7 +122,7 @@ process.stdin.on('data', (chunk) => {
         toolTurn.stage = 2;
         emitTool(toolTurn.id, 'fixture_denied', {});
       } else {
-        const current = toolTurn;
+        const current: any = toolTurn;
         toolTurn = null;
         completeTurn(current.id, 'PI_LIVE_TOOL');
       }
@@ -154,7 +154,7 @@ process.stdin.on('data', (chunk) => {
       continue;
     }
     if (request.method === 'turn') {
-      const prompt = latestUser(params);
+      const prompt: any = latestUser(params);
       if (prompt.includes('PI_LIVE_FAILURE') && !failureIssued) {
         failureIssued = true;
         // Return an admitted terminal provider outcome rather than a JSON-RPC
@@ -184,9 +184,9 @@ process.stdin.on('data', (chunk) => {
   }
 });
 
-const holdPoller = setInterval(() => {
+const holdPoller: any = setInterval(() => {
   if (!holdTurn || !holdReleasePath || !existsSync(holdReleasePath)) return;
-  const held = holdTurn;
+  const held: any = holdTurn;
   holdTurn = null;
   completeTurn(held.id, 'PI_LIVE_HOLD');
 }, 25);

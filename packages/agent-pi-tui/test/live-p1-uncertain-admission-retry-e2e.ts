@@ -14,7 +14,7 @@ import {
   waitFor,
   waitForEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 import { buildControlFrame } from '../dist/nars-client/protocol.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
@@ -22,24 +22,24 @@ if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_T
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
+const productionLaunch: any = process.argv.includes('--production-launch');
 
 await loadPty();
-let dropFirstResponse = true;
-const provider = await startFixtureProvider({
-  dropResponseFor: ({ prompt }) => prompt === 'GAP_UNCERTAIN' && dropFirstResponse && (dropFirstResponse = false, true),
-  responseFor: ({ prompt }) => ({
+let dropFirstResponse: any = true;
+const provider: any = await startFixtureProvider({
+  dropResponseFor: ({ prompt }: any) => prompt === 'GAP_UNCERTAIN' && dropFirstResponse && (dropFirstResponse = false, true),
+  responseFor: ({ prompt }: any) => ({
     choices: [{ message: { role: 'assistant', content: prompt === 'GAP_UNCERTAIN'
       ? 'GAP_UNCERTAIN_RECOVERY_ASSISTANT'
       : `fixture:${prompt}` } }],
   }),
 });
 
-let site = null;
-let runtime = null;
-let pi = null;
-let retryClient = null;
-let result = { status: 'failed' };
+let site: any = null;
+let runtime: any = null;
+let pi: any = null;
+let retryClient: any = null;
+let result: any = { status: 'failed' };
 
 try {
   site = await createLiveSite({
@@ -52,21 +52,21 @@ try {
   await pi.waitForText(['live', 'connected', 'replaying'], 'uncertain_attach');
 
   await pi.submit('GAP_UNCERTAIN');
-  await provider.waitForRequest((request) => request.prompt === 'GAP_UNCERTAIN', 'uncertain_provider_write');
-  const firstTerminal = await waitForEvent(
+  await provider.waitForRequest((request: any) => request.prompt === 'GAP_UNCERTAIN', 'uncertain_provider_write');
+  const firstTerminal: any = await waitForEvent(
     site.eventsPath,
-    (event) => event.event === 'invokable_intelligence_terminal' && event.outcome_kind === 'admission-unknown',
+    (event: any) => event.event === 'invokable_intelligence_terminal' && event.outcome_kind === 'admission-unknown',
     'uncertain_terminal_outcome',
   );
-  await waitForEvent(site.eventsPath, (event) => event.event === 'turn_failed' && event.terminal_status === 'failed', 'uncertain_turn_failed');
-  await waitFor(() => provider.requests.filter((request) => request.prompt === 'GAP_UNCERTAIN').length === 1, 'uncertain_no_auto_retry');
-  assert.equal(readEvents(site.eventsPath).filter((event) => event.event === 'assistant_message' && event.content === 'GAP_UNCERTAIN_RECOVERY_ASSISTANT').length, 0);
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'turn_failed' && event.terminal_status === 'failed', 'uncertain_turn_failed');
+  await waitFor(() => provider.requests.filter((request: any) => request.prompt === 'GAP_UNCERTAIN').length === 1, 'uncertain_no_auto_retry');
+  assert.equal(readEvents(site.eventsPath).filter((event: any) => event.event === 'assistant_message' && event.content === 'GAP_UNCERTAIN_RECOVERY_ASSISTANT').length, 0);
 
   retryClient = await attachClient(runtime, {
     reconnect: false,
     subscriptionId: `gap-uncertain-retry-${Date.now()}`,
   });
-  const retryFrame = buildControlFrame('session.submit', {
+  const retryFrame: any = buildControlFrame('session.submit', {
     content: 'GAP_UNCERTAIN',
     idempotency_key: 'gap-uncertain-key',
     intelligence_invocation: {
@@ -77,14 +77,14 @@ try {
       allow_replan: false,
     },
   });
-  const retryTransport = await retryClient.client.sendOperatorFrame(retryFrame, 'GAP_UNCERTAIN');
+  const retryTransport: any = await retryClient.client.sendOperatorFrame(retryFrame, 'GAP_UNCERTAIN');
   assert.equal(retryTransport.transport, 'written');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_UNCERTAIN_RECOVERY_ASSISTANT', 'explicit_retry_assistant');
-  await waitFor(() => provider.requests.filter((request) => request.prompt === 'GAP_UNCERTAIN').length === 2, 'explicit_retry_provider_call');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_UNCERTAIN_RECOVERY_ASSISTANT', 'explicit_retry_assistant');
+  await waitFor(() => provider.requests.filter((request: any) => request.prompt === 'GAP_UNCERTAIN').length === 2, 'explicit_retry_provider_call');
 
-  const events = readEvents(site.eventsPath);
-  assert.equal(events.filter((event) => event.event === 'assistant_message' && event.content === 'GAP_UNCERTAIN_RECOVERY_ASSISTANT').length, 1);
-  const retryTerminal = events.find((event) => event.event === 'invokable_intelligence_terminal'
+  const events: any = readEvents(site.eventsPath);
+  assert.equal(events.filter((event: any) => event.event === 'assistant_message' && event.content === 'GAP_UNCERTAIN_RECOVERY_ASSISTANT').length, 1);
+  const retryTerminal: any = events.find((event: any) => event.event === 'invokable_intelligence_terminal'
     && event.intent_id === firstTerminal.intent_id
     && event.attempt_id !== firstTerminal.attempt_id
     && event.outcome_kind === 'success');
@@ -129,14 +129,14 @@ try {
     site_root: site?.siteRoot,
     events: site ? readEvents(site.eventsPath).slice(-30) : [],
     intelligence_terminals: site ? readEvents(site.eventsPath)
-      .filter((event) => event.event === 'invokable_intelligence_terminal')
-      .map((event) => ({ intent_id: event.intent_id, attempt_id: event.attempt_id, outcome_kind: event.outcome_kind })) : [],
+      .filter((event: any) => event.event === 'invokable_intelligence_terminal')
+      .map((event: any) => ({ intent_id: event.intent_id, attempt_id: event.attempt_id, outcome_kind: event.outcome_kind })) : [],
     submit_controls: site ? readEvents(site.eventsPath)
-      .filter((event) => event.event === 'session_control_accepted' && event.method === 'session.submit')
-      .map((event) => ({ request_id: event.request_id, idempotency_key: event.idempotency_key, intelligence_invocation: event.intelligence_invocation })) : [],
-    provider_requests: provider.requests.map((request) => ({
+      .filter((event: any) => event.event === 'session_control_accepted' && event.method === 'session.submit')
+      .map((event: any) => ({ request_id: event.request_id, idempotency_key: event.idempotency_key, intelligence_invocation: event.intelligence_invocation })) : [],
+    provider_requests: provider.requests.map((request: any) => ({
       prompt: request.prompt,
-      messages: request.body?.messages?.map((message) => ({ role: message.role, content: message.content })),
+      messages: request.body?.messages?.map((message: any) => ({ role: message.role, content: message.content })),
       dropped: request.dropped,
       aborted: request.aborted,
       completed: request.completed,

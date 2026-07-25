@@ -16,20 +16,20 @@ import {
   waitFor,
   waitForEvent,
   recordLiveEvidence,
-} from './live-test-harness.mjs';
+} from './live-test-harness.js';
 
 if (!process.argv.includes('--enable-live-e2e') && process.env.NARADA_AGENT_PI_TUI_LIVE_E2E !== '1') {
   console.log('agent-pi-tui authority-negative live e2e skipped (pass --enable-live-e2e)');
   process.exit(0);
 }
 
-const productionLaunch = process.argv.includes('--production-launch');
+const productionLaunch: any = process.argv.includes('--production-launch');
 
 await loadPty();
-const deniedMarker = join(process.env.TEMP ?? process.cwd(), `agent-pi-tui-denied-${Date.now()}.marker`);
-const provider = await startFixtureProvider({
-  responseFor: ({ prompt, body }) => {
-    const hasToolResult = (body.messages ?? []).some((message) => message?.role === 'tool' || message?.role === 'toolResult');
+const deniedMarker: any = join(process.env.TEMP ?? process.cwd(), `agent-pi-tui-denied-${Date.now()}.marker`);
+const provider: any = await startFixtureProvider({
+  responseFor: ({ prompt, body }: any) => {
+    const hasToolResult: any = (body.messages ?? []).some((message: any) => message?.role === 'tool' || message?.role === 'toolResult');
     if (prompt.includes('GAP_DENIED_TOOL') && !hasToolResult) {
       return {
         choices: [{ message: { role: 'assistant', content: null, tool_calls: [{
@@ -43,11 +43,11 @@ const provider = await startFixtureProvider({
   },
 });
 
-let site = null;
-let runtime = null;
-let pi = null;
-let invalidPi = null;
-let result = { status: 'failed' };
+let site: any = null;
+let runtime: any = null;
+let pi: any = null;
+let invalidPi: any = null;
+let result: any = { status: 'failed' };
 try {
   site = await createLiveSite({
     provider,
@@ -60,41 +60,41 @@ try {
   runtime = await startRuntime(site, { direct: !productionLaunch });
   pi = spawnPi(site, runtime, { name: 'agent-pi-tui-authority-negative' });
   await pi.waitForText(['live', 'connected', 'replaying'], 'authority_negative_attach');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'session_started' && (event.mcp_operational_state === 'starting' || event.mcp_operational_state === 'ready'), 'mcp_startup_event');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'session_started' && (event.mcp_operational_state === 'starting' || event.mcp_operational_state === 'ready'), 'mcp_startup_event');
   // The launcher may expose a short-lived health projection race while the
   // capability gateway is transitioning from `starting` to `healthy`. The
   // durable lifecycle event is the authoritative startup oracle; startRuntime
   // has already separately admitted the runtime's HTTP health endpoint.
   await waitForEvent(
     site.eventsPath,
-    (event) => event.event === 'capability_gateway_lifecycle_transition'
+    (event: any) => event.event === 'capability_gateway_lifecycle_transition'
       && ['healthy', 'degraded'].includes(event.lifecycle_state),
     'mcp_fixture_startup',
   );
 
-  const beforeUnknownEvents = readEvents(site.eventsPath).length;
-  const beforeUnknownProviderCalls = provider.requests.length;
+  const beforeUnknownEvents: any = readEvents(site.eventsPath).length;
+  const beforeUnknownProviderCalls: any = provider.requests.length;
   await pi.submit('/not-a-real-command');
   await pi.submit('!not-a-shell-command');
   await waitFor(() => pi.text().includes('Unknown command') && pi.text().includes('Shell escapes are unavailable'), 'local_negative_notices');
-  await new Promise((resolvePromise) => setTimeout(resolvePromise, 500));
-  const afterUnknownEvents = readEvents(site.eventsPath).slice(beforeUnknownEvents);
+  await new Promise((resolvePromise: any) => setTimeout(resolvePromise, 500));
+  const afterUnknownEvents: any = readEvents(site.eventsPath).slice(beforeUnknownEvents);
   assert.equal(provider.requests.length, beforeUnknownProviderCalls, 'local unknown/shell input must not reach the provider');
-  assert.equal(afterUnknownEvents.some((event) => event.event === 'user_message' && (event.content === '/not-a-real-command' || event.content === '!not-a-shell-command')), false, 'local unknown/shell input must not become a durable user message');
+  assert.equal(afterUnknownEvents.some((event: any) => event.event === 'user_message' && (event.content === '/not-a-real-command' || event.content === '!not-a-shell-command')), false, 'local unknown/shell input must not become a durable user message');
 
   await pi.submit('GAP_DENIED_TOOL');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'carrier_tool_requested' && event.tool_name === 'fixture_denied', 'denied_tool_requested');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_denied' && event.status === 'refused', 'denied_tool_refused');
-  await waitForEvent(site.eventsPath, (event) => event.event === 'assistant_message' && event.content === 'GAP_DENIED_TOOL_ASSISTANT', 'denied_followup');
-  const refusalEvidence = await waitForEvent(site.eventsPath, (event) => event.event === 'tool_execution_refused' && event.tool_name === 'fixture_denied', 'denied_tool_admission_evidence');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'carrier_tool_requested' && event.tool_name === 'fixture_denied', 'denied_tool_requested');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'carrier_tool_completed' && event.tool_name === 'fixture_denied' && event.status === 'refused', 'denied_tool_refused');
+  await waitForEvent(site.eventsPath, (event: any) => event.event === 'assistant_message' && event.content === 'GAP_DENIED_TOOL_ASSISTANT', 'denied_followup');
+  const refusalEvidence: any = await waitForEvent(site.eventsPath, (event: any) => event.event === 'tool_execution_refused' && event.tool_name === 'fixture_denied', 'denied_tool_admission_evidence');
   assert.equal(refusalEvidence.admission?.admitted, false);
   assert.equal(refusalEvidence.admission?.reason, 'denied_by_runtime_policy');
   assert.equal(existsSync(deniedMarker), false, 'a refused tool must not execute its child-side effect');
-  assert.equal(provider.requests.some((request) => JSON.stringify(request.body).includes('denied-fixture-reached')), false);
+  assert.equal(provider.requests.some((request: any) => JSON.stringify(request.body).includes('denied-fixture-reached')), false);
 
-  const beforeBindingEvents = readEvents(site.eventsPath).length;
-  const bindingPath = join(site.siteRoot, '.ai', 'runtime', 'invalid-pi-binding.json');
-  const resultPath = join(site.siteRoot, '.ai', 'runtime', 'wrong-binding-agent-start-result.json');
+  const beforeBindingEvents: any = readEvents(site.eventsPath).length;
+  const bindingPath: any = join(site.siteRoot, '.ai', 'runtime', 'invalid-pi-binding.json');
+  const resultPath: any = join(site.siteRoot, '.ai', 'runtime', 'wrong-binding-agent-start-result.json');
   await writeFile(resultPath, JSON.stringify({
     schema: 'narada.agent_start.result.v0',
     status: 'materialized',
@@ -156,7 +156,7 @@ try {
     events: site ? readEvents(site.eventsPath).slice(-80) : [],
     runtime_output: runtime?.output?.(),
     pi_text: pi?.text?.(),
-    health: runtime?.healthEndpoint ? await fetch(runtime.healthEndpoint).then((response) => response.json()).catch((healthError) => String(healthError)) : null,
+    health: runtime?.healthEndpoint ? await fetch(runtime.healthEndpoint).then((response: any) => response.json()).catch((healthError: any) => String(healthError)) : null,
   }, null, 2));
   process.exitCode = 1;
 } finally {

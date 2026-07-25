@@ -14,7 +14,7 @@ class FakeSocket implements WebSocketLike {
   }
 
   addEventListener(event: string, listener: (value: unknown) => void): void {
-    const listeners = this.listeners.get(event) ?? new Set();
+    const listeners: any = this.listeners.get(event) ?? new Set();
     listeners.add(listener);
     this.listeners.set(event, listeners);
   }
@@ -46,12 +46,12 @@ class FakeSocket implements WebSocketLike {
 describe('agent-pi-tui NARS attachment', () => {
   it('replays, deduplicates overlap, and detaches without closing NARS', async () => {
     FakeSocket.sockets = [];
-    const client = new NarsAttachClient({ endpoint: 'ws://127.0.0.1/events', WebSocketImpl: FakeSocket, reconnect: false });
+    const client: any = new NarsAttachClient({ endpoint: 'ws://127.0.0.1/events', WebSocketImpl: FakeSocket, reconnect: false });
     const events: string[] = [];
-    client.onEvent(({ event }) => events.push(String(event.event)));
-    const connected = client.connect();
+    client.onEvent(({ event }: any) => events.push(String(event.event)));
+    const connected: any = client.connect();
     await Promise.resolve();
-    const socket = FakeSocket.sockets[0]!;
+    const socket: any = FakeSocket.sockets[0]!;
     socket.open();
     await connected;
     expect(JSON.parse(socket.sent[0]!).method).toBe('session.events.subscribe');
@@ -61,20 +61,20 @@ describe('agent-pi-tui NARS attachment', () => {
     expect(client.getState().phase).toBe('live');
     expect(events).toEqual(['session_started', 'session_events_replay_completed']);
     await client.disconnect();
-    expect(socket.sent.some((frame) => JSON.parse(frame).method === 'session.close')).toBe(false);
+    expect(socket.sent.some((frame: any) => JSON.parse(frame).method === 'session.close')).toBe(false);
   });
 
   it('does not automatically resend an ambiguously written submission', async () => {
     FakeSocket.sockets = [];
-    const client = new NarsAttachClient({ endpoint: 'ws://127.0.0.1/events', WebSocketImpl: FakeSocket, reconnect: false });
-    const connected = client.connect();
+    const client: any = new NarsAttachClient({ endpoint: 'ws://127.0.0.1/events', WebSocketImpl: FakeSocket, reconnect: false });
+    const connected: any = client.connect();
     await Promise.resolve();
-    const socket = FakeSocket.sockets[0]!;
+    const socket: any = FakeSocket.sockets[0]!;
     socket.open();
     await connected;
     socket.message({ event: 'session_events_replay_completed', event_id: 'replay', event_sequence: 1 });
     socket.throwOnSend = true;
-    const result = await client.submit('do not resend');
+    const result: any = await client.submit('do not resend');
     expect(result.transport).toBe('ambiguous');
     expect(result.retryAllowed).toBe(false);
     expect(client.getPendingInputs()[0]?.phase).toBe('ambiguous_transport');
@@ -82,14 +82,14 @@ describe('agent-pi-tui NARS attachment', () => {
 
   it('keeps connection-local websocket errors out of the durable projection', async () => {
     FakeSocket.sockets = [];
-    const client = new NarsAttachClient({ endpoint: 'ws://127.0.0.1/events', WebSocketImpl: FakeSocket, reconnect: false });
+    const client: any = new NarsAttachClient({ endpoint: 'ws://127.0.0.1/events', WebSocketImpl: FakeSocket, reconnect: false });
     const projected: string[] = [];
     const transportErrors: string[] = [];
-    client.onEvent(({ event }) => projected.push(String(event.event)));
-    client.onTransportError(({ error }) => transportErrors.push(error.message));
-    const connected = client.connect();
+    client.onEvent(({ event }: any) => projected.push(String(event.event)));
+    client.onTransportError(({ error }: any) => transportErrors.push(error.message));
+    const connected: any = client.connect();
     await Promise.resolve();
-    const socket = FakeSocket.sockets[0]!;
+    const socket: any = FakeSocket.sockets[0]!;
     socket.open();
     await connected;
     socket.message({ event: 'session_events_replay_completed', event_id: 'replay', event_sequence: 1 });
