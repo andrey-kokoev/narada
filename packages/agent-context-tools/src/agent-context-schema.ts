@@ -1,6 +1,6 @@
-import { ORIENTATION_DDL } from './site-evolution-orientation.mjs';
+import { ORIENTATION_DDL } from './site-evolution-orientation.js';
 
-export const CHECKPOINT_DDL = `
+export const CHECKPOINT_DDL: any = `
 CREATE TABLE IF NOT EXISTS agent_events (
   event_id TEXT PRIMARY KEY,
   agent_id TEXT NOT NULL,

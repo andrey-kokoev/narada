@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import { assertConceptProtocolLifecycleTransition } from './concept-protocol-lifecycle-state.mjs';
+import { assertConceptProtocolLifecycleTransition } from './concept-protocol-lifecycle-state.js';
 
-export const CONCEPT_LIFECYCLE_OBJECT_TYPES = new Set([
+export const CONCEPT_LIFECYCLE_OBJECT_TYPES: any = new Set([
   'concept',
   'protocol',
   'process_contract',
   'doctrine',
 ]);
 
-export const CONCEPT_LIFECYCLE_EVENT_TYPES = new Set([
+export const CONCEPT_LIFECYCLE_EVENT_TYPES: any = new Set([
   'observed',
   'named',
   'doctrine_checked',
@@ -22,7 +22,7 @@ export const CONCEPT_LIFECYCLE_EVENT_TYPES = new Set([
   'corrected',
 ]);
 
-export const CONCEPT_LIFECYCLE_STATES = new Set([
+export const CONCEPT_LIFECYCLE_STATES: any = new Set([
   'observed',
   'named',
   'doctrine_checked',
@@ -45,7 +45,7 @@ export function validateLifecycleEventInput({
   scope,
   artifactRefs,
   evidenceRefs,
-}) {
+}: any) {
   if (!objectId || !/^[a-z0-9][a-z0-9_.:-]*$/.test(objectId)) {
     throw new Error(`invalid_concept_lifecycle_object_id: ${objectId ?? ''}`);
   }
@@ -67,7 +67,7 @@ export function validateLifecycleEventInput({
   validateRefArray('evidence_refs', evidenceRefs);
 }
 
-function validateObject(label, value, requiredKeys) {
+function validateObject(label: any, value: any, requiredKeys: any) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new Error(`invalid_concept_lifecycle_${label}`);
   }
@@ -78,7 +78,7 @@ function validateObject(label, value, requiredKeys) {
   }
 }
 
-function validateRefArray(label, value) {
+function validateRefArray(label: any, value: any) {
   if (!Array.isArray(value) || value.length === 0) {
     throw new Error(`invalid_concept_lifecycle_${label}`);
   }
@@ -103,7 +103,7 @@ export function buildLifecycleEventPayload({
   notes,
   previousState,
   createdAt,
-}) {
+}: any) {
   return {
     schema: 'narada.concept_protocol.lifecycle_event.v0',
     event_id: eventId,
@@ -124,7 +124,7 @@ export function buildLifecycleEventPayload({
   };
 }
 
-export function buildCurrentStatePayload({ event }) {
+export function buildCurrentStatePayload({ event }: any) {
   return {
     schema: 'narada.concept_protocol.current_state_projection.v0',
     object_id: event.object_id,
@@ -145,8 +145,8 @@ export function buildCurrentStatePayload({ event }) {
   };
 }
 
-export function parseLifecycleEventRow(row, parseJsonField, { includePayload = false } = {}) {
-  const parsed = {
+export function parseLifecycleEventRow(row: any, parseJsonField: any, { includePayload = false }: any = {}) {
+  const parsed: any = {
     event_id: row.event_id,
     object_id: row.object_id,
     object_type: row.object_type,
@@ -164,8 +164,8 @@ export function parseLifecycleEventRow(row, parseJsonField, { includePayload = f
   return parsed;
 }
 
-export function parseCurrentStateRow(row, parseJsonField, { includePayload = false } = {}) {
-  const parsed = {
+export function parseCurrentStateRow(row: any, parseJsonField: any, { includePayload = false }: any = {}) {
+  const parsed: any = {
     object_id: row.object_id,
     object_type: row.object_type,
     state_after: row.state_after,
@@ -185,19 +185,19 @@ export function parseCurrentStateRow(row, parseJsonField, { includePayload = fal
   return parsed;
 }
 
-export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () => {} }) {
+export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () => {} }: any) {
   assertDb(db);
-  const objectId = requireString(toolArgs, 'object_id');
-  const objectType = requireString(toolArgs, 'object_type');
-  const eventType = requireString(toolArgs, 'event_type');
-  const stateAfter = requireString(toolArgs, 'state_after');
-  const actorAgentId = requireString(toolArgs, 'actor_agent_id');
+  const objectId: any = requireString(toolArgs, 'object_id');
+  const objectType: any = requireString(toolArgs, 'object_type');
+  const eventType: any = requireString(toolArgs, 'event_type');
+  const stateAfter: any = requireString(toolArgs, 'state_after');
+  const actorAgentId: any = requireString(toolArgs, 'actor_agent_id');
   assertBoundIdentity(actorAgentId);
-  const authorityBasis = objectField(toolArgs ?? {}, 'authority_basis');
-  const scope = objectField(toolArgs ?? {}, 'scope');
-  const artifactRefs = arrayField(toolArgs ?? {}, 'artifact_refs');
-  const evidenceRefs = arrayField(toolArgs ?? {}, 'evidence_refs');
-  const notes = stringField(toolArgs ?? {}, 'notes');
+  const authorityBasis: any = objectField(toolArgs ?? {}, 'authority_basis');
+  const scope: any = objectField(toolArgs ?? {}, 'scope');
+  const artifactRefs: any = arrayField(toolArgs ?? {}, 'artifact_refs');
+  const evidenceRefs: any = arrayField(toolArgs ?? {}, 'evidence_refs');
+  const notes: any = stringField(toolArgs ?? {}, 'notes');
 
   validateLifecycleEventInput({
     objectId,
@@ -211,19 +211,19 @@ export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () =>
     evidenceRefs,
   });
 
-  const currentStateRow = db.prepare(
+  const currentStateRow: any = db.prepare(
     'SELECT state_after FROM concept_protocol_lifecycle_current_state WHERE object_id = ?',
   ).get(objectId);
-  const previousState = currentStateRow ? String(currentStateRow.state_after) : null;
+  const previousState: any = currentStateRow ? String(currentStateRow.state_after) : null;
   assertConceptProtocolLifecycleTransition({
     previousState,
     nextState: stateAfter,
     eventType,
   });
 
-  const now = new Date().toISOString();
-  const eventId = `clife_${randomUUID().replace(/-/g, '')}`;
-  const payload = buildLifecycleEventPayload({
+  const now: any = new Date().toISOString();
+  const eventId: any = `clife_${randomUUID().replace(/-/g, '')}`;
+  const payload: any = buildLifecycleEventPayload({
     eventId,
     objectId,
     objectType,
@@ -238,9 +238,9 @@ export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () =>
     previousState,
     createdAt: now,
   });
-  const currentProjection = buildCurrentStatePayload({ event: payload });
+  const currentProjection: any = buildCurrentStatePayload({ event: payload });
 
-  const insert = db.transaction(() => {
+  const insert: any = db.transaction(() => {
     db.prepare(`
       INSERT INTO concept_protocol_lifecycle_events (
         event_id, object_id, object_type, event_type, state_after, actor_agent_id,
@@ -315,11 +315,11 @@ export function recordLifecycleEvent({ db, toolArgs, assertBoundIdentity = () =>
   };
 }
 
-export function readLifecycleHistory({ db, toolArgs, parseJsonField }) {
+export function readLifecycleHistory({ db, toolArgs, parseJsonField }: any) {
   assertDb(db);
-  const objectId = requireString(toolArgs, 'object_id');
-  const limit = clampLimit(toolArgs?.limit, 50, 100);
-  const rows = db.prepare(`
+  const objectId: any = requireString(toolArgs, 'object_id');
+  const limit: any = clampLimit(toolArgs?.limit, 50, 100);
+  const rows: any = db.prepare(`
     SELECT * FROM concept_protocol_lifecycle_events
     WHERE object_id = ?
     ORDER BY created_at ASC
@@ -333,15 +333,15 @@ export function readLifecycleHistory({ db, toolArgs, parseJsonField }) {
     projection_not_authority: true,
     object_id: objectId,
     count: rows.length,
-    events: rows.map((row) => parseLifecycleEventRow(row, parseJsonField, { includePayload: true })),
+    events: rows.map((row: any) => parseLifecycleEventRow(row, parseJsonField, { includePayload: true })),
   };
 }
 
-export function readCurrentLifecycleState({ db, toolArgs, parseJsonField }) {
+export function readCurrentLifecycleState({ db, toolArgs, parseJsonField }: any) {
   assertDb(db);
-  const objectId = stringField(toolArgs ?? {}, 'object_id');
+  const objectId: any = stringField(toolArgs ?? {}, 'object_id');
   if (objectId) {
-    const row = db.prepare('SELECT * FROM concept_protocol_lifecycle_current_state WHERE object_id = ?').get(objectId);
+    const row: any = db.prepare('SELECT * FROM concept_protocol_lifecycle_current_state WHERE object_id = ?').get(objectId);
     return {
       status: row ? 'ok' : 'not_found',
       schema: 'narada.concept_protocol.current_state.show.v0',
@@ -352,11 +352,11 @@ export function readCurrentLifecycleState({ db, toolArgs, parseJsonField }) {
     };
   }
 
-  const objectType = stringField(toolArgs ?? {}, 'object_type');
-  const stateAfter = stringField(toolArgs ?? {}, 'state_after');
-  const limit = clampLimit(toolArgs?.limit, 50, 100);
-  const where = [];
-  const params = [];
+  const objectType: any = stringField(toolArgs ?? {}, 'object_type');
+  const stateAfter: any = stringField(toolArgs ?? {}, 'state_after');
+  const limit: any = clampLimit(toolArgs?.limit, 50, 100);
+  const where: any = [];
+  const params: any = [];
   if (objectType) {
     if (!CONCEPT_LIFECYCLE_OBJECT_TYPES.has(objectType)) throw new Error(`invalid_concept_lifecycle_object_type: ${objectType}`);
     where.push('object_type = ?');
@@ -367,8 +367,8 @@ export function readCurrentLifecycleState({ db, toolArgs, parseJsonField }) {
     where.push('state_after = ?');
     params.push(stateAfter);
   }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const rows = db.prepare(`
+  const whereSql: any = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows: any = db.prepare(`
     SELECT * FROM concept_protocol_lifecycle_current_state
     ${whereSql}
     ORDER BY last_event_at DESC
@@ -380,37 +380,37 @@ export function readCurrentLifecycleState({ db, toolArgs, parseJsonField }) {
     authority: 'agent_context_sqlite.concept_protocol_lifecycle_events',
     projection_not_authority: true,
     count: rows.length,
-    current_states: rows.map((row) => parseCurrentStateRow(row, parseJsonField)),
+    current_states: rows.map((row: any) => parseCurrentStateRow(row, parseJsonField)),
   };
 }
 
-function assertDb(db) {
+function assertDb(db: any) {
   if (!db) throw new Error('agent_context_db_not_available');
 }
 
-function requireString(record, key) {
-  const value = stringField(record ?? {}, key);
+function requireString(record: any, key: any) {
+  const value: any = stringField(record ?? {}, key);
   if (!value) throw new Error(`${key}_required`);
   return value;
 }
 
-function stringField(record, key) {
-  const value = record[key];
+function stringField(record: any, key: any) {
+  const value: any = record[key];
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : undefined;
 }
 
-function objectField(record, key) {
-  const value = record[key];
+function objectField(record: any, key: any) {
+  const value: any = record[key];
   return value && typeof value === 'object' && !Array.isArray(value) ? value : undefined;
 }
 
-function arrayField(record, key) {
-  const value = record[key];
+function arrayField(record: any, key: any) {
+  const value: any = record[key];
   return Array.isArray(value) ? value : [];
 }
 
-function clampLimit(value, defaultValue, maxValue) {
-  const parsed = parseInt(value ?? String(defaultValue), 10);
+function clampLimit(value: any, defaultValue: any, maxValue: any) {
+  const parsed: any = parseInt(value ?? String(defaultValue), 10);
   if (Number.isNaN(parsed)) return defaultValue;
   return Math.min(Math.max(parsed, 1), maxValue);
 }

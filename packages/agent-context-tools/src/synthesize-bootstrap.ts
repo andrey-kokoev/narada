@@ -6,45 +6,45 @@
  * packet combining Layer 1 (residue: checkpoints) and Layer 2 (active work).
  *
  * Usage:
- *   node synthesize-bootstrap.mjs <cwd> <agent-id>
+ *   node synthesize-bootstrap.js <cwd> <agent-id>
  */
 
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import Database from './sqlite-database.mjs';
+import Database from './sqlite-database.js';
 
-const cwd = process.argv[2] || process.cwd();
-const agentId = process.argv[3];
+const cwd: any = process.argv[2] || process.cwd();
+const agentId: any = process.argv[3];
 
 if (!agentId) {
-  console.error('Usage: node synthesize-bootstrap.mjs <cwd> <agent-id>');
+  console.error('Usage: node synthesize-bootstrap.js <cwd> <agent-id>');
   process.exit(1);
 }
 
-const siteRoot = resolve(cwd);
-const agentDbPath = join(siteRoot, '.ai', 'state', 'agent-context.sqlite');
-const lifecycleDbPath = join(siteRoot, '.ai', 'task-lifecycle.db');
+const siteRoot: any = resolve(cwd);
+const agentDbPath: any = join(siteRoot, '.ai', 'state', 'agent-context.sqlite');
+const lifecycleDbPath: any = join(siteRoot, '.ai', 'task-lifecycle.db');
 
-let agentDb;
-let lifecycleDb;
+let agentDb: any;
+let lifecycleDb: any;
 
 try {
   agentDb = existsSync(agentDbPath) ? new Database(agentDbPath, { readonly: true, fileMustExist: true }) : null;
   lifecycleDb = existsSync(lifecycleDbPath) ? new Database(lifecycleDbPath, { readonly: true, fileMustExist: true }) : null;
 
   // Layer 1: Recent checkpoints
-  let checkpoints = [];
+  let checkpoints: any = [];
   if (agentDb) {
-    const hasTable = agentDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_events'").get();
+    const hasTable: any = agentDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'agent_events'").get();
     if (hasTable) {
-      const rows = agentDb.prepare(
+      const rows: any = agentDb.prepare(
         `SELECT event_id, event_type, task_number, payload_json, emitted_at
          FROM agent_events
          WHERE agent_id = ? AND event_type = 'checkpoint'
          ORDER BY emitted_at DESC
          LIMIT 5`
       ).all(agentId);
-      checkpoints = rows.map((r) => ({
+      checkpoints = rows.map((r: any) => ({
         event_id: r.event_id,
         event_type: r.event_type,
         task_number: r.task_number,
@@ -55,11 +55,11 @@ try {
   }
 
   // Layer 2: Active claimed tasks
-  let activeTasks = [];
+  let activeTasks: any = [];
   if (lifecycleDb) {
-    const hasAssignments = lifecycleDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_assignments'").get();
+    const hasAssignments: any = lifecycleDb.prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_assignments'").get();
     if (hasAssignments) {
-      const rows = lifecycleDb.prepare(
+      const rows: any = lifecycleDb.prepare(
         `SELECT tl.task_number, tl.task_id, tl.status, tl.governed_by, ta.claimed_at
          FROM task_lifecycle tl
          JOIN task_assignments ta ON tl.task_id = ta.task_id
@@ -70,7 +70,7 @@ try {
     }
   }
 
-  const bootstrap = {
+  const bootstrap: any = {
     schema: 'narada.agent_context.bootstrap.v0',
     generated_at: new Date().toISOString(),
     agent_id: agentId,

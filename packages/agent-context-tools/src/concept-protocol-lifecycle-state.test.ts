@@ -1,12 +1,12 @@
 import assert from 'node:assert/strict';
-import Database from './sqlite-database.mjs';
-import { recordLifecycleEvent } from './concept-protocol-lifecycle-service.mjs';
+import Database from './sqlite-database.js';
+import { recordLifecycleEvent } from './concept-protocol-lifecycle-service.js';
 import {
   assertConceptProtocolLifecycleTransition,
   canTransitionConceptProtocolLifecycle,
-} from './concept-protocol-lifecycle-state.mjs';
+} from './concept-protocol-lifecycle-state.js';
 
-const common = {
+const common: any = {
   object_id: 'concept:state_machine',
   object_type: 'concept',
   actor_agent_id: 'andrey-user.primary',
@@ -28,7 +28,7 @@ assert.throws(
   /invalid_concept_protocol_lifecycle_transition/,
 );
 
-const db = new Database(':memory:');
+const db: any = new Database(':memory:');
 db.exec(`
   CREATE TABLE concept_protocol_lifecycle_events (
     event_id TEXT PRIMARY KEY,
@@ -62,7 +62,7 @@ db.exec(`
   );
 `);
 
-const first = recordLifecycleEvent({
+const first: any = recordLifecycleEvent({
   db,
   toolArgs: { ...common, event_type: 'observed', state_after: 'observed' },
 });
@@ -77,7 +77,7 @@ assert.throws(
   /invalid_concept_protocol_lifecycle_transition/,
 );
 
-const named = recordLifecycleEvent({
+const named: any = recordLifecycleEvent({
   db,
   toolArgs: { ...common, event_type: 'named', state_after: 'named' },
 });
@@ -87,7 +87,7 @@ assert.deepEqual(named.lifecycle_transition, {
   event_type: 'named',
 });
 
-const corrected = recordLifecycleEvent({
+const corrected: any = recordLifecycleEvent({
   db,
   toolArgs: { ...common, event_type: 'corrected', state_after: 'named', notes: 'clarified' },
 });

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * agent-context-mcp-server.mjs
+ * agent-context-mcp-server.ts
  *
  * MCP facade over agent-context materializations.
  *
@@ -26,10 +26,10 @@
  *   - MCP is facade only; does not own authority
  *
  * Usage:
- *   node tools/agent-context/agent-context-mcp-server.mjs --site-root <path>
+ *   node tools/agent-context/agent-context-mcp-server.ts --site-root <path>
  */
 
-import Database from './sqlite-database.mjs';
+import Database from './sqlite-database.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
@@ -40,10 +40,10 @@ import {
   resolveAgentIdentityRef,
 } from '@narada2/agent-identity';
 import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
-import { buildReground, formatMarkdown } from './doctrinal-reground.mjs';
-import * as hydrationService from './agent-context-hydration-service.mjs';
-import * as inquirySpaceService from './inquiry-space-service.mjs';
-import * as conceptLifecycleService from './concept-protocol-lifecycle-service.mjs';
+import { buildReground, formatMarkdown } from './doctrinal-reground.js';
+import * as hydrationService from './agent-context-hydration-service.js';
+import * as inquirySpaceService from './inquiry-space-service.js';
+import * as conceptLifecycleService from './concept-protocol-lifecycle-service.js';
 import {
   EXPECTED_TOOL_GROUPS,
   EXPECTED_TOOL_NAMES,
@@ -52,7 +52,7 @@ import {
   STARTUP_TOOL_NAMES,
   TOOLS,
   startupSequenceInputSchema,
-} from './agent-context-tool-catalog.mjs';
+} from './agent-context-tool-catalog.js';
 import {
   attachPayloadSource,
   buildOutputRefToolContent,
@@ -80,7 +80,7 @@ import {
   writeMcpRestartRequest,
   writeMcpRuntimeInstanceObservation,
 } from '@narada2/site-common-tools/mcp-freshness-service';
-import { discoverCodexSessionEvidence, extractCodexSessionEvidencePacket, verifyCodexExactResume } from './codex-session-evidence.mjs';
+import { discoverCodexSessionEvidence, extractCodexSessionEvidencePacket, verifyCodexExactResume } from './codex-session-evidence.js';
 import {
   buildRoleBindingProjection,
   completeCodexSessionAdmission,
@@ -90,7 +90,7 @@ import {
   materializeAgentSessionStart,
   openAgentContextDb,
   validateIdentityAgainstRoster,
-} from './session-start.mjs';
+} from './session-start.js';
 import {
   ORIENTATION_DDL,
   buildIdentityUnverifiedOrientationHint,
@@ -99,29 +99,35 @@ import {
   latestSiteEvolutionOrientation,
   loadRehydrationOnboardingCard,
   showSiteEvolutionOrientation,
-} from './site-evolution-orientation.mjs';
+} from './site-evolution-orientation.js';
 import { buildMcpRuntimeRegistryStatus } from '@narada2/site-common-tools/operator-surface/mcp-runtime-instance-registry';
 import {
   NARADA_PC_SITE_LOCUS,
   NARADA_USER_SITE_LOCUS,
 } from '@narada2/site-common-tools/site-locus-shim';
-import { taskLifecycleTools } from '@narada2/task-lifecycle-tools/src/task-mcp-tool-registry.mjs';
+import { taskLifecycleTools } from '@narada2/task-lifecycle-tools/src/task-mcp-tool-registry.js';
 import { resolveTaskLifecycleMcpServer as resolveTaskLifecycleMcpServerForSite } from '@narada2/site-common-tools/task-lifecycle-mcp-resolution';
 import {
   AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA,
   canTransitionAgentContextMcpSession,
   createAgentContextMcpSession,
   transitionAgentContextMcpSession,
-} from './agent-context-mcp-session-state.mjs';
+} from './agent-context-mcp-session-state.js';
+import { CHECKPOINT_DDL } from './agent-context-schema.js';
+const resolveAgentIdentityRefAny: any = resolveAgentIdentityRef;
+const materializeAgentSessionStartAny: any = materializeAgentSessionStart;
+const completeCodexSessionAdmissionAny: any = completeCodexSessionAdmission;
+const openAgentContextDbAny: any = openAgentContextDb;
+const listAgentStartSessionsAny: any = listAgentStartSessions;
 
-const PROTOCOL_VERSION = '2024-11-05';
-const SERVER_NAME = 'narada-andrey-agent-context-mcp';
-const SERVER_VERSION = '0.0.2';
-const SERVER_BOOTED_AT = new Date().toISOString();
+const PROTOCOL_VERSION: any = '2024-11-05';
+const SERVER_NAME: any = 'narada-andrey-agent-context-mcp';
+const SERVER_VERSION: any = '0.0.2';
+const SERVER_BOOTED_AT: any = new Date().toISOString();
 
-function buildToolResult({ siteRoot, toolName, value, payloadSource, isError = false }) {
-  const isStartupTool = STARTUP_TOOL_NAMES.has(toolName);
-  const contentResult = buildOutputRefToolContent({
+function buildToolResult({ siteRoot, toolName, value, payloadSource, isError = false }: any) {
+  const isStartupTool: any = STARTUP_TOOL_NAMES.has(toolName);
+  const contentResult: any = buildOutputRefToolContent({
     siteRoot,
     toolName,
     value: attachPayloadSource(value, payloadSource),
@@ -135,20 +141,20 @@ function buildToolResult({ siteRoot, toolName, value, payloadSource, isError = f
   };
 }
 
-function inheritedNarsSessionEnvironment(env = process.env) {
+function inheritedNarsSessionEnvironment(env: any = process.env) {
   for (const verificationSource of ['NARADA_NARS_SESSION_ID', 'NARADA_RUNTIME_SESSION_ID', 'NARADA_CARRIER_SESSION_ID']) {
-    const carrierSessionId = typeof env[verificationSource] === 'string' ? env[verificationSource].trim() : '';
+    const carrierSessionId: any = typeof env[verificationSource] === 'string' ? env[verificationSource].trim() : '';
     if (carrierSessionId) return { carrierSessionId, verificationSource };
   }
   return { carrierSessionId: null, verificationSource: null };
 }
 
-function parseArgs(argv) {
-  const result = {};
+function parseArgs(argv: any) {
+  const result: any = {};
   for (let i = 0; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg: any = argv[i];
     if (arg.startsWith('--')) {
-      const key = arg.slice(2);
+      const key: any = arg.slice(2);
       if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
         result[key] = argv[i + 1];
         i++;
@@ -160,12 +166,12 @@ function parseArgs(argv) {
   return result;
 }
 
-const args = parseArgs(process.argv.slice(2));
-const siteRoot = resolve(args['site-root'] ?? process.cwd());
-const dbPath = resolve(process.env.NARADA_AGENT_CONTEXT_DB || join(siteRoot, '.ai', 'state', 'agent-context.sqlite'));
+const args: any = parseArgs(process.argv.slice(2));
+const siteRoot: any = resolve(args['site-root'] ?? process.cwd());
+const dbPath: any = resolve(process.env.NARADA_AGENT_CONTEXT_DB || join(siteRoot, '.ai', 'state', 'agent-context.sqlite'));
 recordAgentContextRuntimeObservation();
 
-let db = null;
+let db: any = null;
 
 try {
   if (existsSync(dbPath)) {
@@ -184,30 +190,30 @@ function recordAgentContextRuntimeObservation() {
       siteRoot,
       surfaceId: 'agent-context-mcp.local',
       serverName: SERVER_NAME,
-      serverEntryPoint: 'tools/agent-context/agent-context-mcp-server.mjs',
+      serverEntryPoint: 'tools/agent-context/agent-context-mcp-server.ts',
       serverBootedAt: SERVER_BOOTED_AT,
-      watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.mjs'],
+      watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.js'],
       restartRequestPath: join(siteRoot, '.ai', 'tmp', 'agent-context-restart-request.json'),
       baselinePath: join(siteRoot, '.ai', 'tmp', 'agent-context-mcp-baseline.json'),
       freshnessEvidencePath: '.ai/runtime/agent-context-mcp',
       transport: { type: 'stdio', runtime_kind: 'node-stdio' },
     });
   } catch (error) {
-    process.stderr.write(`Failed to record agent-context MCP runtime observation: ${error.message}\n`);
+    process.stderr.write(`Failed to record agent-context MCP runtime observation: ${error instanceof Error ? error.message : String(error)}\n`);
   }
 }
 
-function migrateCheckpointsToHistory(database) {
+function migrateCheckpointsToHistory(database: any) {
   // One-time migration: if agent_checkpoint_history is newly created and
   // agent_checkpoints has multiple rows per agent, archive older ones.
   try {
-    const historyExists = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_checkpoint_history'").get();
+    const historyExists: any = database.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'agent_checkpoint_history'").get();
     if (!historyExists) return;
 
-    const count = database.prepare("SELECT COUNT(*) AS cnt FROM agent_checkpoint_history").get();
+    const count: any = database.prepare("SELECT COUNT(*) AS cnt FROM agent_checkpoint_history").get();
     if (count.cnt > 0) return; // Already migrated
 
-    const rows = database.prepare(`
+    const rows: any = database.prepare(`
       SELECT c.* FROM agent_checkpoints c
       WHERE c.checkpoint_id NOT IN (
         SELECT checkpoint_id FROM agent_checkpoints
@@ -216,7 +222,7 @@ function migrateCheckpointsToHistory(database) {
       )
     `).all();
 
-    const insert = database.prepare(`
+    const insert: any = database.prepare(`
       INSERT INTO agent_checkpoint_history (
         history_id, checkpoint_id, agent_id, session_id, checkpoint_at,
         active_task_json, files_touched_json, key_decisions_json,
@@ -224,7 +230,7 @@ function migrateCheckpointsToHistory(database) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const now = new Date().toISOString();
+    const now: any = new Date().toISOString();
     for (const row of rows) {
       insert.run(
         `hist_${randomUUID().replace(/-/g, '')}`,
@@ -244,8 +250,8 @@ function migrateCheckpointsToHistory(database) {
 
     // Delete archived rows from agent_checkpoints
     if (rows.length > 0) {
-      const ids = rows.map((r) => r.checkpoint_id);
-      const placeholders = ids.map(() => '?').join(',');
+      const ids: any = rows.map((r: any) => r.checkpoint_id);
+      const placeholders: any = ids.map(() => '?').join(',');
       database.prepare(`DELETE FROM agent_checkpoints WHERE checkpoint_id IN (${placeholders})`).run(...ids);
     }
   } catch {
@@ -253,10 +259,10 @@ function migrateCheckpointsToHistory(database) {
   }
 }
 
-let mcpOutputMode = 'line';
-let mcpSession = createAgentContextMcpSession();
+let mcpOutputMode: any = 'line';
+let mcpSession: any = createAgentContextMcpSession();
 
-function transitionMcpSession(nextState) {
+function transitionMcpSession(nextState: any) {
   mcpSession = transitionAgentContextMcpSession(mcpSession, nextState);
   return mcpSession;
 }
@@ -289,14 +295,14 @@ function mcpSessionEvidence() {
   };
 }
 
-function requireMcpSessionState(request, expectedState = 'serving') {
+function requireMcpSessionState(request: any, expectedState: any = 'serving') {
   if (mcpSession.state === expectedState) return true;
   sendError(request, -32002, `MCP session is not ${expectedState}: ${mcpSession.state}`);
   return false;
 }
 
-function writeMcpFrame(response) {
-  const body = JSON.stringify(response);
+function writeMcpFrame(response: any) {
+  const body: any = JSON.stringify(response);
   if (mcpOutputMode === 'framed') {
     process.stdout.write(`Content-Length: ${Buffer.byteLength(body, 'utf8')}\r\n\r\n${body}`);
     return;
@@ -304,8 +310,8 @@ function writeMcpFrame(response) {
   process.stdout.write(body + '\n');
 }
 
-function sendResponse(request, result) {
-  const response = {
+function sendResponse(request: any, result: any) {
+  const response: any = {
     jsonrpc: '2.0',
     id: request.id,
     result,
@@ -313,8 +319,8 @@ function sendResponse(request, result) {
   writeMcpFrame(response);
 }
 
-function sendError(request, code, message) {
-  const response = {
+function sendError(request: any, code: any, message: any) {
+  const response: any = {
     jsonrpc: '2.0',
     id: request.id,
     error: { code, message },
@@ -322,7 +328,7 @@ function sendError(request, code, message) {
   writeMcpFrame(response);
 }
 
-async function handleRequest(request) {
+async function handleRequest(request: any) {
   if (request.method === 'initialize') {
     if (!canTransitionAgentContextMcpSession(mcpSession.state, 'initializing')) {
       sendError(request, -32600, `MCP session cannot initialize from ${mcpSession.state}`);
@@ -371,18 +377,18 @@ async function handleRequest(request) {
     return;
   }
 
-  const { name, arguments: rawToolArgs } = request.params;
+  const { name, arguments: rawToolArgs }: any = request.params;
 
   try {
     enforceInlinePayloadLimit({ toolName: name, args: rawToolArgs, allowPayloadCreation: true });
-    const payloadResolution = resolveToolPayloadArgs({
+    const payloadResolution: any = resolveToolPayloadArgs({
       siteRoot,
       toolName: name,
       args: rawToolArgs,
       allowedTools: ['agent_context_checkpoint'],
     });
-    const toolArgs = payloadResolution.args;
-    let result;
+    const toolArgs: any = payloadResolution.args;
+    let result: any;
     switch (name) {
       case 'agent_context_doctor':
         result = agentContextDoctor();
@@ -544,17 +550,17 @@ async function handleRequest(request) {
     sendResponse(request, buildToolResult({
       siteRoot,
       toolName: name,
-      value: { status: 'error', message: error.message },
+      value: { status: 'error', message: error instanceof Error ? error.message : String(error) },
       payloadSource: null,
       isError: true,
     }));
   }
 }
 
-async function agentContextPause(args = {}) {
-  const requestedSeconds = Number(args.seconds);
-  const reason = typeof args.reason === 'string' ? args.reason.trim() : '';
-  const maxSeconds = 30;
+async function agentContextPause(args: any = {}) {
+  const requestedSeconds: any = Number(args.seconds);
+  const reason: any = typeof args.reason === 'string' ? args.reason.trim() : '';
+  const maxSeconds: any = 30;
 
   if (!Number.isFinite(requestedSeconds) || requestedSeconds <= 0) {
     throw new Error('seconds must be a finite number greater than 0');
@@ -566,11 +572,11 @@ async function agentContextPause(args = {}) {
     throw new Error('reason is required');
   }
 
-  const startedAtMs = Date.now();
-  const startedAt = new Date(startedAtMs).toISOString();
-  const requestedMs = Math.round(requestedSeconds * 1000);
+  const startedAtMs: any = Date.now();
+  const startedAt: any = new Date(startedAtMs).toISOString();
+  const requestedMs: any = Math.round(requestedSeconds * 1000);
   await sleep(requestedMs);
-  const endedAtMs = Date.now();
+  const endedAtMs: any = Date.now();
 
   return {
     schema: 'narada.agent_context.pause_result.v0',
@@ -587,14 +593,14 @@ async function agentContextPause(args = {}) {
 }
 
 function agentContextDoctor() {
-  const dbExists = existsSync(dbPath);
-  let tablesPresent = false;
-  let tableList = [];
+  const dbExists: any = existsSync(dbPath);
+  let tablesPresent: any = false;
+  let tableList: any = [];
 
   if (db) {
     try {
-      const rows = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
-      tableList = rows.map((r) => r.name);
+      const rows: any = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
+      tableList = rows.map((r: any) => r.name);
       tablesPresent = [
         'agent_start_events',
         'execution_context_materializations',
@@ -613,7 +619,7 @@ function agentContextDoctor() {
         'concept_protocol_lifecycle_events',
         'concept_protocol_lifecycle_current_state',
         'site_evolution_orientation_snapshots',
-      ].every((t) => tableList.includes(t));
+      ].every((t: any) => tableList.includes(t));
     } catch {
       tablesPresent = false;
     }
@@ -636,14 +642,14 @@ function agentContextDoctor() {
   };
 }
 
-function agentContextStartSession(toolArgs) {
-  const identity = toolArgs?.identity;
+function agentContextStartSession(toolArgs: any) {
+  const identity: any = toolArgs?.identity;
   if (!identity) {
     throw new Error('identity is required');
   }
 
-  const dryRun = toolArgs?.dry_run === true || toolArgs?.dry_run === 'true';
-  const result = materializeAgentSessionStart({
+  const dryRun: any = toolArgs?.dry_run === true || toolArgs?.dry_run === 'true';
+  const result: any = materializeAgentSessionStartAny({
     siteRoot,
     identity,
     runtime: toolArgs?.runtime ?? 'kimi',
@@ -653,7 +659,7 @@ function agentContextStartSession(toolArgs) {
   });
 
   if (!dryRun && !db) {
-    db = openAgentContextDb(siteRoot, dbPath);
+    db = openAgentContextDbAny(siteRoot, dbPath);
     db.exec(CHECKPOINT_DDL);
     migrateCheckpointsToHistory(db);
   }
@@ -661,19 +667,19 @@ function agentContextStartSession(toolArgs) {
   return result;
 }
 
-function agentContextCompleteCodexAdmission(toolArgs) {
-  const admissionId = stringField(toolArgs ?? {}, 'admission_id');
-  const identity = stringField(toolArgs ?? {}, 'identity');
-  const codexSessionId = stringField(toolArgs ?? {}, 'codex_session_id');
-  const codexSessionFile = stringField(toolArgs ?? {}, 'codex_session_file');
-  const operatorOverrideRef = stringField(toolArgs ?? {}, 'operator_override_ref');
+function agentContextCompleteCodexAdmission(toolArgs: any) {
+  const admissionId: any = stringField(toolArgs ?? {}, 'admission_id');
+  const identity: any = stringField(toolArgs ?? {}, 'identity');
+  const codexSessionId: any = stringField(toolArgs ?? {}, 'codex_session_id');
+  const codexSessionFile: any = stringField(toolArgs ?? {}, 'codex_session_file');
+  const operatorOverrideRef: any = stringField(toolArgs ?? {}, 'operator_override_ref');
   if (!admissionId) throw new Error('admission_id is required');
   if (!identity) throw new Error('identity is required');
   if (!codexSessionId) throw new Error('codex_session_id is required');
 
-  const envAgentId = process.env.NARADA_AGENT_ID || null;
-  const envAdmissionId = process.env.NARADA_CODEX_ADMISSION_ID || null;
-  const envIssues = [];
+  const envAgentId: any = process.env.NARADA_AGENT_ID || null;
+  const envAdmissionId: any = process.env.NARADA_CODEX_ADMISSION_ID || null;
+  const envIssues: any = [];
   if (envAgentId !== identity) {
     envIssues.push({
       code: 'narada_agent_id_mismatch',
@@ -692,7 +698,7 @@ function agentContextCompleteCodexAdmission(toolArgs) {
     throw new Error(`codex_admission_completion_env_mismatch: ${JSON.stringify(envIssues)}`);
   }
 
-  const result = completeCodexSessionAdmission({
+  const result: any = completeCodexSessionAdmissionAny({
     siteRoot,
     admissionId,
     identity,
@@ -711,7 +717,7 @@ function agentContextCompleteCodexAdmission(toolArgs) {
   });
 
   if (!db) {
-    db = openAgentContextDb(siteRoot, dbPath);
+    db = openAgentContextDbAny(siteRoot, dbPath);
     db.exec(CHECKPOINT_DDL);
     migrateCheckpointsToHistory(db);
   }
@@ -719,7 +725,7 @@ function agentContextCompleteCodexAdmission(toolArgs) {
   return result;
 }
 
-function agentContextDiscoverCodexSessionEvidence(toolArgs) {
+function agentContextDiscoverCodexSessionEvidence(toolArgs: any) {
   return discoverCodexSessionEvidence({
     siteRoot,
     admissionId: stringField(toolArgs ?? {}, 'admission_id'),
@@ -729,7 +735,7 @@ function agentContextDiscoverCodexSessionEvidence(toolArgs) {
   });
 }
 
-function agentContextExtractCodexSessionEvidencePacket(toolArgs) {
+function agentContextExtractCodexSessionEvidencePacket(toolArgs: any) {
   return extractCodexSessionEvidencePacket({
     siteRoot,
     admissionId: stringField(toolArgs ?? {}, 'admission_id'),
@@ -741,7 +747,7 @@ function agentContextExtractCodexSessionEvidencePacket(toolArgs) {
   });
 }
 
-function agentContextVerifyCodexExactResume(toolArgs) {
+function agentContextVerifyCodexExactResume(toolArgs: any) {
   return verifyCodexExactResume({
     codexSessionId: stringField(toolArgs ?? {}, 'codex_session_id'),
     codexSessionFile: stringField(toolArgs ?? {}, 'codex_session_file'),
@@ -749,14 +755,14 @@ function agentContextVerifyCodexExactResume(toolArgs) {
   });
 }
 
-function agentContextHydrateCurrent(toolArgs) {
-  const hydratedAt = new Date().toISOString();
-  const outputMode = normalizeHydrateOutputMode(stringField(toolArgs ?? {}, 'output') ?? 'summary');
-  const includeRawEvidence = outputMode === 'debug' || toolArgs?.include_raw_evidence === true || toolArgs?.include_raw_evidence === 'true';
-  const checkpointStartup = toolArgs?.checkpoint_startup === true || toolArgs?.checkpoint_startup === 'true';
-  const whoami = agentContextWhoami({});
+function agentContextHydrateCurrent(toolArgs: any) {
+  const hydratedAt: any = new Date().toISOString();
+  const outputMode: any = normalizeHydrateOutputMode(stringField(toolArgs ?? {}, 'output') ?? 'summary');
+  const includeRawEvidence: any = outputMode === 'debug' || toolArgs?.include_raw_evidence === true || toolArgs?.include_raw_evidence === 'true';
+  const checkpointStartup: any = toolArgs?.checkpoint_startup === true || toolArgs?.checkpoint_startup === 'true';
+  const whoami: any = agentContextWhoami({});
   if (whoami.status !== 'ok' || whoami.source !== 'NARADA_AGENT_ID' || whoami.confidence !== 'high' || !whoami.identity) {
-    const actionSafety = buildHydrateActionSafety({
+    const actionSafety: any = buildHydrateActionSafety({
       agentId: whoami.identity,
       hydratedAt,
       whoami,
@@ -768,7 +774,7 @@ function agentContextHydrateCurrent(toolArgs) {
       operatorOverrideRef: stringField(toolArgs ?? {}, 'operator_override_ref'),
       mcpPressure: null,
     });
-    const unverified = {
+    const unverified: any = {
       status: 'identity_unverified',
       schema: 'narada.agent_context.hydrate_current.v0',
       hydrated_at: hydratedAt,
@@ -778,7 +784,7 @@ function agentContextHydrateCurrent(toolArgs) {
       required_next_action: 'agent_session_binding_unavailable',
       identity_unverified_orientation_hint: buildIdentityUnverifiedOrientationHint(),
     };
-    const readiness = buildStartupReadinessVerdict({
+    const readiness: any = buildStartupReadinessVerdict({
       hydratedAt,
       agentId: whoami.identity,
       role: whoami.role,
@@ -792,14 +798,14 @@ function agentContextHydrateCurrent(toolArgs) {
       recommendedNextAction: null,
       operatorOverrideRef: stringField(toolArgs ?? {}, 'operator_override_ref'),
     });
-    const readinessWithActionSafety = { ...readiness, action_safety: actionSafety };
+    const readinessWithActionSafety: any = { ...readiness, action_safety: actionSafety };
     return outputMode === 'readiness'
       ? readinessWithActionSafety
       : { ...unverified, startup_readiness: readinessWithActionSafety };
   }
 
-  const agentId = whoami.identity;
-  const agentIdentityRef = whoami.agent_identity_ref ?? resolveAgentIdentityRef(agentId, {
+  const agentId: any = whoami.identity;
+  const agentIdentityRef: any = whoami.agent_identity_ref ?? resolveAgentIdentityRefAny(agentId, {
     site_id: process.env.NARADA_SITE_ID || null,
     role: whoami.role,
   }).value ?? buildAgentIdentityRefV2({
@@ -810,33 +816,33 @@ function agentContextHydrateCurrent(toolArgs) {
     role: whoami.role,
     legacy_agent_id: agentId,
   });
-  const eventId = process.env.NARADA_AGENT_START_EVENT_ID || null;
-  const rehydrate = safeCall(() => agentContextRehydrate({ agent_id: agentId }));
-  const checkpoint = rehydrate.ok ? rehydrate.value : { status: 'error', message: rehydrate.error };
-  const bootstrap = safeCall(() => agentContextShowBootstrap(eventId ? { event_id: eventId } : { identity: agentId }));
-  const capabilityPolicy = bootstrap.ok
+  const eventId: any = process.env.NARADA_AGENT_START_EVENT_ID || null;
+  const rehydrate: any = safeCall(() => agentContextRehydrate({ agent_id: agentId }));
+  const checkpoint: any = rehydrate.ok ? rehydrate.value : { status: 'error', message: rehydrate.error };
+  const bootstrap: any = safeCall(() => agentContextShowBootstrap(eventId ? { event_id: eventId } : { identity: agentId }));
+  const capabilityPolicy: any = bootstrap.ok
     ? bootstrap.value.execution_context_summary?.capability_policy ?? null
     : null;
-  const suppliedLastWorkboardCheckAt = stringField(toolArgs ?? {}, 'last_workboard_check_at');
-  const checkpointLastWorkboardCheckAt = checkpoint?.status === 'ok'
+  const suppliedLastWorkboardCheckAt: any = stringField(toolArgs ?? {}, 'last_workboard_check_at');
+  const checkpointLastWorkboardCheckAt: any = checkpoint?.status === 'ok'
     ? checkpoint.last_workboard_check_at ?? null
     : null;
-  const effectiveLastWorkboardCheckAt = suppliedLastWorkboardCheckAt ?? checkpointLastWorkboardCheckAt;
-  const workboardFreshnessSource = suppliedLastWorkboardCheckAt
+  const effectiveLastWorkboardCheckAt: any = suppliedLastWorkboardCheckAt ?? checkpointLastWorkboardCheckAt;
+  const workboardFreshnessSource: any = suppliedLastWorkboardCheckAt
     ? 'tool_argument'
     : checkpointLastWorkboardCheckAt
       ? 'checkpoint'
       : 'none';
-  const taskLifecycleNext = callTaskLifecycleNextMcp({
+  const taskLifecycleNext: any = callTaskLifecycleNextMcp({
     agentId,
     limit: integerField(toolArgs ?? {}, 'limit') ?? 8,
     lastWorkboardCheckAt: effectiveLastWorkboardCheckAt,
   });
-  const doctrineDetailSource = stringField(toolArgs ?? {}, 'doctrine_detail') ? 'tool_argument' : 'default';
-  const doctrineDetail = normalizeDoctrineDetail(stringField(toolArgs ?? {}, 'doctrine_detail') ?? 'reground');
-  const groundingTrigger = normalizeGroundingTrigger(stringField(toolArgs ?? {}, 'trigger') ?? 'startup');
-  const operatorOverrideRef = stringField(toolArgs ?? {}, 'operator_override_ref');
-  const grounding = hydrationService.buildHydrationGrounding({
+  const doctrineDetailSource: any = stringField(toolArgs ?? {}, 'doctrine_detail') ? 'tool_argument' : 'default';
+  const doctrineDetail: any = normalizeDoctrineDetail(stringField(toolArgs ?? {}, 'doctrine_detail') ?? 'reground');
+  const groundingTrigger: any = normalizeGroundingTrigger(stringField(toolArgs ?? {}, 'trigger') ?? 'startup');
+  const operatorOverrideRef: any = stringField(toolArgs ?? {}, 'operator_override_ref');
+  const grounding: any = hydrationService.buildHydrationGrounding({
     detail: doctrineDetail,
     whoami,
     capabilityPolicy,
@@ -844,7 +850,7 @@ function agentContextHydrateCurrent(toolArgs) {
     taskLifecycleNext,
     regroundResult: safeCall(() => buildReground(siteRoot)),
   });
-  const groundingEvent = safeCall(() => emitGroundingEvent({
+  const groundingEvent: any = safeCall(() => emitGroundingEvent({
     agentId,
     sessionId: eventId,
     trigger: groundingTrigger,
@@ -852,20 +858,20 @@ function agentContextHydrateCurrent(toolArgs) {
     grounding,
     operatorOverrideRef,
   }));
-  const onboardingCard = loadRehydrationOnboardingCard({ siteRoot, db });
-  const siteLiftOrientation = buildSiteLiftOrientation({
+  const onboardingCard: any = loadRehydrationOnboardingCard({ siteRoot, db });
+  const siteLiftOrientation: any = buildSiteLiftOrientation({
     role: whoami.role,
     bootstrap: bootstrap.ok ? bootstrap.value : null,
   });
-  const locusOrientation = buildHydrationLocusOrientation({
+  const locusOrientation: any = buildHydrationLocusOrientation({
     bootstrap: bootstrap.ok ? bootstrap.value : null,
     sessionSiteRoot: siteRoot,
   });
 
-  const recommendedNextAction = taskLifecycleNext?.recommendation ?? null;
-  let hostRuntimeRegistry = buildHydrateHostRuntimeRegistryStatus();
-  let mcpRestartReadiness = buildHydrateMcpRestartReadiness({ taskLifecycleNext, hostRuntimeRegistry });
-  const mcpRestartAutoAcknowledgement = autoAcknowledgeHydrateMcpRefreshes({
+  const recommendedNextAction: any = taskLifecycleNext?.recommendation ?? null;
+  let hostRuntimeRegistry: any = buildHydrateHostRuntimeRegistryStatus();
+  let mcpRestartReadiness: any = buildHydrateMcpRestartReadiness({ taskLifecycleNext, hostRuntimeRegistry });
+  const mcpRestartAutoAcknowledgement: any = autoAcknowledgeHydrateMcpRefreshes({
     mcpRestartReadiness,
     taskLifecycleNext,
   });
@@ -873,9 +879,9 @@ function agentContextHydrateCurrent(toolArgs) {
     hostRuntimeRegistry = buildHydrateHostRuntimeRegistryStatus();
     mcpRestartReadiness = buildHydrateMcpRestartReadiness({ taskLifecycleNext, hostRuntimeRegistry });
   }
-  const mcpPressure = buildMcpStaleSurfacePressure(mcpRestartReadiness, hostRuntimeRegistry);
-  const mcpSiteReadiness = buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntimeRegistry);
-  const actionSafety = buildHydrateActionSafety({
+  const mcpPressure: any = buildMcpStaleSurfacePressure(mcpRestartReadiness, hostRuntimeRegistry);
+  const mcpSiteReadiness: any = buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntimeRegistry);
+  const actionSafety: any = buildHydrateActionSafety({
     agentId,
     hydratedAt,
     whoami,
@@ -890,7 +896,7 @@ function agentContextHydrateCurrent(toolArgs) {
     operatorOverrideRef,
     mcpPressure,
   });
-  const provenance = {
+  const provenance: any = {
     checkpoint: checkpoint?.status === 'ok'
       ? 'rehydrated'
       : checkpoint?.status === 'no_checkpoint'
@@ -909,7 +915,7 @@ function agentContextHydrateCurrent(toolArgs) {
     rehydration_onboarding_card: onboardingCard.status,
   };
 
-  const fullPayload = {
+  const fullPayload: any = {
     status: 'ok',
     schema: 'narada.agent_context.hydrate_current.v0',
     hydrated_at: hydratedAt,
@@ -978,7 +984,7 @@ function agentContextHydrateCurrent(toolArgs) {
     startup_instruction: 'Obey capability_policy. Treat session_control_surface as orientation/control evidence only; it is not requested-work substrate authority. For short duty-loop nudges such as go on, next, continue, or proceed, preserve the last explicit operator locus correction and require explicit target_site_root before mutation when cwd/operator-stated locus disagrees with an MCP default target. If task_lifecycle_next is live and has agent_actionable_recommendation, it is the normal workloop authority: use workloop_summary/recommended_next_action and act through MCP lifecycle surfaces instead of running inbox/CAPA/capability fallback checks or diagnostic churn. If the task_lifecycle_next payload is large, read only enough to obtain workloop_summary or recommended_next_action, then inspect/claim the recommended task. If the operator asks where we can go, where to go next, what options exist, previous, or downstream, apply the IS Navigation Choice Protocol before reducing the answer to recommended_next_action. Use recommended_next_action as an execution-order signal, not the full inquiry topology. If recommended_next_action is null, do not declare standby from the task workboard alone; check inbox_next, capa_queue, and capability_next first. If a needed capability is missing from MCP, stop and report the missing MCP capability instead of using native substrate fallback.',
   };
 
-  const startupReadiness = buildStartupReadinessVerdict({
+  const startupReadiness: any = buildStartupReadinessVerdict({
     hydratedAt,
     agentId,
     role: whoami.role,
@@ -1089,9 +1095,9 @@ function agentContextHydrateCurrent(toolArgs) {
   }), { outputMode });
 }
 
-function compactHydratePayload(fullPayload, rawEvidenceRefs, { outputMode }) {
-  const startupReadiness = compactStartupReadiness(fullPayload.startup_readiness, rawEvidenceRefs);
-  const compact = {
+function compactHydratePayload(fullPayload: any, rawEvidenceRefs: any, { outputMode }: any) {
+  const startupReadiness: any = compactStartupReadiness(fullPayload.startup_readiness, rawEvidenceRefs);
+  const compact: any = {
     status: fullPayload.status,
     schema: fullPayload.schema,
     output_mode: outputMode,
@@ -1180,9 +1186,9 @@ function compactHydratePayload(fullPayload, rawEvidenceRefs, { outputMode }) {
   return compact;
 }
 
-function compactStartupReadiness(readiness, rawEvidenceRefs = {}) {
+function compactStartupReadiness(readiness: any, rawEvidenceRefs: any = {}) {
   if (!readiness || typeof readiness !== 'object') return readiness;
-  const compact = {
+  const compact: any = {
     ...readiness,
     pc_runtime_registry: compactHostRuntimeRegistry(readiness.pc_runtime_registry),
     mcp_restart_readiness: compactMcpRestartReadinessList(readiness.mcp_restart_readiness, rawEvidenceRefs.mcp_restart_readiness),
@@ -1203,7 +1209,7 @@ function buildHydrationRawEvidenceRefs({
   doctrinalGrounding,
   siteLiftOrientation,
   rehydrationOnboardingCard,
-}) {
+}: any) {
   return {
     mcp_pressure: materializeHydrationEvidenceRef('agent_context_hydrate_current.mcp_pressure.raw', mcpPressure),
     mcp_site_readiness: materializeHydrationEvidenceRef('agent_context_hydrate_current.mcp_site_readiness.raw', mcpSiteReadiness),
@@ -1215,16 +1221,16 @@ function buildHydrationRawEvidenceRefs({
   };
 }
 
-function materializeHydrationEvidenceRef(toolName, value) {
-  const result = buildOutputRefToolContent({
+function materializeHydrationEvidenceRef(toolName: any, value: any) {
+  const result: any = buildOutputRefToolContent({
     siteRoot,
     toolName,
     value,
     limit: 200,
   });
-  const text = result?.content?.[0]?.text;
+  const text: any = result?.content?.[0]?.text;
   try {
-    const parsed = JSON.parse(text);
+    const parsed: any = JSON.parse(text);
     if (parsed?.output_ref) {
       return {
         ref: parsed.output_ref,
@@ -1242,7 +1248,7 @@ function materializeHydrationEvidenceRef(toolName, value) {
   };
 }
 
-function compactMcpPressure(mcpPressure, rawEvidenceRef = null) {
+function compactMcpPressure(mcpPressure: any, rawEvidenceRef: any = null) {
   if (!mcpPressure || typeof mcpPressure !== 'object') return mcpPressure;
   return {
     schema: 'narada.mcp.stale_surface_pressure.summary.v0',
@@ -1255,9 +1261,9 @@ function compactMcpPressure(mcpPressure, rawEvidenceRef = null) {
     counts: mcpPressure.counts ?? mcpPressure.readiness_accounting?.counts ?? {},
     affected_surfaces: (mcpPressure.surfaces ?? []).map(compactMcpReadinessSurface),
     critical_dispositions: (mcpPressure.surfaces ?? [])
-      .map((surface) => ({ surface, disposition: surface.disposition ?? buildMcpRestartDisposition(surface) }))
-      .filter(({ disposition }) => disposition?.terminal_blocker === true)
-      .map(({ surface, disposition }) => ({
+      .map((surface: any) => ({ surface, disposition: surface.disposition ?? buildMcpRestartDisposition(surface) }))
+      .filter(({ disposition }: any) => disposition?.terminal_blocker === true)
+      .map(({ surface, disposition }: any) => ({
         surface_id: surface.surface_id ?? null,
         server_name: surface.server_name ?? null,
         disposition_status: disposition.status ?? null,
@@ -1271,7 +1277,7 @@ function compactMcpPressure(mcpPressure, rawEvidenceRef = null) {
   };
 }
 
-function compactSiteOwnedMcpReadiness(mcpSiteReadiness, rawEvidenceRef = null) {
+function compactSiteOwnedMcpReadiness(mcpSiteReadiness: any, rawEvidenceRef: any = null) {
   if (!mcpSiteReadiness || typeof mcpSiteReadiness !== 'object') return mcpSiteReadiness;
   return {
     schema: 'narada.mcp.site_owned_readiness.summary.v0',
@@ -1292,10 +1298,10 @@ function compactSiteOwnedMcpReadiness(mcpSiteReadiness, rawEvidenceRef = null) {
   };
 }
 
-function compactMcpRestartReadinessList(readiness, rawEvidenceRef = null) {
-  const surfaces = Array.isArray(readiness) ? readiness : [];
-  const compactSurfaces = surfaces.map(compactMcpReadinessSurface);
-  const nonClearSurfaces = compactSurfaces.filter((surface) => (
+function compactMcpRestartReadinessList(readiness: any, rawEvidenceRef: any = null) {
+  const surfaces: any = Array.isArray(readiness) ? readiness : [];
+  const compactSurfaces: any = surfaces.map(compactMcpReadinessSurface);
+  const nonClearSurfaces: any = compactSurfaces.filter((surface: any) => (
     surface.pending_restart === true
     || surface.stale_live_surface_possible === true
     || surface.disposition_status !== 'clear'
@@ -1307,15 +1313,15 @@ function compactMcpRestartReadinessList(readiness, rawEvidenceRef = null) {
       total: compactSurfaces.length,
       clear: compactSurfaces.length - nonClearSurfaces.length,
       non_clear: nonClearSurfaces.length,
-      pending_restart: compactSurfaces.filter((surface) => surface.pending_restart === true).length,
-      stale_live_surface_possible: compactSurfaces.filter((surface) => surface.stale_live_surface_possible === true).length,
+      pending_restart: compactSurfaces.filter((surface: any) => surface.pending_restart === true).length,
+      stale_live_surface_possible: compactSurfaces.filter((surface: any) => surface.stale_live_surface_possible === true).length,
     },
     non_clear_surfaces: nonClearSurfaces,
     raw_evidence_ref: rawEvidenceRef,
   };
 }
 
-function compactDoctrinalGrounding(grounding, rawEvidenceRef = null) {
+function compactDoctrinalGrounding(grounding: any, rawEvidenceRef: any = null) {
   if (!grounding || typeof grounding !== 'object') return grounding;
   return {
     schema: grounding.schema ?? null,
@@ -1335,7 +1341,7 @@ function compactDoctrinalGrounding(grounding, rawEvidenceRef = null) {
   };
 }
 
-function compactRehydrationOnboardingCard(onboardingCard, rawEvidenceRef = null) {
+function compactRehydrationOnboardingCard(onboardingCard: any, rawEvidenceRef: any = null) {
   if (!onboardingCard || typeof onboardingCard !== 'object') return onboardingCard;
   return {
     schema: onboardingCard.schema ?? null,
@@ -1349,7 +1355,7 @@ function compactRehydrationOnboardingCard(onboardingCard, rawEvidenceRef = null)
   };
 }
 
-function compactActionSafety(actionSafety) {
+function compactActionSafety(actionSafety: any) {
   if (!actionSafety || typeof actionSafety !== 'object') return actionSafety;
   return {
     schema: actionSafety.schema ?? null,
@@ -1370,7 +1376,7 @@ function compactActionSafety(actionSafety) {
   };
 }
 
-function compactStandbyVerification(standbyVerification) {
+function compactStandbyVerification(standbyVerification: any) {
   if (!standbyVerification || typeof standbyVerification !== 'object') return standbyVerification;
   return {
     schema: standbyVerification.schema ?? null,
@@ -1384,7 +1390,7 @@ function compactStandbyVerification(standbyVerification) {
   };
 }
 
-function compactCheckpoint(checkpoint) {
+function compactCheckpoint(checkpoint: any) {
   if (!checkpoint || typeof checkpoint !== 'object') return checkpoint;
   return {
     status: checkpoint.status ?? null,
@@ -1398,7 +1404,7 @@ function compactCheckpoint(checkpoint) {
   };
 }
 
-function compactBootstrap(bootstrap) {
+function compactBootstrap(bootstrap: any) {
   if (!bootstrap || typeof bootstrap !== 'object') return bootstrap;
   if (bootstrap.status && bootstrap.status !== 'ok') return bootstrap;
   return {
@@ -1417,7 +1423,7 @@ function compactBootstrap(bootstrap) {
   };
 }
 
-function compactTaskLifecycleNext(taskLifecycleNext) {
+function compactTaskLifecycleNext(taskLifecycleNext: any) {
   if (!taskLifecycleNext || typeof taskLifecycleNext !== 'object') return taskLifecycleNext;
   return {
     status: taskLifecycleNext.status ?? null,
@@ -1434,7 +1440,7 @@ function compactTaskLifecycleNext(taskLifecycleNext) {
   };
 }
 
-function compactMcpFreshness(freshness) {
+function compactMcpFreshness(freshness: any) {
   return {
     schema: freshness.schema ?? null,
     server_name: freshness.server_name ?? null,
@@ -1449,11 +1455,11 @@ function compactMcpFreshness(freshness) {
   };
 }
 
-function buildHydrationLocusOrientation({ bootstrap = null, sessionSiteRoot }) {
-  const executionContext = bootstrap?.execution_context_summary ?? {};
-  const cwd = executionContext.cwd ?? bootstrap?.cwd ?? null;
-  const siteLoci = buildCanonicalSiteLoci({ userSiteRoot: sessionSiteRoot });
-  const operatorStatedRoot = process.env.NARADA_OPERATOR_STATED_SITE_ROOT
+function buildHydrationLocusOrientation({ bootstrap = null, sessionSiteRoot }: any) {
+  const executionContext: any = bootstrap?.execution_context_summary ?? {};
+  const cwd: any = executionContext.cwd ?? bootstrap?.cwd ?? null;
+  const siteLoci: any = buildCanonicalSiteLoci({ userSiteRoot: sessionSiteRoot });
+  const operatorStatedRoot: any = process.env.NARADA_OPERATOR_STATED_SITE_ROOT
     || process.env.NARADA_REQUESTED_WORK_ROOT
     || process.env.NARADA_TARGET_SITE_ROOT
     || null;
@@ -1484,7 +1490,7 @@ function buildHydrationLocusOrientation({ bootstrap = null, sessionSiteRoot }) {
   };
 }
 
-function buildCanonicalSiteLoci({ userSiteRoot = siteRoot, pcSiteRoot = process.env.NARADA_PC_SITE_ROOT || null } = {}) {
+function buildCanonicalSiteLoci({ userSiteRoot = siteRoot, pcSiteRoot = process.env.NARADA_PC_SITE_ROOT || null }: any = {}) {
   return {
     schema: 'narada.site_loci.canonical.v0',
     user_site_locus: NARADA_USER_SITE_LOCUS,
@@ -1495,30 +1501,30 @@ function buildCanonicalSiteLoci({ userSiteRoot = siteRoot, pcSiteRoot = process.
   };
 }
 
-function canonicalRoot(value) {
+function canonicalRoot(value: any) {
   return resolve(String(value ?? '')).replace(/[\\/]+$/, '').toLowerCase();
 }
 
-function pathInsideRoot(pathValue, rootValue) {
-  const root = canonicalRoot(rootValue);
-  const candidate = canonicalRoot(pathValue);
+function pathInsideRoot(pathValue: any, rootValue: any) {
+  const root: any = canonicalRoot(rootValue);
+  const candidate: any = canonicalRoot(pathValue);
   return candidate === root || candidate.startsWith(`${root}\\`) || candidate.startsWith(`${root}/`);
 }
 
-function collectCheckpointPathEvidence(toolArgs) {
-  const evidence = [];
-  const add = (field, value) => {
+function collectCheckpointPathEvidence(toolArgs: any) {
+  const evidence: any = [];
+  const add: any = (field: any, value: any) => {
     if (typeof value !== 'string' || value.trim().length === 0) return;
     evidence.push({ field, value: value.trim() });
   };
-  const walk = (field, value) => {
+  const walk: any = (field: any, value: any) => {
     if (value == null) return;
     if (typeof value === 'string') {
       add(field, value);
       return;
     }
     if (Array.isArray(value)) {
-      value.forEach((item, index) => walk(`${field}[${index}]`, item));
+      value.forEach((item: any, index: any) => walk(`${field}[${index}]`, item));
       return;
     }
     if (typeof value === 'object') {
@@ -1540,10 +1546,10 @@ function collectCheckpointPathEvidence(toolArgs) {
   return evidence;
 }
 
-function extractAbsolutePathCandidates(value) {
+function extractAbsolutePathCandidates(value: any) {
   if (typeof value !== 'string') return [];
-  const candidates = [];
-  const windowsPathPattern = /[A-Za-z]:[\\/][^\s"'`<>|]+(?:[\\/][^\s"'`<>|]+)*/g;
+  const candidates: any = [];
+  const windowsPathPattern: any = /[A-Za-z]:[\\/][^\s"'`<>|]+(?:[\\/][^\s"'`<>|]+)*/g;
   for (const match of value.matchAll(windowsPathPattern)) {
     candidates.push(match[0]);
   }
@@ -1553,10 +1559,10 @@ function extractAbsolutePathCandidates(value) {
   return candidates;
 }
 
-function evaluateCheckpointSiteBinding(toolArgs) {
-  const mismatches = [];
-  const configuredSiteRoot = siteRoot;
-  const targetSiteRoot = typeof toolArgs?.target_site_root === 'string' && toolArgs.target_site_root.trim().length > 0
+function evaluateCheckpointSiteBinding(toolArgs: any) {
+  const mismatches: any = [];
+  const configuredSiteRoot: any = siteRoot;
+  const targetSiteRoot: any = typeof toolArgs?.target_site_root === 'string' && toolArgs.target_site_root.trim().length > 0
     ? toolArgs.target_site_root.trim()
     : null;
   if (targetSiteRoot && !pathInsideRoot(targetSiteRoot, configuredSiteRoot)) {
@@ -1599,8 +1605,8 @@ function evaluateCheckpointSiteBinding(toolArgs) {
   };
 }
 
-function buildCheckpointContamination({ checkpointId, payload }) {
-  const guard = evaluateCheckpointSiteBinding(payload ?? {});
+function buildCheckpointContamination({ checkpointId, payload }: any) {
+  const guard: any = evaluateCheckpointSiteBinding(payload ?? {});
   if (guard.status !== 'refuse') {
     return {
       schema: 'narada.agent_context.checkpoint_contamination.v0',
@@ -1630,8 +1636,8 @@ function buildCheckpointContamination({ checkpointId, payload }) {
   };
 }
 
-function buildSiteLiftOrientation({ role, bootstrap = null }) {
-  const base = {
+function buildSiteLiftOrientation({ role, bootstrap = null }: any) {
+  const base: any = {
     schema: 'narada.site_lift.orientation.v0',
     surface_id: 'site-lift-catalog-mcp.local',
     catalog_path: 'site-lift/lift-catalog.json',
@@ -1651,7 +1657,7 @@ function buildSiteLiftOrientation({ role, bootstrap = null }) {
     };
   }
 
-  const catalogFile = join(siteRoot, 'site-lift', 'lift-catalog.json');
+  const catalogFile: any = join(siteRoot, 'site-lift', 'lift-catalog.json');
   if (!existsSync(catalogFile)) {
     return {
       ...base,
@@ -1664,8 +1670,8 @@ function buildSiteLiftOrientation({ role, bootstrap = null }) {
   }
 
   try {
-    const catalog = JSON.parse(readFileSync(catalogFile, 'utf8'));
-    const artifacts = Array.isArray(catalog.artifacts) ? catalog.artifacts : [];
+    const catalog: any = JSON.parse(readFileSync(catalogFile, 'utf8'));
+    const artifacts: any = Array.isArray(catalog.artifacts) ? catalog.artifacts : [];
     return {
       ...base,
       status: 'available',
@@ -1678,7 +1684,7 @@ function buildSiteLiftOrientation({ role, bootstrap = null }) {
         'site_lift_catalog_adoption_plan',
         'site_lift_catalog_adoption_command',
       ],
-      top_artifacts: artifacts.slice(0, 5).map((artifact) => ({
+      top_artifacts: artifacts.slice(0, 5).map((artifact: any) => ({
         artifact_id: artifact.artifact_id,
         name: artifact.name,
         version: artifact.version,
@@ -1695,51 +1701,51 @@ function buildSiteLiftOrientation({ role, bootstrap = null }) {
       status: 'degraded',
       role_visibility: role,
       reason: 'site_lift_catalog_invalid_json',
-      message: error instanceof Error ? error.message : String(error),
+      message: error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error),
       top_artifacts: [],
       available_tools: [],
     };
   }
 }
 
-function bootstrapHasMcpServer(bootstrap, serverNameOrSurfaceId) {
-  const servers = bootstrap?.execution_context_summary?.mcp_servers;
+function bootstrapHasMcpServer(bootstrap: any, serverNameOrSurfaceId: any) {
+  const servers: any = bootstrap?.execution_context_summary?.mcp_servers;
   if (!Array.isArray(servers)) return false;
-  return servers.some((server) => server?.name === serverNameOrSurfaceId || server?.surface_id === serverNameOrSurfaceId);
+  return servers.some((server: any) => server?.name === serverNameOrSurfaceId || server?.surface_id === serverNameOrSurfaceId);
 }
 
-function siteLiftOrientationSummary(role) {
+function siteLiftOrientationSummary(role: any) {
   if (role === 'resident') return 'Advisory reusable Site machinery catalog is available for local operation and repair context.';
   if (role === 'architect') return 'Advisory lift catalog is available for evaluating possible cross-Site adoption paths.';
   return 'Advisory read-only lift catalog is available for discovery; receiving-Site adoption still requires separate authority.';
 }
 
-function safeCall(fn) {
+function safeCall(fn: any) {
   try {
     return { ok: true, value: fn() };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return { ok: false, error: error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error) };
   }
 }
 
-function normalizeDoctrineDetail(value) {
-  const allowed = new Set(['status', 'summary', 'reground', 'full']);
+function normalizeDoctrineDetail(value: any) {
+  const allowed: any = new Set(['status', 'summary', 'reground', 'full']);
   if (!allowed.has(value)) {
     throw new Error(`invalid_doctrine_detail: ${value}`);
   }
   return value;
 }
 
-function normalizeGroundingTrigger(value) {
-  const allowed = new Set(['startup', 'post_compaction', 'manual_reground', 'hydration']);
+function normalizeGroundingTrigger(value: any) {
+  const allowed: any = new Set(['startup', 'post_compaction', 'manual_reground', 'hydration']);
   if (!allowed.has(value)) {
     throw new Error(`invalid_grounding_trigger: ${value}`);
   }
   return value;
 }
 
-function normalizeHydrateOutputMode(value) {
-  const allowed = new Set(['summary', 'full', 'readiness', 'debug']);
+function normalizeHydrateOutputMode(value: any) {
+  const allowed: any = new Set(['summary', 'full', 'readiness', 'debug']);
   if (!allowed.has(value)) {
     throw new Error(`invalid_hydrate_output: ${value}`);
   }
@@ -1757,20 +1763,20 @@ function buildHydrateActionSafety({
   workboardFreshnessInput,
   operatorOverrideRef,
   mcpPressure,
-}) {
-  const identityVerified = whoami?.status === 'ok'
+}: any) {
+  const identityVerified: any = whoami?.status === 'ok'
     && whoami.source === 'NARADA_AGENT_ID'
     && whoami.confidence === 'high';
-  const workboardGeneratedAt = taskLifecycleNext?.generated_at ?? taskLifecycleNext?.workboard_generated_at ?? null;
-  const liveWorkboardStatus = taskLifecycleNext?.status === 'ok' ? 'fresh' : 'unavailable';
-  const checkpointAt = checkpoint?.status === 'ok' ? checkpoint.checkpoint_at ?? checkpoint.checkpointed_at ?? null : null;
-  const checkpointLastWorkboardCheckAt = checkpoint?.status === 'ok' ? checkpoint.last_workboard_check_at ?? null : null;
-  const capabilityPolicy = bootstrap?.execution_context_summary?.capability_policy ?? null;
-  const authorizedAction = deriveAuthorizedAction({ checkpoint, recommendedNextAction, operatorOverrideRef, taskLifecycleNext });
-  const missingAuthorityReason = authorizedAction
+  const workboardGeneratedAt: any = taskLifecycleNext?.generated_at ?? taskLifecycleNext?.workboard_generated_at ?? null;
+  const liveWorkboardStatus: any = taskLifecycleNext?.status === 'ok' ? 'fresh' : 'unavailable';
+  const checkpointAt: any = checkpoint?.status === 'ok' ? checkpoint.checkpoint_at ?? checkpoint.checkpointed_at ?? null : null;
+  const checkpointLastWorkboardCheckAt: any = checkpoint?.status === 'ok' ? checkpoint.last_workboard_check_at ?? null : null;
+  const capabilityPolicy: any = bootstrap?.execution_context_summary?.capability_policy ?? null;
+  const authorizedAction: any = deriveAuthorizedAction({ checkpoint, recommendedNextAction, operatorOverrideRef, taskLifecycleNext });
+  const missingAuthorityReason: any = authorizedAction
     ? null
     : deriveMissingAuthorityReason({ recommendedNextAction, checkpoint, taskLifecycleNext });
-  const activationAuthority = buildActivationAuthorityProjection({
+  const activationAuthority: any = buildActivationAuthorityProjection({
     authorizedAction,
     missingAuthorityReason,
     recommendedNextAction,
@@ -1778,7 +1784,7 @@ function buildHydrateActionSafety({
     roleBinding: whoami?.role_binding ?? null,
     capabilityPolicy,
   });
-  const blockers = [];
+  const blockers: any = [];
   if (!identityVerified) {
     blockers.push({ kind: 'identity_unverified', summary: 'Hydrate transition requires high-confidence NARADA_AGENT_ID binding.' });
   }
@@ -1880,7 +1886,7 @@ function buildHydrateActionSafety({
   };
 }
 
-function deriveAuthorizedAction({ checkpoint, recommendedNextAction, operatorOverrideRef, taskLifecycleNext }) {
+function deriveAuthorizedAction({ checkpoint, recommendedNextAction, operatorOverrideRef, taskLifecycleNext }: any) {
   if (checkpoint?.checkpoint_contamination?.status === 'contaminated') return null;
   if (checkpoint?.status === 'ok' && checkpoint.active_task && isCheckpointActiveTaskLive({ checkpoint, taskLifecycleNext })) {
     return {
@@ -1907,17 +1913,17 @@ function deriveAuthorizedAction({ checkpoint, recommendedNextAction, operatorOve
   return null;
 }
 
-function isCheckpointActiveTaskLive({ checkpoint, taskLifecycleNext }) {
-  const checkpointTaskNumber = checkpoint?.active_task?.task_number;
+function isCheckpointActiveTaskLive({ checkpoint, taskLifecycleNext }: any) {
+  const checkpointTaskNumber: any = checkpoint?.active_task?.task_number;
   if (!checkpointTaskNumber || taskLifecycleNext?.status !== 'ok') return false;
 
-  const liveTaskCollections = [
+  const liveTaskCollections: any = [
     taskLifecycleNext.in_progress,
     taskLifecycleNext.needs_continuation,
   ];
   for (const collection of liveTaskCollections) {
     if (!Array.isArray(collection)) continue;
-    if (collection.some((task) => Number(task?.task_number) === Number(checkpointTaskNumber))) {
+    if (collection.some((task: any) => Number(task?.task_number) === Number(checkpointTaskNumber))) {
       return true;
     }
   }
@@ -1925,7 +1931,7 @@ function isCheckpointActiveTaskLive({ checkpoint, taskLifecycleNext }) {
   return false;
 }
 
-function buildActionSafetyReportingGuidance({ recommendedAction, authorizedAction, missingAuthorityReason, mcpPressure }) {
+function buildActionSafetyReportingGuidance({ recommendedAction, authorizedAction, missingAuthorityReason, mcpPressure }: any) {
   if (!recommendedAction?.action && mcpPressure?.status === 'active') {
     return {
       summary: `No task workboard action is available, but MCP restart pressure is active: ${mcpPressure.summary}`,
@@ -1943,9 +1949,9 @@ function buildActionSafetyReportingGuidance({ recommendedAction, authorizedActio
     };
   }
 
-  const taskNumber = recommendedAction.task?.task_number;
-  const target = taskNumber ? ` task #${taskNumber}` : '';
-  const recommendedPhrase = `Workboard recommends ${recommendedAction.action}${target}.`;
+  const taskNumber: any = recommendedAction.task?.task_number;
+  const target: any = taskNumber ? ` task #${taskNumber}` : '';
+  const recommendedPhrase: any = `Workboard recommends ${recommendedAction.action}${target}.`;
   if (authorizedAction) {
     return {
       summary: `${recommendedPhrase} Authorized action: ${authorizedAction.action}${target}.`,
@@ -1960,12 +1966,12 @@ function buildActionSafetyReportingGuidance({ recommendedAction, authorizedActio
   };
 }
 
-function buildStandbyVerification({ taskLifecycleNext, recommendedNextAction, mcpPressure }) {
-  const noTaskWorkboardAction = taskLifecycleNext?.status === 'ok' && !recommendedNextAction?.action;
-  const restartPressureActive = mcpPressure?.status === 'active';
-  const correctiveDebtPressure = classifyCorrectiveDebtPressure(taskLifecycleNext?.corrective_debt_readiness);
-  const correctiveDebtPressureActive = correctiveDebtPressure.status === 'active';
-  const correctiveDebtSource = buildCorrectiveDebtSourceProjection({ taskLifecycleNext });
+function buildStandbyVerification({ taskLifecycleNext, recommendedNextAction, mcpPressure }: any) {
+  const noTaskWorkboardAction: any = taskLifecycleNext?.status === 'ok' && !recommendedNextAction?.action;
+  const restartPressureActive: any = mcpPressure?.status === 'active';
+  const correctiveDebtPressure: any = classifyCorrectiveDebtPressure(taskLifecycleNext?.corrective_debt_readiness);
+  const correctiveDebtPressureActive: any = correctiveDebtPressure.status === 'active';
+  const correctiveDebtSource: any = buildCorrectiveDebtSourceProjection({ taskLifecycleNext });
   return {
     schema: 'narada.agent_lifecycle.standby_verification.v0',
     no_task_workboard_action: noTaskWorkboardAction,
@@ -1995,8 +2001,8 @@ function buildStandbyVerification({ taskLifecycleNext, recommendedNextAction, mc
   };
 }
 
-function buildCorrectiveDebtSourceProjection({ taskLifecycleNext }) {
-  const readiness = taskLifecycleNext?.corrective_debt_readiness;
+function buildCorrectiveDebtSourceProjection({ taskLifecycleNext }: any) {
+  const readiness: any = taskLifecycleNext?.corrective_debt_readiness;
   return {
     schema: 'narada.agent_lifecycle.corrective_debt_source.v0',
     scope: 'connected_site_read_model',
@@ -2008,7 +2014,7 @@ function buildCorrectiveDebtSourceProjection({ taskLifecycleNext }) {
   };
 }
 
-function classifyCorrectiveDebtPressure(correctiveDebtReadiness) {
+function classifyCorrectiveDebtPressure(correctiveDebtReadiness: any) {
   if (!correctiveDebtReadiness || typeof correctiveDebtReadiness !== 'object') {
     return {
       status: 'unknown',
@@ -2016,10 +2022,10 @@ function classifyCorrectiveDebtPressure(correctiveDebtReadiness) {
       reason: 'corrective_debt_readiness_unavailable',
     };
   }
-  const counts = correctiveDebtReadiness.counts ?? {};
-  const highSeverity = Number(counts.high_severity ?? 0);
-  const missingCoverage = Number(counts.missing_corrective_task_coverage ?? 0);
-  const state = correctiveDebtReadiness.state ?? 'unknown';
+  const counts: any = correctiveDebtReadiness.counts ?? {};
+  const highSeverity: any = Number(counts.high_severity ?? 0);
+  const missingCoverage: any = Number(counts.missing_corrective_task_coverage ?? 0);
+  const state: any = correctiveDebtReadiness.state ?? 'unknown';
   if (highSeverity > 0 || missingCoverage > 0) {
     return {
       status: 'active',
@@ -2039,7 +2045,7 @@ function classifyCorrectiveDebtPressure(correctiveDebtReadiness) {
   };
 }
 
-function deriveMissingAuthorityReason({ recommendedNextAction, checkpoint, taskLifecycleNext }) {
+function deriveMissingAuthorityReason({ recommendedNextAction, checkpoint, taskLifecycleNext }: any) {
   if (taskLifecycleNext?.status !== 'ok') {
     return 'live_workboard_unavailable';
   }
@@ -2058,8 +2064,8 @@ function deriveMissingAuthorityReason({ recommendedNextAction, checkpoint, taskL
   return 'no_authorized_action_available';
 }
 
-function buildHydrateRequiredRereads({ checkpoint, recommendedNextAction }) {
-  const rereads = [];
+function buildHydrateRequiredRereads({ checkpoint, recommendedNextAction }: any) {
+  const rereads: any = [];
   if (recommendedNextAction?.task?.task_number) {
     rereads.push({
       kind: 'task_body',
@@ -2097,10 +2103,10 @@ function emitLifecycleTransitionEvent({
   authorizedAction,
   actionSafety,
   createdAt,
-}) {
+}: any) {
   if (!db) return { status: 'skipped', reason: 'agent_context_db_not_available' };
-  const transitionId = `life_${randomUUID().replace(/-/g, '')}`;
-  const payload = {
+  const transitionId: any = `life_${randomUUID().replace(/-/g, '')}`;
+  const payload: any = {
     schema: 'narada.agent_lifecycle.transition.v0',
     transition_id: transitionId,
     agent_id: agentId,
@@ -2117,7 +2123,7 @@ function emitLifecycleTransitionEvent({
     action_safety: actionSafety ?? null,
     created_at: createdAt,
   };
-  const eventId = `evt_${randomUUID().replace(/-/g, '')}`;
+  const eventId: any = `evt_${randomUUID().replace(/-/g, '')}`;
   db.prepare(
     `INSERT INTO agent_lifecycle_transitions (
       transition_id, agent_id, session_id, transition, source_zone, target_zone, status,
@@ -2157,13 +2163,13 @@ function emitLifecycleTransitionEvent({
   return { status: 'emitted', event_id: eventId, transition_id: transitionId };
 }
 
-function agentContextLifecycleHistory(toolArgs) {
+function agentContextLifecycleHistory(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const agentId = stringField(toolArgs ?? {}, 'agent_id');
-  const transition = stringField(toolArgs ?? {}, 'transition');
-  const limit = Math.min(Math.max(parseInt(toolArgs?.limit ?? '10', 10), 1), 50);
-  const where = [];
-  const params = [];
+  const agentId: any = stringField(toolArgs ?? {}, 'agent_id');
+  const transition: any = stringField(toolArgs ?? {}, 'transition');
+  const limit: any = Math.min(Math.max(parseInt(toolArgs?.limit ?? '10', 10), 1), 50);
+  const where: any = [];
+  const params: any = [];
   if (agentId) {
     where.push('agent_id = ?');
     params.push(agentId);
@@ -2172,8 +2178,8 @@ function agentContextLifecycleHistory(toolArgs) {
     where.push('transition = ?');
     params.push(transition);
   }
-  const whereSql = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
-  const rows = db.prepare(`
+  const whereSql: any = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  const rows: any = db.prepare(`
     SELECT * FROM agent_lifecycle_transitions
     ${whereSql}
     ORDER BY created_at DESC
@@ -2187,15 +2193,15 @@ function agentContextLifecycleHistory(toolArgs) {
     agent_id: agentId ?? null,
     transition: transition ?? null,
     count: rows.length,
-    transitions: rows.map((row) => parseLifecycleTransitionRow(row)),
+    transitions: rows.map((row: any) => parseLifecycleTransitionRow(row)),
   };
 }
 
-function agentContextLifecycleShow(toolArgs) {
+function agentContextLifecycleShow(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const transitionId = stringField(toolArgs ?? {}, 'transition_id');
+  const transitionId: any = stringField(toolArgs ?? {}, 'transition_id');
   if (!transitionId) throw new Error('transition_id is required');
-  const row = db.prepare('SELECT * FROM agent_lifecycle_transitions WHERE transition_id = ?').get(transitionId);
+  const row: any = db.prepare('SELECT * FROM agent_lifecycle_transitions WHERE transition_id = ?').get(transitionId);
   if (!row) {
     return {
       status: 'not_found',
@@ -2212,8 +2218,8 @@ function agentContextLifecycleShow(toolArgs) {
   };
 }
 
-function parseLifecycleTransitionRow(row, { includePayload = false } = {}) {
-  const parsed = {
+function parseLifecycleTransitionRow(row: any, { includePayload = false }: any = {}) {
+  const parsed: any = {
     transition_id: row.transition_id,
     agent_id: row.agent_id,
     session_id: row.session_id,
@@ -2235,7 +2241,7 @@ function parseLifecycleTransitionRow(row, { includePayload = false } = {}) {
   return parsed;
 }
 
-const ISN_PLANES = new Set([
+const ISN_PLANES: any = new Set([
   'discovery',
   'selection',
   'de_arbitrization',
@@ -2245,23 +2251,23 @@ const ISN_PLANES = new Set([
   'integration',
 ]);
 
-function agentContextIsnCreate(toolArgs) {
+function agentContextIsnCreate(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const agentId = requireString(toolArgs, 'agent_id');
+  const agentId: any = requireString(toolArgs, 'agent_id');
   assertBoundIdentity(agentId);
-  const title = requireString(toolArgs, 'title');
-  const summary = requireString(toolArgs, 'summary');
-  const plane = stringField(toolArgs ?? {}, 'plane') ?? 'discovery';
+  const title: any = requireString(toolArgs, 'title');
+  const summary: any = requireString(toolArgs, 'summary');
+  const plane: any = stringField(toolArgs ?? {}, 'plane') ?? 'discovery';
   inquirySpaceService.validateIsnPlane(plane);
 
-  const now = new Date().toISOString();
-  const nodeId = `isn_${randomUUID().replace(/-/g, '')}`;
-  const authorityOwner = objectField(toolArgs ?? {}, 'authority_owner') ?? { kind: 'unspecified' };
-  const relations = arrayField(toolArgs ?? {}, 'relations');
-  const evidenceRefs = arrayField(toolArgs ?? {}, 'evidence_refs');
-  const nextMovement = objectField(toolArgs ?? {}, 'next_movement');
-  const linkedTaskNumber = integerField(toolArgs ?? {}, 'linked_task_number');
-  const payload = inquirySpaceService.buildIsnPayload({
+  const now: any = new Date().toISOString();
+  const nodeId: any = `isn_${randomUUID().replace(/-/g, '')}`;
+  const authorityOwner: any = objectField(toolArgs ?? {}, 'authority_owner') ?? { kind: 'unspecified' };
+  const relations: any = arrayField(toolArgs ?? {}, 'relations');
+  const evidenceRefs: any = arrayField(toolArgs ?? {}, 'evidence_refs');
+  const nextMovement: any = objectField(toolArgs ?? {}, 'next_movement');
+  const linkedTaskNumber: any = integerField(toolArgs ?? {}, 'linked_task_number');
+  const payload: any = inquirySpaceService.buildIsnPayload({
     nodeId,
     title,
     plane,
@@ -2320,15 +2326,15 @@ function agentContextIsnCreate(toolArgs) {
   };
 }
 
-function agentContextIsnList(toolArgs) {
+function agentContextIsnList(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const plane = stringField(toolArgs ?? {}, 'plane');
+  const plane: any = stringField(toolArgs ?? {}, 'plane');
   if (plane) inquirySpaceService.validateIsnPlane(plane);
-  const status = stringField(toolArgs ?? {}, 'status');
-  const linkedTaskNumber = integerField(toolArgs ?? {}, 'linked_task_number');
-  const limit = Math.min(Math.max(parseInt(toolArgs?.limit ?? '20', 10), 1), 50);
-  const where = [];
-  const params = [];
+  const status: any = stringField(toolArgs ?? {}, 'status');
+  const linkedTaskNumber: any = integerField(toolArgs ?? {}, 'linked_task_number');
+  const limit: any = Math.min(Math.max(parseInt(toolArgs?.limit ?? '20', 10), 1), 50);
+  const where: any = [];
+  const params: any = [];
   if (plane) {
     where.push('plane = ?');
     params.push(plane);
@@ -2341,8 +2347,8 @@ function agentContextIsnList(toolArgs) {
     where.push('linked_task_number = ?');
     params.push(linkedTaskNumber);
   }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const rows = db.prepare(`
+  const whereSql: any = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows: any = db.prepare(`
     SELECT * FROM inquiry_space_nodes
     ${whereSql}
     ORDER BY updated_at DESC
@@ -2354,14 +2360,14 @@ function agentContextIsnList(toolArgs) {
     authority: 'agent_context_sqlite',
     not_task_lifecycle_authority: true,
     count: rows.length,
-    nodes: rows.map((row) => inquirySpaceService.parseIsnRow(row, parseJsonField)),
+    nodes: rows.map((row: any) => inquirySpaceService.parseIsnRow(row, parseJsonField)),
   };
 }
 
-function agentContextIsnShow(toolArgs) {
+function agentContextIsnShow(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const nodeId = requireString(toolArgs, 'node_id');
-  const row = db.prepare('SELECT * FROM inquiry_space_nodes WHERE node_id = ?').get(nodeId);
+  const nodeId: any = requireString(toolArgs, 'node_id');
+  const row: any = db.prepare('SELECT * FROM inquiry_space_nodes WHERE node_id = ?').get(nodeId);
   if (!row) {
     return {
       status: 'not_found',
@@ -2369,7 +2375,7 @@ function agentContextIsnShow(toolArgs) {
       node_id: nodeId,
     };
   }
-  const events = db.prepare(`
+  const events: any = db.prepare(`
     SELECT * FROM inquiry_space_node_events
     WHERE node_id = ?
     ORDER BY created_at DESC
@@ -2381,39 +2387,39 @@ function agentContextIsnShow(toolArgs) {
     authority: 'agent_context_sqlite',
     not_task_lifecycle_authority: true,
     node: inquirySpaceService.parseIsnRow(row, parseJsonField, { includePayload: true }),
-    events: events.map((event) => inquirySpaceService.parseIsnEventRow(event, parseJsonField)),
+    events: events.map((event: any) => inquirySpaceService.parseIsnEventRow(event, parseJsonField)),
   };
 }
 
-function agentContextIsnTransition(toolArgs) {
+function agentContextIsnTransition(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const agentId = requireString(toolArgs, 'agent_id');
+  const agentId: any = requireString(toolArgs, 'agent_id');
   assertBoundIdentity(agentId);
-  const nodeId = requireString(toolArgs, 'node_id');
-  const nextPlane = requireString(toolArgs, 'plane');
-  const reason = requireString(toolArgs, 'reason');
+  const nodeId: any = requireString(toolArgs, 'node_id');
+  const nextPlane: any = requireString(toolArgs, 'plane');
+  const reason: any = requireString(toolArgs, 'reason');
   inquirySpaceService.validateIsnPlane(nextPlane);
-  const existing = db.prepare('SELECT * FROM inquiry_space_nodes WHERE node_id = ?').get(nodeId);
+  const existing: any = db.prepare('SELECT * FROM inquiry_space_nodes WHERE node_id = ?').get(nodeId);
   if (!existing) throw new Error(`isn_node_not_found: ${nodeId}`);
 
-  const current = inquirySpaceService.parseIsnRow(existing, parseJsonField, { includePayload: true });
-  const now = new Date().toISOString();
-  const title = current.title;
-  const summary = stringField(toolArgs ?? {}, 'summary') ?? current.summary;
-  const authorityOwner = objectField(toolArgs ?? {}, 'authority_owner') ?? current.authority_owner;
-  const relations = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'relations')
+  const current: any = inquirySpaceService.parseIsnRow(existing, parseJsonField, { includePayload: true });
+  const now: any = new Date().toISOString();
+  const title: any = current.title;
+  const summary: any = stringField(toolArgs ?? {}, 'summary') ?? current.summary;
+  const authorityOwner: any = objectField(toolArgs ?? {}, 'authority_owner') ?? current.authority_owner;
+  const relations: any = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'relations')
     ? arrayField(toolArgs ?? {}, 'relations')
     : current.relations;
-  const evidenceRefs = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'evidence_refs')
+  const evidenceRefs: any = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'evidence_refs')
     ? arrayField(toolArgs ?? {}, 'evidence_refs')
     : current.evidence_refs;
-  const nextMovement = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'next_movement')
+  const nextMovement: any = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'next_movement')
     ? objectField(toolArgs ?? {}, 'next_movement')
     : current.next_movement;
-  const linkedTaskNumber = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'linked_task_number')
+  const linkedTaskNumber: any = Object.prototype.hasOwnProperty.call(toolArgs ?? {}, 'linked_task_number')
     ? integerField(toolArgs ?? {}, 'linked_task_number')
     : current.linked_task_number;
-  const payload = inquirySpaceService.buildIsnPayload({
+  const payload: any = inquirySpaceService.buildIsnPayload({
     nodeId,
     title,
     plane: nextPlane,
@@ -2449,7 +2455,7 @@ function agentContextIsnTransition(toolArgs) {
     JSON.stringify(payload),
     nodeId
   );
-  const event = appendIsnEvent({
+  const event: any = appendIsnEvent({
     nodeId,
     eventType: 'transitioned',
     fromPlane: current.plane,
@@ -2486,7 +2492,7 @@ function buildIsnPayload({
   updatedBy,
   createdAt,
   updatedAt,
-}) {
+}: any) {
   return {
     schema: 'narada.inquiry_space.node.v0',
     node_id: nodeId,
@@ -2506,9 +2512,9 @@ function buildIsnPayload({
   };
 }
 
-function appendIsnEvent({ nodeId, eventType, fromPlane, toPlane, actorAgentId, reason, payload, createdAt }) {
-  const eventId = `isnevt_${randomUUID().replace(/-/g, '')}`;
-  const eventPayload = inquirySpaceService.buildIsnEventPayload({
+function appendIsnEvent({ nodeId, eventType, fromPlane, toPlane, actorAgentId, reason, payload, createdAt }: any) {
+  const eventId: any = `isnevt_${randomUUID().replace(/-/g, '')}`;
+  const eventPayload: any = inquirySpaceService.buildIsnEventPayload({
     eventId,
     nodeId,
     eventType,
@@ -2538,8 +2544,8 @@ function appendIsnEvent({ nodeId, eventType, fromPlane, toPlane, actorAgentId, r
   return { event_id: eventId, payload: eventPayload };
 }
 
-function parseIsnRow(row, { includePayload = false } = {}) {
-  const parsed = {
+function parseIsnRow(row: any, { includePayload = false }: any = {}) {
+  const parsed: any = {
     node_id: row.node_id,
     title: row.title,
     plane: row.plane,
@@ -2559,7 +2565,7 @@ function parseIsnRow(row, { includePayload = false } = {}) {
   return parsed;
 }
 
-function parseIsnEventRow(row) {
+function parseIsnEventRow(row: any) {
   return {
     event_id: row.event_id,
     node_id: row.node_id,
@@ -2573,48 +2579,48 @@ function parseIsnEventRow(row) {
   };
 }
 
-function validateIsnPlane(plane) {
+function validateIsnPlane(plane: any) {
   if (!ISN_PLANES.has(plane)) {
     throw new Error(`invalid_isn_plane: ${plane}`);
   }
 }
 
-function assertBoundIdentity(agentId) {
-  const sessionIdentity = process.env.NARADA_AGENT_ID || null;
+function assertBoundIdentity(agentId: any) {
+  const sessionIdentity: any = process.env.NARADA_AGENT_ID || null;
   if (sessionIdentity && sessionIdentity !== agentId) {
     throw new Error(`identity_mismatch: session_identity=${sessionIdentity} requested_agent_id=${agentId}`);
   }
 }
 
-function agentContextIsMovementTraceRecord(toolArgs) {
+function agentContextIsMovementTraceRecord(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const agentId = requireString(toolArgs, 'agent_id');
+  const agentId: any = requireString(toolArgs, 'agent_id');
   assertBoundIdentity(agentId);
-  const now = new Date().toISOString();
-  let sequenceId = stringField(toolArgs ?? {}, 'sequence_id');
-  const sequenceInput = objectField(toolArgs ?? {}, 'sequence');
-  const disciplineProfile = objectField(toolArgs ?? {}, 'discipline_profile') ?? sequenceInput?.discipline_profile ?? {};
+  const now: any = new Date().toISOString();
+  let sequenceId: any = stringField(toolArgs ?? {}, 'sequence_id');
+  const sequenceInput: any = objectField(toolArgs ?? {}, 'sequence');
+  const disciplineProfile: any = objectField(toolArgs ?? {}, 'discipline_profile') ?? sequenceInput?.discipline_profile ?? {};
 
   if (!sequenceId && sequenceInput) {
     sequenceId = createMovementSequence({ agentId, sequenceInput, disciplineProfile, now });
   } else if (sequenceId) {
-    const existing = db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(sequenceId);
+    const existing: any = db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(sequenceId);
     if (!existing) throw new Error(`movement_sequence_not_found: ${sequenceId}`);
   }
 
-  const movementId = `ismove_${randomUUID().replace(/-/g, '')}`;
-  const stepIndex = integerField(toolArgs ?? {}, 'step_index') ?? 1;
-  const navigationPlane = requireString(toolArgs, 'navigation_plane');
-  const nodeType = requireString(toolArgs, 'node_type');
-  const isnNodeId = stringField(toolArgs ?? {}, 'isn_node_id');
-  const linkedTaskNumber = integerField(toolArgs ?? {}, 'linked_task_number');
-  const beforeState = objectField(toolArgs ?? {}, 'before_state') ?? {};
-  const afterState = objectField(toolArgs ?? {}, 'after_state') ?? {};
-  const observedDrift = objectField(toolArgs ?? {}, 'observed_drift') ?? {};
-  const actionTaken = objectField(toolArgs ?? {}, 'action_taken') ?? { kind: 'observed_only' };
-  const evidenceRefs = arrayField(toolArgs ?? {}, 'evidence_refs');
-  const nextPressure = objectField(toolArgs ?? {}, 'next_pressure') ?? {};
-  const payload = inquirySpaceService.buildMovementTracePayload({
+  const movementId: any = `ismove_${randomUUID().replace(/-/g, '')}`;
+  const stepIndex: any = integerField(toolArgs ?? {}, 'step_index') ?? 1;
+  const navigationPlane: any = requireString(toolArgs, 'navigation_plane');
+  const nodeType: any = requireString(toolArgs, 'node_type');
+  const isnNodeId: any = stringField(toolArgs ?? {}, 'isn_node_id');
+  const linkedTaskNumber: any = integerField(toolArgs ?? {}, 'linked_task_number');
+  const beforeState: any = objectField(toolArgs ?? {}, 'before_state') ?? {};
+  const afterState: any = objectField(toolArgs ?? {}, 'after_state') ?? {};
+  const observedDrift: any = objectField(toolArgs ?? {}, 'observed_drift') ?? {};
+  const actionTaken: any = objectField(toolArgs ?? {}, 'action_taken') ?? { kind: 'observed_only' };
+  const evidenceRefs: any = arrayField(toolArgs ?? {}, 'evidence_refs');
+  const nextPressure: any = objectField(toolArgs ?? {}, 'next_pressure') ?? {};
+  const payload: any = inquirySpaceService.buildMovementTracePayload({
     movementId,
     sequenceId,
     stepIndex,
@@ -2661,7 +2667,7 @@ function agentContextIsMovementTraceRecord(toolArgs) {
   );
 
   if (sequenceId) updateMovementSequenceAfterTrace(sequenceId, stepIndex, now);
-  const sequence = sequenceId
+  const sequence: any = sequenceId
     ? db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(sequenceId)
     : null;
 
@@ -2681,17 +2687,17 @@ function agentContextIsMovementTraceRecord(toolArgs) {
   };
 }
 
-function createMovementSequence({ agentId, sequenceInput, disciplineProfile, now }) {
-  const sequenceId = stringField(sequenceInput, 'sequence_id') ?? `ismseq_${randomUUID().replace(/-/g, '')}`;
-  const title = stringField(sequenceInput, 'title');
-  const summary = stringField(sequenceInput, 'summary');
-  const requestedStepCount = integerField(sequenceInput, 'requested_step_count');
-  const completedStepCount = integerField(sequenceInput, 'completed_step_count') ?? 0;
-  const startingNodeRef = stringField(sequenceInput, 'starting_node_ref');
-  const terminationReason = stringField(sequenceInput, 'termination_reason');
-  const driftSummary = objectField(sequenceInput, 'drift_summary') ?? {};
-  const linkedArtifacts = arrayField(sequenceInput, 'linked_artifacts');
-  const payload = inquirySpaceService.buildMovementSequencePayload({
+function createMovementSequence({ agentId, sequenceInput, disciplineProfile, now }: any) {
+  const sequenceId: any = stringField(sequenceInput, 'sequence_id') ?? `ismseq_${randomUUID().replace(/-/g, '')}`;
+  const title: any = stringField(sequenceInput, 'title');
+  const summary: any = stringField(sequenceInput, 'summary');
+  const requestedStepCount: any = integerField(sequenceInput, 'requested_step_count');
+  const completedStepCount: any = integerField(sequenceInput, 'completed_step_count') ?? 0;
+  const startingNodeRef: any = stringField(sequenceInput, 'starting_node_ref');
+  const terminationReason: any = stringField(sequenceInput, 'termination_reason');
+  const driftSummary: any = objectField(sequenceInput, 'drift_summary') ?? {};
+  const linkedArtifacts: any = arrayField(sequenceInput, 'linked_artifacts');
+  const payload: any = inquirySpaceService.buildMovementSequencePayload({
     sequenceId,
     agentId,
     title,
@@ -2729,11 +2735,11 @@ function createMovementSequence({ agentId, sequenceInput, disciplineProfile, now
   return sequenceId;
 }
 
-function updateMovementSequenceAfterTrace(sequenceId, stepIndex, updatedAt) {
-  const row = db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(sequenceId);
+function updateMovementSequenceAfterTrace(sequenceId: any, stepIndex: any, updatedAt: any) {
+  const row: any = db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(sequenceId);
   if (!row) return;
-  const completed = Math.max(row.completed_step_count ?? 0, stepIndex);
-  const payload = inquirySpaceService.buildMovementSequencePayload({
+  const completed: any = Math.max(row.completed_step_count ?? 0, stepIndex);
+  const payload: any = inquirySpaceService.buildMovementSequencePayload({
     sequenceId: row.sequence_id,
     agentId: row.agent_id,
     title: parseJsonField(row.payload_json, {})?.title ?? null,
@@ -2755,30 +2761,30 @@ function updateMovementSequenceAfterTrace(sequenceId, stepIndex, updatedAt) {
   `).run(completed, updatedAt, JSON.stringify(payload), sequenceId);
 }
 
-function agentContextIsMovementTraceList(toolArgs) {
+function agentContextIsMovementTraceList(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const agentId = stringField(toolArgs ?? {}, 'agent_id');
-  const sequenceId = stringField(toolArgs ?? {}, 'sequence_id');
-  const linkedTaskNumber = integerField(toolArgs ?? {}, 'linked_task_number');
-  const isnNodeId = stringField(toolArgs ?? {}, 'isn_node_id');
-  const limit = Math.min(Math.max(parseInt(toolArgs?.limit ?? '20', 10), 1), 50);
-  const where = [];
-  const params = [];
+  const agentId: any = stringField(toolArgs ?? {}, 'agent_id');
+  const sequenceId: any = stringField(toolArgs ?? {}, 'sequence_id');
+  const linkedTaskNumber: any = integerField(toolArgs ?? {}, 'linked_task_number');
+  const isnNodeId: any = stringField(toolArgs ?? {}, 'isn_node_id');
+  const limit: any = Math.min(Math.max(parseInt(toolArgs?.limit ?? '20', 10), 1), 50);
+  const where: any = [];
+  const params: any = [];
   if (agentId) { where.push('agent_id = ?'); params.push(agentId); }
   if (sequenceId) { where.push('sequence_id = ?'); params.push(sequenceId); }
   if (linkedTaskNumber !== null) { where.push('linked_task_number = ?'); params.push(linkedTaskNumber); }
   if (isnNodeId) { where.push('isn_node_id = ?'); params.push(isnNodeId); }
-  const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  const rows = db.prepare(`
+  const whereSql: any = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  const rows: any = db.prepare(`
     SELECT * FROM inquiry_space_movement_traces
     ${whereSql}
     ORDER BY created_at DESC
     LIMIT ?
   `).all(...params, limit);
-  const sequences = new Map();
+  const sequences: any = new Map();
   for (const row of rows) {
     if (!row.sequence_id || sequences.has(row.sequence_id)) continue;
-    const sequence = db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(row.sequence_id);
+    const sequence: any = db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(row.sequence_id);
     if (sequence) sequences.set(row.sequence_id, inquirySpaceService.parseMovementSequenceRow(sequence, parseJsonField));
   }
   return {
@@ -2788,20 +2794,20 @@ function agentContextIsMovementTraceList(toolArgs) {
     observational_only: true,
     not_task_lifecycle_authority: true,
     count: rows.length,
-    traces: rows.map((row) => inquirySpaceService.parseMovementTraceRow(row, parseJsonField)),
+    traces: rows.map((row: any) => inquirySpaceService.parseMovementTraceRow(row, parseJsonField)),
     sequences: Array.from(sequences.values()),
   };
 }
 
-function agentContextIsMovementTraceShow(toolArgs) {
+function agentContextIsMovementTraceShow(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const movementId = requireString(toolArgs, 'movement_id');
-  const row = db.prepare('SELECT * FROM inquiry_space_movement_traces WHERE movement_id = ?').get(movementId);
+  const movementId: any = requireString(toolArgs, 'movement_id');
+  const row: any = db.prepare('SELECT * FROM inquiry_space_movement_traces WHERE movement_id = ?').get(movementId);
   if (!row) {
     return { status: 'not_found', schema: 'narada.inquiry_space.movement_trace.show.v0', movement_id: movementId };
   }
-  const trace = inquirySpaceService.parseMovementTraceRow(row, parseJsonField, { includePayload: true });
-  const sequence = trace.sequence_id
+  const trace: any = inquirySpaceService.parseMovementTraceRow(row, parseJsonField, { includePayload: true });
+  const sequence: any = trace.sequence_id
     ? db.prepare('SELECT * FROM inquiry_space_movement_sequences WHERE sequence_id = ?').get(trace.sequence_id)
     : null;
   return {
@@ -2829,7 +2835,7 @@ function buildMovementSequencePayload({
   disciplineProfile,
   createdAt,
   updatedAt,
-}) {
+}: any) {
   return {
     schema: 'narada.inquiry_space.movement_sequence.v0',
     sequence_id: sequenceId,
@@ -2866,7 +2872,7 @@ function buildMovementTracePayload({
   evidenceRefs,
   nextPressure,
   disciplineProfile,
-}) {
+}: any) {
   return {
     schema: 'narada.inquiry_space.movement_trace.v0',
     movement_id: movementId,
@@ -2891,8 +2897,8 @@ function buildMovementTracePayload({
   };
 }
 
-function parseMovementTraceRow(row, { includePayload = false } = {}) {
-  const parsed = {
+function parseMovementTraceRow(row: any, { includePayload = false }: any = {}) {
+  const parsed: any = {
     movement_id: row.movement_id,
     sequence_id: row.sequence_id,
     step_index: row.step_index,
@@ -2914,9 +2920,9 @@ function parseMovementTraceRow(row, { includePayload = false } = {}) {
   return parsed;
 }
 
-function parseMovementSequenceRow(row, { includePayload = false } = {}) {
-  const payload = parseJsonField(row.payload_json, {});
-  const parsed = {
+function parseMovementSequenceRow(row: any, { includePayload = false }: any = {}) {
+  const payload: any = parseJsonField(row.payload_json, {});
+  const parsed: any = {
     sequence_id: row.sequence_id,
     agent_id: row.agent_id,
     title: payload?.title ?? null,
@@ -2935,32 +2941,32 @@ function parseMovementSequenceRow(row, { includePayload = false } = {}) {
   return parsed;
 }
 
-function agentContextConceptLifecycleRecord(toolArgs) {
+function agentContextConceptLifecycleRecord(toolArgs: any) {
   return conceptLifecycleService.recordLifecycleEvent({ db, toolArgs, assertBoundIdentity });
 }
 
-function agentContextConceptLifecycleHistory(toolArgs) {
+function agentContextConceptLifecycleHistory(toolArgs: any) {
   return conceptLifecycleService.readLifecycleHistory({ db, toolArgs, parseJsonField });
 }
 
-function agentContextConceptLifecycleCurrent(toolArgs) {
+function agentContextConceptLifecycleCurrent(toolArgs: any) {
   return conceptLifecycleService.readCurrentLifecycleState({ db, toolArgs, parseJsonField });
 }
 
 function agentContextToolSurfaceReadiness() {
-  const registeredToolNames = TOOLS.map((tool) => tool.name).sort();
-  const missingExpectedTools = EXPECTED_TOOL_NAMES.filter((name) => !registeredToolNames.includes(name));
-  const groupStatus = Object.fromEntries(Object.entries(EXPECTED_TOOL_GROUPS).map(([group, names]) => [group, {
+  const registeredToolNames: any = TOOLS.map((tool: any) => tool.name).sort();
+  const missingExpectedTools: any = EXPECTED_TOOL_NAMES.filter((name: any) => !registeredToolNames.includes(name));
+  const groupStatus: any = Object.fromEntries(Object.entries(EXPECTED_TOOL_GROUPS).map(([group, names]: any) => [group, {
     expected: names,
-    registered: names.filter((name) => registeredToolNames.includes(name)),
-    missing: names.filter((name) => !registeredToolNames.includes(name)),
+    registered: names.filter((name: any) => registeredToolNames.includes(name)),
+    missing: names.filter((name: any) => !registeredToolNames.includes(name)),
   }]));
-  const freshness = buildMcpFreshnessStatus({
+  const freshness: any = buildMcpFreshnessStatus({
     siteRoot,
     serverName: SERVER_NAME,
-    serverEntryPoint: 'tools/agent-context/agent-context-mcp-server.mjs',
+    serverEntryPoint: 'tools/agent-context/agent-context-mcp-server.ts',
     serverBootedAt: SERVER_BOOTED_AT,
-    watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.mjs'],
+    watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.js'],
     expectedTools: EXPECTED_TOOL_NAMES,
     registeredTools: registeredToolNames,
     restartRequestPath: join(siteRoot, '.ai', 'tmp', 'agent-context-restart-request.json'),
@@ -2986,27 +2992,27 @@ function agentContextToolSurfaceReadiness() {
   };
 }
 
-function agentContextRestart(toolArgs) {
-  const mode = stringField(toolArgs ?? {}, 'mode') ?? 'request';
+function agentContextRestart(toolArgs: any) {
+  const mode: any = stringField(toolArgs ?? {}, 'mode') ?? 'request';
   if (!['request', 'status', 'acknowledge', 'clear'].includes(mode)) {
     throw new Error(`invalid_restart_mode: ${mode}`);
   }
-  const requestPath = join(siteRoot, '.ai', 'tmp', 'agent-context-restart-request.json');
-  const baselinePath = join(siteRoot, '.ai', 'tmp', 'agent-context-mcp-baseline.json');
-  const watchedPaths = ['tools/agent-context', 'tools/mcp-freshness-service.mjs'];
-  const existingRequest = readMcpFreshnessJsonFile(requestPath);
+  const requestPath: any = join(siteRoot, '.ai', 'tmp', 'agent-context-restart-request.json');
+  const baselinePath: any = join(siteRoot, '.ai', 'tmp', 'agent-context-mcp-baseline.json');
+  const watchedPaths: any = ['tools/agent-context', 'tools/mcp-freshness-service.js'];
+  const existingRequest: any = readMcpFreshnessJsonFile(requestPath);
 
   if (mode === 'acknowledge' || mode === 'clear') {
     return acknowledgeMcpRestartRequest({
       siteRoot,
       serverName: SERVER_NAME,
       targetSurface: 'agent-context-mcp.local',
-      targetEntrypoint: 'tools/agent-context/agent-context-mcp-server.mjs',
+      targetEntrypoint: 'tools/agent-context/agent-context-mcp-server.ts',
       restartRequestPath: requestPath,
       baselinePath,
       watchedPaths,
       expectedTools: EXPECTED_TOOL_NAMES,
-      registeredTools: TOOLS.map((tool) => tool.name).sort(),
+      registeredTools: TOOLS.map((tool: any) => tool.name).sort(),
       acknowledgedBy: process.env.NARADA_AGENT_ID ?? null,
       reason: stringField(toolArgs ?? {}, 'reason') ?? 'agent_context_restart acknowledged after external restart',
       note: 'Agent-context MCP external restart acknowledged; restart request marker cleared.',
@@ -3032,7 +3038,7 @@ function agentContextRestart(toolArgs) {
     siteRoot,
     serverName: SERVER_NAME,
     targetSurface: 'agent-context-mcp.local',
-    targetEntrypoint: 'tools/agent-context/agent-context-mcp-server.mjs',
+    targetEntrypoint: 'tools/agent-context/agent-context-mcp-server.ts',
     restartRequestPath: requestPath,
     baselinePath,
     requestedBy: process.env.NARADA_AGENT_ID ?? null,
@@ -3041,7 +3047,7 @@ function agentContextRestart(toolArgs) {
   });
 }
 
-function readJsonFile(filePath) {
+function readJsonFile(filePath: any) {
   if (!existsSync(filePath)) return null;
   try {
     return JSON.parse(readFileSync(filePath, 'utf8'));
@@ -3049,13 +3055,13 @@ function readJsonFile(filePath) {
     return {
       status: 'unreadable',
       path: filePath,
-      reason: error instanceof Error ? error.message : String(error),
+      reason: error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error),
     };
   }
 }
 
-function buildHydrationGrounding({ detail, whoami, capabilityPolicy, checkpoint, taskLifecycleNext }) {
-  const reground = safeCall(() => buildReground(siteRoot));
+function buildHydrationGrounding({ detail, whoami, capabilityPolicy, checkpoint, taskLifecycleNext }: any) {
+  const reground: any = safeCall(() => buildReground(siteRoot));
   if (!reground.ok) {
     return {
       status: 'unavailable',
@@ -3076,9 +3082,9 @@ function buildHydrationGrounding({ detail, whoami, capabilityPolicy, checkpoint,
     };
   }
 
-  const value = reground.value;
-  const status = computeGroundingStatus(value);
-  const layers = buildGroundingLayers({
+  const value: any = reground.value;
+  const status: any = computeGroundingStatus(value);
+  const layers: any = buildGroundingLayers({
     whoami,
     capabilityPolicy,
     checkpoint,
@@ -3095,15 +3101,15 @@ function buildHydrationGrounding({ detail, whoami, capabilityPolicy, checkpoint,
   };
 }
 
-function computeGroundingStatus(reground) {
-  const localAvailable = reground?.corpus_status?.local_sources?.all_available === true;
-  const thoughtsAvailable = reground?.corpus_status?.thoughts_corpus?.available === true;
+function computeGroundingStatus(reground: any) {
+  const localAvailable: any = reground?.corpus_status?.local_sources?.all_available === true;
+  const thoughtsAvailable: any = reground?.corpus_status?.thoughts_corpus?.available === true;
   if (localAvailable && thoughtsAvailable) return 'grounded';
   if (localAvailable || thoughtsAvailable) return 'degraded';
   return 'unavailable';
 }
 
-function buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, taskLifecycleNext, reground, regroundAvailable }) {
+function buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, taskLifecycleNext, reground, regroundAvailable }: any) {
   return {
     identity: whoami?.status === 'ok' ? 'loaded' : 'missing',
     capability_policy: capabilityPolicy ? 'loaded' : 'missing',
@@ -3114,8 +3120,8 @@ function buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, taskLifecy
   };
 }
 
-function shapeDoctrinePayload(reground, detail, groundingStatus, groundingLayers) {
-  const base = {
+function shapeDoctrinePayload(reground: any, detail: any, groundingStatus: any, groundingLayers: any) {
+  const base: any = {
     status: 'ok',
     mode: detail,
     schema: reground.schema,
@@ -3138,7 +3144,7 @@ function shapeDoctrinePayload(reground, detail, groundingStatus, groundingLayers
   }
 
   if (detail === 'reground') {
-    const { source_excerpts, site_root, ...compact } = reground;
+    const { source_excerpts, site_root, ...compact }: any = reground;
     return {
       ...compact,
       status: 'ok',
@@ -3157,16 +3163,16 @@ function shapeDoctrinePayload(reground, detail, groundingStatus, groundingLayers
   };
 }
 
-function emitGroundingEvent({ agentId, sessionId, trigger, doctrineDetail, grounding, operatorOverrideRef }) {
+function emitGroundingEvent({ agentId, sessionId, trigger, doctrineDetail, grounding, operatorOverrideRef }: any) {
   if (!db) {
     throw new Error('agent_context_db_not_available');
   }
 
-  const eventId = `ground_${randomUUID().replace(/-/g, '')}`;
-  const createdAt = new Date().toISOString();
-  const sourceRefs = buildGroundingSourceRefs(grounding?.payload);
-  const sourceHashes = buildGroundingSourceHashes(sourceRefs);
-  const groundingSummary = {
+  const eventId: any = `ground_${randomUUID().replace(/-/g, '')}`;
+  const createdAt: any = new Date().toISOString();
+  const sourceRefs: any = buildGroundingSourceRefs(grounding?.payload);
+  const sourceHashes: any = buildGroundingSourceHashes(sourceRefs);
+  const groundingSummary: any = {
     status: grounding?.status ?? 'unknown',
     mode: doctrineDetail,
     generated_at: grounding?.payload?.generated_at ?? null,
@@ -3177,8 +3183,8 @@ function emitGroundingEvent({ agentId, sessionId, trigger, doctrineDetail, groun
     local_sources_all_available: grounding?.payload?.corpus_status?.local_sources?.all_available ?? null,
     thoughts_corpus_available: grounding?.payload?.corpus_status?.thoughts_corpus?.available ?? null,
   };
-  const degradedReason = computeGroundingDegradedReason(grounding);
-  const payload = {
+  const degradedReason: any = computeGroundingDegradedReason(grounding);
+  const payload: any = {
     schema: 'narada.agent_context.grounding_event.v0',
     event_id: eventId,
     agent_id: agentId,
@@ -3229,9 +3235,9 @@ function emitGroundingEvent({ agentId, sessionId, trigger, doctrineDetail, groun
   };
 }
 
-function buildGroundingSourceRefs(payload) {
-  const refs = [];
-  const localSources = payload?.corpus_status?.local_sources?.sources_checked ?? [];
+function buildGroundingSourceRefs(payload: any) {
+  const refs: any = [];
+  const localSources: any = payload?.corpus_status?.local_sources?.sources_checked ?? [];
   for (const source of localSources) {
     refs.push({
       kind: 'file',
@@ -3243,7 +3249,7 @@ function buildGroundingSourceRefs(payload) {
     });
   }
 
-  const thoughts = payload?.corpus_status?.thoughts_corpus;
+  const thoughts: any = payload?.corpus_status?.thoughts_corpus;
   if (thoughts?.path) {
     refs.push({
       kind: 'corpus',
@@ -3271,10 +3277,10 @@ function buildGroundingSourceRefs(payload) {
   return refs;
 }
 
-function buildGroundingSourceHashes(sourceRefs) {
-  const hashes = {};
+function buildGroundingSourceHashes(sourceRefs: any) {
+  const hashes: any = {};
   for (const ref of sourceRefs) {
-    const key = ref.path;
+    const key: any = ref.path;
     if (ref.kind === 'file' && ref.available === true) {
       try {
         hashes[key] = `sha256:${createHash('sha256').update(readFileSync(ref.absolute_path)).digest('hex')}`;
@@ -3282,7 +3288,7 @@ function buildGroundingSourceHashes(sourceRefs) {
       } catch (error) {
         hashes[key] = {
           status: 'unavailable',
-          reason: error instanceof Error ? error.message : String(error),
+          reason: error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error),
         };
         continue;
       }
@@ -3298,17 +3304,17 @@ function buildGroundingSourceHashes(sourceRefs) {
   return hashes;
 }
 
-function computeGroundingDegradedReason(grounding) {
+function computeGroundingDegradedReason(grounding: any) {
   if (!grounding || grounding.status === 'grounded') return null;
-  const missing = Object.entries(grounding.layers ?? {})
-    .filter(([, status]) => status !== 'loaded')
-    .map(([layer, status]) => `${layer}:${status}`);
+  const missing: any = Object.entries(grounding.layers ?? {})
+    .filter(([, status]: any) => status !== 'loaded')
+    .map(([layer, status]: any) => `${layer}:${status}`);
   return missing.length > 0 ? `grounding_not_complete:${missing.join(',')}` : `grounding_status:${grounding.status}`;
 }
 
-function parseGroundingRow(row, { includePayload = false } = {}) {
+function parseGroundingRow(row: any, { includePayload = false }: any = {}) {
   if (!row) return null;
-  const parsed = {
+  const parsed: any = {
     event_id: row.event_id,
     agent_id: row.agent_id,
     session_id: row.session_id,
@@ -3329,7 +3335,7 @@ function parseGroundingRow(row, { includePayload = false } = {}) {
   return parsed;
 }
 
-function parseJsonField(value, fallback) {
+function parseJsonField(value: any, fallback: any) {
   try {
     return value ? JSON.parse(value) : fallback;
   } catch {
@@ -3337,43 +3343,43 @@ function parseJsonField(value, fallback) {
   }
 }
 
-function agentContextGroundingLatest(toolArgs) {
+function agentContextGroundingLatest(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const agentId = toolArgs?.agent_id;
+  const agentId: any = toolArgs?.agent_id;
   if (!agentId) throw new Error('agent_id is required');
-  const row = db.prepare('SELECT * FROM agent_grounding_events WHERE agent_id = ? ORDER BY created_at DESC LIMIT 1').get(agentId);
+  const row: any = db.prepare('SELECT * FROM agent_grounding_events WHERE agent_id = ? ORDER BY created_at DESC LIMIT 1').get(agentId);
   if (!row) {
     return { status: 'no_grounding_event', agent_id: agentId };
   }
   return { status: 'ok', event: parseGroundingRow(row, { includePayload: true }) };
 }
 
-function agentContextGroundingHistory(toolArgs) {
+function agentContextGroundingHistory(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const agentId = toolArgs?.agent_id;
+  const agentId: any = toolArgs?.agent_id;
   if (!agentId) throw new Error('agent_id is required');
-  const limit = Math.min(Math.max(parseInt(toolArgs?.limit ?? '10', 10), 1), 50);
-  const rows = db.prepare('SELECT * FROM agent_grounding_events WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?').all(agentId, limit);
+  const limit: any = Math.min(Math.max(parseInt(toolArgs?.limit ?? '10', 10), 1), 50);
+  const rows: any = db.prepare('SELECT * FROM agent_grounding_events WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?').all(agentId, limit);
   return {
     status: rows.length > 0 ? 'ok' : 'no_grounding_events',
     agent_id: agentId,
     count: rows.length,
-    events: rows.map((row) => parseGroundingRow(row)),
+    events: rows.map((row: any) => parseGroundingRow(row)),
   };
 }
 
-function agentContextGroundingShow(toolArgs) {
+function agentContextGroundingShow(toolArgs: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const eventId = toolArgs?.event_id;
+  const eventId: any = toolArgs?.event_id;
   if (!eventId) throw new Error('event_id is required');
-  const row = db.prepare('SELECT * FROM agent_grounding_events WHERE event_id = ?').get(eventId);
+  const row: any = db.prepare('SELECT * FROM agent_grounding_events WHERE event_id = ?').get(eventId);
   if (!row) {
     return { status: 'not_found', event_id: eventId };
   }
   return { status: 'ok', event: parseGroundingRow(row, { includePayload: true }) };
 }
 
-function agentContextSiteEvolutionOrientationCreate(toolArgs) {
+function agentContextSiteEvolutionOrientationCreate(toolArgs: any) {
   return createSiteEvolutionOrientationSnapshot({
     siteRoot,
     db,
@@ -3400,28 +3406,28 @@ function buildStartupReadinessVerdict({
   mcpRestartReadiness: suppliedMcpRestartReadiness = null,
   mcpPressure: suppliedMcpPressure = null,
   mcpSiteReadiness: suppliedMcpSiteReadiness = null,
-}) {
-  const identityVerified = whoami?.status === 'ok'
+}: any) {
+  const identityVerified: any = whoami?.status === 'ok'
     && whoami.source === 'NARADA_AGENT_ID'
     && whoami.confidence === 'high'
     && Boolean(whoami.identity);
-  const hasVerifiedBadge = Boolean(verifiedBadge?.agent_id);
-  const checkpointLoaded = checkpoint?.status === 'ok';
-  const noCheckpoint = checkpoint?.status === 'no_checkpoint';
-  const groundingEventReturned = Boolean(groundingEventId);
-  const cardStatus = onboardingCard?.status ?? 'missing';
-  const cardLoaded = cardStatus === 'loaded';
-  const cardHasSnapshot = Boolean(onboardingCard?.snapshot_id);
-  const workboardLive = taskLifecycleNext?.status === 'ok'
+  const hasVerifiedBadge: any = Boolean(verifiedBadge?.agent_id);
+  const checkpointLoaded: any = checkpoint?.status === 'ok';
+  const noCheckpoint: any = checkpoint?.status === 'no_checkpoint';
+  const groundingEventReturned: any = Boolean(groundingEventId);
+  const cardStatus: any = onboardingCard?.status ?? 'missing';
+  const cardLoaded: any = cardStatus === 'loaded';
+  const cardHasSnapshot: any = Boolean(onboardingCard?.snapshot_id);
+  const workboardLive: any = taskLifecycleNext?.status === 'ok'
     && Boolean(taskLifecycleNext.generated_at ?? taskLifecycleNext.workboard_generated_at);
-  const hostRuntimeRegistry = suppliedHostRuntimeRegistry ?? buildHydrateHostRuntimeRegistryStatus();
-  const mcpRestartReadiness = suppliedMcpRestartReadiness ?? buildHydrateMcpRestartReadiness({ taskLifecycleNext, hostRuntimeRegistry });
-  const mcpPressure = suppliedMcpPressure ?? buildMcpStaleSurfacePressure(mcpRestartReadiness, hostRuntimeRegistry);
-  const mcpSiteReadiness = suppliedMcpSiteReadiness ?? buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntimeRegistry);
-  const osmSendPermissionPolicy = readOsmSendPermissionPolicy();
-  const osmPolicyConstraint = buildOsmSendPermissionPolicyConstraint(osmSendPermissionPolicy);
-  const criticalMcpRestartNonconformance = hasCriticalMcpRestartNonconformance(mcpPressure);
-  const reconciledBlockers = reconcileStartupBlockers({
+  const hostRuntimeRegistry: any = suppliedHostRuntimeRegistry ?? buildHydrateHostRuntimeRegistryStatus();
+  const mcpRestartReadiness: any = suppliedMcpRestartReadiness ?? buildHydrateMcpRestartReadiness({ taskLifecycleNext, hostRuntimeRegistry });
+  const mcpPressure: any = suppliedMcpPressure ?? buildMcpStaleSurfacePressure(mcpRestartReadiness, hostRuntimeRegistry);
+  const mcpSiteReadiness: any = suppliedMcpSiteReadiness ?? buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntimeRegistry);
+  const osmSendPermissionPolicy: any = readOsmSendPermissionPolicy();
+  const osmPolicyConstraint: any = buildOsmSendPermissionPolicyConstraint(osmSendPermissionPolicy);
+  const criticalMcpRestartNonconformance: any = hasCriticalMcpRestartNonconformance(mcpPressure);
+  const reconciledBlockers: any = reconcileStartupBlockers({
     blockers: checkpoint?.continuation_blockers ?? [],
     checkpoint,
     onboardingCard,
@@ -3429,12 +3435,12 @@ function buildStartupReadinessVerdict({
     mcpRestartReadiness,
     osmSendPermissionPolicy,
   });
-  const policyConstraints = [
+  const policyConstraints: any = [
     ...(osmPolicyConstraint ? [osmPolicyConstraint] : []),
     ...(reconciledBlockers.policy_constraints ?? []),
   ];
 
-  const qualityChecks = [
+  const qualityChecks: any = [
     {
       id: 'identity_verified_from_env',
       status: identityVerified ? 'pass' : 'fail',
@@ -3486,7 +3492,7 @@ function buildStartupReadinessVerdict({
     },
   ];
 
-  const status = computeStartupReadinessStatus({
+  const status: any = computeStartupReadinessStatus({
     identityVerified,
     hasVerifiedBadge,
     groundingStatus,
@@ -3499,7 +3505,7 @@ function buildStartupReadinessVerdict({
     policyConstraints,
     criticalMcpRestartNonconformance,
   });
-  const actionAuthority = computeStartupActionAuthority({ checkpoint, status });
+  const actionAuthority: any = computeStartupActionAuthority({ checkpoint, status });
 
   return {
     status: 'ok',
@@ -3550,11 +3556,11 @@ function buildStartupReadinessVerdict({
   };
 }
 
-function buildMcpStaleSurfacePressure(mcpRestartReadiness, hostRuntimeRegistry = null) {
-  const accounting = buildMcpReadinessAccounting(mcpRestartReadiness, hostRuntimeRegistry);
-  const staleSurfaces = accounting.surfaces.filter((entry) => entry?.stale_live_surface_possible === true || entry?.pending_restart === true);
-  const criticalSurfaces = staleSurfaces.filter(isCriticalMcpRestartSurface);
-  const registryStatus = hostRuntimeRegistry?.status === 'ok' ? 'available' : 'unavailable';
+function buildMcpStaleSurfacePressure(mcpRestartReadiness: any, hostRuntimeRegistry: any = null) {
+  const accounting: any = buildMcpReadinessAccounting(mcpRestartReadiness, hostRuntimeRegistry);
+  const staleSurfaces: any = accounting.surfaces.filter((entry: any) => entry?.stale_live_surface_possible === true || entry?.pending_restart === true);
+  const criticalSurfaces: any = staleSurfaces.filter(isCriticalMcpRestartSurface);
+  const registryStatus: any = hostRuntimeRegistry?.status === 'ok' ? 'available' : 'unavailable';
   return {
     schema: 'narada.mcp.stale_surface_pressure.v0',
     status: staleSurfaces.length > 0 ? 'active' : 'clear',
@@ -3566,7 +3572,7 @@ function buildMcpStaleSurfacePressure(mcpRestartReadiness, hostRuntimeRegistry =
       : 'No stale live MCP surface pressure detected.',
     readiness_accounting: accounting,
     counts: accounting.counts,
-    surfaces: staleSurfaces.map((entry) => ({
+    surfaces: staleSurfaces.map((entry: any) => ({
       surface_id: entry.surface_id ?? null,
       server_name: entry.server_name ?? null,
       server_entrypoint: entry.server_entrypoint ?? null,
@@ -3603,18 +3609,18 @@ function buildMcpStaleSurfacePressure(mcpRestartReadiness, hostRuntimeRegistry =
   };
 }
 
-function hasCriticalMcpRestartNonconformance(mcpPressure) {
+function hasCriticalMcpRestartNonconformance(mcpPressure: any) {
   return (mcpPressure?.surfaces ?? []).some(isCriticalMcpRestartSurface);
 }
 
-function buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntimeRegistry = null) {
-  const accounting = mcpPressure?.readiness_accounting ?? buildMcpReadinessAccounting(mcpRestartReadiness, hostRuntimeRegistry);
-  const surfaces = accounting.surfaces ?? [];
-  const localBlockers = [];
-  const localAdvisoryDebt = [];
-  const foreignSubstrateAdvisory = [];
+function buildSiteOwnedMcpReadiness(mcpPressure: any, mcpRestartReadiness: any, hostRuntimeRegistry: any = null) {
+  const accounting: any = mcpPressure?.readiness_accounting ?? buildMcpReadinessAccounting(mcpRestartReadiness, hostRuntimeRegistry);
+  const surfaces: any = accounting.surfaces ?? [];
+  const localBlockers: any = [];
+  const localAdvisoryDebt: any = [];
+  const foreignSubstrateAdvisory: any = [];
   for (const surface of surfaces) {
-    const compact = compactMcpReadinessSurface(surface);
+    const compact: any = compactMcpReadinessSurface(surface);
     if (surface.foreign_status === true || surface.pc_runtime?.foreign_status === true) {
       foreignSubstrateAdvisory.push({
         ...compact,
@@ -3628,7 +3634,7 @@ function buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntim
       });
       continue;
     }
-    const disposition = surface.disposition ?? buildMcpRestartDisposition(surface);
+    const disposition: any = surface.disposition ?? buildMcpRestartDisposition(surface);
     if (surface.pending_restart === true && disposition?.terminal_blocker === true) {
       localBlockers.push({
         ...compact,
@@ -3651,8 +3657,8 @@ function buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntim
       });
     }
   }
-  const registryStatus = hostRuntimeRegistry?.status === 'ok' ? 'available' : 'unavailable';
-  const nextActions = [];
+  const registryStatus: any = hostRuntimeRegistry?.status === 'ok' ? 'available' : 'unavailable';
+  const nextActions: any = [];
   if (localBlockers.length > 0) {
     nextActions.push('Resolve local MCP blockers through admitted restart/carrier authority before declaring startup ready.');
   }
@@ -3694,8 +3700,8 @@ function buildSiteOwnedMcpReadiness(mcpPressure, mcpRestartReadiness, hostRuntim
   };
 }
 
-function compactMcpReadinessSurface(surface) {
-  const disposition = surface.disposition ?? buildMcpRestartDisposition(surface);
+function compactMcpReadinessSurface(surface: any) {
+  const disposition: any = surface.disposition ?? buildMcpRestartDisposition(surface);
   return {
     surface_id: surface.surface_id ?? null,
     server_name: surface.server_name ?? null,
@@ -3709,34 +3715,34 @@ function compactMcpReadinessSurface(surface) {
   };
 }
 
-function isCriticalMcpRestartSurface(surface) {
+function isCriticalMcpRestartSurface(surface: any) {
   if (surface?.pending_restart !== true) return false;
-  const disposition = surface.disposition ?? buildMcpRestartDisposition(surface);
+  const disposition: any = surface.disposition ?? buildMcpRestartDisposition(surface);
   return disposition?.terminal_blocker === true;
 }
 
-function buildHydrateMcpRestartReadiness({ taskLifecycleNext, hostRuntimeRegistry = null }) {
-  const agentContextFreshness = buildMcpFreshnessStatus({
+function buildHydrateMcpRestartReadiness({ taskLifecycleNext, hostRuntimeRegistry = null }: any) {
+  const agentContextFreshness: any = buildMcpFreshnessStatus({
     siteRoot,
     serverName: SERVER_NAME,
-    serverEntryPoint: 'tools/agent-context/agent-context-mcp-server.mjs',
+    serverEntryPoint: 'tools/agent-context/agent-context-mcp-server.ts',
     serverBootedAt: SERVER_BOOTED_AT,
-    watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.mjs'],
+    watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.js'],
     expectedTools: EXPECTED_TOOL_NAMES,
-    registeredTools: TOOLS.map((tool) => tool.name).sort(),
+    registeredTools: TOOLS.map((tool: any) => tool.name).sort(),
     restartRequestPath: join(siteRoot, '.ai', 'tmp', 'agent-context-restart-request.json'),
     baselinePath: join(siteRoot, '.ai', 'tmp', 'agent-context-mcp-baseline.json'),
     restartToolName: 'agent_context_restart',
   });
-  const localReadiness = [agentContextFreshness, taskLifecycleNext?.mcp_freshness]
+  const localReadiness: any = [agentContextFreshness, taskLifecycleNext?.mcp_freshness]
     .filter(Boolean)
     .map(compactMcpRestartReadiness);
   return mergePcRuntimeRestartReadiness({ localReadiness, hostRuntimeRegistry });
 }
 
-function compactMcpRestartReadiness(freshness) {
-  const selfRestartSupported = freshness.live_process?.self_restart_supported === true;
-  const restartMechanism = selfRestartSupported
+function compactMcpRestartReadiness(freshness: any) {
+  const selfRestartSupported: any = freshness.live_process?.self_restart_supported === true;
+  const restartMechanism: any = selfRestartSupported
     ? 'self_restart_supported'
     : 'external_stdio_mcp_restart_required';
   return {
@@ -3767,11 +3773,11 @@ function compactMcpRestartReadiness(freshness) {
 }
 
 function buildLocalMcpCarrierSessionBinding() {
-  const { carrierSessionId, verificationSource } = inheritedNarsSessionEnvironment();
+  const { carrierSessionId, verificationSource }: any = inheritedNarsSessionEnvironment();
   if (!carrierSessionId) return null;
-  const pcSiteRoot = process.env.NARADA_PC_SITE_ROOT || 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
-  const recordPath = join(resolve(pcSiteRoot), 'runtime', 'carrier-sessions', `${carrierSessionId}.json`);
-  const record = readMcpFreshnessJsonFile(recordPath);
+  const pcSiteRoot: any = process.env.NARADA_PC_SITE_ROOT || 'C:/ProgramData/Narada/sites/pc/desktop-sunroom-2';
+  const recordPath: any = join(resolve(pcSiteRoot), 'runtime', 'carrier-sessions', `${carrierSessionId}.json`);
+  const record: any = readMcpFreshnessJsonFile(recordPath);
   return {
     schema: 'narada.pc_runtime.mcp_child_carrier_session_binding.v0',
     status: record && record.status !== 'unreadable' ? 'bound_to_parent_carrier_session' : 'carrier_session_record_missing',
@@ -3805,18 +3811,18 @@ function buildHydrateHostRuntimeRegistryStatus() {
   } catch (error) {
     return {
       status: 'unavailable',
-      reason: error instanceof Error ? error.message : String(error),
+      reason: error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error),
     };
   }
 }
 
-function autoAcknowledgeHydrateMcpRefreshes({ mcpRestartReadiness, taskLifecycleNext }) {
-  const results = [];
+function autoAcknowledgeHydrateMcpRefreshes({ mcpRestartReadiness, taskLifecycleNext }: any) {
+  const results: any = [];
   for (const entry of mcpRestartReadiness ?? []) {
-    const config = hydrateAutoAckConfigForSurface(entry, taskLifecycleNext);
+    const config: any = hydrateAutoAckConfigForSurface(entry, taskLifecycleNext);
     if (!config) continue;
     if (isNoRequestFreshnessMarkerContradicted(entry)) {
-      const result = reconcileNoRequestMcpFreshnessMarker({
+      const result: any = reconcileNoRequestMcpFreshnessMarker({
         siteRoot,
         pcSiteRoot: process.env.NARADA_PC_SITE_ROOT || undefined,
         ...config,
@@ -3839,7 +3845,7 @@ function autoAcknowledgeHydrateMcpRefreshes({ mcpRestartReadiness, taskLifecycle
       continue;
     }
     if (entry?.restart_request_state !== 'restart_requested') continue;
-    const result = acknowledgeMcpRestartRequest({
+    const result: any = acknowledgeMcpRestartRequest({
       siteRoot,
       pcSiteRoot: process.env.NARADA_PC_SITE_ROOT || undefined,
       ...config,
@@ -3857,40 +3863,40 @@ function autoAcknowledgeHydrateMcpRefreshes({ mcpRestartReadiness, taskLifecycle
   }
   return {
     schema: 'narada.agent_context.mcp_restart_auto_acknowledgement.v0',
-    status: results.some((result) => isHydrateMcpAutoAckStatus(result.status))
+    status: results.some((result: any) => isHydrateMcpAutoAckStatus(result.status))
       ? 'acknowledged'
       : results.length > 0 ? 'attempted_no_acknowledgement' : 'not_applicable',
-    acknowledged: results.filter((result) => isHydrateMcpAutoAckStatus(result.status)),
-    rejected: results.filter((result) => !isHydrateMcpAutoAckStatus(result.status)),
+    acknowledged: results.filter((result: any) => isHydrateMcpAutoAckStatus(result.status)),
+    rejected: results.filter((result: any) => !isHydrateMcpAutoAckStatus(result.status)),
   };
 }
 
-function isHydrateMcpAutoAckStatus(status) {
+function isHydrateMcpAutoAckStatus(status: any) {
   return status === 'restart_acknowledged' || status === 'stale_marker_contradicted_acknowledged';
 }
 
-function hydrateAutoAckConfigForSurface(entry, taskLifecycleNext) {
+function hydrateAutoAckConfigForSurface(entry: any, taskLifecycleNext: any) {
   if (entry?.surface_id === 'agent-context-mcp.local'
-    || entry?.server_entrypoint === 'tools/agent-context/agent-context-mcp-server.mjs') {
+    || entry?.server_entrypoint === 'tools/agent-context/agent-context-mcp-server.ts') {
     return {
       serverName: SERVER_NAME,
       targetSurface: 'agent-context-mcp.local',
-      targetEntrypoint: 'tools/agent-context/agent-context-mcp-server.mjs',
+      targetEntrypoint: 'tools/agent-context/agent-context-mcp-server.ts',
       restartRequestPath: join(siteRoot, '.ai', 'tmp', 'agent-context-restart-request.json'),
       baselinePath: join(siteRoot, '.ai', 'tmp', 'agent-context-mcp-baseline.json'),
-      watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.mjs'],
+      watchedPaths: ['tools/agent-context', 'tools/mcp-freshness-service.js'],
       expectedTools: EXPECTED_TOOL_NAMES,
-      registeredTools: TOOLS.map((tool) => tool.name).sort(),
+      registeredTools: TOOLS.map((tool: any) => tool.name).sort(),
       note: 'Agent-context MCP restart auto-acknowledged during startup hydration after post-request boot evidence.',
     };
   }
   if (entry?.surface_id === 'task-lifecycle-mcp.local'
     || entry?.server_entrypoint === 'task-lifecycle-mcp'
-    || entry?.server_entrypoint === 'tools/task-lifecycle/task-mcp-server.mjs'
+    || entry?.server_entrypoint === 'tools/task-lifecycle/task-mcp-server.js'
     || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js'
-    || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/src/task-lifecycle/task-mcp-server.mjs') {
+    || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/src/task-lifecycle/task-mcp-server.js') {
     if (taskLifecycleNext?.status !== 'ok') return null;
-    const taskToolNames = taskLifecycleTools().map((tool) => tool.name).sort();
+    const taskToolNames: any = taskLifecycleTools().map((tool: any) => tool.name).sort();
     return {
       serverName: 'narada-task-lifecycle-mcp',
       targetSurface: 'task-lifecycle-mcp.local',
@@ -3906,15 +3912,15 @@ function hydrateAutoAckConfigForSurface(entry, taskLifecycleNext) {
   return null;
 }
 
-function mergePcRuntimeRestartReadiness({ localReadiness, hostRuntimeRegistry }) {
+function mergePcRuntimeRestartReadiness({ localReadiness, hostRuntimeRegistry }: any) {
   if (hostRuntimeRegistry?.status !== 'ok') return localReadiness;
-  const byServerName = new Map(localReadiness.map((entry) => [entry.server_name, entry]));
-  const byEntrypoint = new Map(localReadiness.map((entry) => [entry.server_entrypoint, entry]));
-  const merged = [...localReadiness];
+  const byServerName: any = new Map(localReadiness.map((entry: any) => [entry.server_name, entry]));
+  const byEntrypoint: any = new Map(localReadiness.map((entry: any) => [entry.server_entrypoint, entry]));
+  const merged: any = [...localReadiness];
   for (const surface of hostRuntimeRegistry.known_surfaces ?? []) {
-    const surfaceEntrypoint = surface.server_entrypoint ?? surface.entrypoint ?? null;
-    const local = byServerName.get(surface.server_name) ?? byEntrypoint.get(surfaceEntrypoint);
-    const readiness = compactPcRuntimeSurfaceReadiness(surface, local);
+    const surfaceEntrypoint: any = surface.server_entrypoint ?? surface.entrypoint ?? null;
+    const local: any = byServerName.get(surface.server_name) ?? byEntrypoint.get(surfaceEntrypoint);
+    const readiness: any = compactPcRuntimeSurfaceReadiness(surface, local);
     if (local) {
       Object.assign(local, readiness);
     } else {
@@ -3924,24 +3930,24 @@ function mergePcRuntimeRestartReadiness({ localReadiness, hostRuntimeRegistry })
   return merged;
 }
 
-function compactPcRuntimeSurfaceReadiness(surface, local = null) {
-  const serverEntrypoint = surface.server_entrypoint ?? surface.entrypoint ?? local?.server_entrypoint ?? null;
-  const registryAuthority = surface.registry_authority ?? null;
-  const localStartupBlockingAllowed = registryAuthority?.local_startup_blocking_allowed !== false;
-  const foreignStatus = registryAuthority?.authority_scope === 'foreign_site_status_advisory';
-  const surfacePendingRestart = localStartupBlockingAllowed && (
+function compactPcRuntimeSurfaceReadiness(surface: any, local: any = null) {
+  const serverEntrypoint: any = surface.server_entrypoint ?? surface.entrypoint ?? local?.server_entrypoint ?? null;
+  const registryAuthority: any = surface.registry_authority ?? null;
+  const localStartupBlockingAllowed: any = registryAuthority?.local_startup_blocking_allowed !== false;
+  const foreignStatus: any = registryAuthority?.authority_scope === 'foreign_site_status_advisory';
+  const surfacePendingRestart: any = localStartupBlockingAllowed && (
     surface.restart_request?.state === 'restart_requested'
     || surface.source_freshness?.pending_restart === true
   );
-  const pendingRestart = surfacePendingRestart
+  const pendingRestart: any = surfacePendingRestart
     || local?.pending_restart === true;
-  const hasLiveRuntimeEvidence = Boolean(surface.runtime?.pid ?? local?.live_process?.pid);
-  const staleLiveSurfacePossible = (localStartupBlockingAllowed && hasLiveRuntimeEvidence && surface.observed_state === 'live_surface_stale')
+  const hasLiveRuntimeEvidence: any = Boolean(surface.runtime?.pid ?? local?.live_process?.pid);
+  const staleLiveSurfacePossible: any = (localStartupBlockingAllowed && hasLiveRuntimeEvidence && surface.observed_state === 'live_surface_stale')
     || pendingRestart
     || (localStartupBlockingAllowed && surface.source_freshness?.source_newer_than_baseline === true)
     || local?.stale_live_surface_possible === true;
-  const selfRestartSupported = surface.self_restart_supported === true || local?.self_restart_supported === true;
-  const readiness = {
+  const selfRestartSupported: any = surface.self_restart_supported === true || local?.self_restart_supported === true;
+  const readiness: any = {
     schema: 'narada.mcp.restart_readiness.v0',
     server_name: surface.server_name ?? local?.server_name ?? null,
     server_entrypoint: serverEntrypoint,
@@ -3990,17 +3996,17 @@ function compactPcRuntimeSurfaceReadiness(surface, local = null) {
   return readiness;
 }
 
-function buildMcpReadinessAccounting(mcpRestartReadiness, hostRuntimeRegistry = null) {
-  const canonical = new Map();
+function buildMcpReadinessAccounting(mcpRestartReadiness: any, hostRuntimeRegistry: any = null) {
+  const canonical: any = new Map();
   for (const entry of mcpRestartReadiness ?? []) {
     if (!entry) continue;
-    const key = canonicalMcpReadinessKey(entry);
-    const existing = canonical.get(key);
+    const key: any = canonicalMcpReadinessKey(entry);
+    const existing: any = canonical.get(key);
     canonical.set(key, existing ? mergeMcpReadinessEntry(existing, entry) : { ...entry });
   }
-  const surfaces = [...canonical.values()];
-  const hostInstances = hostRuntimeRegistry?.host_freshness_projection?.instances ?? [];
-  const counts = {
+  const surfaces: any = [...canonical.values()];
+  const hostInstances: any = hostRuntimeRegistry?.host_freshness_projection?.instances ?? [];
+  const counts: any = {
     pending_restart: 0,
     missing_observation: 0,
     callable_now: 0,
@@ -4009,7 +4015,7 @@ function buildMcpReadinessAccounting(mcpRestartReadiness, hostRuntimeRegistry = 
     foreign_status: 0,
   };
   for (const surface of surfaces) {
-    const foreignStatus = surface.foreign_status === true || surface.pc_runtime?.foreign_status === true;
+    const foreignStatus: any = surface.foreign_status === true || surface.pc_runtime?.foreign_status === true;
     if (!foreignStatus && (surface.pending_restart === true || surface.restart_request_state === 'restart_requested')) counts.pending_restart += 1;
     if (surface.source_newer_than_baseline === true) counts.stale_source += 1;
     if (surface.pc_runtime?.observation_freshness === 'missing') counts.missing_observation += 1;
@@ -4030,15 +4036,15 @@ function buildMcpReadinessAccounting(mcpRestartReadiness, hostRuntimeRegistry = 
   };
 }
 
-function canonicalMcpReadinessKey(entry) {
+function canonicalMcpReadinessKey(entry: any) {
   return entry.surface_id
     ?? entry.server_entrypoint
     ?? entry.server_name
     ?? 'unknown-mcp-surface';
 }
 
-function mergeMcpReadinessEntry(left, right) {
-  const merged = { ...left, ...right };
+function mergeMcpReadinessEntry(left: any, right: any) {
+  const merged: any = { ...left, ...right };
   merged.pending_restart = left.pending_restart === true || right.pending_restart === true;
   merged.stale_live_surface_possible = left.stale_live_surface_possible === true || right.stale_live_surface_possible === true;
   merged.source_newer_than_baseline = left.source_newer_than_baseline === true || right.source_newer_than_baseline === true;
@@ -4050,28 +4056,28 @@ function mergeMcpReadinessEntry(left, right) {
   return merged;
 }
 
-function isNoRequestFreshnessMarkerContradicted(entry) {
+function isNoRequestFreshnessMarkerContradicted(entry: any) {
   if (!entry || typeof entry !== 'object') return false;
   if (entry.restart_request_state !== 'no_restart_request') return false;
   if (entry.pending_restart !== true && entry.stale_live_surface_possible !== true) return false;
-  const sourceEpoch = mcpSourceEpoch(entry);
-  const bootEpoch = mcpBootEpoch(entry);
+  const sourceEpoch: any = mcpSourceEpoch(entry);
+  const bootEpoch: any = mcpBootEpoch(entry);
   if (!Number.isFinite(sourceEpoch) || !Number.isFinite(bootEpoch) || bootEpoch < sourceEpoch) return false;
   return hasMcpCarrierSessionEvidence(entry);
 }
 
-function hasMcpCarrierSessionEvidence(entry) {
-  const binding = entry?.carrier_session_binding ?? entry?.pc_runtime?.carrier_session_binding ?? null;
-  const bindingStatus = binding?.status ?? null;
-  const parentRef = binding?.parent_carrier_session_ref ?? entry?.parent_carrier_session_ref ?? null;
-  const restartHandle = binding?.record_summary?.restart_handle ?? entry?.restart_handle ?? null;
+function hasMcpCarrierSessionEvidence(entry: any) {
+  const binding: any = entry?.carrier_session_binding ?? entry?.pc_runtime?.carrier_session_binding ?? null;
+  const bindingStatus: any = binding?.status ?? null;
+  const parentRef: any = binding?.parent_carrier_session_ref ?? entry?.parent_carrier_session_ref ?? null;
+  const restartHandle: any = binding?.record_summary?.restart_handle ?? entry?.restart_handle ?? null;
   return bindingStatus === 'bound_to_parent_carrier_session'
     || parentRef?.record_status === 'found'
     || Boolean(restartHandle?.handle || restartHandle?.class);
 }
 
-function mcpSourceEpoch(entry) {
-  const candidates = [
+function mcpSourceEpoch(entry: any) {
+  const candidates: any = [
     entry?.source?.current_max_mtime,
     entry?.pc_runtime?.source_freshness?.source_max_mtime,
     entry?.source_freshness?.source_max_mtime,
@@ -4080,8 +4086,8 @@ function mcpSourceEpoch(entry) {
   return firstFiniteEpoch(candidates);
 }
 
-function mcpBootEpoch(entry) {
-  const candidates = [
+function mcpBootEpoch(entry: any) {
+  const candidates: any = [
     entry?.live_process?.booted_at,
     entry?.pc_runtime?.runtime?.booted_at,
     entry?.runtime?.booted_at,
@@ -4090,20 +4096,20 @@ function mcpBootEpoch(entry) {
   return firstFiniteEpoch(candidates);
 }
 
-function firstFiniteEpoch(candidates) {
+function firstFiniteEpoch(candidates: any) {
   for (const candidate of candidates) {
     if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate;
     if (typeof candidate === 'string' && candidate.trim().length > 0) {
-      const numeric = Number(candidate);
+      const numeric: any = Number(candidate);
       if (Number.isFinite(numeric)) return numeric;
-      const parsed = Date.parse(candidate);
+      const parsed: any = Date.parse(candidate);
       if (Number.isFinite(parsed)) return parsed;
     }
   }
   return NaN;
 }
 
-function buildMcpRestartDisposition(entry) {
+function buildMcpRestartDisposition(entry: any) {
   if (entry?.pending_restart !== true && entry?.stale_live_surface_possible !== true) {
     return {
       status: 'clear',
@@ -4198,8 +4204,8 @@ function buildMcpRestartDisposition(entry) {
   };
 }
 
-function buildMcpOperatorGuidance({ surface, local }) {
-  const migrationGuidance = surface.carrier_session_binding?.migration_guidance;
+function buildMcpOperatorGuidance({ surface, local }: any) {
+  const migrationGuidance: any = surface.carrier_session_binding?.migration_guidance;
   if (migrationGuidance?.operator_guidance) return migrationGuidance.operator_guidance;
   if (surface.startup_disposition === 'operator_restart_required_with_handle') {
     return 'Restart the recorded parent carrier/session handle, then re-run hydration and acknowledge the restart marker only after post-request boot evidence.';
@@ -4214,9 +4220,9 @@ function buildMcpOperatorGuidance({ surface, local }) {
   return local?.operator_guidance ?? 'Use PC runtime registry evidence to decide restart disposition.';
 }
 
-function buildMcpSanctionedRemediation({ surface, local }) {
-  const remediation = [...(local?.sanctioned_remediation ?? [])];
-  const migrationPath = surface.carrier_session_binding?.migration_guidance?.migration_path;
+function buildMcpSanctionedRemediation({ surface, local }: any) {
+  const remediation: any = [...(local?.sanctioned_remediation ?? [])];
+  const migrationPath: any = surface.carrier_session_binding?.migration_guidance?.migration_path;
   if (migrationPath && !remediation.includes(migrationPath)) remediation.push(migrationPath);
   if ((surface.startup_disposition === 'terminal_blocked_missing_parent_carrier_restart_handle'
     || surface.startup_disposition === 'terminal_blocked_missing_embodiment_authority')
@@ -4226,7 +4232,7 @@ function buildMcpSanctionedRemediation({ surface, local }) {
   return remediation;
 }
 
-function compactHostRuntimeRegistry(hostRuntimeRegistry) {
+function compactHostRuntimeRegistry(hostRuntimeRegistry: any) {
   if (!hostRuntimeRegistry) return null;
   if (hostRuntimeRegistry.status !== 'ok') {
     return {
@@ -4255,7 +4261,7 @@ function compactHostRuntimeRegistry(hostRuntimeRegistry) {
   };
 }
 
-function compactSiteLiftOrientation(siteLiftOrientation, rawEvidenceRef = null, { includeTopArtifacts = true } = {}) {
+function compactSiteLiftOrientation(siteLiftOrientation: any, rawEvidenceRef: any = null, { includeTopArtifacts = true }: any = {}) {
   if (!siteLiftOrientation) return null;
   return {
     schema: siteLiftOrientation.schema,
@@ -4287,7 +4293,7 @@ function computeStartupReadinessStatus({
   activeBlockers,
   policyConstraints = [],
   criticalMcpRestartNonconformance,
-}) {
+}: any) {
   if (!identityVerified) return 'blocked_identity';
   if (!hasVerifiedBadge) return 'blocked_capability';
   if (criticalMcpRestartNonconformance) return 'blocked_mcp_restart_nonconformance';
@@ -4296,21 +4302,21 @@ function computeStartupReadinessStatus({
   if (groundingStatus === 'unavailable' && !operatorOverrideRef) return 'blocked_grounding';
   if (cardStatus === 'missing') return 'blocked_orientation';
   if (policyConstraints.length > 0) return 'ready_with_constraints';
-  const residual = groundingStatus !== 'grounded'
+  const residual: any = groundingStatus !== 'grounded'
     || !groundingEventReturned
     || cardStatus !== 'loaded'
     || !cardHasSnapshot;
   return residual ? 'ready_with_residuals' : 'ready';
 }
 
-function computeStartupActionAuthority({ checkpoint, status }) {
+function computeStartupActionAuthority({ checkpoint, status }: any) {
   if (status?.startsWith('blocked_')) return 'observation_only';
   if (checkpoint?.status === 'ok' && checkpoint.active_task) return 'continue_authorized';
   return 'observation_only';
 }
 
-function summarizeStartupReadiness({ status, actionAuthority, recommendedNextAction, mcpPressure, mcpSiteReadiness }) {
-  const siteOwnedMcpSummary = mcpSiteReadiness?.operator_summary
+function summarizeStartupReadiness({ status, actionAuthority, recommendedNextAction, mcpPressure, mcpSiteReadiness }: any) {
+  const siteOwnedMcpSummary: any = mcpSiteReadiness?.operator_summary
     ? ` Site-owned MCP readiness: ${mcpSiteReadiness.operator_summary}`
     : '';
   if (!recommendedNextAction && mcpPressure?.status === 'active') {
@@ -4355,15 +4361,15 @@ function summarizeStartupReadiness({ status, actionAuthority, recommendedNextAct
 }
 
 function readOsmSendPermissionPolicy() {
-  const defaultPolicy = {
+  const defaultPolicy: any = {
     schema: 'narada.site.osm_send_permission_policy.v0',
     mode: 'allowed',
     source: 'default_missing_site_config',
     modes: ['allowed', 'not_allowed', 'on_operator_request_only'],
   };
-  const configPath = join(siteRoot, 'config.json');
+  const configPath: any = join(siteRoot, 'config.json');
   if (!existsSync(configPath)) return defaultPolicy;
-  let config = null;
+  let config: any = null;
   try {
     config = JSON.parse(readFileSync(configPath, 'utf8'));
   } catch {
@@ -4374,7 +4380,7 @@ function readOsmSendPermissionPolicy() {
       parse_error_blocks_osm_send: true,
     };
   }
-  const policy = config?.runtime_config?.operator_surface_message_send_permission_policy?.current_value
+  const policy: any = config?.runtime_config?.operator_surface_message_send_permission_policy?.current_value
     ?? config?.structural_config?.operator_surface_message_send_permission_policy
     ?? defaultPolicy;
   return {
@@ -4392,7 +4398,7 @@ function readOsmSendPermissionPolicy() {
   };
 }
 
-function buildOsmSendPermissionPolicyConstraint(policy) {
+function buildOsmSendPermissionPolicyConstraint(policy: any) {
   if (!policy || policy.mode === 'allowed') return null;
   return {
     kind: 'osm_send_permission_policy',
@@ -4406,13 +4412,13 @@ function buildOsmSendPermissionPolicyConstraint(policy) {
   };
 }
 
-function reconcileStartupBlockers({ blockers, checkpoint, onboardingCard, mcpPressure, mcpRestartReadiness, osmSendPermissionPolicy }) {
-  const active = [];
-  const policyConstraints = [];
-  const cleared = [];
-  const superseded = [];
+function reconcileStartupBlockers({ blockers, checkpoint, onboardingCard, mcpPressure, mcpRestartReadiness, osmSendPermissionPolicy }: any) {
+  const active: any = [];
+  const policyConstraints: any = [];
+  const cleared: any = [];
+  const superseded: any = [];
   for (const blocker of blockers ?? []) {
-    const text = stringifyBlocker(blocker).toLowerCase();
+    const text: any = stringifyBlocker(blocker).toLowerCase();
     if (isDurableOperatorProhibitionBlocker(text)) {
       if (osmSendPermissionPolicy?.source && osmSendPermissionPolicy.source !== 'default_missing_site_config') {
         superseded.push({
@@ -4464,7 +4470,7 @@ function reconcileStartupBlockers({ blockers, checkpoint, onboardingCard, mcpPre
   return { active, policy_constraints: policyConstraints, cleared, superseded };
 }
 
-function stringifyBlocker(blocker) {
+function stringifyBlocker(blocker: any) {
   if (typeof blocker === 'string') return blocker;
   try {
     return JSON.stringify(blocker);
@@ -4473,12 +4479,12 @@ function stringifyBlocker(blocker) {
   }
 }
 
-function isOrientationReloadBlocker(text) {
+function isOrientationReloadBlocker(text: any) {
   return (text.includes('mcp reload') || text.includes('reload') || text.includes('new session'))
     && (text.includes('orientation') || text.includes('onboarding card') || text.includes('orientation surface'));
 }
 
-function isMcpRestartPressureBlocker(text) {
+function isMcpRestartPressureBlocker(text: any) {
   return text.includes('mcp')
     && (
       text.includes('restart pressure')
@@ -4491,24 +4497,24 @@ function isMcpRestartPressureBlocker(text) {
     );
 }
 
-function isDurableOperatorProhibitionBlocker(text) {
+function isDurableOperatorProhibitionBlocker(text: any) {
   return (
     (text.includes('osm') || text.includes('operator surface message'))
     && (text.includes('prohibited') || text.includes('do not send') || text.includes('prior operator instruction'))
   );
 }
 
-function isMcpRestartPressureCleared({ mcpPressure, mcpRestartReadiness }) {
-  const readiness = mcpRestartReadiness ?? [];
+function isMcpRestartPressureCleared({ mcpPressure, mcpRestartReadiness }: any) {
+  const readiness: any = mcpRestartReadiness ?? [];
   return (mcpPressure?.status === 'clear' || mcpPressure?.severity !== 'critical')
     && readiness.length > 0
-    && readiness.every((entry) => {
-      const disposition = entry?.disposition ?? buildMcpRestartDisposition(entry);
+    && readiness.every((entry: any) => {
+      const disposition: any = entry?.disposition ?? buildMcpRestartDisposition(entry);
       return disposition?.terminal_blocker !== true;
     });
 }
 
-function isWorkSelectionCheckpointBlocker(text) {
+function isWorkSelectionCheckpointBlocker(text: any) {
   return (text.includes('do not duplicate') || text.includes('duplicate'))
     && (text.includes('owned') || text.includes('execution') || text.includes('active task') || text.includes('working on'));
 }
@@ -4523,7 +4529,7 @@ function maybeCheckpointStartup({
   onboardingCard,
   taskLifecycleNext,
   recommendedNextAction,
-}) {
+}: any) {
   if (!checkpointStartup) return readiness;
   if (readiness.verdict.status.startsWith('blocked_')) {
     return {
@@ -4534,7 +4540,7 @@ function maybeCheckpointStartup({
       },
     };
   }
-  const checkpointResult = safeCall(() => agentContextCheckpoint({
+  const checkpointResult: any = safeCall(() => agentContextCheckpoint({
     agent_id: agentId,
     active_task: checkpoint?.status === 'ok' ? checkpoint.active_task ?? null : null,
     files_touched: checkpoint?.status === 'ok' ? checkpoint.files_touched ?? [] : [],
@@ -4559,7 +4565,7 @@ function maybeCheckpointStartup({
     ],
     worktree_state: checkpoint?.status === 'ok' ? checkpoint.worktree_state ?? null : null,
     tactical_resume_notes: [
-      `Startup readiness quality checks: ${readiness.quality_checks.map((check) => `${check.id}=${check.status}`).join(', ')}`,
+      `Startup readiness quality checks: ${readiness.quality_checks.map((check: any) => `${check.id}=${check.status}`).join(', ')}`,
     ],
   }));
   if (checkpointResult.ok) {
@@ -4589,7 +4595,7 @@ function maybeCheckpointStartup({
   };
 }
 
-function buildResumeBrief({ agentId, role, checkpoint, taskLifecycleNext, recommendedNextAction, hydratedAt, workboardFreshnessInput, provenance, groundingEvent }) {
+function buildResumeBrief({ agentId, role, checkpoint, taskLifecycleNext, recommendedNextAction, hydratedAt, workboardFreshnessInput, provenance, groundingEvent }: any) {
   return {
     schema: 'narada.agent_context.resume_brief.v0',
     hydrated_at: hydratedAt ?? null,
@@ -4616,7 +4622,7 @@ function buildResumeBrief({ agentId, role, checkpoint, taskLifecycleNext, recomm
   };
 }
 
-function buildCapabilityEnvelopeProjection(capabilityPolicy) {
+function buildCapabilityEnvelopeProjection(capabilityPolicy: any) {
   return {
     schema: 'narada.agent.capability_envelope.v0',
     status: capabilityPolicy ? 'loaded' : 'missing',
@@ -4628,7 +4634,7 @@ function buildCapabilityEnvelopeProjection(capabilityPolicy) {
   };
 }
 
-function buildActivationAuthorityProjection({ authorizedAction, missingAuthorityReason, recommendedNextAction, identityVerified, roleBinding, capabilityPolicy }) {
+function buildActivationAuthorityProjection({ authorizedAction, missingAuthorityReason, recommendedNextAction, identityVerified, roleBinding, capabilityPolicy }: any) {
   return {
     schema: 'narada.agent.activation_authority.v0',
     status: authorizedAction ? 'present' : 'absent',
@@ -4645,8 +4651,8 @@ function buildActivationAuthorityProjection({ authorizedAction, missingAuthority
   };
 }
 
-function buildRequiredPosture(capabilityPolicy) {
-  const posture = [
+function buildRequiredPosture(capabilityPolicy: any) {
+  const posture: any = [
     'Verify identity from NARADA_AGENT_ID before role-gated action.',
     'Use MCP for task lifecycle mutations.',
   ];
@@ -4666,40 +4672,40 @@ function buildRequiredPosture(capabilityPolicy) {
   return posture;
 }
 
-function buildCapabilityPolicySummary(capabilityPolicy) {
+function buildCapabilityPolicySummary(capabilityPolicy: any) {
   if (!capabilityPolicy) {
     return 'Capability policy unavailable; stop before any role-gated action and rehydrate through MCP.';
   }
-  const nativeShell = capabilityPolicy.direct_substrate_shell_access === 'forbidden'
+  const nativeShell: any = capabilityPolicy.direct_substrate_shell_access === 'forbidden'
     ? 'Native/substrate shell is forbidden'
     : 'Native/substrate shell policy is not forbidden';
-  const mcpShell = capabilityPolicy.mcp_shell_execution === 'allowed'
+  const mcpShell: any = capabilityPolicy.mcp_shell_execution === 'allowed'
     ? 'policy-aware shell MCP is allowed'
     : 'policy-aware shell MCP is not allowed';
-  const scriptExecution = capabilityPolicy.script_execution_surface === 'mcp_only'
+  const scriptExecution: any = capabilityPolicy.script_execution_surface === 'mcp_only'
     ? 'script execution is MCP-only'
     : `script execution surface is ${capabilityPolicy.script_execution_surface ?? 'unspecified'}`;
-  const filesystem = capabilityPolicy.filesystem_discovery === 'mcp_only'
+  const filesystem: any = capabilityPolicy.filesystem_discovery === 'mcp_only'
     ? 'filesystem discovery is MCP-only'
     : `filesystem discovery is ${capabilityPolicy.filesystem_discovery ?? 'unspecified'}`;
-  const lifecycle = capabilityPolicy.lifecycle_mutations === 'mcp_only'
+  const lifecycle: any = capabilityPolicy.lifecycle_mutations === 'mcp_only'
     ? 'task lifecycle mutations are MCP-only'
     : `task lifecycle mutations are ${capabilityPolicy.lifecycle_mutations ?? 'unspecified'}`;
   return `${nativeShell}; ${mcpShell}. ${scriptExecution}; ${filesystem}; ${lifecycle}.`;
 }
 
-function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
-  const server = resolveTaskLifecycleMcpServer();
+function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }: any) {
+  const server: any = resolveTaskLifecycleMcpServer();
   if (!server) {
-    const packageBinName = process.platform === 'win32' ? 'task-lifecycle-mcp.cmd' : 'task-lifecycle-mcp';
-    const packageBinPath = join(siteRoot, 'node_modules', '.bin', packageBinName);
+    const packageBinName: any = process.platform === 'win32' ? 'task-lifecycle-mcp.cmd' : 'task-lifecycle-mcp';
+    const packageBinPath: any = join(siteRoot, 'node_modules', '.bin', packageBinName);
     return {
       status: 'unavailable',
       message: `task_lifecycle_mcp_server_not_found: ${packageBinPath}`,
     };
   }
 
-  const init = JSON.stringify({
+  const init: any = JSON.stringify({
     jsonrpc: '2.0',
     id: 0,
     method: 'initialize',
@@ -4709,12 +4715,12 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
       clientInfo: { name: SERVER_NAME, version: SERVER_VERSION },
     },
   });
-  const args = {
+  const args: any = {
     agent_id: agentId,
     limit,
   };
   if (lastWorkboardCheckAt) args.last_workboard_check_at = lastWorkboardCheckAt;
-  const req = JSON.stringify({
+  const req: any = JSON.stringify({
     jsonrpc: '2.0',
     id: 1,
     method: 'tools/call',
@@ -4724,7 +4730,7 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
     },
   });
 
-  const proc = runHiddenPostureCommandSync(server.command, server.args, {
+  const proc: any = runHiddenPostureCommandSync(server.command, server.args, {
     cwd: siteRoot,
     input: `${init}\n${req}\n`,
     encoding: 'utf8',
@@ -4743,14 +4749,14 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
     };
   }
 
-  const responses = (proc.stdout ?? '')
+  const responses: any = (proc.stdout ?? '')
     .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0)
-    .map((line) => {
+    .filter((line: any) => line.trim().length > 0)
+    .map((line: any) => {
       try { return JSON.parse(line); } catch { return null; }
     })
     .filter(Boolean);
-  const call = responses.find((response) => response.id === 1);
+  const call: any = responses.find((response: any) => response.id === 1);
   if (!call) {
     return {
       status: 'unavailable',
@@ -4760,11 +4766,11 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
   if (call.error) {
     return {
       status: 'error',
-      message: call.error.message,
+      message: call.error instanceof Error ? call.error.message : String(call.error),
       error: call.error,
     };
   }
-  const text = call.result?.content?.[0]?.text;
+  const text: any = call.result?.content?.[0]?.text;
   if (!text) {
     return {
       status: 'error',
@@ -4777,7 +4783,7 @@ function callTaskLifecycleNextMcp({ agentId, limit, lastWorkboardCheckAt }) {
   } catch (error) {
     return {
       status: 'error',
-      message: `task_lifecycle_next_mcp_parse_error: ${error.message}`,
+      message: `task_lifecycle_next_mcp_parse_error: ${error instanceof Error ? error.message : String(error)}`,
       raw_text: text,
     };
   }
@@ -4788,15 +4794,15 @@ function resolveTaskLifecycleMcpServer() {
 }
 
 
-function resolveTaskLifecycleNextToolPayload(payload) {
+function resolveTaskLifecycleNextToolPayload(payload: any) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return payload;
   if (typeof payload.output_ref !== 'string') return payload;
-  const match = payload.output_ref.match(/^mcp_output:([A-Za-z0-9_-]+)$/);
+  const match: any = payload.output_ref.match(/^mcp_output:([A-Za-z0-9_-]+)$/);
   if (!match) return payload;
-  const outputPath = join(siteRoot, '.ai', 'tmp', 'mcp-outputs', 'workspace', `${match[1]}.json`);
+  const outputPath: any = join(siteRoot, '.ai', 'tmp', 'mcp-outputs', 'workspace', `${match[1]}.json`);
   if (!existsSync(outputPath)) return payload;
   try {
-    const envelope = JSON.parse(readFileSync(outputPath, 'utf8'));
+    const envelope: any = JSON.parse(readFileSync(outputPath, 'utf8'));
     if (typeof envelope.output_text === 'string') {
       return {
         ...JSON.parse(envelope.output_text),
@@ -4813,14 +4819,14 @@ function resolveTaskLifecycleNextToolPayload(payload) {
   } catch (error) {
     return {
       status: 'error',
-      message: `task_lifecycle_next_mcp_output_ref_parse_error: ${error.message}`,
+      message: `task_lifecycle_next_mcp_output_ref_parse_error: ${error instanceof Error ? error.message : String(error)}`,
       output_ref: payload.output_ref,
     };
   }
 }
 
-function agentContextListSessions(toolArgs) {
-  return listAgentStartSessions({
+function agentContextListSessions(toolArgs: any) {
+  return listAgentStartSessionsAny({
     db,
     identity: toolArgs?.identity ?? null,
     dateFrom: toolArgs?.date_from ?? toolArgs?.from ?? null,
@@ -4830,8 +4836,8 @@ function agentContextListSessions(toolArgs) {
   });
 }
 
-function agentContextShowEvent(toolArgs) {
-  const eventId = toolArgs?.event_id;
+function agentContextShowEvent(toolArgs: any) {
+  const eventId: any = toolArgs?.event_id;
   if (!eventId) {
     throw new Error('event_id is required');
   }
@@ -4840,15 +4846,15 @@ function agentContextShowEvent(toolArgs) {
     throw new Error('agent_context_db_not_available');
   }
 
-  const event = db.prepare('SELECT * FROM agent_start_events WHERE event_id = ?').get(eventId);
+  const event: any = db.prepare('SELECT * FROM agent_start_events WHERE event_id = ?').get(eventId);
   if (!event) {
     throw new Error(`event_not_found: ${eventId}`);
   }
 
-  const ec = db.prepare('SELECT * FROM execution_context_materializations WHERE event_id = ?').get(eventId);
-  const ic = db.prepare('SELECT * FROM intelligence_context_materializations WHERE event_id = ?').get(eventId);
-  const proposals = db.prepare('SELECT proposal_id, proposal_type, verdict, verdict_at, verdict_by, created_at FROM proposal_records WHERE event_id = ?').all(eventId);
-  const residuals = db.prepare('SELECT residual_id, label, status, promoted_task_id, created_at, status_at FROM residual_records WHERE event_id = ?').all(eventId);
+  const ec: any = db.prepare('SELECT * FROM execution_context_materializations WHERE event_id = ?').get(eventId);
+  const ic: any = db.prepare('SELECT * FROM intelligence_context_materializations WHERE event_id = ?').get(eventId);
+  const proposals: any = db.prepare('SELECT proposal_id, proposal_type, verdict, verdict_at, verdict_by, created_at FROM proposal_records WHERE event_id = ?').all(eventId);
+  const residuals: any = db.prepare('SELECT residual_id, label, status, promoted_task_id, created_at, status_at FROM residual_records WHERE event_id = ?').all(eventId);
 
   return {
     status: 'ok',
@@ -4860,27 +4866,27 @@ function agentContextShowEvent(toolArgs) {
   };
 }
 
-function parsePayload(row) {
+function parsePayload(row: any) {
   if (!row?.payload_json) return null;
   try {
     return JSON.parse(row.payload_json);
   } catch (error) {
-    return { payload_parse_error: error.message, payload_raw: row.payload_json };
+    return { payload_parse_error: error instanceof Error ? error.message : String(error), payload_raw: row.payload_json };
   }
 }
 
-function parseJsonObject(value) {
+function parseJsonObject(value: any) {
   try {
-    const parsed = JSON.parse(value ?? '{}');
+    const parsed: any = JSON.parse(value ?? '{}');
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
   } catch {
     return {};
   }
 }
 
-function agentContextShowBootstrap(toolArgs) {
-  let eventId = toolArgs?.event_id;
-  const identity = toolArgs?.identity;
+function agentContextShowBootstrap(toolArgs: any) {
+  let eventId: any = toolArgs?.event_id;
+  const identity: any = toolArgs?.identity;
 
   if (!eventId && !identity) {
     throw new Error('Either event_id or identity is required');
@@ -4891,24 +4897,24 @@ function agentContextShowBootstrap(toolArgs) {
   }
 
   if (!eventId && identity) {
-    const latest = db.prepare('SELECT event_id FROM agent_start_events WHERE identity_id = ? ORDER BY created_at DESC LIMIT 1').get(identity);
+    const latest: any = db.prepare('SELECT event_id FROM agent_start_events WHERE identity_id = ? ORDER BY created_at DESC LIMIT 1').get(identity);
     if (!latest) {
       throw new Error(`no_event_found_for_identity: ${identity}`);
     }
     eventId = latest.event_id;
   }
 
-  const event = db.prepare('SELECT * FROM agent_start_events WHERE event_id = ?').get(eventId);
+  const event: any = db.prepare('SELECT * FROM agent_start_events WHERE event_id = ?').get(eventId);
   if (!event) {
     throw new Error(`event_not_found: ${eventId}`);
   }
 
-  const ec = db.prepare('SELECT runtime, cwd, payload_json FROM execution_context_materializations WHERE event_id = ?').get(eventId);
-  const ic = db.prepare('SELECT materialization_id, schema_id, payload_json FROM intelligence_context_materializations WHERE event_id = ?').get(eventId);
-  const proposals = db.prepare('SELECT proposal_id, proposal_type, verdict FROM proposal_records WHERE event_id = ?').all(eventId);
+  const ec: any = db.prepare('SELECT runtime, cwd, payload_json FROM execution_context_materializations WHERE event_id = ?').get(eventId);
+  const ic: any = db.prepare('SELECT materialization_id, schema_id, payload_json FROM intelligence_context_materializations WHERE event_id = ?').get(eventId);
+  const proposals: any = db.prepare('SELECT proposal_id, proposal_type, verdict FROM proposal_records WHERE event_id = ?').all(eventId);
 
-  const residualRows = db.prepare('SELECT residual_id, label, status, payload_json, created_at, status_at, promoted_task_id FROM residual_records WHERE event_id = ?').all(eventId);
-  const residuals = residualRows.map((row) => ({
+  const residualRows: any = db.prepare('SELECT residual_id, label, status, payload_json, created_at, status_at, promoted_task_id FROM residual_records WHERE event_id = ?').all(eventId);
+  const residuals: any = residualRows.map((row: any) => ({
     residual_id: row.residual_id,
     label: row.label,
     status: row.status,
@@ -4917,8 +4923,8 @@ function agentContextShowBootstrap(toolArgs) {
     status_at: row.status_at,
   }));
 
-  const openInventoryRows = db.prepare("SELECT residual_id, label, status, payload_json, created_at, promoted_task_id FROM residual_records WHERE status IN ('noted', 'deferred')").all();
-  const open_residual_inventory = openInventoryRows.map((row) => ({
+  const openInventoryRows: any = db.prepare("SELECT residual_id, label, status, payload_json, created_at, promoted_task_id FROM residual_records WHERE status IN ('noted', 'deferred')").all();
+  const open_residual_inventory: any = openInventoryRows.map((row: any) => ({
     residual_id: row.residual_id,
     label: row.label,
     status: row.status,
@@ -4927,16 +4933,16 @@ function agentContextShowBootstrap(toolArgs) {
     promoted_task_id: row.promoted_task_id,
   }));
 
-  let ecPayload = null;
-  let icPayload = null;
+  let ecPayload: any = null;
+  let icPayload: any = null;
   try { if (ec?.payload_json) ecPayload = JSON.parse(ec.payload_json); } catch {}
   try { if (ic?.payload_json) icPayload = JSON.parse(ic.payload_json); } catch {}
-  const eventPayload = parseJsonObject(event.event_json);
-  const eventIdentity = event.identity_id ?? event.identity ?? event.agent_id ?? eventPayload.identity ?? null;
-  const eventRuntime = event.runtime ?? event.substrate ?? eventPayload.runtime ?? null;
-  const eventRole = event.role ?? eventPayload.role ?? resolveRoleBindingFromRoster(eventIdentity).role ?? null;
-  const fallbackCapabilityPolicy = eventRole ? defaultCapabilityPolicy(eventRole) : null;
-  const fallbackRoleBinding = eventIdentity
+  const eventPayload: any = parseJsonObject(event.event_json);
+  const eventIdentity: any = event.identity_id ?? event.identity ?? event.agent_id ?? eventPayload.identity ?? null;
+  const eventRuntime: any = event.runtime ?? event.substrate ?? eventPayload.runtime ?? null;
+  const eventRole: any = event.role ?? eventPayload.role ?? resolveRoleBindingFromRoster(eventIdentity).role ?? null;
+  const fallbackCapabilityPolicy: any = eventRole ? defaultCapabilityPolicy(eventRole) : null;
+  const fallbackRoleBinding: any = eventIdentity
     ? buildRoleBindingProjection({
       agentId: eventIdentity,
       role: eventRole,
@@ -4975,34 +4981,34 @@ function agentContextShowBootstrap(toolArgs) {
   };
 }
 
-function agentContextCheckpoint(toolArgs) {
+function agentContextCheckpoint(toolArgs: any) {
   if (!db) {
     throw new Error('agent_context_db_not_available');
   }
 
-  const agentId = toolArgs?.agent_id;
+  const agentId: any = toolArgs?.agent_id;
   if (!agentId) {
     throw new Error('agent_id is required');
   }
 
-  const checkpointId = `chk_${randomUUID().replace(/-/g, '')}`;
-  const now = new Date().toISOString();
+  const checkpointId: any = `chk_${randomUUID().replace(/-/g, '')}`;
+  const now: any = new Date().toISOString();
 
-  const activeTask = toolArgs?.active_task ?? null;
-  const filesTouched = toolArgs?.files_touched ?? [];
-  const keyDecisions = toolArgs?.key_decisions ?? [];
-  const openQuestions = toolArgs?.open_questions ?? [];
-  const gitHead = toolArgs?.git_head ?? null;
-  const lastWorkboardCheckAt = toolArgs?.last_workboard_check_at ?? null;
-  const nextIntendedAction = toolArgs?.next_intended_action ?? null;
-  const authorityBasis = toolArgs?.authority_basis ?? null;
-  const continuationBlockers = toolArgs?.continuation_blockers ?? [];
-  const evidenceRefs = toolArgs?.evidence_refs ?? [];
-  const worktreeState = toolArgs?.worktree_state ?? null;
-  const tacticalResumeNotes = toolArgs?.tactical_resume_notes ?? [];
-  const siteBindingGuard = evaluateCheckpointSiteBinding(toolArgs);
+  const activeTask: any = toolArgs?.active_task ?? null;
+  const filesTouched: any = toolArgs?.files_touched ?? [];
+  const keyDecisions: any = toolArgs?.key_decisions ?? [];
+  const openQuestions: any = toolArgs?.open_questions ?? [];
+  const gitHead: any = toolArgs?.git_head ?? null;
+  const lastWorkboardCheckAt: any = toolArgs?.last_workboard_check_at ?? null;
+  const nextIntendedAction: any = toolArgs?.next_intended_action ?? null;
+  const authorityBasis: any = toolArgs?.authority_basis ?? null;
+  const continuationBlockers: any = toolArgs?.continuation_blockers ?? [];
+  const evidenceRefs: any = toolArgs?.evidence_refs ?? [];
+  const worktreeState: any = toolArgs?.worktree_state ?? null;
+  const tacticalResumeNotes: any = toolArgs?.tactical_resume_notes ?? [];
+  const siteBindingGuard: any = evaluateCheckpointSiteBinding(toolArgs);
   if (siteBindingGuard.status === 'refuse') {
-    const incidentEvidence = {
+    const incidentEvidence: any = {
       schema: 'narada.mcp.wrong_site_mutation_refusal.v0',
       signal: 'authority_boundary_incident',
       surface_id: 'agent-context-mcp.local',
@@ -5046,7 +5052,7 @@ function agentContextCheckpoint(toolArgs) {
     };
   }
 
-  const payload = hydrationService.buildCheckpointPayload({
+  const payload: any = hydrationService.buildCheckpointPayload({
     checkpointId,
     agentId,
     sessionId: toolArgs?.session_id ?? null,
@@ -5066,7 +5072,7 @@ function agentContextCheckpoint(toolArgs) {
   });
 
   // Archive existing checkpoint for this agent before writing new one
-  const existing = db.prepare('SELECT * FROM agent_checkpoints WHERE agent_id = ?').get(agentId);
+  const existing: any = db.prepare('SELECT * FROM agent_checkpoints WHERE agent_id = ?').get(agentId);
   if (existing) {
     db.prepare(
       `INSERT INTO agent_checkpoint_history (
@@ -5110,7 +5116,7 @@ function agentContextCheckpoint(toolArgs) {
     JSON.stringify(payload)
   );
 
-  const lifecycleTransition = emitLifecycleTransitionEvent({
+  const lifecycleTransition: any = emitLifecycleTransitionEvent({
     agentId,
     sessionId: toolArgs?.session_id ?? null,
     transition: 'checkpoint',
@@ -5141,21 +5147,21 @@ function agentContextCheckpoint(toolArgs) {
   };
 }
 
-function agentContextRehydrate(toolArgs) {
+function agentContextRehydrate(toolArgs: any) {
   if (!db) {
     throw new Error('agent_context_db_not_available');
   }
 
-  const agentId = toolArgs?.agent_id;
+  const agentId: any = toolArgs?.agent_id;
   if (!agentId) {
     throw new Error('agent_id is required');
   }
 
-  const historyMode = toolArgs?.history === true || toolArgs?.history === 'true';
-  const limit = Math.min(Math.max(parseInt(toolArgs?.limit ?? '1', 10), 1), 50);
+  const historyMode: any = toolArgs?.history === true || toolArgs?.history === 'true';
+  const limit: any = Math.min(Math.max(parseInt(toolArgs?.limit ?? '1', 10), 1), 50);
 
   if (historyMode || limit > 1) {
-    const rows = db.prepare(
+    const rows: any = db.prepare(
       'SELECT * FROM agent_checkpoint_history WHERE agent_id = ? ORDER BY archived_at DESC LIMIT ?'
     ).all(agentId, limit);
 
@@ -5167,8 +5173,8 @@ function agentContextRehydrate(toolArgs) {
       };
     }
 
-    const checkpoints = rows.map((row) => {
-      let payload = null;
+    const checkpoints: any = rows.map((row: any) => {
+      let payload: any = null;
       try { if (row.payload_json) payload = JSON.parse(row.payload_json); } catch { payload = null; }
       return {
         checkpoint_id: row.checkpoint_id,
@@ -5202,7 +5208,7 @@ function agentContextRehydrate(toolArgs) {
     };
   }
 
-  const row = db.prepare(
+  const row: any = db.prepare(
     'SELECT * FROM agent_checkpoints WHERE agent_id = ? ORDER BY checkpoint_at DESC LIMIT 1'
   ).get(agentId);
 
@@ -5214,7 +5220,7 @@ function agentContextRehydrate(toolArgs) {
     };
   }
 
-  let payload = null;
+  let payload: any = null;
   try {
     if (row.payload_json) payload = JSON.parse(row.payload_json);
   } catch {
@@ -5244,15 +5250,15 @@ function agentContextRehydrate(toolArgs) {
   };
 }
 
-function agentContextWhoami(toolArgs) {
-  const hint = toolArgs?.hint ?? null;
+function agentContextWhoami(toolArgs: any) {
+  const hint: any = toolArgs?.hint ?? null;
 
   // Source 1: Environment variable (highest confidence)
-  const envIdentity = process.env.NARADA_AGENT_ID || null;
+  const envIdentity: any = process.env.NARADA_AGENT_ID || null;
   if (envIdentity) {
-    const roleBindingResolution = resolveRoleBindingFromRoster(envIdentity);
-    const role = roleBindingResolution.role;
-    const agentIdentityRef = resolveAgentIdentityRef(envIdentity, {
+    const roleBindingResolution: any = resolveRoleBindingFromRoster(envIdentity);
+    const role: any = roleBindingResolution.role;
+    const agentIdentityRef: any = resolveAgentIdentityRefAny(envIdentity, {
       site_id: process.env.NARADA_SITE_ID || null,
       role,
     }).value ?? buildAgentIdentityRefV2({
@@ -5263,7 +5269,7 @@ function agentContextWhoami(toolArgs) {
       role,
       legacy_agent_id: envIdentity,
     });
-    const displayIdentity = agentIdentityDisplay(agentIdentityRef, envIdentity) ?? envIdentity;
+    const displayIdentity: any = agentIdentityDisplay(agentIdentityRef, envIdentity) ?? envIdentity;
     return {
       status: 'ok',
       identity: envIdentity,
@@ -5282,13 +5288,13 @@ function agentContextWhoami(toolArgs) {
   // Source 2: Most recent checkpoint across all agents
   if (db) {
     try {
-      const checkpoint = db.prepare(
+      const checkpoint: any = db.prepare(
         'SELECT agent_id, checkpoint_at FROM agent_checkpoints ORDER BY checkpoint_at DESC LIMIT 1'
       ).get();
       if (checkpoint?.agent_id) {
-        const rosterRoleBinding = resolveRoleBindingFromRoster(checkpoint.agent_id);
-        const role = rosterRoleBinding.role ?? inferRoleFromIdentity(checkpoint.agent_id);
-        const agentIdentityRef = resolveAgentIdentityRef(checkpoint.agent_id, {
+        const rosterRoleBinding: any = resolveRoleBindingFromRoster(checkpoint.agent_id);
+        const role: any = rosterRoleBinding.role ?? inferRoleFromIdentity(checkpoint.agent_id);
+        const agentIdentityRef: any = resolveAgentIdentityRefAny(checkpoint.agent_id, {
           site_id: process.env.NARADA_SITE_ID || null,
           role,
         }).value ?? buildAgentIdentityRefV2({
@@ -5299,7 +5305,7 @@ function agentContextWhoami(toolArgs) {
           role,
           legacy_agent_id: checkpoint.agent_id,
         });
-        const displayIdentity = agentIdentityDisplay(agentIdentityRef, checkpoint.agent_id) ?? checkpoint.agent_id;
+        const displayIdentity: any = agentIdentityDisplay(agentIdentityRef, checkpoint.agent_id) ?? checkpoint.agent_id;
         return {
           status: 'ok',
           identity: checkpoint.agent_id,
@@ -5323,13 +5329,13 @@ function agentContextWhoami(toolArgs) {
   // Source 3: Most recent agent start event
   if (db) {
     try {
-      const event = db.prepare(
+      const event: any = db.prepare(
         'SELECT identity_id, created_at FROM agent_start_events ORDER BY created_at DESC LIMIT 1'
       ).get();
       if (event?.identity_id) {
-        const rosterRoleBinding = resolveRoleBindingFromRoster(event.identity_id);
-        const role = rosterRoleBinding.role ?? inferRoleFromIdentity(event.identity_id);
-        const agentIdentityRef = resolveAgentIdentityRef(event.identity_id, {
+        const rosterRoleBinding: any = resolveRoleBindingFromRoster(event.identity_id);
+        const role: any = rosterRoleBinding.role ?? inferRoleFromIdentity(event.identity_id);
+        const agentIdentityRef: any = resolveAgentIdentityRefAny(event.identity_id, {
           site_id: process.env.NARADA_SITE_ID || null,
           role,
         }).value ?? buildAgentIdentityRefV2({
@@ -5340,7 +5346,7 @@ function agentContextWhoami(toolArgs) {
           role,
           legacy_agent_id: event.identity_id,
         });
-        const displayIdentity = agentIdentityDisplay(agentIdentityRef, event.identity_id) ?? event.identity_id;
+        const displayIdentity: any = agentIdentityDisplay(agentIdentityRef, event.identity_id) ?? event.identity_id;
         return {
           status: 'ok',
           identity: event.identity_id,
@@ -5372,10 +5378,10 @@ function agentContextWhoami(toolArgs) {
   };
 }
 
-function resolveRoleBindingFromRoster(identity) {
+function resolveRoleBindingFromRoster(identity: any) {
   if (!identity) return { role: null, role_binding: null, error: 'identity_required' };
   try {
-    const rosterCheck = validateIdentityAgainstRoster(siteRoot, identity);
+    const rosterCheck: any = validateIdentityAgainstRoster(siteRoot, identity);
     if (!rosterCheck.valid) {
       return { role: null, role_binding: null, error: rosterCheck.error ?? 'role_binding_unresolved' };
     }
@@ -5389,15 +5395,15 @@ function resolveRoleBindingFromRoster(identity) {
       error: null,
     };
   } catch (error) {
-    return { role: null, role_binding: null, error: error instanceof Error ? error.message : String(error) };
+    return { role: null, role_binding: null, error: error instanceof Error ? error instanceof Error ? error.message : String(error) : String(error) };
   }
 }
 
-function inferRoleFromIdentity(identity) {
+function inferRoleFromIdentity(identity: any) {
   if (!identity) return null;
-  const parts = identity.split('.');
-  const last = parts[parts.length - 1].toLowerCase();
-  const roleMap = {
+  const parts: any = identity.split('.');
+  const last: any = parts[parts.length - 1].toLowerCase();
+  const roleMap: any = {
     kevin: 'architect',
     architect: 'architect',
     bob: 'builder',
@@ -5411,49 +5417,49 @@ function inferRoleFromIdentity(identity) {
   return roleMap[last] || null;
 }
 
-function stringField(record, key) {
-  const value = record?.[key];
+function stringField(record: any, key: any) {
+  const value: any = record?.[key];
   if (typeof value === 'string') return value;
   if (value === undefined || value === null) return null;
   return String(value);
 }
 
-function requireString(record, key) {
-  const value = stringField(record ?? {}, key);
+function requireString(record: any, key: any) {
+  const value: any = stringField(record ?? {}, key);
   if (!value) throw new Error(`${key} is required`);
   return value;
 }
 
-function objectField(record, key) {
-  const value = record?.[key];
+function objectField(record: any, key: any) {
+  const value: any = record?.[key];
   if (value && typeof value === 'object' && !Array.isArray(value)) return value;
   return null;
 }
 
-function arrayField(record, key) {
-  const value = record?.[key];
+function arrayField(record: any, key: any) {
+  const value: any = record?.[key];
   return Array.isArray(value) ? value : [];
 }
 
-function integerField(record, key) {
-  const value = record?.[key];
+function integerField(record: any, key: any) {
+  const value: any = record?.[key];
   if (typeof value === 'number') return Number.isFinite(value) ? Math.floor(value) : null;
   if (typeof value === 'string') {
-    const parsed = parseInt(value, 10);
+    const parsed: any = parseInt(value, 10);
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
 }
 
-function agentContextDoctrinalGrounding(toolArgs) {
-  const mode = toolArgs?.mode ?? 'summary';
-  const requestedIds = Array.isArray(toolArgs?.doctrine_ids) ? toolArgs.doctrine_ids : null;
+function agentContextDoctrinalGrounding(toolArgs: any) {
+  const mode: any = toolArgs?.mode ?? 'summary';
+  const requestedIds: any = Array.isArray(toolArgs?.doctrine_ids) ? toolArgs.doctrine_ids : null;
 
-  // Reground mode uses local doctrinal-reground.mjs (no WSL dependency)
+  // Reground mode uses local doctrinal-reground.js (no WSL dependency)
   if (mode === 'reground') {
-    const result = buildReground(siteRoot);
+    const result: any = buildReground(siteRoot);
     if (requestedIds) {
-      result.doctrine_catalog = result.doctrine_catalog.filter((d) =>
+      result.doctrine_catalog = result.doctrine_catalog.filter((d: any) =>
         requestedIds.includes(d.acronym.toLowerCase()) || requestedIds.includes(d.name.toLowerCase())
       );
     }
@@ -5471,23 +5477,23 @@ function agentContextDoctrinalGrounding(toolArgs) {
     };
   }
 
-  const configPath = join(siteRoot, 'config.json');
-  let config = null;
+  const configPath: any = join(siteRoot, 'config.json');
+  let config: any = null;
   if (existsSync(configPath)) {
     try {
       config = JSON.parse(readFileSync(configPath, 'utf8'));
     } catch (err) {
-      return { status: 'error', message: `failed_to_parse_config: ${err.message}` };
+      return { status: 'error', message: `failed_to_parse_config: ${err instanceof Error ? err.message : String(err)}` };
     }
   }
 
-  const sources = resolveDoctrinalCorpusSources({ config, siteRoot });
+  const sources: any = resolveDoctrinalCorpusSources({ config, siteRoot });
   if (sources.length === 0) {
     return { status: 'error', message: 'doctrinal_corpus_not_configured' };
   }
 
-  const filtered = requestedIds
-    ? sources.filter((s) => requestedIds.includes(s.doctrine_id))
+  const filtered: any = requestedIds
+    ? sources.filter((s: any) => requestedIds.includes(s.doctrine_id))
     : sources;
 
   if (mode === 'list') {
@@ -5495,7 +5501,7 @@ function agentContextDoctrinalGrounding(toolArgs) {
       status: 'ok',
       mode: 'list',
       count: filtered.length,
-      doctrines: filtered.map((s) => ({
+      doctrines: filtered.map((s: any) => ({
         doctrine_id: s.doctrine_id,
         name: s.name,
         path: s.path,
@@ -5504,7 +5510,7 @@ function agentContextDoctrinalGrounding(toolArgs) {
     };
   }
 
-  const doctrines = [];
+  const doctrines: any = [];
   for (const source of filtered) {
     if (!existsSync(source.path)) {
       doctrines.push({
@@ -5519,8 +5525,8 @@ function agentContextDoctrinalGrounding(toolArgs) {
     }
 
     try {
-      const fullText = readFileSync(source.path, 'utf8');
-      const content = mode === 'summary'
+      const fullText: any = readFileSync(source.path, 'utf8');
+      const content: any = mode === 'summary'
         ? fullText.slice(0, 2000) + (fullText.length > 2000 ? '\n\n[...truncated...]' : '')
         : fullText;
 
@@ -5539,7 +5545,7 @@ function agentContextDoctrinalGrounding(toolArgs) {
         path: source.path,
         readable: false,
         content: null,
-        error: err.message,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }
@@ -5552,7 +5558,7 @@ function agentContextDoctrinalGrounding(toolArgs) {
   };
 }
 
-const CANONICAL_THOUGHTS_DOCTRINE_SOURCES = [
+const CANONICAL_THOUGHTS_DOCTRINE_SOURCES: any = [
   { doctrine_id: 'ie', name: 'Inhabited Evolution', file: 'inhabited-evolution.md' },
   { doctrine_id: 'cipda', name: 'Constructively Invariant Progressive De-arbitrarization', file: 'constructively-invariant-progressive-de-arbitrarization.md' },
   { doctrine_id: 'ccc', name: 'Constructive Coherence Coordinates', file: 'constructive-coherence-coordinates.md' },
@@ -5563,8 +5569,8 @@ const CANONICAL_THOUGHTS_DOCTRINE_SOURCES = [
   { doctrine_id: 'governed_crossing', name: 'Governed Crossing', file: 'governed-crossing.md' },
 ];
 
-function resolveDoctrinalCorpusSources({ config, siteRoot }) {
-  const configuredSources = firstArray(
+function resolveDoctrinalCorpusSources({ config, siteRoot }: any) {
+  const configuredSources: any = firstArray(
     config?.doctrinal_corpus?.sources,
     config?.doctrinal_corpus?.current_value?.sources,
     config?.doctrinal_corpus?.default_value?.sources,
@@ -5573,65 +5579,65 @@ function resolveDoctrinalCorpusSources({ config, siteRoot }) {
   );
   if (configuredSources.length > 0) return configuredSources;
 
-  const corpusRoot = resolveThoughtsDoctrineCorpusRoot(siteRoot);
+  const corpusRoot: any = resolveThoughtsDoctrineCorpusRoot(siteRoot);
   if (!corpusRoot) return [];
   return CANONICAL_THOUGHTS_DOCTRINE_SOURCES
-    .map((source) => ({ doctrine_id: source.doctrine_id, name: source.name, path: join(corpusRoot, source.file) }))
-    .filter((source) => existsSync(source.path));
+    .map((source: any) => ({ doctrine_id: source.doctrine_id, name: source.name, path: join(corpusRoot, source.file) }))
+    .filter((source: any) => existsSync(source.path));
 }
 
-function firstArray(...candidates) {
+function firstArray(...candidates: any[]) {
   for (const candidate of candidates) {
     if (Array.isArray(candidate) && candidate.length > 0) return candidate;
   }
   return [];
 }
 
-function resolveThoughtsDoctrineCorpusRoot(root) {
-  const candidates = [
+function resolveThoughtsDoctrineCorpusRoot(root: any) {
+  const candidates: any = [
     process.env.NARADA_DOCTRINE_CORPUS_ROOT,
     resolve(dirname(resolve(root)), 'thoughts', 'content', 'concepts'),
     resolve('D:/code/thoughts/content/concepts'),
-  ].filter((candidate) => typeof candidate === 'string' && candidate.trim().length > 0);
+  ].filter((candidate: any) => typeof candidate === 'string' && candidate.trim().length > 0);
 
   for (const candidate of candidates) {
-    const resolved = resolve(candidate);
+    const resolved: any = resolve(candidate);
     if (existsSync(resolved)) return resolved;
   }
   return null;
 }
 
 // Stdio loop
-let buffer = '';
+let buffer: any = '';
 process.stdin.setEncoding('utf8');
-process.stdin.on('data', (chunk) => {
+process.stdin.on('data', (chunk: any) => {
   buffer += chunk;
 
   while (true) {
     if (/^Content-Length:/i.test(buffer)) {
-      const headerEnd = buffer.indexOf('\r\n\r\n');
+      const headerEnd: any = buffer.indexOf('\r\n\r\n');
       if (headerEnd < 0) break;
-      const header = buffer.slice(0, headerEnd);
-      const match = header.match(/Content-Length:\s*(\d+)/i);
+      const header: any = buffer.slice(0, headerEnd);
+      const match: any = header.match(/Content-Length:\s*(\d+)/i);
       if (!match) {
         writeMcpFrame({ jsonrpc: '2.0', id: null, error: { code: -32700, message: 'missing Content-Length' } });
         buffer = buffer.slice(headerEnd + 4);
         continue;
       }
-      const length = Number(match[1]);
-      const bodyStart = headerEnd + 4;
+      const length: any = Number(match[1]);
+      const bodyStart: any = headerEnd + 4;
       if (buffer.length < bodyStart + length) break;
-      const body = buffer.slice(bodyStart, bodyStart + length);
+      const body: any = buffer.slice(bodyStart, bodyStart + length);
       buffer = buffer.slice(bodyStart + length);
       mcpOutputMode = 'framed';
       dispatchMcpRequest(body);
       continue;
     }
 
-    const newlineIndex = buffer.indexOf('\n');
+    const newlineIndex: any = buffer.indexOf('\n');
     if (newlineIndex < 0) break;
 
-    const line = buffer.slice(0, newlineIndex).trim();
+    const line: any = buffer.slice(0, newlineIndex).trim();
     buffer = buffer.slice(newlineIndex + 1);
     if (!line) continue;
     mcpOutputMode = 'line';
@@ -5639,15 +5645,15 @@ process.stdin.on('data', (chunk) => {
   }
 });
 
-function dispatchMcpRequest(raw) {
+function dispatchMcpRequest(raw: any) {
   try {
-    const request = JSON.parse(raw);
-    handleRequest(request).catch((error) => {
-      writeMcpFrame({ jsonrpc: '2.0', id: request.id ?? null, error: { code: -32603, message: error.message } });
+    const request: any = JSON.parse(raw);
+    handleRequest(request).catch((error: any) => {
+      writeMcpFrame({ jsonrpc: '2.0', id: request.id ?? null, error: { code: -32603, message: error instanceof Error ? error.message : String(error) } });
     });
   } catch (error) {
     failMcpSession();
-    writeMcpFrame({ jsonrpc: '2.0', id: null, error: { code: -32700, message: error.message } });
+    writeMcpFrame({ jsonrpc: '2.0', id: null, error: { code: -32700, message: error instanceof Error ? error.message : String(error) } });
   }
 }
 process.stdin.on('end', () => {

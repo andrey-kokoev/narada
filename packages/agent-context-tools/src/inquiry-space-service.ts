@@ -1,4 +1,4 @@
-export const ISN_PLANES = new Set([
+export const ISN_PLANES: any = new Set([
   'discovery',
   'selection',
   'de_arbitrization',
@@ -8,13 +8,13 @@ export const ISN_PLANES = new Set([
   'integration',
 ]);
 
-export function validateIsnPlane(plane) {
+export function validateIsnPlane(plane: any) {
   if (!ISN_PLANES.has(plane)) {
     throw new Error(`invalid_isn_plane: ${plane}`);
   }
 }
 
-export function buildIsnPayload({ nodeId, title, plane, status, summary, authorityOwner, relations, evidenceRefs, nextMovement, linkedTaskNumber, createdBy, updatedBy, createdAt, updatedAt }) {
+export function buildIsnPayload({ nodeId, title, plane, status, summary, authorityOwner, relations, evidenceRefs, nextMovement, linkedTaskNumber, createdBy, updatedBy, createdAt, updatedAt }: any) {
   return {
     schema: 'narada.inquiry_space.node.v0',
     node_id: nodeId,
@@ -34,7 +34,7 @@ export function buildIsnPayload({ nodeId, title, plane, status, summary, authori
   };
 }
 
-export function buildIsnEventPayload({ eventId, nodeId, eventType, fromPlane, toPlane, actorAgentId, reason, payload, createdAt }) {
+export function buildIsnEventPayload({ eventId, nodeId, eventType, fromPlane, toPlane, actorAgentId, reason, payload, createdAt }: any) {
   return {
     schema: 'narada.inquiry_space.node_event.v0',
     event_id: eventId,
@@ -49,8 +49,8 @@ export function buildIsnEventPayload({ eventId, nodeId, eventType, fromPlane, to
   };
 }
 
-export function parseIsnRow(row, parseJsonField, { includePayload = false } = {}) {
-  const parsed = {
+export function parseIsnRow(row: any, parseJsonField: any, { includePayload = false }: any = {}) {
+  const parsed: any = {
     node_id: row.node_id,
     title: row.title,
     plane: row.plane,
@@ -70,7 +70,7 @@ export function parseIsnRow(row, parseJsonField, { includePayload = false } = {}
   return parsed;
 }
 
-export function parseIsnEventRow(row, parseJsonField) {
+export function parseIsnEventRow(row: any, parseJsonField: any) {
   return {
     event_id: row.event_id,
     node_id: row.node_id,
@@ -84,7 +84,7 @@ export function parseIsnEventRow(row, parseJsonField) {
   };
 }
 
-export function buildMovementSequencePayload({ sequenceId, agentId, title, summary, startingNodeRef, requestedStepCount, completedStepCount, terminationReason, driftSummary, linkedArtifacts, disciplineProfile, createdAt, updatedAt }) {
+export function buildMovementSequencePayload({ sequenceId, agentId, title, summary, startingNodeRef, requestedStepCount, completedStepCount, terminationReason, driftSummary, linkedArtifacts, disciplineProfile, createdAt, updatedAt }: any) {
   return {
     schema: 'narada.inquiry_space.movement_sequence.v0',
     sequence_id: sequenceId,
@@ -104,7 +104,7 @@ export function buildMovementSequencePayload({ sequenceId, agentId, title, summa
   };
 }
 
-export function buildMovementTracePayload({ movementId, sequenceId, stepIndex, agentId, createdAt, navigationPlane, nodeType, isnNodeId, linkedTaskNumber, beforeState, afterState, observedDrift, actionTaken, evidenceRefs, nextPressure, disciplineProfile }) {
+export function buildMovementTracePayload({ movementId, sequenceId, stepIndex, agentId, createdAt, navigationPlane, nodeType, isnNodeId, linkedTaskNumber, beforeState, afterState, observedDrift, actionTaken, evidenceRefs, nextPressure, disciplineProfile }: any) {
   return {
     schema: 'narada.inquiry_space.movement_trace.v0',
     movement_id: movementId,
@@ -129,8 +129,8 @@ export function buildMovementTracePayload({ movementId, sequenceId, stepIndex, a
   };
 }
 
-export function parseMovementTraceRow(row, parseJsonField, { includePayload = false } = {}) {
-  const parsed = {
+export function parseMovementTraceRow(row: any, parseJsonField: any, { includePayload = false }: any = {}) {
+  const parsed: any = {
     movement_id: row.movement_id,
     sequence_id: row.sequence_id,
     step_index: row.step_index,
@@ -152,9 +152,9 @@ export function parseMovementTraceRow(row, parseJsonField, { includePayload = fa
   return parsed;
 }
 
-export function parseMovementSequenceRow(row, parseJsonField, { includePayload = false } = {}) {
-  const payload = parseJsonField(row.payload_json, {});
-  const parsed = {
+export function parseMovementSequenceRow(row: any, parseJsonField: any, { includePayload = false }: any = {}) {
+  const payload: any = parseJsonField(row.payload_json, {});
+  const parsed: any = {
     sequence_id: row.sequence_id,
     agent_id: row.agent_id,
     title: payload?.title ?? null,

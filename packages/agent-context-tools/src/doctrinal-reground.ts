@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * doctrinal-reground.mjs
+ * doctrinal-reground.js
  *
  * Rehydrate Narada doctrinal posture from local files.
  * Reads key doctrinal documents and returns a compact structured summary.
  *
  * Usage:
- *   node tools/agent-context/doctrinal-reground.mjs [--format json|markdown]
+ *   node tools/agent-context/doctrinal-reground.js [--format json|markdown]
  *
  * When the WSL thoughts corpus is available, operators should prefer
  * reading the full concepts there. This script is the canonical Windows
@@ -16,7 +16,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const DOCTRINAL_SOURCES = [
+const DOCTRINAL_SOURCES: any = [
   {
     path: 'AGENTS.md',
     label: 'Agent Operating Posture',
@@ -34,7 +34,7 @@ const DOCTRINAL_SOURCES = [
   },
 ];
 
-const DOCTRINE_CATALOG = [
+const DOCTRINE_CATALOG: any = [
   {
     acronym: 'IE',
     name: 'Inhabited Evolution',
@@ -86,7 +86,7 @@ const DOCTRINE_CATALOG = [
   },
 ];
 
-const CCC_COORDINATES = [
+const CCC_COORDINATES: any = [
   { code: 'C1', label: 'Architecture inflation', prompt: 'Did I complete structure by symmetry rather than pressure?' },
   { code: 'C2', label: 'Toy substitute', prompt: 'Did I build a lightweight workaround instead of using real substrate?' },
   { code: 'C3', label: 'Balance theater', prompt: 'Did I discuss all coordinates without applying real pressure?' },
@@ -95,30 +95,30 @@ const CCC_COORDINATES = [
   { code: 'C6', label: 'Unearned abstraction', prompt: 'Did I add abstraction before pressure proved the need?' },
 ];
 
-function readSourceFile(siteRoot, relPath) {
-  const fullPath = resolve(siteRoot, relPath);
+function readSourceFile(siteRoot: any, relPath: any) {
+  const fullPath: any = resolve(siteRoot, relPath);
   if (!existsSync(fullPath)) {
     return { available: false, path: fullPath, content: null };
   }
   try {
-    const content = readFileSync(fullPath, 'utf8');
+    const content: any = readFileSync(fullPath, 'utf8');
     return { available: true, path: fullPath, content };
   } catch (err) {
-    return { available: false, path: fullPath, error: err.message };
+    return { available: false, path: fullPath, error: err instanceof Error ? err.message : String(err) };
   }
 }
 
-function extractSection(content, sectionTitle) {
+function extractSection(content: any, sectionTitle: any) {
   if (!content) return null;
-  const pattern = new RegExp(`##+\\s+${sectionTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n([\\s\\S]*?)(?=\\n##+\\s|$)`, 'i');
-  const match = content.match(pattern);
+  const pattern: any = new RegExp(`##+\\s+${sectionTitle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\n([\\s\\S]*?)(?=\\n##+\\s|$)`, 'i');
+  const match: any = content.match(pattern);
   return match ? match[1].trim() : null;
 }
 
-export function buildReground(siteRoot) {
-  const sources = DOCTRINAL_SOURCES.map((src) => {
-    const file = readSourceFile(siteRoot, src.path);
-    const extracted = {};
+export function buildReground(siteRoot: any) {
+  const sources: any = DOCTRINAL_SOURCES.map((src: any) => {
+    const file: any = readSourceFile(siteRoot, src.path);
+    const extracted: any = {};
     if (file.available) {
       for (const section of src.sections) {
         extracted[section] = extractSection(file.content, section);
@@ -132,8 +132,8 @@ export function buildReground(siteRoot) {
     };
   });
 
-  const allAvailable = sources.every((s) => s.available);
-  const thoughtsCorpus = resolveThoughtsCorpus();
+  const allAvailable: any = sources.every((s: any) => s.available);
+  const thoughtsCorpus: any = resolveThoughtsCorpus();
 
   return {
     schema: 'narada.doctrinal.reground.v0',
@@ -143,7 +143,7 @@ export function buildReground(siteRoot) {
       thoughts_corpus: thoughtsCorpus,
       local_sources: {
         all_available: allAvailable,
-        sources_checked: sources.map((s) => ({ label: s.label, path: s.path, available: s.available })),
+        sources_checked: sources.map((s: any) => ({ label: s.label, path: s.path, available: s.available })),
       },
     },
     posture_summary: {
@@ -180,7 +180,7 @@ export function buildReground(siteRoot) {
         P2: 'Record as residual; revisit when pressure earns it',
       },
     },
-    source_excerpts: sources.reduce((acc, s) => {
+    source_excerpts: sources.reduce((acc: any, s: any) => {
       acc[s.path] = s.extracted;
       return acc;
     }, {}),
@@ -188,7 +188,7 @@ export function buildReground(siteRoot) {
 }
 
 function resolveThoughtsCorpus() {
-  const candidates = [
+  const candidates: any = [
     {
       label: 'windows',
       path: 'D:\\code\\thoughts\\content\\concepts',
@@ -207,7 +207,7 @@ function resolveThoughtsCorpus() {
         path: candidate.path,
         available: true,
         source: candidate.label,
-        checked_candidates: candidates.map((c) => ({ path: c.path, source: c.label, available: existsSync(c.path) })),
+        checked_candidates: candidates.map((c: any) => ({ path: c.path, source: c.label, available: existsSync(c.path) })),
         note: candidate.note,
       };
     }
@@ -217,13 +217,13 @@ function resolveThoughtsCorpus() {
     path: candidates[0].path,
     available: false,
     source: null,
-    checked_candidates: candidates.map((c) => ({ path: c.path, source: c.label, available: false })),
+    checked_candidates: candidates.map((c: any) => ({ path: c.path, source: c.label, available: false })),
     note: 'Thoughts corpus not accessible from checked Windows or WSL paths. Use the target embodiment or manual reading when full doctrinal depth is required.',
   };
 }
 
-export function formatMarkdown(result) {
-  const lines = [];
+export function formatMarkdown(result: any) {
+  const lines: any = [];
   lines.push('# Doctrinal Reground');
   lines.push(`> Generated: ${result.generated_at}`);
   lines.push('');
@@ -286,11 +286,11 @@ export function formatMarkdown(result) {
 }
 
 function main() {
-  const args = process.argv.slice(2);
-  const format = args.includes('--format') ? args[args.indexOf('--format') + 1] : 'json';
-  const siteRoot = process.cwd();
+  const args: any = process.argv.slice(2);
+  const format: any = args.includes('--format') ? args[args.indexOf('--format') + 1] : 'json';
+  const siteRoot: any = process.cwd();
 
-  const result = buildReground(siteRoot);
+  const result: any = buildReground(siteRoot);
 
   if (format === 'markdown') {
     console.log(formatMarkdown(result));

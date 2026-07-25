@@ -2,9 +2,9 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSy
 import { homedir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 
-const CODEX_SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const CODEX_SESSION_ID_RE: any = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function isCodexSessionId(value) {
+export function isCodexSessionId(value: any) {
   return typeof value === 'string' && CODEX_SESSION_ID_RE.test(value);
 }
 
@@ -18,24 +18,24 @@ export function discoverCodexSessionEvidence({
   identity,
   codexHome = defaultCodexHome(),
   limit = 200,
-} = {}) {
+}: any = {}) {
   if (!siteRoot) throw new Error('siteRoot is required');
   if (!admissionId) throw new Error('admission_id is required');
 
-  const sessionsRoot = join(codexHome, 'sessions');
-  const files = existsSync(sessionsRoot)
+  const sessionsRoot: any = join(codexHome, 'sessions');
+  const files: any = existsSync(sessionsRoot)
     ? listSessionFiles(sessionsRoot).slice(0, limit)
     : [];
-  const siteRootResolved = normalizePath(siteRoot);
-  const candidates = [];
+  const siteRootResolved: any = normalizePath(siteRoot);
+  const candidates: any = [];
 
   for (const filePath of files) {
-    const candidate = readCandidate({ filePath, admissionId, identity, siteRootResolved });
+    const candidate: any = readCandidate({ filePath, admissionId, identity, siteRootResolved });
     if (candidate) candidates.push(candidate);
   }
 
-  const admissible = candidates.filter((candidate) => candidate.admissible);
-  const status = admissible.length === 1
+  const admissible: any = candidates.filter((candidate: any) => candidate.admissible);
+  const status: any = admissible.length === 1
     ? 'admissible'
     : admissible.length > 1
       ? 'ambiguous'
@@ -65,11 +65,11 @@ export function verifyCodexExactResume({
   codexSessionId,
   codexSessionFile = null,
   admissionId = null,
-} = {}) {
+}: any = {}) {
   if (!codexSessionId) throw new Error('codex_session_id is required');
   if (!isCodexSessionId(codexSessionId)) throw new Error(`codex_session_id_invalid: ${codexSessionId}`);
 
-  const commandShape = `codex resume ${codexSessionId}`;
+  const commandShape: any = `codex resume ${codexSessionId}`;
   return {
     schema: 'narada.codex.exact_resume_verification.v0',
     status: 'unavailable',
@@ -100,15 +100,15 @@ export function extractCodexSessionEvidencePacket({
   searchText,
   outputPath = 'kb/operations/codex-session-evidence-packet.json',
   limit = 200,
-} = {}) {
+}: any = {}) {
   if (!siteRoot) throw new Error('siteRoot is required');
   if (!admissionId) throw new Error('admission_id is required');
   if (!searchText || typeof searchText !== 'string' || searchText.trim().length < 4) {
     throw new Error('search_text_required');
   }
 
-  const outputAbsolute = resolveUnderSiteRoot(siteRoot, outputPath);
-  const discovery = discoverCodexSessionEvidence({ siteRoot, admissionId, identity, codexHome, limit });
+  const outputAbsolute: any = resolveUnderSiteRoot(siteRoot, outputPath);
+  const discovery: any = discoverCodexSessionEvidence({ siteRoot, admissionId, identity, codexHome, limit });
   if (discovery.status !== 'admissible' || !discovery.selected?.codex_session_file) {
     return {
       schema: 'narada.codex.session_evidence.extraction.v0',
@@ -122,12 +122,12 @@ export function extractCodexSessionEvidencePacket({
     };
   }
 
-  const sourceFile = discovery.selected.codex_session_file;
-  const matches = extractMatchingTranscriptEntries({
+  const sourceFile: any = discovery.selected.codex_session_file;
+  const matches: any = extractMatchingTranscriptEntries({
     sourceFile,
     searchText,
   });
-  const packet = {
+  const packet: any = {
     schema: 'narada.codex.session_evidence.extraction.v0',
     status: matches.length > 0 ? 'extracted' : 'not_found',
     extracted_at: new Date().toISOString(),
@@ -146,11 +146,11 @@ export function extractCodexSessionEvidencePacket({
       admission_guard: discovery.selected.guards,
     },
     match_count: matches.length,
-    numbered_item_count: countNumberedIssueLines(matches.map((match) => match.text).join('\n')),
+    numbered_item_count: countNumberedIssueLines(matches.map((match: any) => match.text).join('\n')),
     matches,
     verification: {
-      contains_list_body: countNumberedIssueLines(matches.map((match) => match.text).join('\n')) > 0,
-      pointer_only: matches.length > 0 && countNumberedIssueLines(matches.map((match) => match.text).join('\n')) === 0,
+      contains_list_body: countNumberedIssueLines(matches.map((match: any) => match.text).join('\n')) > 0,
+      pointer_only: matches.length > 0 && countNumberedIssueLines(matches.map((match: any) => match.text).join('\n')) === 0,
     },
   };
 
@@ -159,28 +159,28 @@ export function extractCodexSessionEvidencePacket({
   return packet;
 }
 
-function listSessionFiles(root) {
-  const found = [];
-  const stack = [root];
+function listSessionFiles(root: any) {
+  const found: any = [];
+  const stack: any = [root];
   while (stack.length > 0) {
-    const current = stack.pop();
+    const current: any = stack.pop();
     for (const entry of readdirSync(current, { withFileTypes: true })) {
-      const fullPath = join(current, entry.name);
+      const fullPath: any = join(current, entry.name);
       if (entry.isDirectory()) {
         stack.push(fullPath);
       } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-        const stat = statSync(fullPath);
+        const stat: any = statSync(fullPath);
         found.push({ path: fullPath, mtimeMs: stat.mtimeMs, size: stat.size });
       }
     }
   }
   return found
-    .sort((a, b) => b.mtimeMs - a.mtimeMs)
-    .map((entry) => entry.path);
+    .sort((a: any, b: any) => b.mtimeMs - a.mtimeMs)
+    .map((entry: any) => entry.path);
 }
 
-function readCandidate({ filePath, admissionId, identity, siteRootResolved }) {
-  let content;
+function readCandidate({ filePath, admissionId, identity, siteRootResolved }: any) {
+  let content: any;
   try {
     content = readFileSync(filePath, 'utf8');
   } catch (error) {
@@ -193,17 +193,17 @@ function readCandidate({ filePath, admissionId, identity, siteRootResolved }) {
   }
   if (!content.trim()) return null;
 
-  const meta = parseSessionMeta(content);
-  const filenameId = parseSessionIdFromFilename(filePath);
-  const sessionId = meta?.payload?.id ?? filenameId;
-  const cwd = meta?.payload?.cwd ?? null;
-  const markers = {
+  const meta: any = parseSessionMeta(content);
+  const filenameId: any = parseSessionIdFromFilename(filePath);
+  const sessionId: any = meta?.payload?.id ?? filenameId;
+  const cwd: any = meta?.payload?.cwd ?? null;
+  const markers: any = {
     admission_id: content.includes(admissionId),
     identity: identity ? content.includes(identity) : null,
   };
-  const cwdMatches = cwd ? normalizePath(cwd) === siteRootResolved : false;
-  const idValid = isCodexSessionId(sessionId);
-  const admissible = idValid && cwdMatches && markers.admission_id === true;
+  const cwdMatches: any = cwd ? normalizePath(cwd) === siteRootResolved : false;
+  const idValid: any = isCodexSessionId(sessionId);
+  const admissible: any = idValid && cwdMatches && markers.admission_id === true;
 
   return {
     status: admissible ? 'admissible_candidate' : 'candidate',
@@ -230,20 +230,20 @@ function readCandidate({ filePath, admissionId, identity, siteRootResolved }) {
   };
 }
 
-function extractMatchingTranscriptEntries({ sourceFile, searchText }) {
-  const lines = readFileSync(sourceFile, 'utf8').split(/\r?\n/);
-  const needle = searchText.toLowerCase();
-  const matches = [];
+function extractMatchingTranscriptEntries({ sourceFile, searchText }: any) {
+  const lines: any = readFileSync(sourceFile, 'utf8').split(/\r?\n/);
+  const needle: any = searchText.toLowerCase();
+  const matches: any = [];
   for (let index = 0; index < lines.length; index += 1) {
-    const line = lines[index].trim();
+    const line: any = lines[index].trim();
     if (!line) continue;
-    let parsed;
+    let parsed: any;
     try {
       parsed = JSON.parse(line);
     } catch {
       continue;
     }
-    const text = extractTranscriptText(parsed);
+    const text: any = extractTranscriptText(parsed);
     if (!text || !text.toLowerCase().includes(needle)) continue;
     matches.push({
       line_number: index + 1,
@@ -258,14 +258,14 @@ function extractMatchingTranscriptEntries({ sourceFile, searchText }) {
   return matches;
 }
 
-function extractTranscriptText(entry) {
-  const payload = entry?.payload;
+function extractTranscriptText(entry: any) {
+  const payload: any = entry?.payload;
   if (!payload || typeof payload !== 'object') return '';
   if (typeof payload.message === 'string') return payload.message;
   if (typeof payload.text === 'string') return payload.text;
   if (Array.isArray(payload.content)) {
     return payload.content
-      .map((block) => {
+      .map((block: any) => {
         if (!block || typeof block !== 'object') return '';
         if (typeof block.text === 'string') return block.text;
         return '';
@@ -276,39 +276,39 @@ function extractTranscriptText(entry) {
   return '';
 }
 
-function countNumberedIssueLines(text) {
+function countNumberedIssueLines(text: any) {
   return text
     .split(/\r?\n/)
-    .filter((line) => /^\s*\d+\.\s+/.test(line))
+    .filter((line: any) => /^\s*\d+\.\s+/.test(line))
     .length;
 }
 
-function parseSessionMeta(content) {
-  const firstLine = content.split(/\r?\n/, 1)[0];
+function parseSessionMeta(content: any) {
+  const firstLine: any = content.split(/\r?\n/, 1)[0];
   try {
-    const parsed = JSON.parse(firstLine);
+    const parsed: any = JSON.parse(firstLine);
     return parsed?.type === 'session_meta' ? parsed : null;
   } catch {
     return null;
   }
 }
 
-function parseSessionIdFromFilename(filePath) {
-  const match = basename(filePath).match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i);
+function parseSessionIdFromFilename(filePath: any) {
+  const match: any = basename(filePath).match(/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\.jsonl$/i);
   return match?.[1] ?? null;
 }
 
-function normalizePath(value) {
+function normalizePath(value: any) {
   return resolve(value).toLowerCase();
 }
 
-function normalizeRelativePath(path) {
+function normalizeRelativePath(path: any) {
   return path.replace(/\\/g, '/');
 }
 
-function resolveUnderSiteRoot(siteRoot, outputPath) {
-  const absolute = resolve(siteRoot, outputPath);
-  const rel = relative(siteRoot, absolute);
+function resolveUnderSiteRoot(siteRoot: any, outputPath: any) {
+  const absolute: any = resolve(siteRoot, outputPath);
+  const rel: any = relative(siteRoot, absolute);
   if (rel === '..' || rel.startsWith('..\\') || rel.startsWith('../')) {
     throw new Error(`output_path_outside_site_root: ${outputPath}`);
   }

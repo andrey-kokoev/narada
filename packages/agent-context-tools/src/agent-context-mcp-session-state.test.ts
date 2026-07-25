@@ -4,10 +4,10 @@ import {
   canTransitionAgentContextMcpSession,
   createAgentContextMcpSession,
   transitionAgentContextMcpSession,
-} from './agent-context-mcp-session-state.mjs';
+} from './agent-context-mcp-session-state.js';
 
 test('agent context MCP session follows initialize, serve, and close protocol', () => {
-  let session = createAgentContextMcpSession();
+  let session: any = createAgentContextMcpSession();
   for (const state of ['initializing', 'initialized', 'serving', 'closing', 'closed']) {
     session = transitionAgentContextMcpSession(session, state);
   }
@@ -18,7 +18,7 @@ test('agent context MCP session follows initialize, serve, and close protocol', 
 });
 
 test('agent context MCP session rejects serving after close', () => {
-  const session = createAgentContextMcpSession('closed');
+  const session: any = createAgentContextMcpSession('closed');
   assert.throws(
     () => transitionAgentContextMcpSession(session, 'serving'),
     /invalid_agent_context_mcp_session_transition/,

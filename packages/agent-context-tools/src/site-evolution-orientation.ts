@@ -2,11 +2,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
 
-export const ORIENTATION_SNAPSHOT_SCHEMA = 'narada.site_evolution.orientation_snapshot.v0';
-export const ONBOARDING_CARD_SCHEMA = 'narada.site_evolution.rehydration_onboarding_card.v0';
-export const ORIENTATION_GENERATOR_VERSION = '0.1.0';
+export const ORIENTATION_SNAPSHOT_SCHEMA: any = 'narada.site_evolution.orientation_snapshot.v0';
+export const ONBOARDING_CARD_SCHEMA: any = 'narada.site_evolution.rehydration_onboarding_card.v0';
+export const ORIENTATION_GENERATOR_VERSION: any = '0.1.0';
 
-export const ORIENTATION_DDL = `
+export const ORIENTATION_DDL: any = `
 CREATE TABLE IF NOT EXISTS site_evolution_orientation_snapshots (
   snapshot_id TEXT PRIMARY KEY,
   created_at TEXT NOT NULL,
@@ -26,22 +26,22 @@ CREATE INDEX IF NOT EXISTS idx_site_evolution_orientation_site
   ON site_evolution_orientation_snapshots(site_id, created_at DESC);
 `;
 
-const PRIMITIVES_REL = 'docs/site-evolution/orientation-primitives.json';
-const GENESIS_REL = 'docs/site-evolution/genesis-arc.md';
+const PRIMITIVES_REL: any = 'docs/site-evolution/orientation-primitives.json';
+const GENESIS_REL: any = 'docs/site-evolution/genesis-arc.md';
 
-export function loadRehydrationOnboardingCard({ siteRoot, db }) {
-  const latest = readLatestOrientationSnapshot(db);
+export function loadRehydrationOnboardingCard({ siteRoot, db }: any) {
+  const latest: any = readLatestOrientationSnapshot(db);
   if (!latest) {
     return buildMissingOrFallbackCard({ siteRoot, statusReason: 'no orientation snapshot exists' });
   }
 
-  const card = parseJson(latest.orientation_card_json, null);
+  const card: any = parseJson(latest.orientation_card_json, null);
   if (!card) {
     return buildMissingOrFallbackCard({ siteRoot, statusReason: 'latest orientation snapshot card is unreadable' });
   }
 
-  const currentSources = readCanonicalSources(siteRoot);
-  const staleReasons = [];
+  const currentSources: any = readCanonicalSources(siteRoot);
+  const staleReasons: any = [];
   if (latest.schema_id !== ORIENTATION_SNAPSHOT_SCHEMA) staleReasons.push('schema changed');
   if (latest.generator_version !== ORIENTATION_GENERATOR_VERSION) staleReasons.push('generator version changed');
   if (latest.primitives_hash !== currentSources.primitives.hash) staleReasons.push('orientation primitives hash changed');
@@ -66,27 +66,27 @@ export function loadRehydrationOnboardingCard({ siteRoot, db }) {
   };
 }
 
-export function createSiteEvolutionOrientationSnapshot({ siteRoot, db, reason = 'explicit_create' }) {
+export function createSiteEvolutionOrientationSnapshot({ siteRoot, db, reason = 'explicit_create' }: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const createdAt = new Date().toISOString();
-  const snapshotId = `seo_${randomUUID().replace(/-/g, '')}`;
-  const sources = readCanonicalSources(siteRoot);
-  const sourceRefs = buildSourceRefs(sources);
-  const sourceHashes = buildSourceHashes(sources);
-  const degradedReasons = [];
+  const createdAt: any = new Date().toISOString();
+  const snapshotId: any = `seo_${randomUUID().replace(/-/g, '')}`;
+  const sources: any = readCanonicalSources(siteRoot);
+  const sourceRefs: any = buildSourceRefs(sources);
+  const sourceHashes: any = buildSourceHashes(sources);
+  const degradedReasons: any = [];
 
   if (!sources.primitives.available) degradedReasons.push('orientation primitives source missing');
   if (!sources.genesis.available) degradedReasons.push('genesis source missing');
   if (!sources.agents.available) degradedReasons.push('AGENTS.md missing');
 
-  const primitives = sources.primitives.value;
-  const card = primitives
+  const primitives: any = sources.primitives.value;
+  const card: any = primitives
     ? buildCardFromPrimitives({ primitives, snapshotId, status: degradedReasons.length ? 'degraded' : 'loaded', statusReason: degradedReasons.join('; ') || 'orientation snapshot loaded' })
     : buildMinimalCard({ status: 'missing', statusReason: 'orientation primitives source missing', snapshotId });
 
-  const claimIndex = primitives ? buildClaimIndex(primitives, sourceRefs) : [];
-  const latestGrounding = readLatestGroundingEvent(db);
-  const payload = {
+  const claimIndex: any = primitives ? buildClaimIndex(primitives, sourceRefs) : [];
+  const latestGrounding: any = readLatestGroundingEvent(db);
+  const payload: any = {
     schema: ORIENTATION_SNAPSHOT_SCHEMA,
     snapshot_id: snapshotId,
     generated_at: createdAt,
@@ -143,8 +143,8 @@ export function createSiteEvolutionOrientationSnapshot({ siteRoot, db, reason = 
   };
 }
 
-export function latestSiteEvolutionOrientation({ db }) {
-  const row = readLatestOrientationSnapshot(db);
+export function latestSiteEvolutionOrientation({ db }: any) {
+  const row: any = readLatestOrientationSnapshot(db);
   if (!row) return { status: 'missing', not_action_authority: true };
   return {
     status: 'ok',
@@ -153,22 +153,22 @@ export function latestSiteEvolutionOrientation({ db }) {
   };
 }
 
-export function historySiteEvolutionOrientation({ db, limit = 10 }) {
+export function historySiteEvolutionOrientation({ db, limit = 10 }: any) {
   if (!db) throw new Error('agent_context_db_not_available');
-  const bounded = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
-  const rows = db.prepare('SELECT * FROM site_evolution_orientation_snapshots ORDER BY created_at DESC LIMIT ?').all(bounded);
+  const bounded: any = Math.min(Math.max(parseInt(limit, 10) || 10, 1), 50);
+  const rows: any = db.prepare('SELECT * FROM site_evolution_orientation_snapshots ORDER BY created_at DESC LIMIT ?').all(bounded);
   return {
     status: rows.length ? 'ok' : 'missing',
     not_action_authority: true,
     count: rows.length,
-    snapshots: rows.map((row) => parseOrientationRow(row, { includePayload: false })),
+    snapshots: rows.map((row: any) => parseOrientationRow(row, { includePayload: false })),
   };
 }
 
-export function showSiteEvolutionOrientation({ db, snapshotId }) {
+export function showSiteEvolutionOrientation({ db, snapshotId }: any) {
   if (!db) throw new Error('agent_context_db_not_available');
   if (!snapshotId) throw new Error('snapshot_id is required');
-  const row = db.prepare('SELECT * FROM site_evolution_orientation_snapshots WHERE snapshot_id = ?').get(snapshotId);
+  const row: any = db.prepare('SELECT * FROM site_evolution_orientation_snapshots WHERE snapshot_id = ?').get(snapshotId);
   if (!row) return { status: 'not_found', not_action_authority: true, snapshot_id: snapshotId };
   return {
     status: 'ok',
@@ -189,8 +189,8 @@ export function buildIdentityUnverifiedOrientationHint() {
   };
 }
 
-function buildMissingOrFallbackCard({ siteRoot, statusReason }) {
-  const sources = readCanonicalSources(siteRoot);
+function buildMissingOrFallbackCard({ siteRoot, statusReason }: any) {
+  const sources: any = readCanonicalSources(siteRoot);
   if (sources.primitives.value) {
     return buildCardFromPrimitives({
       primitives: sources.primitives.value,
@@ -202,7 +202,7 @@ function buildMissingOrFallbackCard({ siteRoot, statusReason }) {
   return buildMinimalCard({ status: 'missing', statusReason, snapshotId: null });
 }
 
-function buildCardFromPrimitives({ primitives, snapshotId, status, statusReason }) {
+function buildCardFromPrimitives({ primitives, snapshotId, status, statusReason }: any) {
   return {
     schema: ONBOARDING_CARD_SCHEMA,
     snapshot_id: snapshotId,
@@ -225,7 +225,7 @@ function buildCardFromPrimitives({ primitives, snapshotId, status, statusReason 
   };
 }
 
-function buildMinimalCard({ status, statusReason, snapshotId }) {
+function buildMinimalCard({ status, statusReason, snapshotId }: any) {
   return {
     schema: ONBOARDING_CARD_SCHEMA,
     snapshot_id: snapshotId,
@@ -251,7 +251,7 @@ function buildMinimalCard({ status, statusReason, snapshotId }) {
   };
 }
 
-function readCanonicalSources(siteRoot) {
+function readCanonicalSources(siteRoot: any) {
   return {
     primitives: readJsonSource(siteRoot, PRIMITIVES_REL),
     genesis: readTextSource(siteRoot, GENESIS_REL),
@@ -259,31 +259,31 @@ function readCanonicalSources(siteRoot) {
   };
 }
 
-function readTextSource(siteRoot, relPath) {
-  const absolutePath = resolve(siteRoot, relPath);
+function readTextSource(siteRoot: any, relPath: any) {
+  const absolutePath: any = resolve(siteRoot, relPath);
   if (!existsSync(absolutePath)) {
     return { relPath, absolutePath, available: false, hash: null, content: null };
   }
   try {
-    const content = readFileSync(absolutePath, 'utf8');
+    const content: any = readFileSync(absolutePath, 'utf8');
     return { relPath, absolutePath, available: true, hash: hashContent(content), content };
   } catch (error) {
-    return { relPath, absolutePath, available: false, hash: null, content: null, error: error.message };
+    return { relPath, absolutePath, available: false, hash: null, content: null, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-function readJsonSource(siteRoot, relPath) {
-  const source = readTextSource(siteRoot, relPath);
+function readJsonSource(siteRoot: any, relPath: any) {
+  const source: any = readTextSource(siteRoot, relPath);
   if (!source.available) return { ...source, value: null };
   try {
     return { ...source, value: JSON.parse(source.content) };
   } catch (error) {
-    return { ...source, value: null, error: error.message };
+    return { ...source, value: null, error: error instanceof Error ? error.message : String(error) };
   }
 }
 
-function buildSourceRefs(sources) {
-  return Object.entries(sources).map(([key, source]) => ({
+function buildSourceRefs(sources: any) {
+  return Object.entries(sources).map(([key, source]: any) => ({
     kind: key === 'primitives' ? 'orientation_primitives' : key === 'genesis' ? 'genesis_source' : 'local_source',
     label: key,
     path: source.relPath,
@@ -293,14 +293,14 @@ function buildSourceRefs(sources) {
   }));
 }
 
-function buildSourceHashes(sources) {
-  return Object.fromEntries(Object.values(sources).map((source) => [source.relPath, source.hash]));
+function buildSourceHashes(sources: any) {
+  return Object.fromEntries(Object.values(sources).map((source: any) => [source.relPath, source.hash]));
 }
 
-function buildClaimIndex(primitives, sourceRefs) {
-  const sourceRefPaths = sourceRefs.filter((ref) => ref.available).map((ref) => ref.path);
-  const claims = [];
-  const addClaim = (section, item, statementKey = 'label') => {
+function buildClaimIndex(primitives: any, sourceRefs: any) {
+  const sourceRefPaths: any = sourceRefs.filter((ref: any) => ref.available).map((ref: any) => ref.path);
+  const claims: any = [];
+  const addClaim: any = (section: any, item: any, statementKey: any = 'label') => {
     if (!item?.id) return;
     claims.push({
       claim_id: `${section}:${item.id}`,
@@ -322,7 +322,7 @@ function buildClaimIndex(primitives, sourceRefs) {
   return claims;
 }
 
-function readLatestOrientationSnapshot(db) {
+function readLatestOrientationSnapshot(db: any) {
   if (!db) return null;
   try {
     return db.prepare('SELECT * FROM site_evolution_orientation_snapshots ORDER BY created_at DESC LIMIT 1').get();
@@ -331,18 +331,18 @@ function readLatestOrientationSnapshot(db) {
   }
 }
 
-function readLatestGroundingEvent(db) {
+function readLatestGroundingEvent(db: any) {
   if (!db) return null;
   try {
-    const row = db.prepare('SELECT event_id, agent_id, trigger, created_at, grounding_status, degraded_reason FROM agent_grounding_events ORDER BY created_at DESC LIMIT 1').get();
+    const row: any = db.prepare('SELECT event_id, agent_id, trigger, created_at, grounding_status, degraded_reason FROM agent_grounding_events ORDER BY created_at DESC LIMIT 1').get();
     return row ?? null;
   } catch {
     return null;
   }
 }
 
-function parseOrientationRow(row, { includePayload }) {
-  const parsed = {
+function parseOrientationRow(row: any, { includePayload }: any) {
+  const parsed: any = {
     snapshot_id: row.snapshot_id,
     created_at: row.created_at,
     schema_id: row.schema_id,
@@ -360,7 +360,7 @@ function parseOrientationRow(row, { includePayload }) {
   return parsed;
 }
 
-function parseJson(value, fallback) {
+function parseJson(value: any, fallback: any) {
   try {
     return value ? JSON.parse(value) : fallback;
   } catch {
@@ -368,6 +368,6 @@ function parseJson(value, fallback) {
   }
 }
 
-function hashContent(content) {
+function hashContent(content: any) {
   return `sha256:${createHash('sha256').update(content).digest('hex')}`;
 }

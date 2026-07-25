@@ -1,16 +1,16 @@
 import { listCommandTools, listOutputTools, listPayloadTools } from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
 
-export const STARTUP_TOOL_INLINE_LIMIT = 100_000;
-export const PERMISSIVE_OBJECT_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true };
-export const STARTUP_TOOL_NAMES = new Set(['agent_context_whoami', 'agent_context_hydrate_current', 'agent_context_startup_sequence']);
+export const STARTUP_TOOL_INLINE_LIMIT: any = 100_000;
+export const PERMISSIVE_OBJECT_OUTPUT_SCHEMA: any = { type: 'object', additionalProperties: true };
+export const STARTUP_TOOL_NAMES: any = new Set(['agent_context_whoami', 'agent_context_hydrate_current', 'agent_context_startup_sequence']);
 
-export const EXPECTED_TOOL_GROUPS = {
+export const EXPECTED_TOOL_GROUPS: any = {
   core: ['agent_context_doctor', 'agent_context_whoami', 'agent_context_hydrate_current', 'agent_context_startup_sequence', 'startup_sequence', 'agent_context_restart', 'agent_context_pause'],
   isn: ['agent_context_isn_create', 'agent_context_isn_list', 'agent_context_isn_show', 'agent_context_isn_transition'],
   movement_trace: ['agent_context_is_movement_trace_record', 'agent_context_is_movement_trace_list', 'agent_context_is_movement_trace_show'],
 };
 
-export const EXPECTED_TOOL_NAMES = [...new Set(Object.values(EXPECTED_TOOL_GROUPS).flat())];
+export const EXPECTED_TOOL_NAMES: any = [...new Set(Object.values(EXPECTED_TOOL_GROUPS).flat())];
 
 export function startupSequenceInputSchema() {
   return {
@@ -27,7 +27,7 @@ export function startupSequenceInputSchema() {
   };
 }
 
-export const TOOLS = [
+export const TOOLS: any = [
   ...listCommandTools(),
   ...listPayloadTools(),
   ...listOutputTools(),

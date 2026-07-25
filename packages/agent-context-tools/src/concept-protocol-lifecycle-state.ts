@@ -1,6 +1,6 @@
-export const CONCEPT_PROTOCOL_LIFECYCLE_SCHEMA = 'narada.concept_protocol.lifecycle_state.v1';
+export const CONCEPT_PROTOCOL_LIFECYCLE_SCHEMA: any = 'narada.concept_protocol.lifecycle_state.v1';
 
-const lifecycleStates = [
+const lifecycleStates: any = [
   'observed',
   'named',
   'doctrine_checked',
@@ -13,7 +13,7 @@ const lifecycleStates = [
   'superseded',
 ];
 
-const eventTargets = {
+const eventTargets: any = {
   observed: 'observed',
   named: 'named',
   doctrine_checked: 'doctrine_checked',
@@ -26,7 +26,7 @@ const eventTargets = {
   superseded: 'superseded',
 };
 
-const allowedTransitions = {
+const allowedTransitions: any = {
   null: ['observed'],
   observed: ['named', 'rejected'],
   named: ['doctrine_checked', 'rejected'],
@@ -40,7 +40,7 @@ const allowedTransitions = {
   superseded: [],
 };
 
-export function canTransitionConceptProtocolLifecycle(previousState, nextState, eventType) {
+export function canTransitionConceptProtocolLifecycle(previousState: any, nextState: any, eventType: any) {
   if (!lifecycleStates.includes(nextState)) return false;
   if (eventType === 'corrected') {
     return previousState !== null
@@ -52,7 +52,7 @@ export function canTransitionConceptProtocolLifecycle(previousState, nextState, 
   return (allowedTransitions[String(previousState)] ?? []).includes(nextState);
 }
 
-export function assertConceptProtocolLifecycleTransition({ previousState, nextState, eventType }) {
+export function assertConceptProtocolLifecycleTransition({ previousState, nextState, eventType }: any) {
   if (!canTransitionConceptProtocolLifecycle(previousState, nextState, eventType)) {
     throw new Error(
       `invalid_concept_protocol_lifecycle_transition: ${previousState ?? 'none'} -> ${nextState} (${eventType})`,

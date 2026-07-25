@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "node --input-type=module -e \"import { readdirSync } from 'node:fs'; import { join } from 'node:path'; import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture'; const files = readdirSync('src').filter((file) => file.endsWith('.mjs')).sort(); for (const file of files) { const result = runHiddenPostureCommandSync(process.execPath, ['--check', join('src', file)], { stdio: 'inherit', posture: 'test_child' }); if (result.status !== 0) process.exit(result.status ?? 1); }\""
+    "test": "node --import tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada2/agent-context-mcp": "workspace:*",
@@ -25,5 +25,9 @@
   },
   "engines": {
     "node": ">=22.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0"
   }
 }

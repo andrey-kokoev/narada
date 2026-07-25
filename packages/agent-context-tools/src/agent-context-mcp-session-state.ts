@@ -1,6 +1,6 @@
-const AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA = 'narada.agent_context_mcp.session_state.v1';
+const AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA: any = 'narada.agent_context_mcp.session_state.v1';
 
-const AGENT_CONTEXT_MCP_SESSION_STATES = Object.freeze([
+const AGENT_CONTEXT_MCP_SESSION_STATES: any = Object.freeze([
   'created',
   'initializing',
   'initialized',
@@ -10,7 +10,7 @@ const AGENT_CONTEXT_MCP_SESSION_STATES = Object.freeze([
   'failed',
 ]);
 
-const AGENT_CONTEXT_MCP_SESSION_TRANSITIONS = Object.freeze({
+const AGENT_CONTEXT_MCP_SESSION_TRANSITIONS: any = Object.freeze({
   created: Object.freeze(['initializing', 'closing', 'failed']),
   initializing: Object.freeze(['initialized', 'failed']),
   initialized: Object.freeze(['serving', 'closing', 'failed']),
@@ -20,20 +20,20 @@ const AGENT_CONTEXT_MCP_SESSION_TRANSITIONS = Object.freeze({
   closed: Object.freeze([]),
 });
 
-function assertAgentContextMcpSessionState(state) {
+function assertAgentContextMcpSessionState(state: any) {
   if (!AGENT_CONTEXT_MCP_SESSION_STATES.includes(state)) {
     throw new Error(`unsupported_agent_context_mcp_session_state: ${state}`);
   }
   return state;
 }
 
-function canTransitionAgentContextMcpSession(from, to) {
+function canTransitionAgentContextMcpSession(from: any, to: any) {
   assertAgentContextMcpSessionState(from);
   assertAgentContextMcpSessionState(to);
   return from === to || AGENT_CONTEXT_MCP_SESSION_TRANSITIONS[from].includes(to);
 }
 
-function createAgentContextMcpSession(initialState = 'created') {
+function createAgentContextMcpSession(initialState: any = 'created') {
   assertAgentContextMcpSessionState(initialState);
   return {
     schema: AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA,
@@ -42,7 +42,7 @@ function createAgentContextMcpSession(initialState = 'created') {
   };
 }
 
-function transitionAgentContextMcpSession(session, nextState) {
+function transitionAgentContextMcpSession(session: any, nextState: any) {
   assertAgentContextMcpSessionState(nextState);
   if (!canTransitionAgentContextMcpSession(session.state, nextState)) {
     throw new Error(`invalid_agent_context_mcp_session_transition: ${session.state}->${nextState}`);

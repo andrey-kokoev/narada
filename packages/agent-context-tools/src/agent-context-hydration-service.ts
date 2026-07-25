@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export function buildCheckpointPayload({ checkpointId, agentId, sessionId = null, checkpointAt, activeTask = null, filesTouched = [], keyDecisions = [], openQuestions = [], gitHead = null, lastWorkboardCheckAt = null, nextIntendedAction = null, authorityBasis = null, continuationBlockers = [], evidenceRefs = [], worktreeState = null, tacticalResumeNotes = [] }) {
+export function buildCheckpointPayload({ checkpointId, agentId, sessionId = null, checkpointAt, activeTask = null, filesTouched = [], keyDecisions = [], openQuestions = [], gitHead = null, lastWorkboardCheckAt = null, nextIntendedAction = null, authorityBasis = null, continuationBlockers = [], evidenceRefs = [], worktreeState = null, tacticalResumeNotes = [] }: any) {
   return {
     schema: 'narada.agent_context.checkpoint.v0',
     checkpoint_id: checkpointId,
@@ -22,7 +22,7 @@ export function buildCheckpointPayload({ checkpointId, agentId, sessionId = null
   };
 }
 
-export function checkpointFromPayloadRow(row, payload) {
+export function checkpointFromPayloadRow(row: any, payload: any) {
   return {
     checkpoint_id: row.checkpoint_id,
     agent_id: row.agent_id,
@@ -45,7 +45,7 @@ export function checkpointFromPayloadRow(row, payload) {
   };
 }
 
-export function buildResumeBrief({ agentId, role, checkpoint, taskLifecycleNext, recommendedNextAction, hydratedAt, workboardFreshnessInput, provenance, groundingEvent }) {
+export function buildResumeBrief({ agentId, role, checkpoint, taskLifecycleNext, recommendedNextAction, hydratedAt, workboardFreshnessInput, provenance, groundingEvent }: any) {
   return {
     schema: 'narada.agent_context.resume_brief.v0',
     hydrated_at: hydratedAt ?? null,
@@ -75,7 +75,7 @@ export function buildResumeBrief({ agentId, role, checkpoint, taskLifecycleNext,
   };
 }
 
-export function buildHydrationGrounding({ detail, whoami, capabilityPolicy, checkpoint, taskLifecycleNext, regroundResult }) {
+export function buildHydrationGrounding({ detail, whoami, capabilityPolicy, checkpoint, taskLifecycleNext, regroundResult }: any) {
   if (!regroundResult?.ok) {
     return {
       status: 'unavailable',
@@ -89,9 +89,9 @@ export function buildHydrationGrounding({ detail, whoami, capabilityPolicy, chec
     };
   }
 
-  const value = regroundResult.value;
-  const status = computeGroundingStatus(value);
-  const layers = buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, taskLifecycleNext, reground: value, regroundAvailable: true });
+  const value: any = regroundResult.value;
+  const status: any = computeGroundingStatus(value);
+  const layers: any = buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, taskLifecycleNext, reground: value, regroundAvailable: true });
   return {
     status,
     provenance: detail,
@@ -100,15 +100,15 @@ export function buildHydrationGrounding({ detail, whoami, capabilityPolicy, chec
   };
 }
 
-export function computeGroundingStatus(reground) {
-  const localAvailable = reground?.corpus_status?.local_sources?.all_available === true;
-  const thoughtsAvailable = reground?.corpus_status?.thoughts_corpus?.available === true;
+export function computeGroundingStatus(reground: any) {
+  const localAvailable: any = reground?.corpus_status?.local_sources?.all_available === true;
+  const thoughtsAvailable: any = reground?.corpus_status?.thoughts_corpus?.available === true;
   if (localAvailable && thoughtsAvailable) return 'grounded';
   if (localAvailable || thoughtsAvailable) return 'degraded';
   return 'unavailable';
 }
 
-export function buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, taskLifecycleNext, reground, regroundAvailable }) {
+export function buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, taskLifecycleNext, reground, regroundAvailable }: any) {
   return {
     identity: whoami?.status === 'ok' ? 'loaded' : 'missing',
     capability_policy: capabilityPolicy ? 'loaded' : 'missing',
@@ -119,8 +119,8 @@ export function buildGroundingLayers({ whoami, capabilityPolicy, checkpoint, tas
   };
 }
 
-export function shapeDoctrinePayload(reground, detail, groundingStatus, groundingLayers) {
-  const base = {
+export function shapeDoctrinePayload(reground: any, detail: any, groundingStatus: any, groundingLayers: any) {
+  const base: any = {
     status: 'ok',
     mode: detail,
     schema: reground.schema,
@@ -139,7 +139,7 @@ export function shapeDoctrinePayload(reground, detail, groundingStatus, groundin
     };
   }
   if (detail === 'reground') {
-    const { source_excerpts, site_root, ...compact } = reground;
+    const { source_excerpts, site_root, ...compact }: any = reground;
     return {
       ...compact,
       status: 'ok',
@@ -157,8 +157,8 @@ export function shapeDoctrinePayload(reground, detail, groundingStatus, groundin
   };
 }
 
-export function buildGroundingSourceHashes(sourceRefs, readText) {
-  const hashes = [];
+export function buildGroundingSourceHashes(sourceRefs: any, readText: any) {
+  const hashes: any = [];
   for (const source of sourceRefs ?? []) {
     if (!source?.path || typeof readText !== 'function') continue;
     try {
