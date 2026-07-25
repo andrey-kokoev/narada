@@ -98,7 +98,6 @@ export function registerConsoleCommands(program: Command): void {
       const restarted = await restartOperatorConsoleRuntime({
         host,
         port,
-        timeout_ms: 15_000,
       });
       const workspaceUrl = restarted.started.url;
       const browserOutcome = await openOperatorConsoleWorkspace(workspaceUrl, { shouldOpen: opts.open !== false });

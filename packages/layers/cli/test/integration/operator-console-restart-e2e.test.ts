@@ -56,7 +56,7 @@ function launchNode(entrypoint, args, env) {
   };
 }
 
-async function waitForChildExit(child, timeoutMs = 15_000) {
+async function waitForChildExit(child, timeoutMs = 120_000) {
   if (child.exitCode !== null || child.signalCode !== null) return;
   await new Promise((resolvePromise, reject) => {
     const timer = setTimeout(() => reject(new Error(`child_exit_timeout:${child.pid}`)), timeoutMs);
@@ -94,7 +94,9 @@ async function readRoutes(url) {
   return response.json();
 }
 
-async function waitForOperatorConsoleRoute(url, predicate, processInfo, timeoutMs = 20_000, { failOnProcessExit = true } = {}) {
+// A clean checkout may need to build the Operator Console artifact before
+// the detached runtime can register its route.
+async function waitForOperatorConsoleRoute(url, predicate, processInfo, timeoutMs = 120_000, { failOnProcessExit = true } = {}) {
   const deadline = Date.now() + timeoutMs;
   let lastRoutes = null;
   while (Date.now() < deadline) {

@@ -23,8 +23,13 @@ import {
 
 const OPERATOR_CONSOLE_ROUTE_ID = 'operator-console';
 const OPERATOR_CONSOLE_ROUTE_CLASS = 'operator-console' as const;
-const DEFAULT_RUNTIME_TIMEOUT_MS = 15_000;
-const DEFAULT_LOCK_TIMEOUT_MS = 15_000;
+// A first local start may synchronously materialize the Operator Console UI
+// artifact before the backend can register its Router route. The artifact
+// build itself is bounded at 120 seconds, so the lifecycle wait and singleton
+// lock must cover that same governed boundary rather than timing out while
+// the child is still doing legitimate startup work.
+const DEFAULT_RUNTIME_TIMEOUT_MS = 120_000;
+const DEFAULT_LOCK_TIMEOUT_MS = 120_000;
 const LOCK_STALE_AFTER_MS = 30_000;
 const POLL_INTERVAL_MS = 100;
 // Operator Router caps a route request timeout at 120 seconds. Keep the
