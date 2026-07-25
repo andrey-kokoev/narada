@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { synthesizeBootstrap } from './synthesize-bootstrap.mjs';
+import { synthesizeBootstrap } from './synthesize-bootstrap.js';
+
+type AnyRecord = Record<string, any>;
 
 test('returns cold bootstrap without database', () => {
   const result = synthesizeBootstrap(null, 'agent.test');
@@ -12,8 +14,8 @@ test('returns cold bootstrap without database', () => {
 });
 
 test('returns cold bootstrap without agent event table', () => {
-  const db = {
-    prepare(sql) {
+  const db: AnyRecord = {
+    prepare(sql: string) {
       assert.match(sql, /sqlite_master/);
       return { get: () => null };
     },
@@ -26,7 +28,7 @@ test('returns cold bootstrap without agent event table', () => {
 });
 
 test('summarizes recent checkpoints', () => {
-  const rows = [
+  const rows: AnyRecord[] = [
     {
       event_id: 'evt1',
       task_number: '42',
@@ -34,17 +36,17 @@ test('summarizes recent checkpoints', () => {
       payload_json: JSON.stringify({
         boundary_type: 'implementation',
         decisions: [{ what: 'Packaged bootstrap.' }],
-        files_changed: ['packages/agent-start-bootstrap/src/synthesize-bootstrap.mjs'],
+        files_changed: ['packages/agent-start-bootstrap/src/synthesize-bootstrap.ts'],
         tests_run: ['node --test'],
         friction: [{ what: 'legacy mirror', severity: 8 }],
       }),
     },
   ];
-  const db = {
-    prepare(sql) {
+  const db: AnyRecord = {
+    prepare(sql: string) {
       if (sql.includes('sqlite_master')) return { get: () => ({ name: 'agent_events' }) };
       return {
-        all(agentId, limit) {
+        all(agentId: string, limit: number) {
           assert.equal(agentId, 'agent.test');
           assert.equal(limit, 10);
           return rows;

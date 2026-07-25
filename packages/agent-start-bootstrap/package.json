@@ -4,13 +4,20 @@
   "type": "module",
   "private": true,
   "exports": {
-    ".": "./src/synthesize-bootstrap.mjs",
-    "./synthesize-bootstrap": "./src/synthesize-bootstrap.mjs",
+    ".": {
+      "types": "./dist/synthesize-bootstrap.d.ts",
+      "import": "./dist/synthesize-bootstrap.js"
+    },
+    "./synthesize-bootstrap": {
+      "types": "./dist/synthesize-bootstrap.d.ts",
+      "import": "./dist/synthesize-bootstrap.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test src/synthesize-bootstrap.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/synthesize-bootstrap.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Bootstrap generator for Narada agent startup",
   "license": "MIT",
