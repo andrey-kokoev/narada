@@ -1894,7 +1894,7 @@ function formatCreateSiteInteractiveSummary(
 }
 
 function siteLiveCarrierToolPath(): string {
-  return fileURLToPath(new URL('../../../../../tools/site-init/site-live-carriers.mjs', import.meta.url));
+  return fileURLToPath(new URL('../../../../../tools/site-init/site-live-carriers.ts', import.meta.url));
 }
 
 function buildLiveCarrierArgs(options: SitesLiveCarrierOptions): string[] {
@@ -3616,14 +3616,14 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     }
     await walk(srcRoot);
   }
-  const bootstrapPath = fileURLToPath(new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.mjs', import.meta.url));
+  const bootstrapPath = fileURLToPath(new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.ts', import.meta.url));
   if (existsSync(bootstrapPath)) {
     await addCanonicalHash({
-      path: 'tools/agent-start/synthesize-bootstrap.mjs',
+      path: 'tools/agent-start/synthesize-bootstrap.ts',
       packageName: '@narada2/agent-start-bootstrap',
       version: '0.1.0',
       surface: 'agent-start',
-      fileUrl: new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.mjs', import.meta.url),
+      fileUrl: new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.ts', import.meta.url),
     });
   }
   const overlayScripts = [
@@ -3645,15 +3645,15 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     }
   }
   const typedMcpScripts = [
-    'adr-mcp-server.mjs',
-    'ee-mcp-server.mjs',
-    'generate-carrier-mcp-config.mjs',
-    'inbox-admission-log.mjs',
-    'inbox-admit.mjs',
-    'inbox-mcp-server.mjs',
+    'adr-mcp-server.ts',
+    'ee-mcp-server.ts',
+    'generate-carrier-mcp-config.ts',
+    'inbox-admission-log.ts',
+    'inbox-admit.ts',
+    'inbox-mcp-server.ts',
     'Invoke-EeMcpPrototype.ps1',
     'Invoke-InboxMcpPrototype.ps1',
-    'validate-mcp-surface-registry.mjs',
+    'validate-mcp-surface-registry.ts',
   ];
   for (const script of typedMcpScripts) {
     const scriptPath = fileURLToPath(new URL(`../../../../../packages/typed-mcp-surface/src/${script}`, import.meta.url));
@@ -3668,11 +3668,11 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     }
   }
   await addCanonicalHash({
-    path: 'tools/typed-mcp/inbox-mcp-server.mjs',
+    path: 'tools/typed-mcp/inbox-mcp-server.ts',
     packageName: '@narada2/typed-mcp-surface',
     version: '0.1.0',
     surface: 'typed-mcp',
-    fileUrl: new URL('../../../../../packages/typed-mcp-surface/compat/inbox-mcp-server.legacy-site.mjs', import.meta.url),
+    fileUrl: new URL('../../../../../packages/typed-mcp-surface/compat/inbox-mcp-server.legacy-site.ts', import.meta.url),
   });
   await addCanonicalPackageTree({
     packageName: '@narada2/operator-surface-carriers',
@@ -3708,7 +3708,7 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     surface: 'site-tools',
     relativeToolRoot: 'tools',
     packageSrcUrl: new URL('../../../../../packages/site-common-tools/src', import.meta.url),
-    excludeRelativePaths: ['mcp-servers/filesystem/filesystem-mcp-server.mjs'],
+    excludeRelativePaths: ['mcp-servers/filesystem/filesystem-mcp-server.ts'],
   });
   canonicalToolSurfaceEntries = entries;
   return entries;

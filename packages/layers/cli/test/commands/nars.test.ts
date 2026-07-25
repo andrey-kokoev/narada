@@ -43,21 +43,21 @@ const tempDirs: string[] = [];
 function defaultRuntimeMcpServers(siteId = 'sonar'): Record<string, Record<string, unknown>> {
   const prefix = `narada-${siteId}`;
   return {
-    [`${prefix}-agent-context`]: { command: 'node', args: ['agent-context-mcp.mjs'] },
-    [`${prefix}-task-lifecycle`]: { command: 'node', args: ['task-lifecycle-mcp.mjs'] },
-    [`${prefix}-inbox`]: { command: 'node', args: ['inbox-mcp.mjs'] },
-    [`${prefix}-site-ops`]: { command: 'node', args: ['site-ops-mcp.mjs'] },
-    [`${prefix}-mailbox`]: { command: 'node', args: ['mailbox-mcp.mjs'] },
-    [`${prefix}-graph-mail`]: { command: 'node', args: ['graph-mail-mcp.mjs'] },
-    [`${prefix}-git`]: { command: 'node', args: ['git-mcp.mjs', '--allowed-root', siteId] },
-    [`${prefix}-local-filesystem`]: { command: 'node', args: ['local-filesystem-mcp.mjs', '--allowed-root', siteId] },
-    [`${prefix}-structured-command`]: { command: 'node', args: ['structured-command-mcp.mjs', '--allowed-root', siteId] },
-    [`${prefix}-worker-delegation`]: { command: 'node', args: ['worker-delegation-mcp.mjs'] },
-    [`${prefix}-sop`]: { command: 'node', args: ['sop-mcp.mjs'] },
-    [`${prefix}-scheduler`]: { command: 'node', args: ['scheduler-mcp.mjs'] },
-    [`${prefix}-surface-feedback`]: { command: 'node', args: ['surface-feedback-mcp.mjs'] },
-    [`${prefix}-delegated-task`]: { command: 'node', args: ['delegated-task-mcp.mjs'] },
-    [`${prefix}-speech`]: { command: 'node', args: ['speech-mcp.mjs'] },
+    [`${prefix}-agent-context`]: { command: 'node', args: ['agent-context-mcp.ts'] },
+    [`${prefix}-task-lifecycle`]: { command: 'node', args: ['task-lifecycle-mcp.ts'] },
+    [`${prefix}-inbox`]: { command: 'node', args: ['inbox-mcp.ts'] },
+    [`${prefix}-site-ops`]: { command: 'node', args: ['site-ops-mcp.ts'] },
+    [`${prefix}-mailbox`]: { command: 'node', args: ['mailbox-mcp.ts'] },
+    [`${prefix}-graph-mail`]: { command: 'node', args: ['graph-mail-mcp.ts'] },
+    [`${prefix}-git`]: { command: 'node', args: ['git-mcp.ts', '--allowed-root', siteId] },
+    [`${prefix}-local-filesystem`]: { command: 'node', args: ['local-filesystem-mcp.ts', '--allowed-root', siteId] },
+    [`${prefix}-structured-command`]: { command: 'node', args: ['structured-command-mcp.ts', '--allowed-root', siteId] },
+    [`${prefix}-worker-delegation`]: { command: 'node', args: ['worker-delegation-mcp.ts'] },
+    [`${prefix}-sop`]: { command: 'node', args: ['sop-mcp.ts'] },
+    [`${prefix}-scheduler`]: { command: 'node', args: ['scheduler-mcp.ts'] },
+    [`${prefix}-surface-feedback`]: { command: 'node', args: ['surface-feedback-mcp.ts'] },
+    [`${prefix}-delegated-task`]: { command: 'node', args: ['delegated-task-mcp.ts'] },
+    [`${prefix}-speech`]: { command: 'node', args: ['speech-mcp.ts'] },
   };
 }
 
@@ -76,7 +76,7 @@ function writeProjectionRegistration(siteRoot: string, serverNames: string[]): s
   const path = join(projectionDir, 'mcp-registration.json');
   writeFileSync(path, `${JSON.stringify({
     schema: 'narada.launcher.mcp_projection_registration.v1',
-    mcp_servers: serverNames.map((name) => ({ name, command: 'node', args: ['projection.mjs'] })),
+    mcp_servers: serverNames.map((name) => ({ name, command: 'node', args: ['projection.ts'] })),
   }, null, 2)}\n`, 'utf8');
   return path;
 }

@@ -43,6 +43,14 @@ export interface OperatorSurfaceIdentityAddOptions {
   format?: string;
 }
 
+export interface OperatorSurfaceIdentityRemoveOptions {
+  cwd?: string;
+  identityName?: string;
+  site?: string;
+  by?: string;
+  format?: CliFormat;
+}
+
 export interface OperatorSurfaceIdentityRenameOptions {
   cwd?: string;
   fromIdentity?: string;
@@ -1858,6 +1866,59 @@ export async function operatorSurfaceIdentityAddCommand(
         registry_path: path,
         identity: record,
         runtime_binding_mutated: false,
+      },
+    };
+  } catch (error) {
+    return errorResult(error);
+  }
+}
+
+export async function operatorSurfaceIdentityRemoveCommand(
+  options: OperatorSurfaceIdentityRemoveOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  try {
+    const cwd = options.cwd ?? '.';
+    const identityId = requireText(options.identityName, '<identity-name>');
+    const siteId = requireText(options.site, '--site');
+    const by = requireText(options.by, '--by');
+    const registry = await readOperatorSurfaceIdentities(cwd);
+    const index = registry.identities.findIndex((entry) => entry.identity_id === identityId);
+    if (index < 0) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'refused',
+          mutation_performed: false,
+          reason: 'identity_not_found',
+          identity_id: identityId,
+        },
+      };
+    }
+    const identity = registry.identities[index]!;
+    if (identity.site_id !== siteId) {
+      return {
+        exitCode: ExitCode.INVALID_CONFIG,
+        result: {
+          status: 'refused',
+          mutation_performed: false,
+          reason: 'identity_site_mismatch',
+          identity_id: identityId,
+          expected_site_id: siteId,
+          actual_site_id: identity.site_id,
+        },
+      };
+    }
+    registry.identities.splice(index, 1);
+    const path = await writeOperatorSurfaceIdentities(cwd, registry);
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'success',
+        mutation_performed: true,
+        registry_path: path,
+        identity,
+        removed_by: by,
       },
     };
   } catch (error) {

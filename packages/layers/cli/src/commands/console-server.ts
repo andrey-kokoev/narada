@@ -19,6 +19,8 @@ import { renderOperatorWorkspacePage } from './operator-workspace-page.js';
 import { createAgentSessionReadModel, type AgentSessionReadModel } from './agent-session-read-model.js';
 import { createSiteAgentOverviewReadModel, type SiteAgentOverviewReadModel } from './site-agent-overview-read-model.js';
 import { createSiteAgentLaunchGateway, type SiteAgentLaunchGateway } from './site-agent-launch-gateway.js';
+import { createSiteAgentAdmissionGateway, type SiteAgentAdmissionGateway } from './site-agent-admission-gateway.js';
+import { createSiteAgentLifecycleGateway, type SiteAgentLifecycleGateway } from './site-agent-lifecycle-gateway.js';
 import { createSiteAgentPendingTracker, type SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 import {
@@ -185,6 +187,8 @@ export interface ConsoleServerConfig {
   agentSessions?: AgentSessionReadModel;
   siteAgentOverview?: SiteAgentOverviewReadModel;
   siteAgentLaunch?: SiteAgentLaunchGateway;
+  siteAgentAdmission?: SiteAgentAdmissionGateway;
+  siteAgentLifecycle?: SiteAgentLifecycleGateway;
   siteAgentPending?: SiteAgentPendingTracker;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
@@ -273,6 +277,8 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     agentSessions,
   });
   const siteAgentLaunch = config.siteAgentLaunch ?? createSiteAgentLaunchGateway({ overview: siteAgentOverview });
+  const siteAgentAdmission = config.siteAgentAdmission ?? createSiteAgentAdmissionGateway();
+  const siteAgentLifecycle = config.siteAgentLifecycle ?? createSiteAgentLifecycleGateway({ overview: siteAgentOverview });
 
   const routeContext = {
     registry,
@@ -283,6 +289,8 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     agentSessions,
     siteAgentOverview,
     siteAgentLaunch,
+    siteAgentAdmission,
+    siteAgentLifecycle,
     siteAgentPending: config.siteAgentPending ?? createSiteAgentPendingTracker(),
     workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,

@@ -690,7 +690,7 @@ export const SYNTHETIC_ASSIGNMENTS: FixtureAssignment[] = [
 export const SYNTHETIC_WRITE_SETS: Map<string, FixtureWriteSetManifest> = new Map([
   ['20260422-500-schema-migration', { declared_files: ['packages/layers/control-plane/src/schema.ts'], declared_creates: [], declared_deletes: [] }],
   ['20260422-501-sync-cli-command', { declared_files: ['packages/layers/cli/src/commands/sync.ts'], declared_creates: [], declared_deletes: [] }],
-  ['20260422-502-mailbox-mcp-fixture', { declared_files: ['packages/site-common-tools/src/site-mail/**/*.mjs'], declared_creates: [], declared_deletes: [] }],
+  ['20260422-502-mailbox-mcp-fixture', { declared_files: ['packages/site-common-tools/src/site-mail/**/*.ts'], declared_creates: [], declared_deletes: [] }],
   ['20260422-503-cloudflare-worker', { declared_files: ['packages/sites/cloudflare/src/worker.ts'], declared_creates: [], declared_deletes: [] }],
   ['20260422-504-architecture-decision', { declared_files: ['.ai/decisions/*.md'], declared_creates: [], declared_deletes: [] }],
   ['20260422-505-operator-console-ui', { declared_files: ['packages/layers/daemon/src/ui/**/*.ts'], declared_creates: [], declared_deletes: [] }],

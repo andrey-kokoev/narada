@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { writeLaunchArtifactManifest } from './launch-artifact-lib.mjs';
+import { writeLaunchArtifactManifest } from './launch-artifact-lib.ts';
 
 const args = process.argv.slice(2);
 const valueAfter = (name) => {

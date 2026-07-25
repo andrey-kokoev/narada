@@ -194,7 +194,7 @@ test('published CLI installs into a blank Windows profile and provisions the Use
       assert.ok(packageRoot, `published runtime/UI package missing from bundled dependency tree: @narada2/${packageName}`);
       assert.equal(JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).name, `@narada2/${packageName}`);
       const requiredOutput = packageName === 'agent-runtime-server'
-        ? join(packageRoot, 'bin', 'narada-agent-runtime-server.mjs')
+        ? join(packageRoot, 'bin', 'narada-agent-runtime-server.ts')
         : join(packageRoot, 'dist', 'index.html');
       assert.equal(existsSync(requiredOutput), true, `published ${packageName} output missing: ${requiredOutput}`);
     }

@@ -3,7 +3,7 @@ import {
   checkLaunchArtifact,
   computeLaunchArtifactSourceClosure,
   resolveLaunchArtifactDescriptor,
-} from './launch-artifact-lib.mjs';
+} from './launch-artifact-lib.ts';
 
 export const BUILD_MANIFEST_SCHEMA = 'narada.cli.dist_build_manifest.v0';
 export const BUILD_MANIFEST_PATH = join('packages', 'layers', 'cli', 'dist', 'build-manifest.json');

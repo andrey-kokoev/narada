@@ -88,8 +88,9 @@ export async function verifyRunCommand(
       exitCode: ExitCode.SUCCESS,
       result: { status: 'ok', command, scope, routed_through: 'pnpm test:focused' },
     };
-  } catch (err: any) {
-    const exitStatus = err.status ?? 1;
+  } catch (err) {
+    const failure = err && typeof err === 'object' ? err as { status?: unknown; message?: unknown } : {};
+    const exitStatus = typeof failure.status === 'number' ? failure.status : 1;
     return {
       exitCode: exitStatus === 0 ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
       result: {
@@ -97,7 +98,7 @@ export async function verifyRunCommand(
         command,
         scope,
         exitStatus,
-        error: err.message,
+        error: typeof failure.message === 'string' ? failure.message : String(err),
       },
     };
   }

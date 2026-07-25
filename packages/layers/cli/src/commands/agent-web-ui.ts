@@ -1,6 +1,6 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir, rename, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
@@ -48,6 +48,16 @@ import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.j
 
 function allowsStaleSessionInspection(options: AgentWebUiAttachOptions): boolean {
   return options.inspectStaleSession === true || options.allowStaleSession === true;
+}
+
+async function projectionDebug(message: string): Promise<void> {
+  const path = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG;
+  if (!path) return;
+  try {
+    await appendFile(path, `debug: ${message}\n`, 'utf8');
+  } catch {
+    // Diagnostics must never change projection lifecycle behavior.
+  }
 }
 
 async function writeAgentWebUiReadiness(path: string | undefined, plan: AgentWebUiAttachPlan): Promise<void> {
@@ -365,6 +375,7 @@ export async function agentWebUiAttachCommand(
   const router = useOperatorRouter
     ? await (deps.ensureOperatorRouter ?? ensureOperatorRouter)({ host, port })
     : null;
+  await projectionDebug(`router_ready:${router?.url ?? 'direct'}`);
   const publicEventEndpoint = router ? operatorRouterWebsocketUrl(router.url, `${publicPath}/events`) : null;
   const publicHealthEndpoint = router ? `${router.url}${publicPath}/api/health` : null;
   const sessionKey = operatorRouterSessionKey(sessionId);
@@ -401,6 +412,7 @@ export async function agentWebUiAttachCommand(
   ];
   if (router) {
     const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
+    await projectionDebug(`router_inventory:${existingRoutes.routes.length}`);
     const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, requiredRouteIds, expectedRouteIdentities);
     if (routePosture.posture === 'healthy') {
       transitionAttachment('attached');
@@ -469,6 +481,7 @@ export async function agentWebUiAttachCommand(
       || process.env.CLOUDFLARE_NARS_PROJECTION_URL
       || null,
   });
+  await projectionDebug(`server_started:${started.url}`);
   const routeIds: string[] = [];
   let routeSet: Awaited<ReturnType<typeof registerOperatorRouteSet>> | null = null;
   if (router) {
@@ -532,6 +545,7 @@ export async function agentWebUiAttachCommand(
       }] : []),
     ];
     try {
+      await projectionDebug(`registering_routes:${routeInputs.map((route) => route.route_id).join(',')}`);
       const reconstructed = await reconstructOperatorRouteSet({
         admin,
         routes: routeInputs,
@@ -540,6 +554,7 @@ export async function agentWebUiAttachCommand(
       });
       routeSet = reconstructed.route_set;
       routeIds.push(...routeSet.route_ids);
+      await projectionDebug(`routes_registered:${routeIds.join(',')}`);
     } catch (error) {
       await closeStartedServer(started.server);
       throw error;
@@ -568,7 +583,9 @@ export async function agentWebUiAttachCommand(
     attachmentLifecycle,
   });
   try {
+    await projectionDebug(`writing_readiness:${options.readyFile ?? 'none'}`);
     await writeAgentWebUiReadiness(options.readyFile, plan);
+    await projectionDebug('readiness_written');
   } catch (error) {
     await routeSet?.stop();
     await closeStartedServer(started.server);

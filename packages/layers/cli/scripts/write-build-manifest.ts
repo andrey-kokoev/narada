@@ -1,7 +1,7 @@
 import { copyFileSync, cpSync, mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { BUILD_MANIFEST_PATH, BUILD_MANIFEST_SCHEMA, computeCliBuildSourceHash } from './build-manifest-lib.mjs';
-import { writeLaunchArtifactManifest } from './launch-artifact-lib.mjs';
+import { BUILD_MANIFEST_PATH, BUILD_MANIFEST_SCHEMA, computeCliBuildSourceHash } from './build-manifest-lib.ts';
+import { writeLaunchArtifactManifest } from './launch-artifact-lib.ts';
 
 const siteRoot = resolve(process.argv[2] ?? join(import.meta.dirname, '..', '..', '..', '..'));
 const packageRoot = resolve(import.meta.dirname, '..');

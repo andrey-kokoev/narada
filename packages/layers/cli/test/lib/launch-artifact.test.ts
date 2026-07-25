@@ -6,7 +6,7 @@ import test from 'node:test';
 import {
   checkLaunchArtifact,
   writeLaunchArtifactManifest,
-} from '../../scripts/launch-artifact-lib.mjs';
+} from '../../scripts/launch-artifact-lib.ts';
 
 async function fixtureRoot() {
   const root = await mkdtemp(join(tmpdir(), 'narada-launch-artifact-'));

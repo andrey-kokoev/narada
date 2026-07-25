@@ -1,7 +1,7 @@
 import { dirname, resolve, join } from 'node:path';
 import { access, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { openLocalIntelligenceRegistry } from '@narada2/agent-runtime-server/local-intelligence-runtime';
+import type { openLocalIntelligenceRegistry } from '@narada2/agent-runtime-server/local-intelligence-runtime';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -70,7 +70,12 @@ async function inspectIntelligenceCatalogReadiness(root: string): Promise<Intell
   }
   let store: Awaited<ReturnType<typeof openLocalIntelligenceRegistry>> | undefined;
   try {
-    store = await openLocalIntelligenceRegistry({ siteRoot: root, registryDbPath: catalogLocator });
+    // Keep the runtime-only intelligence implementation out of the CLI's
+    // eager module graph. The plain-node CLI is also used for launches, while
+    // this package's local intelligence source is loaded through tsx during
+    // the actual agent-start path.
+    const { openLocalIntelligenceRegistry: openRegistry } = await import('@narada2/agent-runtime-server/local-intelligence-runtime');
+    store = await openRegistry({ siteRoot: root, registryDbPath: catalogLocator });
     const [records, resources] = await Promise.all([store.listCatalogRecords(), store.listResources()]);
     const ready = records.length > 0 && resources.length > 0;
     return {

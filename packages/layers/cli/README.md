@@ -273,8 +273,8 @@ pnpm --filter @narada2/cli test:launcher-acceptance
 
 This single command runs the authoritative launcher journey checks in a serialized sequence:
 
-- `test/integration/operator-launch-journey.test.mjs`
-- `test/integration/workspace-selection-ui-e2e.test.mjs`
+- `test/integration/operator-launch-journey.test.ts`
+- `test/integration/workspace-selection-ui-e2e.test.ts`
 
 It covers workspace selection, launcher planning, NARS session discovery, agent-cli attach, agent-web-ui attach, canonical identity/session labeling, and the launch/session regressions that previously showed up as stale dist/source-hash mismatches or broken projection handoff paths.
 

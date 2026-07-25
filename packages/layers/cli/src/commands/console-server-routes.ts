@@ -7,6 +7,7 @@
  * Authority boundary:
  * - GET routes are strictly read-only; they never mutate registry or Site state.
  * - POST /console/sites/:site_id/control delegates through ControlRequestRouter.
+ * - POST /console/agents/api/admission delegates through the Site-agent admission gateway.
  * - POST /console/registry/api/sites/:id/launch runs the plan-first sites-launch ensure
  *   (dry-run unless the body explicitly sets dry_run: false).
  * - Registry plan/apply POSTs delegate through the RegistryMutationGateway.
@@ -26,8 +27,14 @@ import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOp
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
 import type { SiteAgentOverviewReadModel } from './site-agent-overview-read-model.js';
 import type { SiteAgentLaunchGateway } from './site-agent-launch-gateway.js';
+import type { SiteAgentAdmissionGateway } from './site-agent-admission-gateway.js';
+import type { SiteAgentLifecycleGateway } from './site-agent-lifecycle-gateway.js';
 import {
   OPERATOR_CONSOLE_AGENTS_API_PATH,
+  OPERATOR_CONSOLE_AGENTS_ADMISSION_API_PATH,
+  OPERATOR_CONSOLE_AGENTS_ADMISSION_OPTIONS_API_PATH,
+  OPERATOR_CONSOLE_AGENTS_DELETE_API_PATH,
+  OPERATOR_CONSOLE_AGENTS_STOP_API_PATH,
   OPERATOR_CONSOLE_AGENTS_PATH,
   OPERATOR_CONSOLE_ASSET_PATH,
   OPERATOR_CONSOLE_PATH,
@@ -85,6 +92,8 @@ export interface ConsoleServerRouteContext {
   agentSessions?: AgentSessionReadModel;
   siteAgentOverview?: SiteAgentOverviewReadModel;
   siteAgentLaunch?: SiteAgentLaunchGateway;
+  siteAgentAdmission?: SiteAgentAdmissionGateway;
+  siteAgentLifecycle?: SiteAgentLifecycleGateway;
   siteAgentPending?: SiteAgentPendingTracker;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
@@ -504,6 +513,171 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         jsonResponse(res, 200, withInvariantDiagnostics(await ctx.siteAgentOverview.read()));
+      },
+    },
+    {
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_ADMISSION_OPTIONS_API_PATH),
+      handler: async (req, res, _params, searchParams) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const siteId = searchParams.get('site_id')?.trim();
+        if (!siteId) {
+          jsonResponse(res, 400, { error: 'site_id is required' });
+          return;
+        }
+        if (!ctx.siteAgentAdmission) {
+          jsonResponse(res, 503, {
+            schema: 'narada.operator_console.site_agent_admission_options.v1',
+            status: 'refused',
+            generated_at: new Date().toISOString(),
+            site_id: siteId,
+            site_display_name: null,
+            revision: null,
+            roles: [],
+            agent_kinds: [],
+            runtimes: [],
+            operator_surfaces: [],
+            intelligence: {
+              selection_authority: null,
+              policy_choices: [],
+              provider_choices: [],
+              model_choices: [],
+            },
+            refusals: ['site_agent_admission_unavailable'],
+          });
+          return;
+        }
+        const result = await ctx.siteAgentAdmission.options(siteId);
+        jsonResponse(res, result.status === 'refused' ? 409 : 200, result);
+      },
+    },
+    {
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_ADMISSION_API_PATH),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const siteId = optionalString(payload?.site_id)?.trim();
+        const role = optionalString(payload?.role)?.trim();
+        const agentKind = optionalString(payload?.agent_kind)?.trim();
+        const runtime = optionalString(payload?.runtime)?.trim();
+        const operatorSurface = optionalString(payload?.operator_surface)?.trim();
+        if (!siteId || !role || !agentKind || !runtime || !operatorSurface) {
+          jsonResponse(res, 400, { error: 'site_id, role, agent_kind, runtime, and operator_surface are required' });
+          return;
+        }
+        if (!ctx.siteAgentAdmission) {
+          jsonResponse(res, 503, {
+            schema: 'narada.operator_console.site_agent_admission.v1',
+            status: 'failed',
+            site_id: siteId,
+            agent_id: null,
+            local_agent_id: null,
+            role,
+            agent_kind: agentKind,
+            runtime,
+            operator_surface: operatorSurface,
+            reason: 'site_agent_admission_unavailable',
+            message: 'The Site agent admission gateway is unavailable.',
+            request_id: `unavailable_${Date.now()}`,
+            options_revision: optionalString(payload?.options_revision) ?? null,
+            intelligence: {
+              selection_authority: null,
+              policy: optionalString(payload?.intelligence_policy) ?? null,
+              provider: optionalString(payload?.provider) ?? null,
+              model: optionalString(payload?.model) ?? null,
+            },
+          });
+          return;
+        }
+        const result = await ctx.siteAgentAdmission.admit({
+          site_id: siteId,
+          role,
+          agent_kind: agentKind,
+          runtime,
+          operator_surface: operatorSurface,
+          ...(optionalString(payload?.intelligence_policy) ? { intelligence_policy: optionalString(payload?.intelligence_policy) } : {}),
+          ...(optionalString(payload?.provider) ? { provider: optionalString(payload?.provider) } : {}),
+          ...(optionalString(payload?.model) ? { model: optionalString(payload?.model) } : {}),
+          ...(optionalString(payload?.options_revision) ? { options_revision: optionalString(payload?.options_revision) } : {}),
+        });
+        const status = result.status === 'refused' ? 409 : result.status === 'failed' ? 500 : 201;
+        jsonResponse(res, status, result);
+      },
+    },
+    {
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_STOP_API_PATH),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const siteId = optionalString(payload?.site_id)?.trim();
+        const agentId = optionalString(payload?.agent_id)?.trim();
+        if (!siteId || !agentId) {
+          jsonResponse(res, 400, { error: 'site_id and agent_id are required' });
+          return;
+        }
+        if (!ctx.siteAgentLifecycle) {
+          jsonResponse(res, 503, {
+            schema: 'narada.operator_console.agent_stop.v1',
+            status: 'failed',
+            site_id: siteId,
+            agent_id: agentId,
+            session_id: null,
+            reason: 'site_agent_lifecycle_unavailable',
+            message: 'The Site agent lifecycle gateway is unavailable.',
+            request_id: `unavailable_${Date.now()}`,
+          });
+          return;
+        }
+        const result = await ctx.siteAgentLifecycle.stop({ siteId, agentId });
+        const status = result.status === 'refused' ? 409 : result.status === 'failed' ? 500 : 200;
+        jsonResponse(res, status, result);
+      },
+    },
+    {
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_DELETE_API_PATH),
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const siteId = optionalString(payload?.site_id)?.trim();
+        const agentId = optionalString(payload?.agent_id)?.trim();
+        if (!siteId || !agentId) {
+          jsonResponse(res, 400, { error: 'site_id and agent_id are required' });
+          return;
+        }
+        if (!ctx.siteAgentLifecycle) {
+          jsonResponse(res, 503, {
+            schema: 'narada.operator_console.agent_delete.v1',
+            status: 'failed',
+            site_id: siteId,
+            agent_id: agentId,
+            reason: 'site_agent_lifecycle_unavailable',
+            message: 'The Site agent lifecycle gateway is unavailable.',
+            request_id: `unavailable_${Date.now()}`,
+          });
+          return;
+        }
+        const result = await ctx.siteAgentLifecycle.delete({ siteId, agentId });
+        const status = result.status === 'refused' ? 409 : result.status === 'failed' ? 500 : 200;
+        jsonResponse(res, status, result);
       },
     },
     {

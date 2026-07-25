@@ -50,10 +50,20 @@ function sessionProjection(
   const sessionId = optionalString(entry.session_id) ?? optionalString(record.session_id);
   const state = displayState(entry.display_state);
   if (!sessionId || !state) return null;
+  const identity = isRecord(entry.agent_identity_ref)
+    ? entry.agent_identity_ref
+    : isRecord(record.agent_identity_ref)
+      ? record.agent_identity_ref
+      : null;
+  const projectedAgentId = optionalString(entry.agent_id)
+    ?? optionalString(record.agent_id)
+    ?? optionalString(identity?.canonical_agent_id)
+    ?? optionalString(identity?.legacy_agent_id)
+    ?? optionalString(identity?.local_agent_id);
   return {
     session_id: sessionId,
     site_id: siteId ?? optionalString(entry.site_id) ?? optionalString(record.site_id),
-    agent_id: optionalString(entry.agent_id) ?? optionalString(record.agent_id),
+    agent_id: projectedAgentId,
     runtime_kind: optionalString(entry.runtime_kind) ?? optionalString(record.runtime_kind),
     launch_operator_surface_kind: optionalString(entry.launch_operator_surface_kind)
       ?? optionalString(record.launch_operator_surface_kind),

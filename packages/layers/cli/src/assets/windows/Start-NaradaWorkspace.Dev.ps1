@@ -171,7 +171,7 @@ function Assert-NaradaCliDistFreshness {
     [string]$NaradaProperRoot
   )
 
-  $manifestLibPath = Join-Path $NaradaProperRoot "packages\layers\cli\scripts\build-manifest-lib.mjs"
+  $manifestLibPath = Join-Path $NaradaProperRoot "packages\layers\cli\scripts\build-manifest-lib.ts"
   if (-not (Test-Path -LiteralPath $manifestLibPath -PathType Leaf)) {
     throw "narada_cli_dist_freshness_check_missing: $manifestLibPath"
   }
@@ -289,7 +289,7 @@ function Assert-NaradaCarrierProjectionFreshness {
   $capabilitiesRegistryPath = Join-Path $SiteRoot '.narada\capabilities\mcp-surfaces.json'
   if (-not (Test-Path -LiteralPath $capabilitiesRegistryPath -PathType Leaf)) { return }
 
-  $generatorPath = Join-Path $NaradaProperRoot 'packages\typed-mcp-surface\src\generate-carrier-mcp-config.mjs'
+  $generatorPath = Join-Path $NaradaProperRoot 'packages\typed-mcp-surface\src\generate-carrier-mcp-config.ts'
   if (-not (Test-Path -LiteralPath $generatorPath -PathType Leaf)) {
     throw "narada_carrier_projection_generator_missing: $generatorPath"
   }

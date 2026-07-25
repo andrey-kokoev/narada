@@ -40,7 +40,7 @@ if (typecheckExit !== 0) {
 
 const testExit = run(
   process.execPath,
-  ['scripts/run-vitest-quiet.mjs', 'run', '--silent', ...requestedArgs],
+  ['scripts/run-vitest-quiet.ts', 'run', '--silent', ...requestedArgs],
   `behavioral test ${testFiles[0]}`,
 );
 process.exit(testExit);

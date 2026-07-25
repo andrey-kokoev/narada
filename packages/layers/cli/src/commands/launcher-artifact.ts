@@ -1,4 +1,4 @@
-import { checkLaunchArtifact } from '../../scripts/launch-artifact-lib.mjs';
+import { checkLaunchArtifact } from '../lib/launch-artifact-lib.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 import { ExitCode } from '../lib/exit-codes.js';

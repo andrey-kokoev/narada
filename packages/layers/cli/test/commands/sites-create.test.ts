@@ -1224,8 +1224,8 @@ describe('sitesCreateCommand', () => {
         name: 'site-task-lifecycle',
         transport: 'stdio',
         command: 'node',
-        args: ['server.mjs'],
-        entrypoint: join(siteRoot, 'server.mjs'),
+        args: ['server.ts'],
+        entrypoint: join(siteRoot, 'server.ts'),
       }]),
       mutationAuthorized: true,
     }, createMockContext());

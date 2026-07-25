@@ -23,6 +23,7 @@ const workspaceLauncher = resolve(__dirname, '..', '..', 'src', 'assets', 'windo
 // the real runtime can resolve the seeded route without a test-only topology.
 const SITE_ID = 'narada';
 const AGENT_ID = `${SITE_ID}.resident`;
+const LIFECYCLE_AGENT_ID = `${SITE_ID}.builder`;
 const FAILURE_SITE_ID = 'narada-missing-catalog';
 const FAILURE_AGENT_ID = `${FAILURE_SITE_ID}.resident`;
 const RUNTIME_FAILURE_SITE_ID = 'narada-runtime-failure';
@@ -269,6 +270,7 @@ async function writeLaunchRegistry(root) {
     `      SiteRoot = "${escapedSiteRoot}"`,
     `      WorkspaceRoot = "${escapedSiteRoot}"`,
     '      Launcher = "launcher.ps1"',
+    '      OperatorSurface = "agent-web-ui"',
     '      Runtime = "narada-agent-runtime-server"',
     '      McpScope = "none"',
     '      EnableNativeShell = $false',
@@ -281,6 +283,7 @@ async function writeLaunchRegistry(root) {
     `      SiteRoot = "${escapedRuntimeFailureSiteRoot}"`,
     `      WorkspaceRoot = "${escapedRuntimeFailureSiteRoot}"`,
     '      Launcher = "launcher.ps1"',
+    '      OperatorSurface = "agent-web-ui"',
     '      Runtime = "narada-agent-runtime-server"',
     '      McpScope = "none"',
     '      EnableNativeShell = $false',
@@ -293,6 +296,7 @@ async function writeLaunchRegistry(root) {
     `      SiteRoot = "${escapedProjectionFailureSiteRoot}"`,
     `      WorkspaceRoot = "${escapedProjectionFailureSiteRoot}"`,
     '      Launcher = "launcher.ps1"',
+    '      OperatorSurface = "agent-web-ui"',
     '      Runtime = "narada-agent-runtime-server"',
     '      McpScope = "none"',
     '      EnableNativeShell = $false',
@@ -305,6 +309,7 @@ async function writeLaunchRegistry(root) {
     `      SiteRoot = "${escapedFailureSiteRoot}"`,
     `      WorkspaceRoot = "${escapedFailureSiteRoot}"`,
     '      Launcher = "launcher.ps1"',
+    '      OperatorSurface = "agent-web-ui"',
     '      Runtime = "narada-agent-runtime-server"',
     '      McpScope = "none"',
     '      EnableNativeShell = $false',
@@ -513,6 +518,7 @@ test('Operator Console launches a stopped agent into a real NARS session and rou
   const previousIntelligenceHostSite = process.env.NARADA_INTELLIGENCE_HOST_SITE;
   const previousIntelligencePrincipalId = process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID;
   const previousIntelligenceContextPath = process.env.NARADA_INTELLIGENCE_CONTEXT_PATH;
+  const previousHiddenProjectionLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG;
 
   const fixtureRoot = await mkdtemp(join(tmpdir(), 'operator-console-real-launch-'));
   const siteRoot = join(fixtureRoot, 'site-root');
@@ -560,6 +566,7 @@ test('Operator Console launches a stopped agent into a real NARS session and rou
     process.env.NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_MS = '15000';
     process.env.NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_INTERVAL_MS = '100';
     process.env.NARADA_WORKSPACE_LAUNCH_PROJECTION_READINESS_TIMEOUT_MS = '30000';
+    process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG = join(fixtureRoot, 'hidden-projection.log');
 
     const routerPort = await getFreePort('127.0.0.1');
     routerOwner = await ensureOperatorRouter({
@@ -609,6 +616,11 @@ test('Operator Console launches a stopped agent into a real NARS session and rou
 
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    page.on('pageerror', (error) => console.log(`operator_console_pageerror:${error.stack ?? error.message}`));
+    page.on('requestfailed', (request) => console.log(`operator_console_requestfailed:${request.method()}:${request.url()}:${request.failure()?.errorText ?? 'unknown'}`));
+    page.on('close', () => console.log('operator_console_page_closed'));
+    page.on('crash', () => console.log('operator_console_page_crashed'));
+    browser.on('disconnected', () => console.log('operator_console_browser_disconnected'));
     await page.goto(routerUrl + '/console/agents', { waitUntil: 'domcontentloaded' });
     await page.getByRole('heading', { level: 2, name: 'Sites and Agents' }).waitFor();
     const siteBox = page.locator(`.site-box[data-site-id="${SITE_ID}"]`);
@@ -633,39 +645,51 @@ test('Operator Console launches a stopped agent into a real NARS session and rou
     );
 
     const launchRequestPromise = page.waitForRequest((request) =>
-      request.url() === `${routerUrl}/console/agents/api/launch` && request.method() === 'POST');
+      request.url() === `${routerUrl}/console/agents/api/launch` && request.method() === 'POST')
+      .catch((error) => { console.log(`operator_console_launch_request_wait_failed:${error.message}`); return null; });
     const launchResponsePromise = page.waitForResponse((response) =>
       response.url() === `${routerUrl}/console/agents/api/launch` && response.request().method() === 'POST',
-      { timeout: 120_000 });
-    const popupPromise = page.waitForEvent('popup');
-    const concurrentLaunchResponsePromise = page.evaluate(async ({ baseUrl, siteId, agentId }) => {
-      const response = await fetch(`${baseUrl}/console/agents/api/launch`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ site_id: siteId, agent_id: agentId }),
-      });
-      return { status: response.status, body: await response.json() };
-    }, { baseUrl: routerUrl, siteId: SITE_ID, agentId: AGENT_ID });
+      { timeout: 120_000 })
+      .catch((error) => { console.log(`operator_console_launch_response_wait_failed:${error.message}`); return null; });
+    const popupPromise = page.waitForEvent('popup')
+      .catch((error) => { console.log(`operator_console_popup_wait_failed:${error.message}`); return null; });
+    const concurrentLaunchResponsePromise = process.env.NARADA_SKIP_CONCURRENT_LAUNCH === '1'
+      ? null
+      : page.evaluate(async ({ baseUrl, siteId, agentId }) => {
+        const response = await fetch(`${baseUrl}/console/agents/api/launch`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ site_id: siteId, agent_id: agentId }),
+        });
+        return { status: response.status, body: await response.json() };
+      }, { baseUrl: routerUrl, siteId: SITE_ID, agentId: AGENT_ID });
 
+    console.log('operator_console_click_start');
     await agentButton.click();
+    console.log(`operator_console_click_done:${page.url()}`);
     const launchRequest = await launchRequestPromise;
+    assert.ok(launchRequest, 'launch request was not observed');
     assert.deepEqual(launchRequest.postDataJSON(), {
       site_id: SITE_ID,
       agent_id: AGENT_ID,
+      operator_surface: 'agent-web-ui',
     });
     const launchResponse = await launchResponsePromise;
+    assert.ok(launchResponse, 'launch response was not observed');
     assert.equal(launchResponse.status(), 200);
     const launchBody = await launchResponse.json();
     assert.ok(['launched', 'reused'].includes(launchBody.status));
     assert.ok(typeof launchBody.session_id === 'string' && launchBody.session_id.length > 0);
-    const concurrentLaunch = await concurrentLaunchResponsePromise;
-    assert.equal(concurrentLaunch.status, 200, JSON.stringify(concurrentLaunch.body));
-    assert.ok(['launched', 'reused'].includes(concurrentLaunch.body.status));
-    assert.equal(concurrentLaunch.body.session_id, launchBody.session_id);
-    assert.ok(
-      launchBody.status === 'launched' || concurrentLaunch.body.status === 'launched',
-      'at least one concurrent browser request must perform the launch',
-    );
+    if (concurrentLaunchResponsePromise) {
+      const concurrentLaunch = await concurrentLaunchResponsePromise;
+      assert.equal(concurrentLaunch.status, 200, JSON.stringify(concurrentLaunch.body));
+      assert.ok(['launched', 'reused'].includes(concurrentLaunch.body.status));
+      assert.equal(concurrentLaunch.body.session_id, launchBody.session_id);
+      assert.ok(
+        launchBody.status === 'launched' || concurrentLaunch.body.status === 'launched',
+        'at least one concurrent browser request must perform the launch',
+      );
+    }
 
     const popup = await popupPromise;
     await popup.waitForFunction(() => !window.location.href.startsWith('about:blank'), { timeout: 60_000 });
@@ -895,7 +919,11 @@ test('Operator Console launches a stopped agent into a real NARS session and rou
     }
     await consoleServer?.stop();
     await stopEnsuredRouter(routerOwner);
-    await removeFixtureRoot(fixtureRoot);
+    if (process.env.NARADA_KEEP_OPERATOR_CONSOLE_E2E_FIXTURE === '1') {
+      console.log(`operator_console_real_launch_e2e_fixture_retained:${fixtureRoot}`);
+    } else {
+      await removeFixtureRoot(fixtureRoot);
+    }
 
     if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA;
     else process.env.LOCALAPPDATA = previousLocalAppData;
@@ -927,5 +955,328 @@ test('Operator Console launches a stopped agent into a real NARS session and rou
     else process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID = previousIntelligencePrincipalId;
     if (previousIntelligenceContextPath === undefined) delete process.env.NARADA_INTELLIGENCE_CONTEXT_PATH;
     else process.env.NARADA_INTELLIGENCE_CONTEXT_PATH = previousIntelligenceContextPath;
+    if (previousHiddenProjectionLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG;
+    else process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG = previousHiddenProjectionLog;
+  }
+});
+
+test('Operator Console admits, launches, stops, and deletes a Site agent through the live UI and real NARS runtime', { skip: process.platform !== 'win32' }, async () => {
+  assert.equal(process.platform, 'win32');
+  assert.equal(await statPath(workspaceLauncher), true, 'User Site launcher not found: ' + workspaceLauncher);
+
+  const previousLocalAppData = process.env.LOCALAPPDATA;
+  const previousUserSiteRoot = process.env.NARADA_USER_SITE_ROOT;
+  const previousRouterStateRoot = process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT;
+  const previousRouterPort = process.env.NARADA_OPERATOR_ROUTER_PORT;
+  const previousProperRoot = process.env.NARADA_PROPER_ROOT;
+  const previousNodeExecutable = process.env.NARADA_NODE_EXECUTABLE;
+  const previousNoBrowser = process.env.NARADA_NO_BROWSER;
+  const previousApiKey = process.env.KIMI_CODE_API_KEY;
+  const previousApiBaseUrl = process.env.KIMI_CODE_API_BASE_URL;
+  const previousIntelligenceRegistryDb = process.env.NARADA_INTELLIGENCE_REGISTRY_DB;
+  const previousIntelligenceTargetSite = process.env.NARADA_INTELLIGENCE_TARGET_SITE;
+  const previousIntelligenceUserSite = process.env.NARADA_INTELLIGENCE_USER_SITE;
+  const previousIntelligenceHostSite = process.env.NARADA_INTELLIGENCE_HOST_SITE;
+  const previousIntelligencePrincipalId = process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID;
+  const previousIntelligenceContextPath = process.env.NARADA_INTELLIGENCE_CONTEXT_PATH;
+  const previousHiddenProjectionLog = process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG;
+
+  const fixtureRoot = await mkdtemp(join(tmpdir(), 'operator-console-real-lifecycle-'));
+  const siteRoot = join(fixtureRoot, 'site-root');
+  const failureSiteRoot = join(fixtureRoot, 'missing-catalog-site-root');
+  const runtimeFailureSiteRoot = join(fixtureRoot, 'runtime-failure-site-root');
+  const projectionFailureSiteRoot = join(fixtureRoot, 'projection-failure-site-root');
+  const routerStateRoot = join(fixtureRoot, 'operator-router-state');
+  const userSiteRoot = join(fixtureRoot, 'Narada', '.registry');
+  const launchRegistryPath = join(userSiteRoot, 'config', 'launch', 'agents.psd1');
+  const identityRegistryPath = join(siteRoot, 'operator-surfaces', 'identities.json');
+  let routerOwner = null;
+  let consoleServer = null;
+  let consoleRouteSet = null;
+  let browser = null;
+  let sessionId = null;
+  let controlPath = null;
+
+  try {
+    await mkdir(siteRoot, { recursive: true });
+    await mkdir(routerStateRoot, { recursive: true });
+    await writeSiteMetadata(fixtureRoot);
+    await writePrincipalRuntime(fixtureRoot);
+    await seedIntelligenceCatalog(siteRoot, SITE_ID);
+    await seedIntelligenceCatalog(runtimeFailureSiteRoot, RUNTIME_FAILURE_SITE_ID);
+    await seedIntelligenceCatalog(projectionFailureSiteRoot, PROJECTION_FAILURE_SITE_ID);
+    await seedRegistry(fixtureRoot, siteRoot, failureSiteRoot);
+    await writeLaunchRegistry(fixtureRoot);
+
+    process.env.NARADA_PROPER_ROOT = naradaProperRoot;
+    process.env.NARADA_NODE_EXECUTABLE = process.execPath;
+    process.env.NARADA_NO_BROWSER = '1';
+    process.env.NARADA_INTELLIGENCE_CONTEXT_PATH = join(
+      fixtureRoot,
+      'user-site-root',
+      '.narada',
+      'intelligence-launch-context.json',
+    );
+    process.env.KIMI_CODE_API_KEY = 'launcher-e2e-fixture-key';
+    process.env.KIMI_CODE_API_BASE_URL = 'http://127.0.0.1:1';
+    for (const name of [
+      'NARADA_INTELLIGENCE_REGISTRY_DB',
+      'NARADA_INTELLIGENCE_TARGET_SITE',
+      'NARADA_INTELLIGENCE_USER_SITE',
+      'NARADA_INTELLIGENCE_HOST_SITE',
+      'NARADA_INTELLIGENCE_PRINCIPAL_ID',
+    ]) delete process.env[name];
+    process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT = routerStateRoot;
+    process.env.NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_MS = '15000';
+    process.env.NARADA_WORKSPACE_LAUNCH_OBSERVATION_POLL_INTERVAL_MS = '100';
+    process.env.NARADA_WORKSPACE_LAUNCH_PROJECTION_READINESS_TIMEOUT_MS = '30000';
+    process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG = join(fixtureRoot, 'hidden-projection.log');
+
+    const routerPort = await getFreePort('127.0.0.1');
+    routerOwner = await ensureOperatorRouter({
+      host: '127.0.0.1',
+      port: routerPort,
+      state_root: routerStateRoot,
+      timeout_ms: 10_000,
+    });
+    assert.equal(routerOwner.ownership, 'started');
+    assert.ok(routerOwner.child);
+    const routerUrl = routerOwner.url;
+    process.env.NARADA_OPERATOR_ROUTER_PORT = String(routerPort);
+
+    consoleServer = await createConsoleServer({
+      host: '127.0.0.1',
+      port: 0,
+      ingressMode: 'router',
+      operatorRouterUrl: routerUrl,
+    });
+    const consoleUrl = await consoleServer.start();
+    const consoleOwnerId = 'operator-console:operator-console-real-lifecycle-e2e:' + process.pid;
+    const consoleInstanceNonce = randomUUID().replace(/-/g, '');
+    consoleRouteSet = await registerOperatorRouteSet({
+      admin: { url: routerUrl, registration_token: routerOwner.registration_token },
+      renew_interval_ms: 10_000,
+      routes: [{
+        route_id: 'operator-console',
+        route_class: 'operator-console',
+        public_path: '/',
+        route_mode: 'prefix',
+        target_url: consoleUrl,
+        health_url: consoleUrl + '/health',
+        owner_id: consoleOwnerId,
+        process_evidence: { instance_nonce: consoleInstanceNonce, pid: process.pid, started_at: new Date().toISOString() },
+        protocols: ['http'],
+        methods: ['GET', 'HEAD', 'POST', 'OPTIONS'],
+        timeout_ms: 120_000,
+        lease_ms: 60_000,
+        reconstruction: { kind: 'explicit', site_root: null, site_id: null, session_id: null },
+      }],
+    });
+
+    browser = await chromium.launch({ headless: true });
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(routerUrl + '/console/agents', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('heading', { level: 2, name: 'Sites and Agents' }).waitFor();
+    const siteBox = page.locator('.site-box[data-site-id="' + SITE_ID + '"]');
+    await siteBox.waitFor({ state: 'visible' });
+
+    const addButton = siteBox.getByRole('button', { name: /Add an agent to/ });
+    await addButton.click();
+    const admissionDialog = page.getByRole('dialog');
+    await admissionDialog.waitFor({ state: 'visible' });
+    await admissionDialog.getByLabel('Role').selectOption('builder');
+    await admissionDialog.getByLabel('Agent kind').selectOption('cli-coding-agent');
+    await admissionDialog.getByLabel('Runtime').selectOption('narada-agent-runtime-server');
+    await admissionDialog.getByLabel('Operator surface').selectOption('agent-web-ui');
+    const admissionResponsePromise = page.waitForResponse((response) =>
+      response.url() === routerUrl + '/console/agents/api/admission'
+        && response.request().method() === 'POST');
+    await admissionDialog.getByRole('button', { name: 'Admit agent' }).click();
+    const admissionResponse = await admissionResponsePromise;
+    const admissionBody = await admissionResponse.json();
+    assert.equal(admissionResponse.status(), 201, JSON.stringify(admissionBody));
+    assert.equal(admissionBody.status, 'admitted');
+    assert.equal(admissionBody.agent_id, LIFECYCLE_AGENT_ID);
+
+    const builderButton = siteBox.locator('button.agent-button[aria-label^="' + LIFECYCLE_AGENT_ID + ': stopped"]');
+    await builderButton.waitFor({ state: 'visible' });
+    const launchRegistryAfterAdmission = await readFile(launchRegistryPath, 'utf8');
+    assert.equal(launchRegistryAfterAdmission.includes('Agent = "' + LIFECYCLE_AGENT_ID + '"'), true);
+    const identitiesAfterAdmission = JSON.parse(await readFile(identityRegistryPath, 'utf8'));
+    assert.ok(identitiesAfterAdmission.identities.some((identity) => identity.identity_id === LIFECYCLE_AGENT_ID));
+    const admittedOverview = await waitForOverviewAgent(
+      routerUrl,
+      (agent) => agent.runtime.state === 'stopped',
+      45_000,
+      SITE_ID,
+      LIFECYCLE_AGENT_ID,
+    );
+    assert.equal(admittedOverview.agent.agent_id, LIFECYCLE_AGENT_ID);
+    assert.equal(admittedOverview.agent.actions.start, true);
+
+    const launchResponsePromise = page.waitForResponse((response) =>
+      response.url() === routerUrl + '/console/agents/api/launch'
+        && response.request().method() === 'POST',
+      { timeout: 120_000 });
+    const popupPromise = page.waitForEvent('popup', { timeout: 120_000 });
+    await builderButton.click();
+    const launchResponse = await launchResponsePromise;
+    const launchBody = await launchResponse.json();
+    assert.equal(launchResponse.status(), 200, JSON.stringify(launchBody));
+    assert.equal(launchBody.status, 'launched');
+    assert.ok(typeof launchBody.session_id === 'string' && launchBody.session_id.length > 0);
+    const popup = await popupPromise;
+    await popup.waitForFunction(() => !window.location.href.startsWith('about:blank'), { timeout: 60_000 });
+    await popup.waitForURL((url) => url.href.startsWith(routerUrl + '/sessions/'), { timeout: 60_000 });
+    await popup.waitForLoadState('domcontentloaded');
+    assert.match(await popup.title(), /Narada Agent Web UI|Starting/);
+    const builderSessionSnapshot = discoverNarsSessions({ siteRoot }).sessions
+      .filter((session) => session.agent_id === LIFECYCLE_AGENT_ID);
+    console.log('builder_session_snapshot:' + JSON.stringify(builderSessionSnapshot));
+    for (const session of builderSessionSnapshot) {
+      if (session.health_endpoint) {
+        const healthResponse = await fetch(session.health_endpoint, {
+          signal: AbortSignal.timeout(3_000),
+        }).catch(() => null);
+        const healthText = healthResponse ? await healthResponse.text().catch(() => 'body_read_failed') : 'fetch_failed';
+        console.log('builder_health_snapshot:' + String(session.health_endpoint) + ':' + healthText);
+      }
+    }
+
+    const runningOverview = await waitForOverviewAgent(
+      routerUrl,
+      (agent) => agent.runtime.state === 'running' && Boolean(agent.runtime.selected_session_id),
+      60_000,
+      SITE_ID,
+      LIFECYCLE_AGENT_ID,
+    );
+    sessionId = runningOverview.agent.runtime.selected_session_id;
+    assert.ok(sessionId);
+    assert.equal(launchBody.session_id, sessionId);
+    const launchedSession = discoverNarsSessions({ siteRoot }).sessions.find((session) =>
+      session.session_id === sessionId
+        && session.site_id === SITE_ID
+        && session.agent_id === LIFECYCLE_AGENT_ID);
+    assert.ok(launchedSession, 'builder session was not indexed: ' + JSON.stringify(discoverNarsSessions({ siteRoot }).sessions));
+    assert.equal(popup.url().endsWith('/sessions/' + sessionId), true);
+    const routeDirectoryResponse = await fetch(routerUrl + '/routes');
+    assert.equal(routeDirectoryResponse.status, 200);
+    const routeDirectory = await routeDirectoryResponse.json();
+    assert.ok(routeDirectory.routes.some((route) =>
+      route.route_class === 'agent-web-ui'
+        && route.session_id === sessionId
+        && route.state === 'healthy'));
+    controlPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'control.jsonl');
+
+    const stopResponsePromise = page.waitForResponse((response) =>
+      response.url() === routerUrl + '/console/agents/api/stop'
+        && response.request().method() === 'POST',
+      { timeout: 30_000 });
+    await siteBox.getByRole('button', { name: 'Stop ' + LIFECYCLE_AGENT_ID }).click();
+    const stopResponse = await stopResponsePromise;
+    const stopBody = await stopResponse.json();
+    assert.equal(stopResponse.status(), 200, JSON.stringify(stopBody));
+    assert.equal(stopBody.status, 'requested');
+    const controlText = await readFile(controlPath, 'utf8');
+    const controlRequest = JSON.parse(controlText.trim().split(/\r?\n/).at(-1));
+    assert.equal(controlRequest.method, 'session.close');
+    assert.equal(controlRequest.params.site_id, SITE_ID);
+    assert.equal(controlRequest.params.agent_id, LIFECYCLE_AGENT_ID);
+    assert.equal(controlRequest.params.reason, 'operator_requested');
+    await waitForSessionClosed(siteRoot, sessionId, 30_000);
+    const stoppedOverview = await waitForOverviewAgent(
+      routerUrl,
+      (agent) => agent.runtime.state === 'stopped' && agent.runtime.session_count === 0,
+      45_000,
+      SITE_ID,
+      LIFECYCLE_AGENT_ID,
+    );
+    assert.equal(stoppedOverview.agent.actions.start, true);
+
+    await siteBox.getByRole('button', { name: 'Delete ' + LIFECYCLE_AGENT_ID }).click();
+    await page.getByRole('heading', { name: 'Delete ' + LIFECYCLE_AGENT_ID + '?' }).waitFor({ state: 'visible' });
+    const deleteResponsePromise = page.waitForResponse((response) =>
+      response.url() === routerUrl + '/console/agents/api/delete'
+        && response.request().method() === 'POST',
+      { timeout: 30_000 });
+    await page.getByRole('button', { name: 'Delete admission' }).click();
+    const deleteResponse = await deleteResponsePromise;
+    const deleteBody = await deleteResponse.json();
+    assert.equal(deleteResponse.status(), 200, JSON.stringify(deleteBody));
+    assert.equal(deleteBody.status, 'deleted');
+    await page.waitForFunction((agentId) =>
+      !Array.from(document.querySelectorAll('.agent-button'))
+        .some((button) => button.getAttribute('aria-label')?.startsWith(agentId + ':')),
+    LIFECYCLE_AGENT_ID);
+    const launchRegistryAfterDelete = await readFile(launchRegistryPath, 'utf8');
+    assert.equal(launchRegistryAfterDelete.includes('Agent = "' + LIFECYCLE_AGENT_ID + '"'), false);
+    const identitiesAfterDelete = JSON.parse(await readFile(identityRegistryPath, 'utf8'));
+    assert.equal(identitiesAfterDelete.identities.some((identity) => identity.identity_id === LIFECYCLE_AGENT_ID), false);
+  } finally {
+    await browser?.close();
+    if (sessionId && controlPath) {
+      try {
+        await writeFile(controlPath, JSON.stringify({
+          request_id: 'operator-console-real-lifecycle-e2e-close',
+          method: 'session.close',
+          params: {},
+        }) + '\n', { flag: 'a' });
+      } catch {
+        // Best-effort graceful close before hard fixture cleanup.
+      }
+      try {
+        await waitForSessionClosed(siteRoot, sessionId);
+      } catch {
+        // Cleanup continues with hard termination below.
+      }
+    }
+    await terminateFixtureProcesses(fixtureRoot);
+    if (consoleRouteSet) {
+      try {
+        await consoleRouteSet.stop();
+      } catch {
+        // Cleanup continues even if route unregistration races with router shutdown.
+      }
+    }
+    await consoleServer?.stop();
+    await stopEnsuredRouter(routerOwner);
+    if (process.env.NARADA_KEEP_OPERATOR_CONSOLE_E2E_FIXTURE === '1') {
+      console.log('operator_console_real_lifecycle_e2e_fixture_retained:' + fixtureRoot);
+    } else {
+      await removeFixtureRoot(fixtureRoot);
+    }
+
+    if (previousLocalAppData === undefined) delete process.env.LOCALAPPDATA;
+    else process.env.LOCALAPPDATA = previousLocalAppData;
+    if (previousUserSiteRoot === undefined) delete process.env.NARADA_USER_SITE_ROOT;
+    else process.env.NARADA_USER_SITE_ROOT = previousUserSiteRoot;
+    if (previousRouterStateRoot === undefined) delete process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT;
+    else process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT = previousRouterStateRoot;
+    if (previousRouterPort === undefined) delete process.env.NARADA_OPERATOR_ROUTER_PORT;
+    else process.env.NARADA_OPERATOR_ROUTER_PORT = previousRouterPort;
+    if (previousProperRoot === undefined) delete process.env.NARADA_PROPER_ROOT;
+    else process.env.NARADA_PROPER_ROOT = previousProperRoot;
+    if (previousNodeExecutable === undefined) delete process.env.NARADA_NODE_EXECUTABLE;
+    else process.env.NARADA_NODE_EXECUTABLE = previousNodeExecutable;
+    if (previousNoBrowser === undefined) delete process.env.NARADA_NO_BROWSER;
+    else process.env.NARADA_NO_BROWSER = previousNoBrowser;
+    if (previousApiKey === undefined) delete process.env.KIMI_CODE_API_KEY;
+    else process.env.KIMI_CODE_API_KEY = previousApiKey;
+    if (previousApiBaseUrl === undefined) delete process.env.KIMI_CODE_API_BASE_URL;
+    else process.env.KIMI_CODE_API_BASE_URL = previousApiBaseUrl;
+    if (previousIntelligenceRegistryDb === undefined) delete process.env.NARADA_INTELLIGENCE_REGISTRY_DB;
+    else process.env.NARADA_INTELLIGENCE_REGISTRY_DB = previousIntelligenceRegistryDb;
+    if (previousIntelligenceTargetSite === undefined) delete process.env.NARADA_INTELLIGENCE_TARGET_SITE;
+    else process.env.NARADA_INTELLIGENCE_TARGET_SITE = previousIntelligenceTargetSite;
+    if (previousIntelligenceUserSite === undefined) delete process.env.NARADA_INTELLIGENCE_USER_SITE;
+    else process.env.NARADA_INTELLIGENCE_USER_SITE = previousIntelligenceUserSite;
+    if (previousIntelligenceHostSite === undefined) delete process.env.NARADA_INTELLIGENCE_HOST_SITE;
+    else process.env.NARADA_INTELLIGENCE_HOST_SITE = previousIntelligenceHostSite;
+    if (previousIntelligencePrincipalId === undefined) delete process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID;
+    else process.env.NARADA_INTELLIGENCE_PRINCIPAL_ID = previousIntelligencePrincipalId;
+    if (previousIntelligenceContextPath === undefined) delete process.env.NARADA_INTELLIGENCE_CONTEXT_PATH;
+    else process.env.NARADA_INTELLIGENCE_CONTEXT_PATH = previousIntelligenceContextPath;
+    if (previousHiddenProjectionLog === undefined) delete process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG;
+    else process.env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG = previousHiddenProjectionLog;
   }
 });

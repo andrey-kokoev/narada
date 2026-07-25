@@ -6,7 +6,7 @@ import {
   checkLaunchArtifact,
   resolveLaunchArtifactDescriptor,
   type LaunchArtifactCheck,
-} from '../../scripts/launch-artifact-lib.mjs';
+} from './launch-artifact-lib.js';
 
 const DEFAULT_NARADA_PROPER_ROOT = resolve(fileURLToPath(new URL('../../../../..', import.meta.url)));
 

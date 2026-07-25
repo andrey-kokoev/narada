@@ -302,7 +302,7 @@ async function checkMcpFabricMaterialization(
   siteRoot: string,
 ): Promise<{ check: SiteLaunchCheck; validation?: McpFabricValidation }> {
   try {
-    // Variable specifier keeps the untyped .mjs workspace module out of tsc resolution.
+    // Variable specifier keeps the untyped .ts workspace module out of tsc resolution.
     const mcpFabricSpecifier = '@narada2/mcp-fabric';
     const { loadSiteMcpFabric } = (await import(mcpFabricSpecifier)) as McpFabricModule;
     const fabric = loadSiteMcpFabric(siteRoot, { validateRegistry: 'diagnostic' });

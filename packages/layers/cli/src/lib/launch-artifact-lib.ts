@@ -5,6 +5,83 @@ import { dirname, join, relative, resolve, sep } from 'node:path';
 export const LAUNCH_ARTIFACT_SCHEMA = 'narada.launch_artifact.v1';
 export const LAUNCH_ARTIFACT_MANIFEST_NAME = 'narada-launch-artifact.json';
 
+export interface LaunchArtifactDescriptor {
+  schema: typeof LAUNCH_ARTIFACT_SCHEMA;
+  target: string;
+  package_name: string;
+  package_root: string;
+  package_root_relative: string;
+  output_root: string;
+  output_root_relative: string;
+  build_script: string;
+  required_outputs: string[];
+  package_json: PackageJson;
+}
+
+export interface LaunchArtifactCheck {
+  status: 'current' | 'stale' | 'not_applicable';
+  target: string;
+  reason?: string;
+  package?: string;
+  package_root?: string;
+  output_root?: string;
+  artifact_root?: string;
+  artifact_manifest_path?: string;
+  required_command?: string;
+  source_hash?: string;
+  input_count?: number;
+  [key: string]: unknown;
+}
+
+export interface LaunchArtifactCheckOptions {
+  packageRoot?: string;
+  published?: boolean;
+}
+
+interface PackageJson {
+  name?: string;
+  packageManager?: string;
+  narada?: {
+    launch_artifact?: {
+      target?: string;
+      output_root?: string;
+      build_script?: string;
+      required_outputs?: unknown[];
+    };
+  };
+  scripts?: Record<string, string | undefined>;
+  dependencies?: Record<string, string>;
+  optionalDependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+  bundleDependencies?: string[];
+  [key: string]: unknown;
+}
+
+interface PackageEntry {
+  root: string;
+  packageJson: PackageJson;
+}
+
+interface LaunchArtifactSourceClosure {
+  algorithm: string;
+  source_hash: string;
+  input_count: number;
+  inputs: string[];
+  packages: string[];
+}
+
+interface WalkFilesOptions {
+  excludedRoots?: Array<string | null>;
+}
+
+interface OutputSnapshot {
+  algorithm: string;
+  tree_hash: string;
+  file_count: number;
+  files: Array<{ path: string; bytes: number; sha256: string }>;
+  required_missing: string[];
+}
+
 const IGNORED_DIRECTORIES = new Set([
   '.git',
   '.ai',
@@ -16,19 +93,24 @@ const IGNORED_DIRECTORIES = new Set([
   'test-results',
 ]);
 
-export function resolveLaunchArtifactDescriptor(siteRoot, target, options = {}) {
+export function resolveLaunchArtifactDescriptor(
+  siteRoot: string,
+  target: string,
+  options: { packageRoot?: string } = {},
+): LaunchArtifactDescriptor {
   const root = resolve(siteRoot);
   const packageRoot = options.packageRoot ? resolve(root, options.packageRoot) : null;
   if (packageRoot && !isWithin(root, packageRoot)) {
     throw new Error(`launch_artifact_package_root_outside_workspace:${packageRoot}`);
   }
-  const packageEntries = packageRoot
-    ? [{ root: packageRoot, packageJson: readPackageJson(packageRoot) }]
+  const packageEntries: PackageEntry[] = packageRoot
+    ? [{ root: packageRoot, packageJson: readPackageJson(packageRoot) ?? {} }]
     : discoverPackages(root);
   const entry = packageEntries.find(({ packageJson }) => packageJson?.narada?.launch_artifact?.target === target);
   if (!entry) throw new Error(`launch_artifact_declaration_missing:${target}`);
 
-  const launchArtifact = entry.packageJson.narada.launch_artifact;
+  const launchArtifact = entry.packageJson.narada?.launch_artifact;
+  if (!launchArtifact) throw new Error(`launch_artifact_declaration_missing:${target}`);
   const outputRootRelative = normalizeRelativePath(launchArtifact.output_root ?? 'dist');
   const outputRoot = resolve(entry.root, outputRootRelative);
   if (!isWithin(entry.root, outputRoot)) {
@@ -44,18 +126,21 @@ export function resolveLaunchArtifactDescriptor(siteRoot, target, options = {}) 
     output_root_relative: outputRootRelative,
     build_script: String(launchArtifact.build_script ?? 'build'),
     required_outputs: Array.isArray(launchArtifact.required_outputs)
-      ? launchArtifact.required_outputs.map(String)
+      ? launchArtifact.required_outputs.map((value: unknown) => String(value))
       : [],
     package_json: entry.packageJson,
   };
 }
 
-export function computeLaunchArtifactSourceClosure(siteRoot, descriptor) {
+export function computeLaunchArtifactSourceClosure(
+  siteRoot: string,
+  descriptor: LaunchArtifactDescriptor,
+): LaunchArtifactSourceClosure {
   const root = resolve(siteRoot);
   const packageMap = new Map(discoverPackages(root).map((entry) => [entry.packageJson.name, entry]));
-  const entries = new Map();
-  const queue = [descriptor.package_name];
-  const visited = new Set();
+  const entries = new Map<string, PackageEntry>();
+  const queue: string[] = [descriptor.package_name];
+  const visited = new Set<string>();
 
   while (queue.length > 0) {
     const packageName = queue.shift();
@@ -69,7 +154,7 @@ export function computeLaunchArtifactSourceClosure(siteRoot, descriptor) {
     }
   }
 
-  const files = new Set();
+  const files = new Set<string>();
   for (const path of [
     join(root, 'package.json'),
     join(root, 'pnpm-lock.yaml'),
@@ -102,12 +187,16 @@ export function computeLaunchArtifactSourceClosure(siteRoot, descriptor) {
     inputs,
     packages: [...entries.values()]
       .map((entry) => entry.packageJson.name)
-      .filter(Boolean)
+      .filter((name): name is string => Boolean(name))
       .sort(),
   };
 }
 
-export function checkLaunchArtifact(siteRoot, target, options = {}) {
+export function checkLaunchArtifact(
+  siteRoot: string,
+  target: string,
+  options: LaunchArtifactCheckOptions = {},
+): LaunchArtifactCheck {
   const root = resolve(siteRoot);
   let descriptor;
   try {
@@ -157,10 +246,10 @@ export function checkLaunchArtifact(siteRoot, target, options = {}) {
   const toolchain = published ? null : computeToolchainFingerprint(root);
   const recipe = published ? null : computeBuildRecipe(descriptor);
   const outputSnapshot = snapshotOutputs(descriptor);
-  const checks = [
-    [published || manifest.source_closure?.source_hash === sourceClosure.source_hash, 'source_closure_changed'],
+  const checks: Array<[boolean, string]> = [
+    [published || manifest.source_closure?.source_hash === sourceClosure?.source_hash, 'source_closure_changed'],
     [published || stableStringify(manifest.toolchain) === stableStringify(toolchain), 'toolchain_changed'],
-    [published || manifest.recipe_hash === recipe.recipe_hash, 'build_recipe_changed'],
+    [published || manifest.recipe_hash === recipe?.recipe_hash, 'build_recipe_changed'],
     [manifest.outputs?.tree_hash === outputSnapshot.tree_hash, 'published_outputs_changed'],
     [outputSnapshot.required_missing.length === 0, 'required_outputs_missing'],
   ];
@@ -190,8 +279,16 @@ export function checkLaunchArtifact(siteRoot, target, options = {}) {
   };
 }
 
-export function writeLaunchArtifactManifest({ siteRoot, target, packageRoot } = {}) {
-  const root = resolve(siteRoot ?? resolve(import.meta.dirname, '..', '..', '..', '..'));
+export function writeLaunchArtifactManifest({
+  siteRoot,
+  target,
+  packageRoot,
+}: {
+  siteRoot?: string;
+  target: string;
+  packageRoot?: string;
+}): Record<string, unknown> {
+  const root = resolve(siteRoot ?? resolve(import.meta.dirname, '..', '..', '..', '..', '..'));
   const descriptor = resolveLaunchArtifactDescriptor(root, target, packageRoot ? { packageRoot } : {});
   const sourceClosure = computeLaunchArtifactSourceClosure(root, descriptor);
   const toolchain = computeToolchainFingerprint(root);
@@ -225,15 +322,18 @@ export function writeLaunchArtifactManifest({ siteRoot, target, packageRoot } = 
   return { ...manifest, artifact_manifest_path: manifestPath, artifact_root: descriptor.output_root };
 }
 
-export function computeToolchainFingerprint(siteRoot) {
+export function computeToolchainFingerprint(siteRoot: string): { node: string; package_manager: string | null } {
   const rootPackage = readPackageJson(resolve(siteRoot));
   return {
     node: process.version,
-    package_manager: rootPackage.packageManager ?? null,
+    package_manager: rootPackage?.packageManager ?? null,
   };
 }
 
-export function computeBuildRecipe(descriptor) {
+export function computeBuildRecipe(descriptor: LaunchArtifactDescriptor): {
+  recipe: Record<string, unknown>;
+  recipe_hash: string;
+} {
   const scripts = descriptor.package_json.scripts ?? {};
   const recipe = {
     package: descriptor.package_name,
@@ -252,7 +352,7 @@ export function computeBuildRecipe(descriptor) {
   };
 }
 
-function snapshotOutputs(descriptor) {
+function snapshotOutputs(descriptor: LaunchArtifactDescriptor): OutputSnapshot {
   const files = walkFiles(descriptor.output_root)
     .filter((file) => !isMetadataFile(file))
     .map((file) => ({
@@ -272,16 +372,16 @@ function snapshotOutputs(descriptor) {
   };
 }
 
-function discoverPackages(siteRoot) {
+function discoverPackages(siteRoot: string): PackageEntry[] {
   const packagesRoot = join(siteRoot, 'packages');
   return walkFiles(packagesRoot)
     .filter((file) => file.endsWith(`${sep}package.json`) || file.endsWith('/package.json'))
     .map((file) => ({ root: dirname(file), packageJson: readPackageJson(dirname(file)) }))
-    .filter((entry) => entry.packageJson && typeof entry.packageJson.name === 'string');
+    .filter((entry): entry is PackageEntry => Boolean(entry.packageJson && typeof entry.packageJson.name === 'string'));
 }
 
-function workspaceDependencyNames(packageJson) {
-  const names = new Set();
+function workspaceDependencyNames(packageJson: PackageJson): string[] {
+  const names = new Set<string>();
   for (const key of ['dependencies', 'optionalDependencies', 'peerDependencies', 'bundleDependencies']) {
     const value = packageJson[key];
     if (Array.isArray(value)) value.forEach((name) => names.add(String(name)));
@@ -290,11 +390,13 @@ function workspaceDependencyNames(packageJson) {
   return [...names];
 }
 
-function walkFiles(root, options = {}) {
+function walkFiles(root: string, options: WalkFilesOptions = {}): string[] {
   if (!root || !existsSync(root)) return [];
-  const excludedRoots = (options.excludedRoots ?? []).filter(Boolean).map((path) => resolve(path));
-  const files = [];
-  function visit(directory) {
+  const excludedRoots = (options.excludedRoots ?? [])
+    .filter((path): path is string => Boolean(path))
+    .map((path) => resolve(path));
+  const files: string[] = [];
+  function visit(directory: string): void {
     if (excludedRoots.some((excludedRoot) => directory === excludedRoot || directory.startsWith(`${excludedRoot}${sep}`))) return;
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       const fullPath = join(directory, entry.name);
@@ -309,7 +411,7 @@ function walkFiles(root, options = {}) {
   return files;
 }
 
-function readPackageJson(packageRoot) {
+function readPackageJson(packageRoot: string): PackageJson | null {
   try {
     return JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8'));
   } catch {
@@ -317,12 +419,12 @@ function readPackageJson(packageRoot) {
   }
 }
 
-function isMetadataFile(file) {
+function isMetadataFile(file: string): boolean {
   return file.endsWith(`${sep}${LAUNCH_ARTIFACT_MANIFEST_NAME}`)
     || file.endsWith(`${sep}build-manifest.json`);
 }
 
-function matchesPattern(path, pattern) {
+function matchesPattern(path: string, pattern: string): boolean {
   if (!pattern.includes('*')) return path === pattern;
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
     .replaceAll('**', '__NARADA_GLOBSTAR__')
@@ -331,23 +433,24 @@ function matchesPattern(path, pattern) {
   return new RegExp(`^${escaped}$`).test(path);
 }
 
-function normalizeRelativePath(path) {
+function normalizeRelativePath(path: string): string {
   return path.replaceAll('\\', '/').replace(/^\.\//, '');
 }
 
-function isWithin(parent, candidate) {
+function isWithin(parent: string, candidate: string): boolean {
   const relativePath = relative(resolve(parent), resolve(candidate));
   return relativePath === '' || (!relativePath.startsWith('..') && !relativePath.includes(':'));
 }
 
-function stableStringify(value) {
+function stableStringify(value: unknown): string {
   if (Array.isArray(value)) return `[${value.map(stableStringify).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`).join(',')}}`;
+    const record = value as Record<string, unknown>;
+    return `{${Object.keys(record).sort().map((key) => `${JSON.stringify(key)}:${stableStringify(record[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
 }
 
-function sha256(value) {
+function sha256(value: string | Uint8Array): string {
   return createHash('sha256').update(value).digest('hex');
 }

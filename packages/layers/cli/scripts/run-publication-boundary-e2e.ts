@@ -3,7 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const testPath = resolve(packageRoot, 'test', 'integration', 'published-cli-install.test.mjs');
+const testPath = resolve(packageRoot, 'test', 'integration', 'published-cli-install.test.ts');
 const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', testPath], {
   stdio: 'inherit',
   env: { ...process.env, NARADA_RUN_PUBLICATION_E2E: '1' },
