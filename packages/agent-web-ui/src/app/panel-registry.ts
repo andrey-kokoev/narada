@@ -32,7 +32,7 @@ const surfacePanel = (
   id,
   label,
   unavailableMessage: `${label} capability is not advertised by the attached runtime.`,
-  isAvailable: (context) => context.surfaceKinds.includes(id),
+  isAvailable: (context: any) => context.surfaceKinds.includes(id),
 });
 
 export const SESSION_PANEL_REGISTRY: readonly SessionPanelRegistration[] = [
@@ -52,13 +52,13 @@ export const SESSION_PANEL_REGISTRY: readonly SessionPanelRegistration[] = [
     id: 'generic_affordance',
     label: 'MCP Surface',
     unavailableMessage: 'No generic MCP surface affordances are advertised by the attached runtime.',
-    isAvailable: (context) => context.genericAffordanceCount > 0,
+    isAvailable: (context: any) => context.genericAffordanceCount > 0,
   },
   {
     id: 'artifacts',
     label: 'Artifacts',
     unavailableMessage: 'Artifact access is not advertised by the attached runtime.',
-    isAvailable: (context) => Boolean(context.artifactBasePath),
+    isAvailable: (context: any) => Boolean(context.artifactBasePath),
   },
   surfacePanel('delegation', 'Delegation'),
   surfacePanel('git', 'Git'),
@@ -74,13 +74,13 @@ export function isSessionPanelAvailable(
   id: SessionPanelId,
   context: SessionPanelCapabilityContext,
 ): boolean {
-  return SESSION_PANEL_REGISTRY.find((panel) => panel.id === id)?.isAvailable(context) ?? false;
+  return SESSION_PANEL_REGISTRY.find((panel: any) => panel.id === id)?.isAvailable(context) ?? false;
 }
 
 export function availableSessionPanelIds(
   context: SessionPanelCapabilityContext,
 ): SessionPanelId[] {
   return SESSION_PANEL_REGISTRY
-    .filter((panel) => panel.isAvailable(context))
-    .map((panel) => panel.id);
+    .filter((panel: any) => panel.isAvailable(context))
+    .map((panel: any) => panel.id);
 }

@@ -4,6 +4,10 @@ import {
   CommandEmpty,
   CommandItem,
   CommandList,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
   Tooltip,
   TooltipContent,
   TooltipProvider,
@@ -27,4 +31,13 @@ import {
       <CommandEmpty>No actions</CommandEmpty>
     </CommandList>
   </Command>
+
+  <DropdownMenu>
+    <DropdownMenuTrigger as-child>
+      <button type="button">Open menu</button>
+    </DropdownMenuTrigger>
+    <DropdownMenuContent>
+      <DropdownMenuItem>Menu item</DropdownMenuItem>
+    </DropdownMenuContent>
+  </DropdownMenu>
 </template>

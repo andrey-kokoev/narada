@@ -103,8 +103,8 @@ export function startAgentWebUi({
   refreshHttpHealthStatus(config, documentRef, fetchFn);
   const healthTimer = config.healthEndpoint ? windowRef.setInterval(() => refreshHttpHealthStatus(config, documentRef, fetchFn), 10000) : null;
   const connection = connectEvents(config, config.maxReplay, documentRef, windowRef.WebSocket ?? globalThis.WebSocket, {
-    setTimeout: (handler, timeout) => (windowRef.setTimeout ?? globalThis.setTimeout)(handler, timeout),
-    clearTimeout: (id) => {
+    setTimeout: (handler: any, timeout: any) => (windowRef.setTimeout ?? globalThis.setTimeout)(handler, timeout),
+    clearTimeout: (id: any) => {
       if (id === undefined) return;
       (windowRef.clearTimeout ?? globalThis.clearTimeout)(id as number);
     },
@@ -142,7 +142,7 @@ export function renderAuthorityTransition(
 function bindProjectionVerbositySelector(documentRef: Document): void {
   const selector = documentRef.getElementById?.('projection-verbosity') as HTMLSelectElement | null;
   if (!selector) return;
-  if (Array.isArray(selector.children) && selector.children.length === 0 && typeof documentRef.createElement === 'function') {
+  if (Array.isArray(selector.children) && selector.children.length=== 0 && typeof documentRef.createElement === 'function') {
     for (const level of NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS) {
       const option = documentRef.createElement('option');
       option.value = level;

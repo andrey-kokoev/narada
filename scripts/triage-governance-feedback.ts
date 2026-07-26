@@ -32,7 +32,7 @@ function parseGovernanceFeedback(content: string): FeedbackEntry[] {
   const entryRegex = /^##\s+(\d{4}-\d{2}-\d{2})\s+\/\s+([^/]+)\s+\/\s+(.+)$/gm;
   const matches = [...content.matchAll(entryRegex)];
 
-  for (let i = 0; i < matches.length; i++) {
+  for (let i= 0; i < matches.length; i++) {
     const [, date, agentId, taskId] = matches[i];
     const startIndex = matches[i].index!;
     const endIndex = i + 1 < matches.length ? matches[i + 1].index! : content.length;
@@ -67,7 +67,7 @@ function main(): void {
 
   const entries = parseGovernanceFeedback(content);
 
-  if (entries.length === 0) {
+  if (entries.length=== 0) {
     console.log('No governance feedback entries found.');
     console.log('The inbox is empty — nothing to triage.');
     return;
@@ -112,7 +112,7 @@ function main(): void {
       console.log(`  • ${hint} (${c} item${c > 1 ? 's' : ''} in scope "${scope}")`);
     }
   }
-  if (seenHints.size === 0) {
+  if (seenHints.size=== 0) {
     console.log('  (no recognized scopes with schema mappings)');
   }
 

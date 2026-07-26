@@ -6,20 +6,26 @@
   "description": "Authority-owned singleton admission for Narada Agent Runtime Server sessions",
   "exports": {
     ".": {
-      "types": "./src/index.d.mts",
-      "import": "./src/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./node-sqlite": {
-      "types": "./src/index.d.mts",
-      "import": "./src/index.mjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     },
     "./package.json": "./package.json"
   },
-  "types": "./src/index.d.mts",
+  "types": "./dist/index.d.ts",
   "scripts": {
-    "test": "node --test src/*.test.mjs"
+    "test": "node --import tsx --test src/*.test.ts",
+    "pretest": "pnpm run build",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "files": [
+    "dist/"
+  ]
 }

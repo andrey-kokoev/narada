@@ -70,7 +70,7 @@ function projectionInputResponse(body: unknown, response: Response, requestId: s
   };
 }
 
-function disconnectedDurationText(disconnectedAt: number | null, now = Date.now()): string {
+function disconnectedDurationText(disconnectedAt: number | null, now: any= Date.now()): string {
   if (!disconnectedAt) return '0s';
   return `${Math.max(0, Math.floor((now - disconnectedAt) / 1000))}s`;
 }
@@ -81,7 +81,7 @@ function setReconnectText(connection: EventStreamConnection, documentRef: Docume
 
 export function connectEvents(
   endpointOrConfig: string | EventStreamConfig | null | undefined,
-  maxReplay = 100,
+  maxReplay= 100,
   documentRef: Document | undefined = globalThis.document,
   WebSocketCtor: typeof WebSocket | undefined = globalThis.WebSocket,
   timers: TimerOverrides | TimerFunction = {},
@@ -215,7 +215,7 @@ export function connectEvents(
         connection.disconnectedAt = null;
         setText('stream', 'stream connected', documentRef);
       });
-      socket.addEventListener('message', (event) => {
+      socket.addEventListener('message', (event: any) => {
         try {
           const message = JSON.parse(event.data);
           if (message?.event === 'websocket_connected') return;
@@ -257,7 +257,7 @@ export function connectEvents(
       if (!isAgentWebUiCloudflareProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
       socket.send(JSON.stringify(frame));
     });
-    socket.addEventListener('message', (event) => {
+    socket.addEventListener('message', (event: any) => {
       try {
         const message = JSON.parse(event.data);
         const sequence = sequenceFromRuntimeMessage(message);

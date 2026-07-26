@@ -78,17 +78,17 @@ function hasTestSuitePassedEvidence(stderr: string, stdout: string): boolean {
 
   // Failing test files are marked with ❯ and contain "| N failed"
   const hasFailingFile = lines.some(
-    (l) => l.includes("❯") && l.includes(".test.ts") && l.includes("failed"),
+    (l: any) => l.includes("❯") && l.includes(".test.ts") && l.includes("failed"),
   );
   if (hasFailingFile) return false;
 
   // Individual failing tests within a file are marked with ✗
-  const hasFailMarks = lines.some((l) => l.includes("✗"));
+  const hasFailMarks = lines.some((l: any) => l.includes("✗"));
   if (hasFailMarks) return false;
 
   // Passing test files are marked with ✓
   const hasPassingFiles = lines.some(
-    (l) => l.includes("✓") && l.includes(".test.ts"),
+    (l: any) => l.includes("✓") && l.includes(".test.ts"),
   );
   return hasPassingFiles;
 }
@@ -111,11 +111,11 @@ export function classifyStep(
     "Trace/breakpoint trap",
     "SIGTRAP",
   ];
-  const looksLikeTeardownCrash = teardownSignatures.some((s) =>
+  const looksLikeTeardownCrash = teardownSignatures.some((s: any) =>
     combined.includes(s),
   );
 
-  if (exitStatus === 133 || looksLikeTeardownCrash) {
+  if (exitStatus=== 133 || looksLikeTeardownCrash) {
     return "infrastructure-failure";
   }
 
@@ -127,7 +127,7 @@ export function classifyStep(
     "✗",
     "failed",
   ];
-  const hasAssertionFailure = assertionPatterns.some((p) =>
+  const hasAssertionFailure = assertionPatterns.some((p: any) =>
     combined.includes(p),
   );
 
@@ -191,7 +191,7 @@ export function makeSummary(entry: TelemetryEntry): string {
   parts.push(`Duration: ${(entry.durationMs / 1000).toFixed(1)}s`);
   parts.push(`Classification: ${entry.classification}`);
   if (entry.stepTimings.length > 0) {
-    const slowest = [...entry.stepTimings].sort((a, b) => b.durationMs - a.durationMs)[0];
+    const slowest = [...entry.stepTimings].sort((a: any, b: any) => b.durationMs - a.durationMs)[0];
     parts.push(`Slowest step: ${slowest.name} (${(slowest.durationMs / 1000).toFixed(1)}s)`);
   }
 
@@ -204,7 +204,7 @@ export function printMetricsHint(): void {
   );
 }
 
-export function printRecentSummary(limit = 5): void {
+export function printRecentSummary(limit: any= 5): void {
   const entries = loadEntries().slice(-limit);
   if (entries.length === 0) return;
   console.log("\n📊 Recent test runs:\n");

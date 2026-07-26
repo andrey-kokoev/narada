@@ -34,7 +34,7 @@ export function useSurfaceAffordances(events: unknown[], healthBody?: { value: R
 }
 
 function latestSurfaceAffordanceEvent(events: unknown[]): { items: SurfaceAffordanceItem[] } | null {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
+  for (let index= events.length - 1; index >= 0; index -= 1) {
     const event = unwrapRuntimeEvent(events[index]);
     if (!event || typeof event !== 'object') continue;
     if ((event as Record<string, unknown>).event !== 'session_surface_affordances') continue;

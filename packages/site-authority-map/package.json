@@ -4,11 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/site-authority-map.mjs",
+    ".": {
+      "types": "./dist/site-authority-map.d.ts",
+      "import": "./dist/site-authority-map.js"
+    },
     "./fixture-cases": "./fixtures/site-authority-map-cases.json"
   },
   "scripts": {
-    "test": "node --test src/site-authority-map.test.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/site-authority-map.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Shared v1 vocabulary and pure classifier for Narada Site authority routing",
   "license": "MIT",
@@ -16,6 +21,10 @@
     "type": "git",
     "url": "git+https://github.com/andrey-kokoev/narada.git",
     "directory": "packages/site-authority-map"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
   },
   "engines": {
     "node": ">=22.0.0"

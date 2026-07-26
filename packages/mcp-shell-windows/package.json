@@ -29,11 +29,11 @@
     "node": ">=18.0.0"
   },
   "bin": {
-    "narada-shell-mcp": "./server.mjs"
+    "narada-shell-mcp": "./server.ts"
   },
   "files": [
     "dist/",
-    "server.mjs",
+    "server.ts",
     "support/",
     "README.md"
   ],

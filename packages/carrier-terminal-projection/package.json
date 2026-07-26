@@ -16,13 +16,13 @@
     ]
   },
   "exports": {
-    ".": "./src/projected-terminal.mjs",
-    "./projected-input": "./src/projected-input.mjs",
-    "./projected-terminal": "./src/projected-terminal.mjs",
-    "./terminal-event-rendering": "./src/terminal-event-rendering.mjs",
-    "./terminal-markdown": "./src/terminal-markdown.mjs",
-    "./terminal-style": "./src/terminal-style.mjs",
-    "./terminal-text": "./src/terminal-text.mjs",
+    ".": { "types": "./dist/projected-terminal.d.ts", "import": "./dist/projected-terminal.js" },
+    "./projected-input": { "types": "./dist/projected-input.d.ts", "import": "./dist/projected-input.js" },
+    "./projected-terminal": { "types": "./dist/projected-terminal.d.ts", "import": "./dist/projected-terminal.js" },
+    "./terminal-event-rendering": { "types": "./dist/terminal-event-rendering.d.ts", "import": "./dist/terminal-event-rendering.js" },
+    "./terminal-markdown": { "types": "./dist/terminal-markdown.d.ts", "import": "./dist/terminal-markdown.js" },
+    "./terminal-style": { "types": "./dist/terminal-style.d.ts", "import": "./dist/terminal-style.js" },
+    "./terminal-text": { "types": "./dist/terminal-text.d.ts", "import": "./dist/terminal-text.js" },
     "./package.json": "./package.json"
   },
   "dependencies": {
@@ -31,8 +31,9 @@
     "@narada2/nars-client-projection-contract": "workspace:*"
   },
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/projected-input.mjs src/projected-terminal.mjs src/terminal-event-rendering.mjs src/terminal-markdown.mjs src/terminal-style.mjs src/terminal-text.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Runtime-neutral terminal projection without session execution",
   "license": "MIT",

@@ -11,6 +11,10 @@ export const OPERATOR_CONSOLE_LAUNCH_API_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}
 export const OPERATOR_CONSOLE_LAUNCH_SESSIONS_PATH = `${OPERATOR_CONSOLE_LAUNCH_PATH}/sessions` as const;
 export const OPERATOR_CONSOLE_AGENTS_PATH = `${OPERATOR_CONSOLE_PATH}/agents` as const;
 export const OPERATOR_CONSOLE_AGENTS_API_PATH = `${OPERATOR_CONSOLE_AGENTS_PATH}/api` as const;
+export const OPERATOR_CONSOLE_AGENTS_ADMISSION_OPTIONS_API_PATH = `${OPERATOR_CONSOLE_AGENTS_API_PATH}/admission/options` as const;
+export const OPERATOR_CONSOLE_AGENTS_ADMISSION_API_PATH = `${OPERATOR_CONSOLE_AGENTS_API_PATH}/admission` as const;
+export const OPERATOR_CONSOLE_AGENTS_STOP_API_PATH = `${OPERATOR_CONSOLE_AGENTS_API_PATH}/stop` as const;
+export const OPERATOR_CONSOLE_AGENTS_DELETE_API_PATH = `${OPERATOR_CONSOLE_AGENTS_API_PATH}/delete` as const;
 export const OPERATOR_CONSOLE_ONBOARDING_PATH = `${OPERATOR_CONSOLE_PATH}/onboarding` as const;
 export const OPERATOR_CONSOLE_ONBOARDING_API_PATH = `${OPERATOR_CONSOLE_ONBOARDING_PATH}/api` as const;
 export const OPERATOR_CONSOLE_SESSIONS_PATH = `${OPERATOR_CONSOLE_PATH}/sessions` as const;
@@ -264,6 +268,83 @@ export interface OperatorSiteAgentOverviewWireResponse {
   refusals: string[];
 }
 
+export interface OperatorSiteAgentAdmissionChoice {
+  value: string;
+  label: string;
+}
+
+export interface OperatorSiteAgentIntelligenceSelectionAuthority {
+  schema: 'narada.invokable-intelligence.selection-authority.v1';
+  owner: '@narada2/invokable-intelligence-runtime';
+  resolution_phase: 'runtime-invocation';
+  authority_scope: {
+    kind: 'site';
+    site_id: string | null;
+  };
+  catalog: {
+    store_kind: 'node:sqlite' | 'cloudflare:d1';
+    locator: string;
+  };
+  launcher_selection: false;
+  authoritative_inputs: string[];
+}
+
+export interface OperatorSiteAgentAdmissionIntelligenceWireState {
+  selection_authority: OperatorSiteAgentIntelligenceSelectionAuthority | null;
+  policy_choices: OperatorSiteAgentAdmissionChoice[];
+  provider_choices: OperatorSiteAgentAdmissionChoice[];
+  model_choices: OperatorSiteAgentAdmissionChoice[];
+}
+
+export interface OperatorSiteAgentAdmissionOptionsWireResponse {
+  schema: 'narada.operator_console.site_agent_admission_options.v1';
+  status: 'success' | 'refused';
+  generated_at: string;
+  site_id: string;
+  site_display_name: string | null;
+  revision: string | null;
+  roles: OperatorSiteAgentAdmissionChoice[];
+  agent_kinds: OperatorSiteAgentAdmissionChoice[];
+  runtimes: OperatorSiteAgentAdmissionChoice[];
+  operator_surfaces: OperatorSiteAgentAdmissionChoice[];
+  intelligence: OperatorSiteAgentAdmissionIntelligenceWireState;
+  refusals: string[];
+}
+
+export interface OperatorSiteAgentAdmissionWireRequest {
+  site_id: string;
+  role: string;
+  agent_kind: string;
+  runtime: string;
+  operator_surface: string;
+  intelligence_policy?: string;
+  provider?: string;
+  model?: string;
+  options_revision?: string;
+}
+
+export interface OperatorSiteAgentAdmissionWireResponse {
+  schema: 'narada.operator_console.site_agent_admission.v1';
+  status: 'admitted' | 'refused' | 'failed';
+  site_id: string;
+  agent_id: string | null;
+  local_agent_id: string | null;
+  role: string | null;
+  agent_kind: string | null;
+  runtime: string | null;
+  operator_surface: string | null;
+  reason: string | null;
+  message: string | null;
+  request_id: string;
+  options_revision: string | null;
+  intelligence: {
+    selection_authority: OperatorSiteAgentIntelligenceSelectionAuthority | null;
+    policy: string | null;
+    provider: string | null;
+    model: string | null;
+  };
+}
+
 export type OperatorSiteAgentLaunchFailurePhase =
   | 'overview_read'
   | 'launch_record_read'
@@ -290,6 +371,27 @@ export interface OperatorSiteAgentLaunchWireResponse {
   handoff?: OperatorSiteAgentLaunchHandoffWireRecord;
   request_id?: string;
   failure?: OperatorSiteAgentLaunchFailureWireRecord | null;
+}
+
+export interface OperatorSiteAgentStopWireResponse {
+  schema: 'narada.operator_console.agent_stop.v1';
+  status: 'requested' | 'already_stopped' | 'refused' | 'failed';
+  site_id: string;
+  agent_id: string;
+  session_id: string | null;
+  reason: string | null;
+  message: string | null;
+  request_id: string;
+}
+
+export interface OperatorSiteAgentDeleteWireResponse {
+  schema: 'narada.operator_console.agent_delete.v1';
+  status: 'deleted' | 'refused' | 'failed';
+  site_id: string;
+  agent_id: string;
+  reason: string | null;
+  message: string | null;
+  request_id: string;
 }
 
 export interface OperatorSiteAgentInvariantViolation {
@@ -491,6 +593,161 @@ export function parseOperatorSiteAgentOverviewWireResponse(value: unknown): Oper
   if (groups.some((group) => group === null)) return null;
   const parsed = { ...row, groups: groups as OperatorSiteAgentGroupWireRecord[] } as unknown as OperatorSiteAgentOverviewWireResponse;
   return validateOperatorSiteAgentOverviewInvariants(parsed).length > 0 ? null : parsed;
+}
+
+function parseAdmissionChoice(value: unknown): OperatorSiteAgentAdmissionChoice | null {
+  const row = recordValue(value);
+  return row
+    && nonEmptyWireString(row.value)
+    && nonEmptyWireString(row.label)
+    ? row as unknown as OperatorSiteAgentAdmissionChoice
+    : null;
+}
+
+function parseIntelligenceSelectionAuthority(value: unknown): OperatorSiteAgentIntelligenceSelectionAuthority | null {
+  const row = recordValue(value);
+  const scope = recordValue(row?.authority_scope);
+  const catalog = recordValue(row?.catalog);
+  if (!row
+    || row.schema !== 'narada.invokable-intelligence.selection-authority.v1'
+    || row.owner !== '@narada2/invokable-intelligence-runtime'
+    || row.resolution_phase !== 'runtime-invocation'
+    || !scope
+    || scope.kind !== 'site'
+    || !(typeof scope.site_id === 'string' || scope.site_id === null)
+    || !catalog
+    || !['node:sqlite', 'cloudflare:d1'].includes(String(catalog.store_kind))
+    || !nonEmptyWireString(catalog.locator)
+    || row.launcher_selection !== false
+    || !Array.isArray(row.authoritative_inputs)
+    || !row.authoritative_inputs.every((item) => nonEmptyWireString(item) !== null)) return null;
+  return row as unknown as OperatorSiteAgentIntelligenceSelectionAuthority;
+}
+
+function parseAdmissionIntelligence(value: unknown): OperatorSiteAgentAdmissionIntelligenceWireState | null {
+  const row = recordValue(value);
+  if (!row || !Array.isArray(row.policy_choices) || !Array.isArray(row.provider_choices) || !Array.isArray(row.model_choices)) return null;
+  const selectionAuthority = row.selection_authority === null
+    ? null
+    : parseIntelligenceSelectionAuthority(row.selection_authority);
+  const policyChoices = row.policy_choices.map(parseAdmissionChoice);
+  const providerChoices = row.provider_choices.map(parseAdmissionChoice);
+  const modelChoices = row.model_choices.map(parseAdmissionChoice);
+  if (!selectionAuthority && row.selection_authority !== null) return null;
+  if (policyChoices.some((choice) => choice === null)
+    || providerChoices.some((choice) => choice === null)
+    || modelChoices.some((choice) => choice === null)) return null;
+  return {
+    selection_authority: selectionAuthority,
+    policy_choices: policyChoices as OperatorSiteAgentAdmissionChoice[],
+    provider_choices: providerChoices as OperatorSiteAgentAdmissionChoice[],
+    model_choices: modelChoices as OperatorSiteAgentAdmissionChoice[],
+  };
+}
+
+export function parseOperatorSiteAgentAdmissionOptionsWireResponse(
+  value: unknown,
+): OperatorSiteAgentAdmissionOptionsWireResponse | null {
+  const row = recordValue(value);
+  if (!row
+    || row.schema !== 'narada.operator_console.site_agent_admission_options.v1'
+    || (row.status !== 'success' && row.status !== 'refused')
+    || !nonEmptyWireString(row.generated_at)
+    || !nonEmptyWireString(row.site_id)
+    || !(typeof row.site_display_name === 'string' || row.site_display_name === null)
+    || !(typeof row.revision === 'string' || row.revision === null)
+    || !Array.isArray(row.roles)
+    || !Array.isArray(row.agent_kinds)
+    || !Array.isArray(row.runtimes)
+    || !Array.isArray(row.operator_surfaces)
+    || !parseAdmissionIntelligence(row.intelligence)
+    || !Array.isArray(row.refusals)
+    || !row.refusals.every((item) => typeof item === 'string')) return null;
+  const roles = row.roles.map(parseAdmissionChoice);
+  const agentKinds = row.agent_kinds.map(parseAdmissionChoice);
+  const runtimes = row.runtimes.map(parseAdmissionChoice);
+  const operatorSurfaces = row.operator_surfaces.map(parseAdmissionChoice);
+  if (roles.some((choice) => choice === null)
+    || agentKinds.some((choice) => choice === null)
+    || runtimes.some((choice) => choice === null)
+    || operatorSurfaces.some((choice) => choice === null)) return null;
+  return {
+    ...row,
+    roles: roles as OperatorSiteAgentAdmissionChoice[],
+    agent_kinds: agentKinds as OperatorSiteAgentAdmissionChoice[],
+    runtimes: runtimes as OperatorSiteAgentAdmissionChoice[],
+    operator_surfaces: operatorSurfaces as OperatorSiteAgentAdmissionChoice[],
+    intelligence: parseAdmissionIntelligence(row.intelligence)!,
+  } as unknown as OperatorSiteAgentAdmissionOptionsWireResponse;
+}
+
+export function parseOperatorSiteAgentAdmissionWireResponse(
+  value: unknown,
+): OperatorSiteAgentAdmissionWireResponse | null {
+  const row = recordValue(value);
+  const intelligence = recordValue(row?.intelligence);
+  if (!row
+    || row.schema !== 'narada.operator_console.site_agent_admission.v1'
+    || !['admitted', 'refused', 'failed'].includes(String(row.status))
+    || !nonEmptyWireString(row.site_id)
+    || !(typeof row.agent_id === 'string' || row.agent_id === null)
+    || !(typeof row.local_agent_id === 'string' || row.local_agent_id === null)
+    || !(typeof row.role === 'string' || row.role === null)
+    || !(typeof row.agent_kind === 'string' || row.agent_kind === null)
+    || !(typeof row.runtime === 'string' || row.runtime === null)
+    || !(typeof row.operator_surface === 'string' || row.operator_surface === null)
+    || !(typeof row.reason === 'string' || row.reason === null)
+    || !(typeof row.message === 'string' || row.message === null)
+    || !nonEmptyWireString(row.request_id)
+    || !(typeof row.options_revision === 'string' || row.options_revision === null)
+    || !intelligence) return null;
+  const selectionAuthority = intelligence.selection_authority === null
+    ? null
+    : parseIntelligenceSelectionAuthority(intelligence.selection_authority);
+  if (!selectionAuthority && intelligence.selection_authority !== null) return null;
+  if (!(typeof intelligence.policy === 'string' || intelligence.policy === null)
+    || !(typeof intelligence.provider === 'string' || intelligence.provider === null)
+    || !(typeof intelligence.model === 'string' || intelligence.model === null)) return null;
+  return {
+    ...row,
+    intelligence: {
+      selection_authority: selectionAuthority,
+      policy: intelligence.policy,
+      provider: intelligence.provider,
+      model: intelligence.model,
+    },
+  } as unknown as OperatorSiteAgentAdmissionWireResponse;
+}
+
+export function parseOperatorSiteAgentStopWireResponse(
+  value: unknown,
+): OperatorSiteAgentStopWireResponse | null {
+  const row = recordValue(value);
+  if (!row
+    || row.schema !== 'narada.operator_console.agent_stop.v1'
+    || !['requested', 'already_stopped', 'refused', 'failed'].includes(String(row.status))
+    || !nonEmptyWireString(row.site_id)
+    || !nonEmptyWireString(row.agent_id)
+    || !(typeof row.session_id === 'string' || row.session_id === null)
+    || !(typeof row.reason === 'string' || row.reason === null)
+    || !(typeof row.message === 'string' || row.message === null)
+    || !nonEmptyWireString(row.request_id)) return null;
+  return row as unknown as OperatorSiteAgentStopWireResponse;
+}
+
+export function parseOperatorSiteAgentDeleteWireResponse(
+  value: unknown,
+): OperatorSiteAgentDeleteWireResponse | null {
+  const row = recordValue(value);
+  if (!row
+    || row.schema !== 'narada.operator_console.agent_delete.v1'
+    || !['deleted', 'refused', 'failed'].includes(String(row.status))
+    || !nonEmptyWireString(row.site_id)
+    || !nonEmptyWireString(row.agent_id)
+    || !(typeof row.reason === 'string' || row.reason === null)
+    || !(typeof row.message === 'string' || row.message === null)
+    || !nonEmptyWireString(row.request_id)) return null;
+  return row as unknown as OperatorSiteAgentDeleteWireResponse;
 }
 
 export interface OperatorSurfaceAvailabilityDetail {

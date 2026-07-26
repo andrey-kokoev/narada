@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "Narada agent-start result v0",
-  "description": "Generated from packages/agent-start/src/launch-result-v0-contract.mts",
+  "description": "Generated from packages/agent-start/src/launch-result-v0-contract.ts",
   "anyOf": [
     {
       "type": "object",

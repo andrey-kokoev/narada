@@ -14,9 +14,9 @@ export function useBoxVisibilityPreference<TId extends string>(options: BoxVisib
   const visibleIds = ref(loadVisibleIds(options)) as Ref<Set<TId>>;
   const availableIdSet = computed(() => new Set(options.availableIds?.value ?? options.itemIds));
   const requiredIdSet = computed(() => new Set(options.requiredIds ?? []));
-  const orderedVisibleIds = computed(() => options.itemIds.filter((id) => isVisible(id)));
+  const orderedVisibleIds = computed(() => options.itemIds.filter((id: any) => isVisible(id)));
 
-  watch(visibleIds, (value) => persistVisibleIds(options, value));
+  watch(visibleIds, (value: any) => persistVisibleIds(options, value));
 
   function isVisible(id: TId): boolean {
     return availableIdSet.value.has(id) && (visibleIds.value.has(id) || requiredIdSet.value.has(id));
@@ -53,6 +53,6 @@ function loadVisibleIds<TId extends string>(options: BoxVisibilityPreferenceOpti
 
 function persistVisibleIds<TId extends string>(options: BoxVisibilityPreferenceOptions<TId>, ids: Set<TId>) {
   if (typeof window === 'undefined') return;
-  const orderedIds = options.itemIds.filter((id) => ids.has(id));
+  const orderedIds = options.itemIds.filter((id: any) => ids.has(id));
   writeJsonPreference(options.storageKey, orderedIds);
 }

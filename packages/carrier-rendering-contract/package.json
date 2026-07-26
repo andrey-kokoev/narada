@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/carrier-rendering-contract.mjs",
+    ".": {
+      "types": "./dist/carrier-rendering-contract.d.ts",
+      "import": "./dist/carrier-rendering-contract.js"
+    },
     "./transcript-classifiers": "./contracts/transcript-classifiers.json"
   },
   "scripts": {
-    "test": "node --test src/carrier-rendering-contract.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-rendering-contract.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/carrier-rendering-contract.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Carrier rendering contracts",
   "license": "MIT",

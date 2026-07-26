@@ -147,7 +147,7 @@ function overlaps(a: { start: number; end: number }, b: { start: number; end: nu
 
 function findReservation(registry: TaskRegistry, start: number, end: number): Reservation | undefined {
   return registry.reservations.find(
-    (r) => r.range_start === start && r.range_end === end
+    (r: any) => r.range_start === start && r.range_end === end
   );
 }
 
@@ -165,7 +165,7 @@ function reserve(rangeStr: string, purpose: string, agent: string): void {
 
   // Check overlap with active reservations
   for (const r of registry.reservations) {
-    if (r.status === "active" && overlaps({ start, end }, { start: r.range_start, end: r.range_end })) {
+    if (r.status=== "active" && overlaps({ start, end }, { start: r.range_start, end: r.range_end })) {
       throw new Error(
         `Range ${rangeStr} overlaps with active reservation ` +
           `${r.range_start}-${r.range_end} (reserved by ${r.reserved_by}).`
@@ -193,9 +193,9 @@ function reserve(rangeStr: string, purpose: string, agent: string): void {
 
 function listReservations(): void {
   const registry = loadRegistry();
-  const active = registry.reservations.filter((r) => r.status === "active");
-  const expired = registry.reservations.filter((r) => r.status === "expired");
-  const released = registry.reservations.filter((r) => r.status === "released");
+  const active = registry.reservations.filter((r: any) => r.status === "active");
+  const expired = registry.reservations.filter((r: any) => r.status === "expired");
+  const released = registry.reservations.filter((r: any) => r.status === "released");
 
   console.log(`Registry: version=${registry.version}, last_allocated=${registry.last_allocated}`);
   console.log("");
@@ -242,7 +242,7 @@ function releaseRange(rangeStr: string): void {
   if (!r) {
     throw new Error(`No reservation found for range ${rangeStr}.`);
   }
-  if (r.status === "released") {
+  if (r.status=== "released") {
     console.log(`Range ${rangeStr} is already released.`);
     return;
   }
@@ -250,8 +250,8 @@ function releaseRange(rangeStr: string): void {
   // Recalculate last_allocated from actual tasks and active reservations
   const maxTaskNum = computeMaxTaskNumber();
   const maxActiveRes = registry.reservations
-    .filter((res) => res.status === "active")
-    .reduce((max, res) => Math.max(max, res.range_end), 0);
+    .filter((res: any) => res.status === "active")
+    .reduce((max: any, res: any) => Math.max(max, res.range_end), 0);
   registry.last_allocated = Math.max(maxTaskNum, maxActiveRes);
   saveRegistry(registry);
   console.log(`Released ${rangeStr}.`);
@@ -296,7 +296,7 @@ Options:
 function main(): void {
   const args = process.argv.slice(2);
 
-  if (args.length === 0 || args.includes("--help") || args.includes("-h")) {
+  if (args.length=== 0 || args.includes("--help") || args.includes("-h")) {
     showHelp();
     process.exit(0);
   }

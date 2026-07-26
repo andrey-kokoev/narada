@@ -36,6 +36,6 @@ export function useAgentActivity(events: unknown[] | Ref<unknown[]>, healthBody?
   return { activity };
 }
 
-export function accumulateActivity(events: unknown[], nowMs = Date.now()): AgentActivityState {
+export function accumulateActivity(events: unknown[], nowMs= Date.now()): AgentActivityState {
   return createSessionProjection(events, { nowMs }).activity;
 }

@@ -6,23 +6,36 @@
   "dependencies": {
     "@narada2/mcp-transport": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/sqlite": "workspace:*"
+    "@narada2/sqlite": "workspace:*",
+    "@narada2/agent-context-mcp": "workspace:*",
+    "@narada2/task-governance": "workspace:*",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
   },
   "engines": {
     "node": ">=22.0.0"
   },
   "exports": {
-    "./compat/mcp-payload-file.legacy-site": "./compat/mcp-payload-file.legacy-site.mjs",
-    "./generic-command-registry": "./src/generic-command-registry.mjs",
-    "./mcp-freshness-service": "./src/mcp-freshness-service.mjs",
-    "./operator-surface/mcp-runtime-instance-registry": "./src/operator-surface/mcp-runtime-instance-registry.mjs",
-    "./site-layout": "./src/site-layout.mjs",
-    "./site-locus-shim": "./src/site-locus-shim.mjs",
-    "./task-lifecycle-mcp-resolution": "./src/task-lifecycle-mcp-resolution.mjs",
-    "./incubation/write-file-utf8.mjs": "./src/incubation/write-file-utf8.mjs"
+    "./compat/mcp-payload-file.legacy-site": "./compat/mcp-payload-file.legacy-site.ts",
+    "./generic-command-registry": "./src/generic-command-registry.ts",
+    "./mcp-freshness-service": "./src/mcp-freshness-service.ts",
+    "./operator-surface/mcp-runtime-instance-registry": "./src/operator-surface/mcp-runtime-instance-registry.ts",
+    "./site-layout": {
+      "types": "./dist/site-layout.d.ts",
+      "import": "./dist/site-layout.js"
+    },
+    "./site-locus-shim": "./src/site-locus-shim.ts",
+    "./task-lifecycle-mcp-resolution": "./src/task-lifecycle-mcp-resolution.ts",
+    "./incubation/write-file-utf8.ts": "./src/incubation/write-file-utf8.ts",
+    "./inbox/admission-log": "./src/inbox/admission-log.ts",
+    "./inbox/envelope-kinds": "./src/inbox/envelope-kinds.ts",
+    "./inbox/inbox-index": "./src/inbox/inbox-index.ts"
   },
   "scripts": {
-    "test": "node --test src/site-common-tools.test.mjs src/task-lifecycle-mcp-resolution.test.mjs src/site-init/site-live-carrier-state.test.mjs src/site-init/site-init-lifecycle.test.mjs src/site-init/site-init.test.mjs src/site-lift/site-lift-lifecycle.test.mjs src/site-lift/site-lift.test.mjs"
+    "test": "node --import tsx --test src/site-common-tools.test.ts src/task-lifecycle-mcp-resolution.test.ts src/site-init/site-live-carrier-state.test.ts src/site-init/site-init-lifecycle.test.ts src/site-init/site-init.test.ts src/site-lift/site-lift-lifecycle.test.ts src/site-lift/site-lift.test.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "pretest": "pnpm build"
   },
   "description": "Site common tools runtime surface",
   "license": "MIT",

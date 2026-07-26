@@ -43,19 +43,19 @@ export function buildSurfaceAffordancesRequestFrame(): SessionProtocolFrame | nu
   return frameFromContract(contract.buildAgentWebUiSurfaceAffordancesFrame());
 }
 
-export function buildIntelligenceReconfigureFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+export function buildIntelligenceReconfigureFrame(input: Record<string, unknown>, options: Record<string, unknown>= {}): SessionProtocolFrame | null {
   return frameFromContract(contract.buildAgentWebUiIntelligenceReconfigureFrame(input, options));
 }
 
-export function buildAffordanceActionRequestFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+export function buildAffordanceActionRequestFrame(input: Record<string, unknown>, options: Record<string, unknown>= {}): SessionProtocolFrame | null {
   return frameFromContract(contract.buildAgentWebUiAffordanceActionRequestFrame(input, options));
 }
 
-export function buildAffordanceActionConfirmFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+export function buildAffordanceActionConfirmFrame(input: Record<string, unknown>, options: Record<string, unknown>= {}): SessionProtocolFrame | null {
   return frameFromContract(contract.buildAgentWebUiAffordanceActionConfirmFrame(input, options));
 }
 
-export function buildAffordanceActionCancelFrame(input: Record<string, unknown>, options: Record<string, unknown> = {}): SessionProtocolFrame | null {
+export function buildAffordanceActionCancelFrame(input: Record<string, unknown>, options: Record<string, unknown>= {}): SessionProtocolFrame | null {
   return frameFromContract(contract.buildAgentWebUiAffordanceActionCancelFrame(input, options));
 }
 

@@ -3,20 +3,20 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { TASK_LIFECYCLE_TOOL_ALIASES, taskLifecycleDomainTools } from '../../src/task-lifecycle-mcp-contract.js';
-import { listOutputTools, listPayloadTools } from '../../runtime/mcp-payload-file.mjs';
+import { listOutputTools, listPayloadTools } from '../../runtime/mcp-payload-file.js';
 import {
   assertTaskLifecycleHandlerCoverage,
   createTaskLifecycleHandlerRegistry,
   PAYLOAD_OUTPUT_TOOL_NAMES,
-} from '../../runtime/task-lifecycle/task-lifecycle-handler-registry.mjs';
-import { TASK_LIFECYCLE_ADMIN_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-admin-handlers.mjs';
-import { TASK_LIFECYCLE_READ_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-read-handlers.mjs';
-import { TASK_LIFECYCLE_ASSIGNMENT_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-assignment-handlers.mjs';
-import { TASK_LIFECYCLE_NAVIGATION_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-navigation-handlers.mjs';
-import { TASK_LIFECYCLE_INSPECTION_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-inspection-handlers.mjs';
-import { TASK_LIFECYCLE_EVIDENCE_REVIEW_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-evidence-review-handlers.mjs';
-import { TASK_LIFECYCLE_OPERATIONS_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-operations-handlers.mjs';
-import { TASK_LIFECYCLE_CREATE_RECURRING_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-create-recurring-handlers.mjs';
+} from '../../runtime/task-lifecycle/task-lifecycle-handler-registry.js';
+import { TASK_LIFECYCLE_ADMIN_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-admin-handlers.js';
+import { TASK_LIFECYCLE_READ_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-read-handlers.js';
+import { TASK_LIFECYCLE_ASSIGNMENT_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-assignment-handlers.js';
+import { TASK_LIFECYCLE_NAVIGATION_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-navigation-handlers.js';
+import { TASK_LIFECYCLE_INSPECTION_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-inspection-handlers.js';
+import { TASK_LIFECYCLE_EVIDENCE_REVIEW_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-evidence-review-handlers.js';
+import { TASK_LIFECYCLE_OPERATIONS_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-operations-handlers.js';
+import { TASK_LIFECYCLE_CREATE_RECURRING_TOOL_NAMES } from '../../runtime/task-lifecycle/task-lifecycle-create-recurring-handlers.js';
 
 const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url));
 
@@ -66,7 +66,7 @@ describe('task lifecycle handler registry', () => {
   });
 
   it('keeps all tool dispatch cases out of the server runtime shell', () => {
-    const server = readFileSync(join(repoRoot, 'packages/task-governance/runtime/task-lifecycle/task-mcp-server.mjs'), 'utf8');
+    const server = readFileSync(join(repoRoot, 'packages/task-governance/runtime/task-lifecycle/task-mcp-server.ts'), 'utf8');
     expect(server).not.toMatch(/case 'task_lifecycle_/);
     expect(server).not.toMatch(/case 'mcp_/);
     for (const toolName of [...PAYLOAD_OUTPUT_TOOL_NAMES, ...TASK_LIFECYCLE_ADMIN_TOOL_NAMES, ...TASK_LIFECYCLE_READ_TOOL_NAMES, ...TASK_LIFECYCLE_ASSIGNMENT_TOOL_NAMES, ...TASK_LIFECYCLE_NAVIGATION_TOOL_NAMES, ...TASK_LIFECYCLE_INSPECTION_TOOL_NAMES, ...TASK_LIFECYCLE_EVIDENCE_REVIEW_TOOL_NAMES, ...TASK_LIFECYCLE_OPERATIONS_TOOL_NAMES, ...TASK_LIFECYCLE_CREATE_RECURRING_TOOL_NAMES]) {

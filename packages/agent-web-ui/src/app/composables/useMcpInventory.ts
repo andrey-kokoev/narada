@@ -39,7 +39,7 @@ function inventoryFromHealth(body: Record<string, unknown> | null): McpInventory
   const mcp = objectField(body, 'mcp');
   const rawTools = arrayField(body, 'mcp_tools').length ? arrayField(body, 'mcp_tools') : arrayField(mcp, 'tools');
   const toolMap = toolsByServer(rawTools);
-  const servers = arrayField(mcp, 'servers').map((entry) => normalizeServerEntry(entry, 'health', toolMap)).filter(Boolean) as McpServerInventoryEntry[];
+  const servers = arrayField(mcp, 'servers').map((entry: any) => normalizeServerEntry(entry, 'health', toolMap)).filter(Boolean) as McpServerInventoryEntry[];
   const serverCount = numberField(mcp, 'server_count') ?? numberField(body, 'mcp_server_count') ?? (servers.length ? servers.length : null);
   const operationalState = stringField(mcp, 'operational_state') ?? stringField(body, 'mcp_operational_state');
   if (!operationalState && !serverCount && servers.length === 0) return emptyInventory();
@@ -54,12 +54,12 @@ function inventoryFromHealth(body: Record<string, unknown> | null): McpInventory
 }
 
 function mergeHealthInventoryWithEventTools(health: McpInventorySummary, event: McpInventorySummary): McpInventorySummary {
-  const eventToolsByServer = new Map(event.servers.map((server) => [server.serverName, server.tools]));
-  const servers = health.servers.map((server) => ({
+  const eventToolsByServer = new Map(event.servers.map((server: any) => [server.serverName, server.tools]));
+  const servers = health.servers.map((server: any) => ({
     ...server,
     tools: server.tools.length ? server.tools : eventToolsByServer.get(server.serverName) ?? [],
   }));
-  const healthServerNames = new Set(servers.map((server) => server.serverName));
+  const healthServerNames = new Set(servers.map((server: any) => server.serverName));
   for (const server of event.servers) {
     if (!healthServerNames.has(server.serverName)) servers.push(server);
   }
@@ -67,7 +67,7 @@ function mergeHealthInventoryWithEventTools(health: McpInventorySummary, event: 
 }
 
 function inventoryFromEvents(events: unknown[]): McpInventorySummary {
-  for (let index = events.length - 1; index >= 0; index -= 1) {
+  for (let index= events.length - 1; index >= 0; index -= 1) {
     const event = unwrapRuntimeEvent(events[index]);
     if (!event || typeof event !== 'object') continue;
     const record = event as Record<string, unknown>;
@@ -76,7 +76,7 @@ function inventoryFromEvents(events: unknown[]): McpInventorySummary {
     const rawServers = arrayField(record, 'mcp_servers').length ? arrayField(record, 'mcp_servers') : arrayField(mcp, 'servers');
     const rawTools = arrayField(record, 'mcp_tools').length ? arrayField(record, 'mcp_tools') : arrayField(mcp, 'tools');
     const toolMap = toolsByServer(rawTools);
-    const servers = rawServers.map((entry) => normalizeServerEntry(entry, 'event', toolMap)).filter(Boolean) as McpServerInventoryEntry[];
+    const servers = rawServers.map((entry: any) => normalizeServerEntry(entry, 'event', toolMap)).filter(Boolean) as McpServerInventoryEntry[];
     const serverCount = numberField(record, 'mcp_server_count') ?? numberField(mcp, 'server_count') ?? (servers.length ? servers.length : null);
     const operationalState = stringField(record, 'mcp_operational_state') ?? stringField(mcp, 'operational_state');
     if (!operationalState && !serverCount && servers.length === 0) continue;
@@ -116,7 +116,7 @@ function toolsByServer(values: unknown[]): Map<string, McpToolInventoryEntry[]> 
     map.set(tool.serverName, tools);
   }
   for (const [serverName, tools] of map) {
-    map.set(serverName, tools.sort((a, b) => a.toolName.localeCompare(b.toolName)));
+    map.set(serverName, tools.sort((a: any, b: any) => a.toolName.localeCompare(b.toolName)));
   }
   return map;
 }

@@ -140,7 +140,7 @@ Resolution refusals throw `intelligence_resolution_refused:<reason_code>`
 before any inference call (distinct from operator-session/auth failures and
 from `cloudflare_workers_ai_provider_failed`). An empty D1 registry refuses
 with `intelligence_registry_not_initialized`. See
-`src/cloudflare-intelligence-resolution.mjs`.
+`src/cloudflare-intelligence-resolution.ts`.
 
 Operational transport tuning remains non-authoritative:
 

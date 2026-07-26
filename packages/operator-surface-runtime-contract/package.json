@@ -4,10 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/operator-surface-runtime-contract.mjs",
+    ".": {
+      "types": "./dist/operator-surface-runtime-contract.d.ts",
+      "import": "./dist/operator-surface-runtime-contract.js"
+    },
     "./operator-surface-runtime-selection": {
-      "types": "./src/operator-surface-runtime-selection.d.ts",
-      "default": "./src/operator-surface-runtime-selection.mjs"
+      "types": "./dist/operator-surface-runtime-selection.d.ts",
+      "import": "./dist/operator-surface-runtime-selection.js"
     },
     "./launch-slice": "./contracts/launch-slice.json",
     "./operator-surface-launch-matrix": "./contracts/operator-surface-launch-matrix.json",
@@ -17,8 +20,9 @@
     "./boolean-values": "./contracts/boolean-values.json"
   },
   "scripts": {
-    "test": "node --test src/operator-surface-runtime-contract.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/operator-surface-runtime-contract.mjs src/operator-surface-runtime-selection.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/operator-surface-runtime-contract.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada2/nars-intelligence-kernel-contract": "workspace:*"

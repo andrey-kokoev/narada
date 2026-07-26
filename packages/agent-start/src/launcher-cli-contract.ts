@@ -1,17 +1,17 @@
-export const ADMITTED_MCP_SCOPES = Object.freeze(['all', 'host', 'user-site', 'local-site', 'none']);
+export const ADMITTED_MCP_SCOPES: any = Object.freeze(['all', 'host', 'user-site', 'local-site', 'none']);
 
-export function parseArgs(argv) {
-  const result = {};
-  let i = 0;
+export function parseArgs(argv: any) : any{
+  const result: any = {};
+  let i: any = 0;
   if (argv.length > 0 && !argv[0].startsWith('--')) {
     result.identity = argv[0];
     i = 1;
   }
   for (; i < argv.length; i++) {
-    const arg = argv[i];
+    const arg: any = argv[i];
     if (!arg.startsWith('--')) continue;
 
-    const key = arg.slice(2).replace(/-/g, '_');
+    const key: any = arg.slice(2).replace(/-/g, '_');
     if (i + 1 < argv.length && !argv[i + 1].startsWith('--')) {
       result[key] = argv[i + 1];
       i++;
@@ -22,25 +22,25 @@ export function parseArgs(argv) {
   return result;
 }
 
-export function canonicalJson(value) {
+export function canonicalJson(value: any) : any{
   if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
   if (value && typeof value === 'object') {
-    return `{${Object.keys(value).sort().map((key) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
+    return `{${Object.keys(value).sort().map((key: any) => `${JSON.stringify(key)}:${canonicalJson(value[key])}`).join(',')}}`;
   }
   return JSON.stringify(value);
 }
 
-export function identityToken(identity) {
+export function identityToken(identity: any) : any{
   return String(identity).replace(/[^A-Za-z0-9]+/g, '_');
 }
 
-export function normalizeMcpScope(value) {
-  const normalized = String(value ?? 'none').trim().toLowerCase();
+export function normalizeMcpScope(value: any) : any{
+  const normalized: any = String(value ?? 'none').trim().toLowerCase();
   if (ADMITTED_MCP_SCOPES.includes(normalized)) return normalized;
   throw new Error(`mcp_scope_not_admitted: ${normalized}. Admitted scopes: ${ADMITTED_MCP_SCOPES.join(', ')}`);
 }
 
-export function mcpScopeLoci(scope) {
+export function mcpScopeLoci(scope: any) : any{
   if (scope === 'none') return [];
   if (scope === 'host') return ['host'];
   if (scope === 'user-site') return ['user-site'];

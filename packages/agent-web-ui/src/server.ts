@@ -67,7 +67,7 @@ type ServerDependencies = {
 const STATIC_ROOT = new URL('./', import.meta.url);
 const DIST_ROOT = new URL('../dist/', import.meta.url);
 const VENDOR_MODULES = new Map([
-  ['vendor/nars-client-projection-contract.js', new URL('../../nars-client-projection-contract/src/nars-client-projection-contract.mjs', import.meta.url)],
+  ['vendor/nars-client-projection-contract.js', new URL('../../nars-client-projection-contract/src/nars-client-projection-contract.ts', import.meta.url)],
   ['vendor/vue.js', new URL('../node_modules/vue/dist/vue.esm-browser.prod.js', import.meta.url)],
 ]);
 const CONTENT_TYPES = new Map([
@@ -190,8 +190,8 @@ function assertNoProjectionAuthorityOverride(body: UnknownRecord): void {
 }
 
 function stringList(value: unknown): string[] | undefined {
-  if (Array.isArray(value)) return value.flatMap((entry) => String(entry).split(',')).map((entry) => entry.trim()).filter(Boolean);
-  if (typeof value === 'string') return value.split(',').map((entry) => entry.trim()).filter(Boolean);
+  if (Array.isArray(value)) return value.flatMap((entry: any) => String(entry).split(',')).map((entry: any) => entry.trim()).filter(Boolean);
+  if (typeof value === 'string') return value.split(',').map((entry: any) => entry.trim()).filter(Boolean);
   return undefined;
 }
 
@@ -560,7 +560,7 @@ export function createAgentWebUiServer(options: AgentWebUiOptions, deps: ServerD
 
 export function startAgentWebUiServer(options: AgentWebUiOptions, deps: ServerDependencies = {}): Promise<{ server: ReturnType<typeof createServer>; url: string }> {
   const server = createAgentWebUiServer(options, deps);
-  return new Promise((resolve, reject) => {
+  return new Promise((resolve: any, reject: any) => {
     server.once('error', reject);
     server.listen(options.port, options.host, () => {
       server.off('error', reject);

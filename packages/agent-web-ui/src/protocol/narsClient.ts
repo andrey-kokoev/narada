@@ -167,7 +167,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     pendingOperatorInputTimers.set(requestId, timer);
   };
 
-  const failPendingOperatorInput = (requestId: string, message: unknown, extra: Record<string, unknown> = {}) => {
+  const failPendingOperatorInput = (requestId: string, message: unknown, extra: Record<string, unknown>= {}) => {
     const pending = pendingOperatorInputs.get(requestId);
     if (!pending) return;
     removePendingOperatorInput(requestId);
@@ -237,7 +237,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     const event = unwrapTransportEvent(message);
     if (!event || typeof event !== 'object') return true;
     const kind = typeof event.event === 'string' ? event.event : null;
-    if (kind === 'session_events_read' && Array.isArray(event.events)) {
+    if (kind=== 'session_events_read' && Array.isArray(event.events)) {
       for (const nestedEvent of event.events) reconcilePendingOperatorInput(nestedEvent);
       return true;
     }
@@ -264,7 +264,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       persistPendingOperatorInputs(pendingInputStorage, pendingInputStorageKey, pendingOperatorInputs.values());
     }
 
-    if (kind === 'projection_input_response') {
+    if (kind=== 'projection_input_response') {
       if (isProjectionInputAdmissionAccepted(event)) {
         if (pending && transitionPendingOperatorInput(pending, PENDING_OPERATOR_INPUT_PHASES.RELAY_PENDING)) {
           persistPendingOperatorInputs(pendingInputStorage, pendingInputStorageKey, pendingOperatorInputs.values());
@@ -276,12 +276,12 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       return true;
     }
 
-    if (kind === 'projection_input_failed') {
+    if (kind=== 'projection_input_failed') {
       if (pending) failPendingOperatorInput(pending.request_id, event.message ?? event.error ?? 'Cloudflare input relay failed');
       return true;
     }
 
-    if (kind === 'websocket_error') {
+    if (kind=== 'websocket_error') {
       if (pending) {
         const websocketCode = typeof event.code === 'string' && event.code.trim() ? event.code.trim() : 'websocket_error';
         failPendingOperatorInput(pending.request_id, event.message ?? event.error ?? `NARS WebSocket rejected ${pending.method}`, {
@@ -293,9 +293,9 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       return true;
     }
 
-    if (kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'input_event_deduplicated' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['completed', 'failed', 'rejected', 'interrupted'].includes(requestState))) {
+    if (kind=== 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'input_event_deduplicated' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['completed', 'failed', 'rejected', 'interrupted'].includes(requestState))) {
       if (pending) {
-        if (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
+        if (pending.phase=== PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
           emitLocalEvent(options.onEvent, pendingLifecycleEvent('operator_input_late_acknowledged', pending, {
             acknowledged_event: kind,
             recovery_state: pending.phase,
@@ -306,9 +306,9 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       }
       return true;
     }
-    if (kind === 'input_event_completed' || kind === 'input_completed') {
+    if (kind=== 'input_event_completed' || kind === 'input_completed') {
       if (pending) {
-        if (pending.phase === PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
+        if (pending.phase=== PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
           emitLocalEvent(options.onEvent, pendingLifecycleEvent('operator_input_late_acknowledged', pending, {
             acknowledged_event: kind,
             recovery_state: pending.phase,
@@ -323,7 +323,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
 
   const adapterOptions: NarsClientOptions = {
     ...options,
-    onEvent(message) {
+    onEvent(message: any) {
       if (reconcilePendingOperatorInput(message)) options.onEvent?.(message);
     },
   };
@@ -334,12 +334,12 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     get lifecycle() { return state.lifecycle; },
     get activeTurnId() { return state.activeTurnId; },
     get lastSequence() { return state.lastSequence; },
-    subscribeView(view) {
+    subscribeView(view: any) {
       state.view = normalizeNarsClientProjectionVerbosity(view);
       return state.subscribeView?.(state.view) ?? false;
     },
     getSocket() { return state.socket; },
-    requestHealth(fetchFn = globalThis.fetch) {
+    requestHealth(fetchFn= globalThis.fetch) {
       if (!options.healthEndpoint) return null;
       return fetchFn(options.healthEndpoint, {
         method: 'GET',
@@ -367,7 +367,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     reviewPendingOperatorInput,
     discardPendingOperatorInput,
     markPendingOperatorInputRetried,
-    readEventsPage(options) {
+    readEventsPage(options: any) {
       return connection.sendFrame(buildAgentWebUiEventsReadFrame(options));
     },
     close() {
@@ -421,7 +421,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     }));
   }
 
-  state.sendFrameImpl = (frame) => {
+  state.sendFrameImpl = (frame: any) => {
     const socket = state.socket;
     const openState = WebSocketCtor.OPEN ?? 1;
     if (!socket || socket.readyState !== openState) return false;
@@ -476,7 +476,7 @@ function pendingInputFromFrame(requestId: string, frame: SessionProtocolFrame, c
 function unwrapTransportEvent(message: unknown): Record<string, unknown> | null {
   if (!message || typeof message !== 'object') return null;
   const candidate = message as Record<string, unknown>;
-  if (candidate.event === 'session_event' && candidate.payload && typeof candidate.payload === 'object') {
+  if (candidate.event=== 'session_event' && candidate.payload && typeof candidate.payload === 'object') {
     return candidate.payload as Record<string, unknown>;
   }
   return candidate;
@@ -559,7 +559,7 @@ function isPendingOperatorInputPhase(value: unknown): value is PendingOperatorIn
 function pendingLifecycleEvent(
   event: string,
   pending: PendingOperatorInput,
-  extra: Record<string, unknown> = {},
+  extra: Record<string, unknown>= {},
 ): Record<string, unknown> {
   return {
     event,

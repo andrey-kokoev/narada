@@ -2,8 +2,8 @@ import { join } from 'node:path';
 import {
   assertAgentStartResultV0,
   resolveAgentStartSessionProjection,
-} from './launch-result-v0-contract.mjs';
-import type { AgentStartResultV0 } from './launch-result-v0-contract.mts';
+} from './launch-result-v0-contract.js';
+import type { AgentStartResultV0 } from './launch-result-v0-contract.js';
 
 type OptionalRecord = Record<string, unknown> | null | undefined;
 type McpScopeInput = {
@@ -64,7 +64,7 @@ function launcherContractInput(result: AgentStartResultV0): LauncherContractInpu
 }
 
 function isLaunchFailureStatus(status: unknown): boolean {
-  const normalized = typeof status === 'string' ? status.trim().toLowerCase() : '';
+  const normalized: any = typeof status === 'string' ? status.trim().toLowerCase() : '';
   return normalized === 'failed'
     || normalized === 'refused'
     || normalized === 'not_available'
@@ -73,17 +73,17 @@ function isLaunchFailureStatus(status: unknown): boolean {
     || normalized.startsWith('refused_');
 }
 
-export function buildLauncherContractsFromAgentStartResult(result: AgentStartResultV0) {
-  const canonicalResult = assertAgentStartResultV0(result);
-  const sessionProjection = resolveAgentStartSessionProjection(canonicalResult);
+export function buildLauncherContractsFromAgentStartResult(result: AgentStartResultV0) : any{
+  const canonicalResult: any = assertAgentStartResultV0(result);
+  const sessionProjection: any = resolveAgentStartSessionProjection(canonicalResult);
   if (canonicalResult.status === 'materialized' && !sessionProjection?.session_ref) {
     throw new Error('agent_start_result_handoff_invalid: canonical session projection is not coherent');
   }
   return buildLauncherContracts(canonicalResult);
 }
 
-export function startupCommandFromSequence(startupSequence = []) {
-  const firstStep = startupSequence[0];
+export function startupCommandFromSequence(startupSequence: any = []) : any{
+  const firstStep: any = startupSequence[0];
   if (!firstStep?.tool) return null;
   return {
     name: firstStep.tool,
@@ -92,10 +92,10 @@ export function startupCommandFromSequence(startupSequence = []) {
   };
 }
 
-function buildLaunchResultArtifact(result: LauncherContractInput) {
-  const sessionProjection = resolveAgentStartSessionProjection(result);
-  const sessionId = sessionProjection?.session_id ?? null;
-  const artifactPath = result.launch_result_path
+function buildLaunchResultArtifact(result: LauncherContractInput) : any{
+  const sessionProjection: any = resolveAgentStartSessionProjection(result);
+  const sessionId: any = sessionProjection?.session_id ?? null;
+  const artifactPath: any = result.launch_result_path
     ?? (result.session_site_root && result.agent_start_event
       ? join(result.session_site_root, '.ai', 'runtime', 'agent-start-results', `${result.agent_start_event}.result.json`)
       : null);
@@ -130,13 +130,13 @@ function buildLaunchResultArtifact(result: LauncherContractInput) {
   };
 }
 
-export function buildRuntimeHealthPosture(result: AgentStartResultV0) {
-  const input = launcherContractInput(result);
-  const health = input.nars_health ?? null;
-  const events = input.nars_events ?? null;
+export function buildRuntimeHealthPosture(result: AgentStartResultV0) : any{
+  const input: any = launcherContractInput(result);
+  const health: any = input.nars_health ?? null;
+  const events: any = input.nars_events ?? null;
   if (!health && !events) return null;
 
-  const summarizeEndpointStatus = (endpoint, availableAtLaunch) => {
+  const summarizeEndpointStatus: any = (endpoint: any, availableAtLaunch: any) => {
     if (endpoint) return 'materialized';
     if (availableAtLaunch) return 'pending';
     return 'projected';
@@ -184,14 +184,14 @@ export function buildRuntimeHealthPosture(result: AgentStartResultV0) {
   };
 }
 
-function buildLauncherContracts(result: AgentStartResultV0) {
-  const input = launcherContractInput(result);
-  const runtimeHostKind = input.runtime_host_kind ?? input.runtime_substrate_kind ?? null;
-  const operatorSurfaceKind = input.operator_surface_kind ?? input.nars_launch?.operator_surface_kind ?? input.carrier_kind ?? null;
-  const launchSelectionKind = input.launch_selection_kind ?? input.carrier_kind ?? null;
-  const carrierImplementationKind = input.carrier_implementation_kind ?? null;
-  const launchResultArtifact = buildLaunchResultArtifact(input);
-  const runtimeHealthPosture = buildRuntimeHealthPosture(result);
+function buildLauncherContracts(result: AgentStartResultV0) : any{
+  const input: any = launcherContractInput(result);
+  const runtimeHostKind: any = input.runtime_host_kind ?? input.runtime_substrate_kind ?? null;
+  const operatorSurfaceKind: any = input.operator_surface_kind ?? input.nars_launch?.operator_surface_kind ?? input.carrier_kind ?? null;
+  const launchSelectionKind: any = input.launch_selection_kind ?? input.carrier_kind ?? null;
+  const carrierImplementationKind: any = input.carrier_implementation_kind ?? null;
+  const launchResultArtifact: any = buildLaunchResultArtifact(input);
+  const runtimeHealthPosture: any = buildRuntimeHealthPosture(result);
   return {
     schema: 'narada.launcher_contract_bundle.v0',
     authority_runtime_host_selection: {

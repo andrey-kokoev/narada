@@ -4,15 +4,27 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/kernel.test.mjs && node test/stdio-json-rpc.test.mjs && node test/tool-call-pipeline.test.mjs && node test/import-boundary.test.mjs"
+    "test": "node --import tsx --test test/*.test.ts",
+    "pretest": "pnpm run build",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "exports": {
-    ".": "./src/index.mjs",
-    "./stdio-json-rpc": "./src/stdio-json-rpc.mjs",
-    "./tool-call-pipeline": "./src/tool-call-pipeline.mjs"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./stdio-json-rpc": {
+      "types": "./dist/stdio-json-rpc.d.ts",
+      "import": "./dist/stdio-json-rpc.js"
+    },
+    "./tool-call-pipeline": {
+      "types": "./dist/tool-call-pipeline.d.ts",
+      "import": "./dist/tool-call-pipeline.js"
+    }
   },
   "files": [
-    "src/"
+    "dist/"
   ],
   "description": "Task lifecycle kernel runtime",
   "license": "MIT",

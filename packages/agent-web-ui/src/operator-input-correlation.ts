@@ -42,10 +42,10 @@ export function findCorrelatedInput(
   } = {},
 ): CorrelationMatch {
   const correlation = inputCorrelationFromEvent(event);
-  const candidates = Array.from(records ?? []).filter((record) => record && activeOnly(record));
+  const candidates = Array.from(records ?? []).filter((record: any) => record && activeOnly(record));
 
   const requestMatches = correlation.requestId
-    ? candidates.filter((record) => {
+    ? candidates.filter((record: any) => {
       const candidateCorrelation = inputCorrelationFromValue(record);
       return candidateCorrelation.requestId === correlation.requestId
         && sessionsCompatible(candidateCorrelation.sessionId, correlation.sessionId);
@@ -55,7 +55,7 @@ export function findCorrelatedInput(
   if (requestResult) return requestResult;
 
   const inputEventMatches = correlation.inputEventId
-    ? candidates.filter((record) => {
+    ? candidates.filter((record: any) => {
       const candidateCorrelation = inputCorrelationFromValue(record);
       return candidateCorrelation.inputEventId === correlation.inputEventId
         && sessionsCompatible(candidateCorrelation.sessionId, correlation.sessionId);
@@ -65,7 +65,7 @@ export function findCorrelatedInput(
   if (inputEventResult) return inputEventResult;
 
   if (allowUniqueMethod && correlation.method) {
-    const methodMatches = candidates.filter((record) => {
+    const methodMatches = candidates.filter((record: any) => {
       const candidateCorrelation = inputCorrelationFromValue(record);
       return methodsCompatible(candidateCorrelation.method, correlation.method)
         && sessionsCompatible(candidateCorrelation.sessionId, correlation.sessionId);

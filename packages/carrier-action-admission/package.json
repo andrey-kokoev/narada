@@ -4,14 +4,24 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/carrier-action-admission.mjs",
-    "./tool-metadata": "./src/tool-metadata.mjs",
-    "./evidence-reader": "./src/evidence-reader.mjs",
+    ".": {
+      "types": "./dist/carrier-action-admission.d.ts",
+      "import": "./dist/carrier-action-admission.js"
+    },
+    "./tool-metadata": {
+      "types": "./dist/tool-metadata.d.ts",
+      "import": "./dist/tool-metadata.js"
+    },
+    "./evidence-reader": {
+      "types": "./dist/evidence-reader.d.ts",
+      "import": "./dist/evidence-reader.js"
+    },
     "./classification-cases": "./fixtures/classification-cases.json"
   },
   "scripts": {
-    "test": "node --test src/carrier-action-admission.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-action-admission.mjs src/tool-metadata.mjs src/evidence-reader.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/carrier-action-admission.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada2/site-common-tools": "workspace:*"

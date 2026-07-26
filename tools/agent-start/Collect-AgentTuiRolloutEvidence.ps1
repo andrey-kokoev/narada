@@ -172,7 +172,7 @@ $Evidence["thoughts-project.agent-tui"] = Invoke-BoundedLaunch -Root $ThoughtsRo
 if (-not $SkipAcceptanceReport) {
     Push-Location -LiteralPath $NaradaRoot
     try {
-        & node tools\agent-start\agent-tui-rollout-acceptance.mjs `
+        & node tools\agent-start\agent-tui-rollout-acceptance.ts `
             --site-root $NaradaRoot `
             --known-site-root "narada-andrey=$NaradaAndreyRoot" `
             --known-site-root "narada-staccato=$StaccatoRoot" `

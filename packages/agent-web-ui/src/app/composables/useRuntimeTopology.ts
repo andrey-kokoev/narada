@@ -170,7 +170,7 @@ function canonicalRuntimeTopology(health: Record<string, unknown> | null): Runti
           ['Runtime faults', numberField(mcp, 'runtime_fault_count')],
         ]),
       },
-      ...mcpChildren.map((child, index) => ({
+      ...mcpChildren.map((child: any, index: any) => ({
         id: `mcp-${stringField(child, 'id') ?? index}`,
         label: `MCP: ${stringField(child, 'label') ?? stringField(child, 'id') ?? 'unknown'}`,
         state: stringField(child, 'state') ?? 'unknown',
@@ -353,7 +353,7 @@ function runtimePosture({
       canSendInput: false,
     };
   }
-  if (inputPolicy === 'disabled_source_sealed') {
+  if (inputPolicy=== 'disabled_source_sealed') {
     return {
       verdictLabel: 'read-only attachment',
       primaryCause: 'Source authority is sealed for input.',
@@ -361,7 +361,7 @@ function runtimePosture({
       canSendInput: false,
     };
   }
-  if (!sessionId || status === 'unavailable') {
+  if (!sessionId || status=== 'unavailable') {
     return {
       verdictLabel: 'not attached',
       primaryCause: 'No live runtime health binding is available.',
@@ -377,7 +377,7 @@ function runtimePosture({
       canSendInput: true,
     };
   }
-  if (status === 'degraded') {
+  if (status=== 'degraded') {
     return {
       verdictLabel: 'attached, degraded',
       primaryCause: 'Runtime health is degraded, but authority is not stale.',
@@ -396,7 +396,7 @@ function runtimePosture({
 function compactMetadata(values: [string, string | number | null | undefined][]): { label: string; value: string }[] {
   return values
     .filter((entry): entry is [string, string | number] => entry[1] !== null && entry[1] !== undefined && String(entry[1]).length > 0)
-    .map(([label, value]) => ({ label, value: String(value) }));
+    .map(([label, value]: any) => ({ label, value: String(value) }));
 }
 
 function stringField(record: unknown, field: string): string | null {

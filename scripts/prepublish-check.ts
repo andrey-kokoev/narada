@@ -42,7 +42,7 @@ const publicationManifest = JSON.parse(
   schema: string;
   packages: Array<{ name: string; path: string }>;
 };
-const PACKAGES = publicationManifest.packages.map(({ path }) => path);
+const PACKAGES = publicationManifest.packages.map(({ path }: any) => path);
 
 const colors = {
   reset: '\x1b[0m',
@@ -69,7 +69,7 @@ function runCommand(command: string, cwd?: string): { success: boolean; output: 
       ? error as Record<string, unknown>
       : {};
     const output = [record.message, record.stdout, record.stderr]
-      .filter((value) => value !== undefined && value !== '')
+      .filter((value: any) => value !== undefined && value !== '')
       .map(String)
       .join('\n');
     return { success: false, output };
@@ -104,7 +104,7 @@ function runPackSmokeCheck(): CheckResult {
         };
       }
 
-      const after = readdirSync(tmp).filter((name) => !before.has(name) && name.endsWith('.tgz'));
+      const after = readdirSync(tmp).filter((name: any) => !before.has(name) && name.endsWith('.tgz'));
       if (after.length !== 1) {
         return {
           name: 'Pack smoke check',
@@ -113,7 +113,7 @@ function runPackSmokeCheck(): CheckResult {
         };
       }
 
-      if (pkgPath === 'packages/layers/cli') {
+      if (pkgPath=== 'packages/layers/cli') {
         const consumer = mkdtempSync(join(tmp, 'cli-consumer-'));
         writeFileSync(
           join(consumer, 'package.json'),
@@ -184,7 +184,7 @@ function runChecks(): CheckResult[] {
   log('\n📋 Checking canonical publication manifest...', 'blue');
   const publicationManifestValid = publicationManifest.schema === 'narada.npm_publication_packages.v1'
     && publicationManifest.packages.length > 0
-    && publicationManifest.packages.every(({ name, path }) => {
+    && publicationManifest.packages.every(({ name, path }: any) => {
       const manifest = packageJson(path);
       return manifest.name === name
         && manifest.private !== true
@@ -252,7 +252,7 @@ function runChecks(): CheckResult[] {
   if (allVersionsValid) log('  ✓ All versions are valid semver', 'green');
 
   log('\n📋 Checking for README files...', 'blue');
-  const missingReadmes = PACKAGES.filter((pkgPath) => !existsSync(join(pkgPath, 'README.md')));
+  const missingReadmes = PACKAGES.filter((pkgPath: any) => !existsSync(join(pkgPath, 'README.md')));
   checks.push({
     name: 'README files exist',
     passed: missingReadmes.length === 0,
@@ -291,7 +291,7 @@ function runChecks(): CheckResult[] {
     const pkg = packageJson(pkgPath);
     const deps = { ...pkg.dependencies, ...pkg.peerDependencies, ...pkg.optionalDependencies };
     for (const [name, version] of Object.entries(deps)) {
-      if (typeof version === 'string' && version.startsWith('file:')) {
+      if (typeof version=== 'string' && version.startsWith('file:')) {
         noFileDependencies = false;
         log(`  ✗ file: dependency found in ${pkgPath}: ${name}@${version}`, 'red');
       }
@@ -307,13 +307,13 @@ function runChecks(): CheckResult[] {
   log('\n📋 Checking CLI runtime dependency closure...', 'blue');
   const cliPackage = packageJson('packages/layers/cli');
   const cliWorkspaceDependencies = Object.entries(cliPackage.dependencies ?? {})
-    .filter(([, version]) => typeof version === 'string' && version.startsWith('workspace:'))
-    .map(([name]) => name);
+    .filter(([, version]: any) => typeof version === 'string' && version.startsWith('workspace:'))
+    .map(([name]: any) => name);
   const cliBundledDependencies = new Set(
     Array.isArray(cliPackage.bundleDependencies) ? cliPackage.bundleDependencies : [],
   );
   const unbundledCliWorkspaceDependencies = cliWorkspaceDependencies
-    .filter((name) => !cliBundledDependencies.has(name));
+    .filter((name: any) => !cliBundledDependencies.has(name));
   const cliClosureBundled = unbundledCliWorkspaceDependencies.length === 0;
   checks.push({
     name: 'CLI runtime dependency closure is distributable',
@@ -337,7 +337,7 @@ function main(): void {
   log(`🔍 Running ${PACK_ONLY ? 'pack-only ' : ''}pre-publish checks...\n`, 'blue');
 
   const checks = runChecks();
-  const failures = checks.filter((c) => !c.passed);
+  const failures = checks.filter((c: any) => !c.passed);
 
   log('\n' + '='.repeat(50), 'blue');
   log(`Results: ${checks.length - failures.length}/${checks.length} checks passed`, failures.length === 0 ? 'green' : 'red');

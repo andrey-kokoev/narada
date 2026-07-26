@@ -22,26 +22,26 @@
   },
   "bin": {
     "narada-agent-start": "./src/narada-agent-start.ts",
-    "narada-agent-start-verify-launchers": "./bin/verify-registered-site-launchers.mjs"
+    "narada-agent-start-verify-launchers": "./bin/verify-registered-site-launchers.ts"
   },
   "exports": {
     ".": "./src/narada-agent-start.ts",
     "./narada-agent-start": "./src/narada-agent-start.ts",
     "./launch-result-v0-contract": {
-      "types": "./src/launch-result-v0-contract.d.mts",
-      "import": "./src/launch-result-v0-contract.mjs"
+      "types": "./src/launch-result-v0-contract.d.ts",
+      "import": "./src/launch-result-v0-contract.ts"
     },
-    "./verify-registered-site-launchers": "./bin/verify-registered-site-launchers.mjs",
+    "./verify-registered-site-launchers": "./bin/verify-registered-site-launchers.ts",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "syntaxcheck": "node --import tsx --check src/narada-agent-start.ts && node --check bin/verify-registered-site-launchers.mjs",
+    "syntaxcheck": "node --import tsx --check src/narada-agent-start.ts && node --import tsx --check bin/verify-registered-site-launchers.ts",
     "generate:result-schema": "node --import tsx scripts/generate-result-schema.ts",
     "check:result-contract": "node --import tsx scripts/generate-result-schema.ts --check",
-    "test": "node test/run-agent-start-tests.mjs",
-    "test:launcher-contract": "node test/run-launcher-registry-contract-shards.mjs",
-    "verify": "node bin/verify-registered-site-launchers.mjs",
-    "test:option-contract": "node test/run-option-contract-shards.mjs"
+    "test": "node --import tsx test/run-agent-start-tests.ts",
+    "test:launcher-contract": "node --import tsx test/run-launcher-registry-contract-shards.ts",
+    "verify": "node --import tsx bin/verify-registered-site-launchers.ts",
+    "test:option-contract": "node --import tsx test/run-option-contract-shards.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

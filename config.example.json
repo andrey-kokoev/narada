@@ -21,7 +21,9 @@
       "narada-shell": {
         "command": "node",
         "args": [
-          "${siteRoot}/packages/mcp-shell-windows/server.mjs",
+          "--import",
+          "tsx",
+          "${siteRoot}/packages/mcp-shell-windows/server.ts",
           "--site-root",
           "${siteRoot}"
         ],

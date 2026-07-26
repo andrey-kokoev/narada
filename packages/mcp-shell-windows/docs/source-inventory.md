@@ -7,10 +7,10 @@ This inventory records external orientation evidence used for the package-local 
 ## Considered Evidence
 
 - `narada-andrey:kb/operations/shell-filesystem-mcp-boundaries.md`
-- `narada-andrey:tools/mcp-servers/shell/shell-mcp-server.mjs`
-- `narada-andrey:tools/mcp-servers/shell/shell-mcp-server.test.mjs`
-- `narada-andrey:tools/mcp-servers/shell/scoped-index-commit-guard.test.mjs`
-- `narada-andrey:tools/mcp-servers/shell/closeout-volatile-projection-boundary.test.mjs`
+- `narada-andrey:tools/mcp-servers/shell/shell-mcp-server.ts`
+- `narada-andrey:tools/mcp-servers/shell/shell-mcp-server.test.ts`
+- `narada-andrey:tools/mcp-servers/shell/scoped-index-commit-guard.test.ts`
+- `narada-andrey:tools/mcp-servers/shell/closeout-volatile-projection-boundary.test.ts`
 
 ## Lifted
 

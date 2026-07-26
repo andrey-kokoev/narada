@@ -81,7 +81,7 @@ export function createSessionProjection(
     projection.rawEvents.push(message);
     reduceHealthState(projection.health, message);
     const disposition = classifyRuntimeMessage(message);
-    if (disposition === 'state_sample') {
+    if (disposition=== 'state_sample') {
       projection.droppedStateSampleCount += 1;
     } else {
       const row = projectMessageRow(message, options, rowState);
@@ -183,7 +183,7 @@ function projectMessageRow(message: unknown, options: SessionProjectionOptions, 
   if (isRecord(options.customView) && !customViewIncludesDisposition(options.customView as CustomProjectionView, disposition)) return null;
   // Primary path: contract-provided render keys carry the identity contract.
   const key = projection.renderKey ?? projectionIdentityKey(message, projection) ?? `event:${state.renderedByKey.size}`;
-  if (projection.kind === 'assistant_message_stream') {
+  if (projection.kind=== 'assistant_message_stream') {
     const previous = state.renderedByKey.get(key)?.streamContent ?? '';
     const streamContent = `${previous}${summarizeValue(projection.summary)}`;
     projection = { ...projection, summary: streamContent, streamContent };
@@ -213,7 +213,7 @@ function projectMessageRow(message: unknown, options: SessionProjectionOptions, 
 
 function materializedRows(state: RowProjectionState): ProjectionRow[] {
   return state.order
-    .map((key) => state.renderedByKey.get(key))
+    .map((key: any) => state.renderedByKey.get(key))
     .filter((row): row is ProjectionRow => row !== undefined);
 }
 
@@ -343,7 +343,7 @@ function terminalDetail(event: UnknownRecord): string | null {
 }
 
 function toolDetail(item: UnknownRecord): string | null {
-  const name = [item.server, item.tool].filter((value) => typeof value === 'string' && value).join('.');
+  const name = [item.server, item.tool].filter((value: any) => typeof value === 'string' && value).join('.');
   return name || null;
 }
 
@@ -367,7 +367,7 @@ function normalizeAssistantText(value: unknown): string {
 
 function summarizeValue(value: unknown): string {
   if (value === null || value === undefined) return '';
-  if (Array.isArray(value)) return value.map((part) => summarizeValue(part)).join('\n');
+  if (Array.isArray(value)) return value.map((part: any) => summarizeValue(part)).join('\n');
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (typeof value === 'object') return JSON.stringify(value, null, 2);

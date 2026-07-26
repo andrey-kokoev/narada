@@ -6,29 +6,29 @@ import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   operatorSurfaceKindsForRuntimeHost,
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
-import { assertAgentStartResultV0, evaluateAgentStartHandoff } from './launch-result-v0-contract.mjs';
+import { assertAgentStartResultV0, evaluateAgentStartHandoff } from './launch-result-v0-contract.js';
 
-const NARS_OPERATOR_SURFACE_KINDS = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
+const NARS_OPERATOR_SURFACE_KINDS: any = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);
 
-export function siteNaradaRoot(siteRoot) {
+export function siteNaradaRoot(siteRoot: any) : any{
   return siteAuthorityRootFromSiteRoot(siteRoot);
 }
 
-export function carrierControlPath(siteRoot, sessionId) {
+export function carrierControlPath(siteRoot: any, sessionId: any) : any{
   return resolveNaradaSitePaths({ siteRoot, sessionId }).narsControlPath;
 }
 
-export function carrierSessionPath(siteRoot, sessionId) {
+export function carrierSessionPath(siteRoot: any, sessionId: any) : any{
   return resolveNaradaSitePaths({ siteRoot, sessionId }).narsSessionPath;
 }
 
-export function newCarrierSessionId() {
+export function newCarrierSessionId() : any{
   return `carrier_${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}_${randomUUID().replace(/-/g, '').slice(0, 12)}`;
 }
 
-export function writeJsonFileAtomically(path, value) {
+export function writeJsonFileAtomically(path: any, value: any) : any{
   mkdirSync(dirname(path), { recursive: true });
-  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  const temporaryPath: any = `${path}.${process.pid}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temporaryPath, `${JSON.stringify(value, null, 2)}\n`, { encoding: 'utf8', flag: 'wx' });
     renameSync(temporaryPath, path);
@@ -43,18 +43,18 @@ export function materializeCarrierLaunchFiles({
   startingCarrierInput,
   agentStartEventId,
   identityToken,
-}) {
-  const controlPath = carrierControlPath(siteRoot, sessionId);
-  const sessionPath = carrierSessionPath(siteRoot, sessionId);
+}: any) : any{
+  const controlPath: any = carrierControlPath(siteRoot, sessionId);
+  const sessionPath: any = carrierSessionPath(siteRoot, sessionId);
   mkdirSync(dirname(controlPath), { recursive: true });
   if (!existsSync(controlPath)) writeFileSync(controlPath, '', 'utf8');
   if (!existsSync(sessionPath)) writeFileSync(sessionPath, '', 'utf8');
   if (startingCarrierInput?.content) {
-    const existingControl = readFileSync(controlPath, 'utf8');
+    const existingControl: any = readFileSync(controlPath, 'utf8');
     if (existingControl.trim().length === 0) {
-      const now = new Date().toISOString();
-      const token = identityToken(`${sessionId}_starting_carrier_input`);
-      const controlRecord = {
+      const now: any = new Date().toISOString();
+      const token: any = identityToken(`${sessionId}_starting_carrier_input`);
+      const controlRecord: any = {
         schema: 'narada.carrier.control.input_event.v1',
         control_event_id: `control_${token}`,
         input_event_id: `input_${token}`,
@@ -106,11 +106,11 @@ export function materializeCarrierSessionRecord({
   workspace,
   processId,
   writeJsonFile,
-} = {}) {
-  const carrierSessionId = sessionId ?? newCarrierSessionId();
-  const recordPath = join(pcSiteRoot, 'runtime', 'carrier-sessions', `${carrierSessionId}.json`);
-  const startedAt = new Date().toISOString();
-  const record = {
+}: any = {}) : any{
+  const carrierSessionId: any = sessionId ?? newCarrierSessionId();
+  const recordPath: any = join(pcSiteRoot, 'runtime', 'carrier-sessions', `${carrierSessionId}.json`);
+  const startedAt: any = new Date().toISOString();
+  const record: any = {
     schema: 'narada.pc_runtime.carrier_session.v0',
     session_id: carrierSessionId,
     runtime_session_id: carrierSessionId,
@@ -175,16 +175,16 @@ export function materializeCarrierSessionRecord({
   };
 }
 
-export function writeLaunchResultFile(result, { siteRoot }) {
-  const eventId = result.agent_start_event;
+export function writeLaunchResultFile(result: any, { siteRoot }: any) : any{
+  const eventId: any = result.agent_start_event;
   if (!eventId) return null;
-  const outDir = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
+  const outDir: any = join(siteRoot, '.ai', 'runtime', 'agent-start-results');
   mkdirSync(outDir, { recursive: true });
-  const path = join(outDir, `${eventId}.result.json`);
+  const path: any = join(outDir, `${eventId}.result.json`);
   result.launch_result_path = path;
-  const validatedResult = assertAgentStartResultV0(result);
+  const validatedResult: any = assertAgentStartResultV0(result);
   if (validatedResult.status === 'materialized') {
-    const handoff = evaluateAgentStartHandoff(validatedResult);
+    const handoff: any = evaluateAgentStartHandoff(validatedResult);
     if (!handoff.eligible) {
       throw new Error(
         `agent_start_result_handoff_invalid: ${handoff.reason ?? 'unknown'}: ${handoff.detail ?? 'The materialized result cannot be attached.'}`,

@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/carrier-command-contract.mjs",
+    ".": {
+      "types": "./dist/carrier-command-contract.d.ts",
+      "import": "./dist/carrier-command-contract.js"
+    },
     "./commands": "./contracts/commands.json"
   },
   "scripts": {
-    "test": "node --test src/carrier-command-contract.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-command-contract.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/carrier-command-contract.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Shared carrier command vocabulary and semantic effect contract",
   "license": "MIT",

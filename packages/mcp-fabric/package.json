@@ -4,15 +4,22 @@
   "private": true,
   "type": "module",
   "bin": {
-    "mcp_fabric_doctor": "./src/mcp-fabric.mjs"
+    "mcp_fabric_doctor": "./dist/mcp-fabric.js"
   },
   "exports": {
-    ".": "./src/mcp-fabric.mjs",
-    "./runtime-state": "./src/mcp-fabric-runtime-state.mjs"
+    ".": {
+      "types": "./dist/mcp-fabric.d.ts",
+      "import": "./dist/mcp-fabric.js"
+    },
+    "./runtime-state": {
+      "types": "./dist/mcp-fabric-runtime-state.d.ts",
+      "import": "./dist/mcp-fabric-runtime-state.js"
+    }
   },
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-fabric.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@narada2/carrier-action-admission": "workspace:*",
@@ -27,5 +34,8 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "files": [
+    "dist/"
+  ]
 }

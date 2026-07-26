@@ -26,7 +26,7 @@ import type { CloudflareNarsWorkspaceRouteRegistration, CloudflareNarsWorkspaceU
 export const CLOUDFLARE_NARS_PROJECTION_STORE_SCHEMA = 'narada.cloudflare_nars_projection.store.v1';
 export const CLOUDFLARE_NARS_PROJECTION_PREFLIGHT_SCHEMA = 'narada.cloudflare_nars_projection.preflight.v1';
 
-type HiddenSpawnImpl = NonNullable<Parameters<typeof spawnHiddenPostureProcess>[2]['spawnImpl']>;
+type HiddenSpawnImpl = NonNullable<NonNullable<Parameters<typeof spawnHiddenPostureProcess>[2]>['spawnImpl']>;
 
 export interface ProjectionStorePaths {
   projections_root: string;

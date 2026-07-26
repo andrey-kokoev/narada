@@ -27,7 +27,7 @@ type StoredProjectionViews = {
   customViews?: unknown;
 };
 
-export function useProjectionVerbosity(initial = NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY) {
+export function useProjectionVerbosity(initial: any= NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY) {
   const fallbackVerbosity = loadProjectionVerbosity(initial);
   const persisted = loadProjectionViews(fallbackVerbosity);
   const customViews = ref<CustomProjectionView[]>(persisted.customViews);
@@ -37,12 +37,12 @@ export function useProjectionVerbosity(initial = NARS_CLIENT_PROJECTION_DEFAULT_
     ...BUILT_IN_PROJECTION_VIEWS,
     ...customViews.value.map(customProjectionViewOption),
   ]);
-  const activeView = computed(() => viewOptions.value.find((view) => view.id === viewId.value) ?? BUILT_IN_PROJECTION_VIEWS[0]);
+  const activeView = computed(() => viewOptions.value.find((view: any) => view.id === viewId.value) ?? BUILT_IN_PROJECTION_VIEWS[0]);
 
   watch([viewId, customViews], () => persistProjectionViews(viewId.value, verbosity.value, customViews.value), { deep: true });
 
   function setView(value: string) {
-    const selected = viewOptions.value.find((view) => view.id === value) ?? BUILT_IN_PROJECTION_VIEWS[0];
+    const selected = viewOptions.value.find((view: any) => view.id === value) ?? BUILT_IN_PROJECTION_VIEWS[0];
     viewId.value = selected.id;
     verbosity.value = selected.canonicalVerbosity as ProjectionVerbosity;
   }
@@ -56,16 +56,16 @@ export function useProjectionVerbosity(initial = NARS_CLIENT_PROJECTION_DEFAULT_
       facets: draft.facets,
     });
     if (!normalized) return false;
-    const index = customViews.value.findIndex((view) => view.id === normalized.id);
+    const index = customViews.value.findIndex((view: any) => view.id === normalized.id);
     if (index < 0) customViews.value = [...customViews.value, normalized];
-    else customViews.value = customViews.value.map((view, currentIndex) => currentIndex === index ? normalized : view);
+    else customViews.value = customViews.value.map((view: any, currentIndex: any) => currentIndex === index ? normalized : view);
     setView(normalized.id);
     return true;
   }
 
   function deleteCustomView(id: string) {
-    if (!customViews.value.some((view) => view.id === id)) return;
-    customViews.value = customViews.value.filter((view) => view.id !== id);
+    if (!customViews.value.some((view: any) => view.id === id)) return;
+    customViews.value = customViews.value.filter((view: any) => view.id !== id);
     if (viewId.value === id) setView('conversation');
   }
 
@@ -90,7 +90,7 @@ function loadProjectionViews(fallbackVerbosity: ProjectionVerbosity): { activeVi
   const stored = readJsonPreference<StoredProjectionViews | null>(PROJECTION_VIEWS_STORAGE_KEY, null);
   const customViews = sanitizeCustomProjectionViews(stored?.customViews);
   const activeViewId = typeof stored?.activeViewId === 'string'
-    && (isCanonicalProjectionVerbosity(stored.activeViewId) || customViews.some((view) => view.id === stored.activeViewId))
+    && (isCanonicalProjectionVerbosity(stored.activeViewId) || customViews.some((view: any) => view.id === stored.activeViewId))
     ? stored.activeViewId
     : legacyActiveViewId;
   return { activeViewId, customViews };
@@ -104,7 +104,7 @@ function persistProjectionViews(activeViewId: string, verbosity: ProjectionVerbo
 
 function canonicalVerbosityForView(viewId: string, customViews: readonly CustomProjectionView[], fallback: ProjectionVerbosity): ProjectionVerbosity {
   if (isCanonicalProjectionVerbosity(viewId)) return viewId as ProjectionVerbosity;
-  const custom = customViews.find((view) => view.id === viewId);
+  const custom = customViews.find((view: any) => view.id === viewId);
   return custom ? transportVerbosityForFacets(custom.facets) as ProjectionVerbosity : fallback;
 }
 

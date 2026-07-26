@@ -30,7 +30,7 @@ export function useAffordanceConfirmations(events: unknown[]) {
       if (!event) continue;
       const eventName = stringField(event, 'event');
       const confirmationId = stringField(event, 'confirmation_id');
-      if (eventName === CONFIRMATION_REQUIRED_EVENT && confirmationId) {
+      if (eventName=== CONFIRMATION_REQUIRED_EVENT && confirmationId) {
         pending.set(confirmationId, {
           confirmationId,
           requestId: stringField(event, 'request_id'),

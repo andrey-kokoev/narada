@@ -120,7 +120,7 @@ export function createOperatorInputDeliveryState(): DeliveryState {
   };
 }
 
-export function createOperatorInputDeliveryProjection(events: readonly unknown[] = [], nowMs = Date.now()): OperatorInputDeliveryProjection {
+export function createOperatorInputDeliveryProjection(events: readonly unknown[] = [], nowMs: any= Date.now()): OperatorInputDeliveryProjection {
   const state = createOperatorInputDeliveryState();
   for (const message of events) reduceOperatorInputDelivery(state, message);
   return materializeOperatorInputDelivery(state, nowMs);
@@ -137,7 +137,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
   const kind = event.event;
   const requestId = requestIdFromEvent(event);
 
-  if (kind === 'operator_input_submitted') {
+  if (kind=== 'operator_input_submitted') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = ensureRecord(state, requestId, event);
     if (isFinalTerminal(record.phase)) return state;
@@ -152,7 +152,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'input_event_deduplicated') {
+  if (kind=== 'input_event_deduplicated') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -160,7 +160,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'operator_input_pending_restored') {
+  if (kind=== 'operator_input_pending_restored') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = ensureRecord(state, requestId, event);
     if (isFinalTerminal(record.phase)) return state;
@@ -172,7 +172,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'operator_input_reviewed') {
+  if (kind=== 'operator_input_reviewed') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -180,7 +180,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'operator_input_discarded') {
+  if (kind=== 'operator_input_discarded') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -188,7 +188,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'operator_input_retried') {
+  if (kind=== 'operator_input_retried') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -196,7 +196,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'operator_input_pending_expired') {
+  if (kind=== 'operator_input_pending_expired') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -204,7 +204,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'web_ui_input_ack_timeout') {
+  if (kind=== 'web_ui_input_ack_timeout') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
@@ -213,14 +213,14 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'web_ui_input_not_sent') {
+  if (kind=== 'web_ui_input_not_sent') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (record) transition(record, OPERATOR_INPUT_DELIVERY_PHASES.REJECTED, event, event.message ?? event.reason_code ?? 'input was not sent');
     return state;
   }
 
-  if (kind === 'web_ui_input_transport_failed') {
+  if (kind=== 'web_ui_input_transport_failed') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -228,7 +228,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'operator_input_late_acknowledged') {
+  if (kind=== 'operator_input_late_acknowledged') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -236,7 +236,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'projection_input_response' && isProjectionInputAdmissionAccepted(event)) {
+  if (kind=== 'projection_input_response' && isProjectionInputAdmissionAccepted(event)) {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -244,7 +244,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'input_event_queued') {
+  if (kind=== 'input_event_queued') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -253,7 +253,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'input_event_started' || kind === 'input_admitted_to_turn') {
+  if (kind=== 'input_event_started' || kind === 'input_admitted_to_turn') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -262,7 +262,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'input_event_completed' || kind === 'input_completed') {
+  if (kind=== 'input_event_completed' || kind === 'input_completed') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -270,24 +270,24 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'session_control_accepted' || kind === 'session_control_response') {
+  if (kind=== 'session_control_accepted' || kind === 'session_control_response') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     const terminalState = typeof event.terminal_state === 'string' ? event.terminal_state : null;
-    if (kind === 'session_control_response' && terminalState !== null && ['failed', 'rejected', 'refused', 'interrupted'].includes(terminalState)) {
+    if (kind=== 'session_control_response' && terminalState !== null && ['failed', 'rejected', 'refused', 'interrupted'].includes(terminalState)) {
       const phase = terminalState === 'rejected' || terminalState === 'refused'
         ? OPERATOR_INPUT_DELIVERY_PHASES.REJECTED
         : OPERATOR_INPUT_DELIVERY_PHASES.FAILED;
       transition(record, phase, event, event.error ?? event.message ?? terminalState, terminalState);
       return state;
     }
-    if (kind === 'session_control_response' && terminalState === 'completed') {
+    if (kind=== 'session_control_response' && terminalState === 'completed') {
       absorbRuntimeMetadata(record, event);
       transition(record, OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED, event, null, 'completed');
       return state;
     }
-    if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.DRAFT
+    if (record.phase=== OPERATOR_INPUT_DELIVERY_PHASES.DRAFT
       || record.phase === OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING
       || record.phase === OPERATOR_INPUT_DELIVERY_PHASES.RELAY_PENDING
       || record.phase === OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT) {
@@ -296,12 +296,12 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'runtime_request_state_transition') {
+  if (kind=== 'runtime_request_state_transition') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     const requestState = typeof event.request_state === 'string' ? event.request_state : null;
-    if (requestState === 'failed' || requestState === 'rejected') {
+    if (requestState=== 'failed' || requestState === 'rejected') {
       const phase = requestState === 'rejected'
         ? OPERATOR_INPUT_DELIVERY_PHASES.REJECTED
         : OPERATOR_INPUT_DELIVERY_PHASES.FAILED;
@@ -310,7 +310,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'session_control_rejected') {
+  if (kind=== 'session_control_rejected') {
     if (!isTrackedOperatorFrame(event.method)) return state;
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
@@ -322,19 +322,19 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end') {
+  if (kind=== 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (record && !isFinalTerminal(record.phase)) transition(record, OPERATOR_INPUT_DELIVERY_PHASES.REJECTED, event, event.drop_reason ?? 'input was removed');
     return state;
   }
 
-  if (kind === 'carrier_turn_failed' || kind === 'turn_failed' || kind === 'turn_interrupted') {
+  if (kind=== 'carrier_turn_failed' || kind === 'turn_failed' || kind === 'turn_interrupted') {
     const record = findRecordByTurnOrRequest(state, requestId, event);
     if (record && !isFinalTerminal(record.phase)) transition(record, OPERATOR_INPUT_DELIVERY_PHASES.FAILED, event, event.error ?? event.terminal_state ?? 'turn failed', event.terminal_state ?? 'failed');
     return state;
   }
 
-  if (kind === 'carrier_turn_started' || kind === 'turn_started') {
+  if (kind=== 'carrier_turn_started' || kind === 'turn_started') {
     const record = findRecordByTurnOrRequest(state, requestId, event);
     if (record && !isFinalTerminal(record.phase)) {
       absorbRuntimeMetadata(record, event);
@@ -344,7 +344,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
   return state;
 }
 
-export function materializeOperatorInputDelivery(state: DeliveryState, nowMs = Date.now()): OperatorInputDeliveryProjection {
+export function materializeOperatorInputDelivery(state: DeliveryState, nowMs: any= Date.now()): OperatorInputDeliveryProjection {
   const latestKey = state.order.length > 0 ? state.order[state.order.length - 1] : undefined;
   const record = latestKey ? state.records.get(latestKey) : null;
   if (!record) return { ...IDLE_OPERATOR_INPUT_DELIVERY, history: [...IDLE_OPERATOR_INPUT_DELIVERY.history] };
@@ -405,7 +405,7 @@ function findRecord(state: DeliveryState, requestId: string | null, event: Deliv
   if (explicitMatch.record || explicitMatch.ambiguous) return explicitMatch.record as DeliveryRecord | null;
   const activeMatch = findCorrelatedInput(state.records.values(), event, {
     allowUniqueMethod: true,
-    activeOnly: (record) => !isFinalTerminal(record.phase),
+    activeOnly: (record: any) => !isFinalTerminal(record.phase),
   });
   return activeMatch.record as DeliveryRecord | null;
 }
@@ -415,7 +415,7 @@ function findOrCreateRuntimeRecord(state: DeliveryState, requestId: string | nul
   if (existing) return existing;
   const activeMatch = findCorrelatedInput(state.records.values(), event, {
     allowUniqueMethod: true,
-    activeOnly: (record) => !isFinalTerminal(record.phase),
+    activeOnly: (record: any) => !isFinalTerminal(record.phase),
   });
   if (activeMatch.ambiguous) return null;
   return ensureRecord(state, requestId, event);
@@ -425,7 +425,7 @@ function findRecordByTurnOrRequest(state: DeliveryState, requestId: string | nul
   const direct = findRecord(state, requestId, event);
   if (direct) return direct;
   if (event?.turn_id) {
-    for (let index = state.order.length - 1; index >= 0; index -= 1) {
+    for (let index= state.order.length - 1; index >= 0; index -= 1) {
       const record = state.records.get(state.order[index]);
       if ((record?.activeTurnId === event.turn_id || record?.inputEventId === event.turn_id) && !isFinalTerminal(record.phase)) return record;
     }
@@ -453,7 +453,7 @@ function transition(
   const previousPhase = record.phase;
   const timestampMs = timestampFromEvent(event) ?? Date.now();
   if (!transitionOperatorInputLifecycle(record, phase, new Date(timestampMs).toISOString())) return record;
-  if (previousPhase === OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT && phase !== OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT) {
+  if (previousPhase=== OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT && phase !== OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT) {
     record.terminalAtMs = null;
     record.terminalState = null;
     record.error = null;
@@ -461,7 +461,7 @@ function transition(
   if (previousPhase !== phase) record.history.push(phase);
   if (phase === OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED) record.acceptedAtMs ??= timestampMs;
   if (phase === OPERATOR_INPUT_DELIVERY_PHASES.STEERING) record.startedAtMs ??= timestampMs;
-  if (phase === OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED
+  if (phase=== OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED
     || phase === OPERATOR_INPUT_DELIVERY_PHASES.REJECTED
     || phase === OPERATOR_INPUT_DELIVERY_PHASES.FAILED
     || phase === OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT
@@ -507,7 +507,7 @@ function timestampFromEvent(event: DeliveryEvent): number | null {
 }
 
 function deliveryLabel(phase: OperatorInputPhase, record: DeliveryRecord | null = null): string {
-  if (record?.method === 'session.close') {
+  if (record?.method=== 'session.close') {
     const closeLabels: Partial<Record<OperatorInputPhase, string>> = {
       [OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING]: 'Closing session…',
       [OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED]: 'Session close accepted',

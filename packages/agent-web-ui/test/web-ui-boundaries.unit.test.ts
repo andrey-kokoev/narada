@@ -192,7 +192,7 @@ describe('agent-web-ui runtime boundaries', () => {
       authorityTransition: shallowRef(null),
       mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
     }).topology.value;
-    expect(topology.nodes.find((node) => node.id === 'control-input-bridge')).toMatchObject({
+    expect(topology.nodes.find((node: any) => node.id === 'control-input-bridge')).toMatchObject({
       label: 'Control Input',
       state: 'polling',
       detail: 'control.jsonl',
@@ -206,8 +206,8 @@ describe('agent-web-ui runtime boundaries', () => {
       snippets: [],
       supportsProtocolMethod: supportsHealthOnly,
     });
-    expect(commands.some((entry) => entry.kind === 'command' && entry.command.id === 'status')).toBe(true);
-    expect(commands.some((entry) => entry.kind === 'command' && entry.command.id === 'recovery')).toBe(false);
+    expect(commands.some((entry: any) => entry.kind === 'command' && entry.command.id === 'status')).toBe(true);
+    expect(commands.some((entry: any) => entry.kind === 'command' && entry.command.id === 'recovery')).toBe(false);
 
     const help = submitOperatorInput('/help', null, null, 'default', false, supportsHealthOnly);
     expect(help.localEvent).toMatchObject({ event: 'agent_web_ui_help' });
@@ -217,12 +217,12 @@ describe('agent-web-ui runtime boundaries', () => {
 
   it('bounds retained session events and preserves the newest sequence window', () => {
     const state = createRetainedEventState(3);
-    for (let sequence = 1; sequence <= 5; sequence += 1) {
+    for (let sequence= 1; sequence <= 5; sequence += 1) {
       retainEvent(state, { event: 'session_event', payload: { event: 'assistant_message', sequence }, cursor: { sequence } });
     }
     expect(state.events).toHaveLength(3);
     expect(state.droppedCount).toBe(2);
-    expect(state.events.map((event) => (event as { cursor: { sequence: number } }).cursor.sequence)).toEqual([3, 4, 5]);
+    expect(state.events.map((event: any) => (event as { cursor: { sequence: number } }).cursor.sequence)).toEqual([3, 4, 5]);
   });
 
   it('does not allow an invalid retention limit to disable trimming', () => {
@@ -237,7 +237,7 @@ describe('agent-web-ui runtime boundaries', () => {
       { type: 'artifact_ref', artifact_id: 'artifact-1', kind: 'html' },
       { type: 'intent_ref', intent: 'entity_number:dismiss', label: 'Dismiss' },
     ]);
-    expect(pipeline.parts.map((part) => part.kind)).toEqual([
+    expect(pipeline.parts.map((part: any) => part.kind)).toEqual([
       'plain_text',
       'mermaid_diagram',
       'artifact_ref',
@@ -250,7 +250,7 @@ describe('agent-web-ui runtime boundaries', () => {
     const context = { artifactBasePath: null, surfaceKinds: [], genericAffordanceCount: 0 };
     expect(isSessionPanelAvailable('generic_affordance', context)).toBe(false);
     expect(availableSessionPanelIds(context)).toEqual(['runtime_topology', 'mcp']);
-    expect(SESSION_PANEL_REGISTRY.find((panel) => panel.id === 'generic_affordance')?.unavailableMessage).toMatch(/advertised/);
+    expect(SESSION_PANEL_REGISTRY.find((panel: any) => panel.id === 'generic_affordance')?.unavailableMessage).toMatch(/advertised/);
   });
 
   it('admits session actions once and records fail-closed refusals', () => {
@@ -258,7 +258,7 @@ describe('agent-web-ui runtime boundaries', () => {
     const transport = shallowRef<SessionTransport | null>({
       sendFrame: vi.fn(() => true),
     } as unknown as SessionTransport);
-    const actions = useSessionActions(transport, (event) => retained.push(event), (method) => method === 'session.health');
+    const actions = useSessionActions(transport, (event: any) => retained.push(event), (method: any) => method === 'session.health');
     expect(actions.send({ method: 'session.health', params: {} })).toBe(true);
     expect(actions.send({ method: 'session.close', params: {} })).toBe(false);
     expect(actions.send(null)).toBe(false);
@@ -271,7 +271,7 @@ describe('agent-web-ui runtime boundaries', () => {
     const throwingTransport = shallowRef<SessionTransport | null>({
       sendFrame: vi.fn(() => { throw new Error('transport down'); }),
     } as unknown as SessionTransport);
-    const throwingActions = useSessionActions(throwingTransport, (event) => retained.push(event));
+    const throwingActions = useSessionActions(throwingTransport, (event: any) => retained.push(event));
     expect(throwingActions.send({ method: 'session.health' })).toBe(false);
     expect(retained.at(-1)).toEqual(expect.objectContaining({ reason_code: 'transport_rejected_session_action' }));
   });
@@ -285,7 +285,7 @@ describe('agent-web-ui runtime boundaries', () => {
       'default',
       true,
       null,
-      (frame) => { frames.push(frame); return true; },
+      (frame: any) => { frames.push(frame); return true; },
       'projected-turn',
     );
     expect(result.handled).toBe(true);
@@ -308,7 +308,7 @@ describe('agent-web-ui runtime boundaries', () => {
       null,
       'default',
       false,
-      (method) => method === 'session.submit',
+      (method: any) => method === 'session.submit',
       sendFrame,
     );
     expect(initial.handled).toBe(true);
@@ -322,7 +322,7 @@ describe('agent-web-ui runtime boundaries', () => {
       null,
       'default',
       false,
-      (method) => method === 'session.close',
+      (method: any) => method === 'session.close',
       sendFrame,
     );
     expect(close.handled).toBe(true);
@@ -336,7 +336,7 @@ describe('agent-web-ui runtime boundaries', () => {
       null,
       'default',
       false,
-      (method) => method === 'session.submit',
+      (method: any) => method === 'session.submit',
       sendFrame,
       undefined,
       initialKey ?? null,
@@ -379,12 +379,12 @@ describe('agent-web-ui runtime boundaries', () => {
           return timer.id;
         },
         clearTimeout(id: number) {
-          const timer = timers.find((candidate) => candidate.id === id);
+          const timer = timers.find((candidate: any) => candidate.id === id);
           if (timer) timer.cleared = true;
         },
       },
     });
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
     expect(client.kind).toBe('cloudflare-projection');
     expect(sockets).toHaveLength(1);
     sockets[0].open();
@@ -392,9 +392,9 @@ describe('agent-web-ui runtime boundaries', () => {
     sockets[0].emit('error');
     sockets[0].emit('close');
     expect(sockets[0].readyState).toBe(3);
-    expect(timers.filter((timer) => timer.delay === 1000 && !timer.cleared)).toHaveLength(1);
+    expect(timers.filter((timer: any) => timer.delay === 1000 && !timer.cleared)).toHaveLength(1);
     client.close();
-    expect(timers.some((timer) => timer.cleared)).toBe(true);
+    expect(timers.some((timer: any) => timer.cleared)).toBe(true);
   });
 
   it('times out an unacknowledged operator input without resending and reconciles a late acknowledgment', () => {
@@ -415,9 +415,9 @@ describe('agent-web-ui runtime boundaries', () => {
       sessionId: 'session-timeout',
       pendingInputStorageKey: 'pending-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       operatorInputAckTimeoutMs: 5000,
       WebSocketCtor,
@@ -428,11 +428,11 @@ describe('agent-web-ui runtime boundaries', () => {
           return timer.id;
         },
         clearTimeout(id: number) {
-          const timer = timers.find((candidate) => candidate.id === id);
+          const timer = timers.find((candidate: any) => candidate.id === id);
           if (timer) timer.cleared = true;
         },
       },
-      onEvent: (event) => clientEvents.push(event),
+      onEvent: (event: any) => clientEvents.push(event),
     });
 
     sockets[0].open();
@@ -447,14 +447,14 @@ describe('agent-web-ui runtime boundaries', () => {
     });
     expect(storageValues.get('pending-input-test')).toContain('request-timeout');
 
-    timers.find((timer) => timer.delay === 5000)?.handler();
+    timers.find((timer: any) => timer.delay === 5000)?.handler();
     expect(clientEvents).toContainEqual(expect.objectContaining({
       event: 'web_ui_input_ack_timeout',
       request_id: 'request-timeout',
       reason_code: 'nars_ack_timeout',
     }));
-    expect(timers.filter((timer) => timer.delay === 5000 && !timer.cleared)).toHaveLength(0);
-    expect(sockets[0].sentFrames.filter((frame) => JSON.parse(frame).id === 'request-timeout')).toHaveLength(1);
+    expect(timers.filter((timer: any) => timer.delay === 5000 && !timer.cleared)).toHaveLength(0);
+    expect(sockets[0].sentFrames.filter((frame: any) => JSON.parse(frame).id === 'request-timeout')).toHaveLength(1);
     expect(JSON.parse(storageValues.get('pending-input-test') ?? '[]')).toEqual([
       expect.objectContaining({ request_id: 'request-timeout', phase: 'timed_out' }),
     ]);
@@ -492,9 +492,9 @@ describe('agent-web-ui runtime boundaries', () => {
       sessionId: 'session-websocket-error',
       pendingInputStorageKey: 'websocket-error-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       operatorInputAckTimeoutMs: 5000,
       WebSocketCtor,
@@ -505,11 +505,11 @@ describe('agent-web-ui runtime boundaries', () => {
           return timer.id;
         },
         clearTimeout(id: number) {
-          const timer = timers.find((candidate) => candidate.id === id);
+          const timer = timers.find((candidate: any) => candidate.id === id);
           if (timer) timer.cleared = true;
         },
       },
-      onEvent: (event) => clientEvents.push(event),
+      onEvent: (event: any) => clientEvents.push(event),
     });
 
     sockets[0].open();
@@ -536,8 +536,8 @@ describe('agent-web-ui runtime boundaries', () => {
       rejected_method: 'conversation.send',
     }));
     expect(storageValues.has('websocket-error-input-test')).toBe(false);
-    expect(timers.find((timer) => timer.delay === 5000)?.cleared).toBe(true);
-    expect(clientEvents.some((event) => (event as { event?: string })?.event === 'web_ui_input_ack_timeout')).toBe(false);
+    expect(timers.find((timer: any) => timer.delay === 5000)?.cleared).toBe(true);
+    expect(clientEvents.some((event: any) => (event as { event?: string })?.event === 'web_ui_input_ack_timeout')).toBe(false);
     client.close();
   });
 
@@ -559,9 +559,9 @@ describe('agent-web-ui runtime boundaries', () => {
       sessionId: 'session-terminal',
       pendingInputStorageKey: 'pending-terminal-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       operatorInputAckTimeoutMs: 5000,
       WebSocketCtor,
@@ -572,11 +572,11 @@ describe('agent-web-ui runtime boundaries', () => {
           return timer.id;
         },
         clearTimeout(id: number) {
-          const timer = timers.find((candidate) => candidate.id === id);
+          const timer = timers.find((candidate: any) => candidate.id === id);
           if (timer) timer.cleared = true;
         },
       },
-      onEvent: (event) => clientEvents.push(event),
+      onEvent: (event: any) => clientEvents.push(event),
     });
 
     sockets[0].open();
@@ -604,8 +604,8 @@ describe('agent-web-ui runtime boundaries', () => {
       payload: expect.objectContaining({ event: 'runtime_request_state_transition' }),
     }));
     expect(storageValues.has('pending-terminal-input-test')).toBe(false);
-    expect(timers.find((timer) => timer.delay === 5000)?.cleared).toBe(true);
-    expect(clientEvents.some((event) => (event as { event?: string })?.event === 'web_ui_input_ack_timeout')).toBe(false);
+    expect(timers.find((timer: any) => timer.delay === 5000)?.cleared).toBe(true);
+    expect(clientEvents.some((event: any) => (event as { event?: string })?.event === 'web_ui_input_ack_timeout')).toBe(false);
     client.close();
   });
 
@@ -627,9 +627,9 @@ describe('agent-web-ui runtime boundaries', () => {
       sessionId: 'session-recovery',
       pendingInputStorageKey: 'recovery-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       operatorInputAckTimeoutMs: 5000,
       WebSocketCtor,
@@ -640,11 +640,11 @@ describe('agent-web-ui runtime boundaries', () => {
           return timer.id;
         },
         clearTimeout(id: number) {
-          const timer = timers.find((candidate) => candidate.id === id);
+          const timer = timers.find((candidate: any) => candidate.id === id);
           if (timer) timer.cleared = true;
         },
       },
-      onEvent: (event) => events.push(event),
+      onEvent: (event: any) => events.push(event),
     });
 
     sockets[0].open();
@@ -659,7 +659,7 @@ describe('agent-web-ui runtime boundaries', () => {
       expect.objectContaining({ request_id: 'request-review', phase: 'retried', superseded_by_request_id: 'request-retry' }),
     ]);
     expect(events).toContainEqual(expect.objectContaining({ event: 'operator_input_retried', request_id: 'request-review', retry_request_id: 'request-retry' }));
-    expect(sockets[0].sentFrames.filter((frame) => JSON.parse(frame).id === 'request-review')).toHaveLength(1);
+    expect(sockets[0].sentFrames.filter((frame: any) => JSON.parse(frame).id === 'request-review')).toHaveLength(1);
 
     expect(client.sendFrame({ id: 'request-discard', method: 'session.submit', params: { message: 'discard me' } })).toBe(true);
     expect(client.reviewPendingOperatorInput('request-discard')).toBe(true);
@@ -698,12 +698,12 @@ describe('agent-web-ui runtime boundaries', () => {
       sessionId: 'session-restored',
       pendingInputStorageKey: 'pending-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       WebSocketCtor,
-      onEvent: (event) => restoredEvents.push(event),
+      onEvent: (event: any) => restoredEvents.push(event),
     });
 
     expect(restoredEvents).toContainEqual(expect.objectContaining({
@@ -742,12 +742,12 @@ describe('agent-web-ui runtime boundaries', () => {
       pendingInputStorageKey: 'expired-input-test',
       pendingInputRetentionMs: 1000,
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       WebSocketCtor,
-      onEvent: (event) => events.push(event),
+      onEvent: (event: any) => events.push(event),
     });
 
     expect(events).toContainEqual(expect.objectContaining({
@@ -782,9 +782,9 @@ describe('agent-web-ui runtime boundaries', () => {
       inputEndpoint: 'https://projection.example/input',
       pendingInputStorageKey: 'cloudflare-pending-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       operatorInputAckTimeoutMs: 7000,
       WebSocketCtor,
@@ -796,14 +796,14 @@ describe('agent-web-ui runtime boundaries', () => {
           return timer.id;
         },
         clearTimeout(id: number) {
-          const timer = timers.find((candidate) => candidate.id === id);
+          const timer = timers.find((candidate: any) => candidate.id === id);
           if (timer) timer.cleared = true;
         },
       },
-      onEvent: (event) => events.push(event),
+      onEvent: (event: any) => events.push(event),
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
     expect(sockets).toHaveLength(1);
     sockets[0].open();
     expect(client.sendFrame({
@@ -815,12 +815,12 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(fetchFn).toHaveBeenCalledWith('https://projection.example/input', expect.objectContaining({ method: 'POST' }));
     expect(storageValues.get('cloudflare-pending-input-test')).toContain('cloudflare-request-timeout');
 
-    timers.find((timer) => timer.delay === 7000)?.handler();
+    timers.find((timer: any) => timer.delay === 7000)?.handler();
     expect(events).toContainEqual(expect.objectContaining({
       event: 'web_ui_input_ack_timeout',
       request_id: 'cloudflare-request-timeout',
     }));
-    expect(fetchFn.mock.calls.filter(([url]) => String(url) === 'https://projection.example/input')).toHaveLength(1);
+    expect(fetchFn.mock.calls.filter(([url]: any) => String(url) === 'https://projection.example/input')).toHaveLength(1);
     client.close();
   });
 
@@ -837,7 +837,7 @@ describe('agent-web-ui runtime boundaries', () => {
     } as unknown as typeof WebSocket;
     const events: unknown[] = [];
     const fetchFn = vi.fn(async (url: string | URL) => {
-      if (String(url) === 'https://projection.example/input') {
+      if (String(url)=== 'https://projection.example/input') {
         inputResponseCount += 1;
         return {
           ok: true,
@@ -877,16 +877,16 @@ describe('agent-web-ui runtime boundaries', () => {
       inputEndpoint: 'https://projection.example/input',
       pendingInputStorageKey: 'cloudflare-admission-semantics-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       WebSocketCtor,
       fetchFn: fetchFn as unknown as typeof fetch,
-      onEvent: (event) => events.push(event),
+      onEvent: (event: any) => events.push(event),
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
     expect(sockets).toHaveLength(1);
     expect(events).toContainEqual(expect.objectContaining({
       event: 'session_events_subscription_started',
@@ -905,7 +905,7 @@ describe('agent-web-ui runtime boundaries', () => {
 
     sockets[0].open();
     expect(client.sendFrame({ id: 'cloudflare-admitted', method: 'session.submit', params: { message: 'admit me' } })).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
     expect(events).toContainEqual(expect.objectContaining({
       event: 'projection_input_response',
       request_id: 'cloudflare-admitted',
@@ -932,7 +932,7 @@ describe('agent-web-ui runtime boundaries', () => {
     }));
 
     expect(client.sendFrame({ id: 'cloudflare-refused', method: 'session.submit', params: { message: 'refuse me' } })).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
     expect(events).toContainEqual(expect.objectContaining({
       event: 'projection_input_response',
       request_id: 'cloudflare-refused',
@@ -954,7 +954,7 @@ describe('agent-web-ui runtime boundaries', () => {
       }
     } as unknown as typeof WebSocket;
     const fetchFn = vi.fn(async (url: string | URL) => {
-      if (String(url) === 'https://projection.example/input') {
+      if (String(url)=== 'https://projection.example/input') {
         return {
           ok: false,
           status: 503,
@@ -973,23 +973,23 @@ describe('agent-web-ui runtime boundaries', () => {
       inputEndpoint: 'https://projection.example/input',
       pendingInputStorageKey: 'cloudflare-failed-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       WebSocketCtor,
       fetchFn: fetchFn as unknown as typeof fetch,
-      onEvent: (event) => events.push(event),
+      onEvent: (event: any) => events.push(event),
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
     sockets[0].open();
     expect(client.sendFrame({
       id: 'cloudflare-request-failed',
       method: 'session.submit',
       params: { message: 'relay me' },
     })).toBe(true);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
     await Promise.resolve();
 
     expect(events).toContainEqual(expect.objectContaining({
@@ -1024,12 +1024,12 @@ describe('agent-web-ui runtime boundaries', () => {
       sessionId: 'session-correlated',
       pendingInputStorageKey: 'correlation-input-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       WebSocketCtor,
-      onEvent: (event) => events.push(event),
+      onEvent: (event: any) => events.push(event),
     });
 
     sockets[0].open();
@@ -1084,12 +1084,12 @@ describe('agent-web-ui runtime boundaries', () => {
       sessionId: 'session-missing-request-id',
       pendingInputStorageKey: 'missing-request-id-test',
       pendingInputStorage: {
-        getItem: (key) => storageValues.get(key) ?? null,
-        setItem: (key, value) => { storageValues.set(key, value); },
-        removeItem: (key) => { storageValues.delete(key); },
+        getItem: (key: any) => storageValues.get(key) ?? null,
+        setItem: (key: any, value: any) => { storageValues.set(key, value); },
+        removeItem: (key: any) => { storageValues.delete(key); },
       },
       WebSocketCtor,
-      onEvent: (event) => events.push(event),
+      onEvent: (event: any) => events.push(event),
     });
 
     sockets[0].open();

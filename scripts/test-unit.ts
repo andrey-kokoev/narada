@@ -71,7 +71,7 @@ if (result.exitStatus !== 0) {
 }
 
 const finishedAt = new Date().toISOString();
-const totalDuration = stepTimings.reduce((sum, s) => sum + s.durationMs, 0);
+const totalDuration = stepTimings.reduce((sum: any, s: any) => sum + s.durationMs, 0);
 
 // Overall classification: most severe among step classifications
 // precedence: assertion-failure > infrastructure-failure > success
@@ -83,7 +83,7 @@ function severity(c: ReturnType<typeof classifyStep>): number {
     default: return 2;
   }
 }
-const classification = stepClassifications.reduce((worst, current) =>
+const classification = stepClassifications.reduce((worst: any, current: any) =>
   severity(current) > severity(worst) ? current : worst,
 );
 

@@ -1,0 +1,139 @@
+import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import test from 'node:test';
+
+import { readNarsEventLogPage } from './event-log.js';
+
+test('event views filter before applying the page limit', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'narada-event-log-'));
+  const eventsPath = join(directory, 'events.jsonl');
+  const events = [
+    { event: 'session_health', event_sequence: 1 },
+    { event: 'session_health', event_sequence: 2 },
+    { event: 'session_started', event_sequence: 3 },
+    { event: 'tool_call', event_sequence: 4 },
+    { event: 'user_message', event_sequence: 5, text: 'first' },
+    { event: 'session_health', event_sequence: 6 },
+    { event: 'assistant_message', event_sequence: 7, text: 'second' },
+    { event: 'tool_result', event_sequence: 8 },
+    { event: 'assistant_message', event_sequence: 9, text: 'third' },
+    { event: 'runtime_output_failure', event_sequence: 10 },
+  ];
+  writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n'));
+
+  try {
+    const conversation = readNarsEventLogPage({ eventsPath, view: 'conversation', limit: 2 });
+    assert.deepEqual(conversation.events.map((event) => event.event_sequence), [5, 7]);
+    assert.equal(conversation.has_more, true);
+
+    const operations = readNarsEventLogPage({ eventsPath, view: 'operations', limit: 20 });
+    assert.deepEqual(operations.events.map((event) => event.event_sequence), [3, 4, 5, 7, 8, 9]);
+
+    const diagnostics = readNarsEventLogPage({ eventsPath, view: 'diagnostics', limit: 20 });
+    assert.deepEqual(diagnostics.events.map((event) => event.event_sequence), [1, 2, 6, 10]);
+
+    const earlier = readNarsEventLogPage({ eventsPath, view: 'conversation', beforeSequence: 9, direction: 'backward', limit: 1 });
+    assert.deepEqual(earlier.events.map((event) => event.event_sequence), [7]);
+    assert.equal(earlier.cursor.before_sequence, 7);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('selector filters find an old input event beyond the raw event tail', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'narada-event-log-selector-'));
+  const eventsPath = join(directory, 'events.jsonl');
+  const events = [
+    { event: 'user_message', event_sequence: 1, request_id: 'target-request', input_event_id: 'target-input' },
+    ...Array.from({ length: 120 }, (_, index) => ({ event: 'session_health', event_sequence: index + 2 })),
+  ];
+  writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n'));
+
+  try {
+    const result = readNarsEventLogPage({
+      eventsPath,
+      view: 'conversation',
+      direction: 'backward',
+      limit: 10,
+      filters: { any_of: { request_id: 'target-request', input_event_id: 'target-input' } },
+    });
+    assert.deepEqual(result.events.map((event) => event.event_sequence), [1]);
+    assert.equal(result.has_more, false);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('invalid event views are rejected', () => {
+  assert.throws(() => readNarsEventLogPage({ eventsPath: 'missing', view: 'not-a-view' }), /invalid_nars_session_event_view/);
+});
+
+test('conversation view carries operator delivery lifecycle facts before applying its limit', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'narada-event-log-delivery-'));
+  const eventsPath = join(directory, 'events.jsonl');
+  const events = [
+    { event: 'session_health', event_sequence: 1 },
+    { event: 'input_event_queued', event_sequence: 2, request_id: 'request-1' },
+    { event: 'tool_call', event_sequence: 3 },
+    { event: 'input_event_started', event_sequence: 4, request_id: 'request-1' },
+    { event: 'session_control_response', event_sequence: 5, request_id: 'request-1' },
+    { event: 'carrier_turn_completed', event_sequence: 6, turn_id: 'turn-1' },
+    { event: 'input_event_completed', event_sequence: 7, request_id: 'request-1', terminal_state: 'completed' },
+  ];
+  writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n'));
+
+  try {
+    const conversation = readNarsEventLogPage({ eventsPath, view: 'conversation', limit: 3 });
+    assert.deepEqual(conversation.events.map((event) => event.event_sequence), [2, 4, 5]);
+    assert.equal(conversation.has_more, true);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('conversation view carries canonical turn lifecycle evidence for reactive activity', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'narada-event-log-turn-lifecycle-'));
+  const eventsPath = join(directory, 'events.jsonl');
+  const events = [
+    { event: 'session_health', event_sequence: 1 },
+    { event: 'turn_started', event_sequence: 2, turn_id: 'turn-1' },
+    { event: 'assistant_message', event_sequence: 3, turn_id: 'turn-1' },
+    { event: 'turn_interrupted', event_sequence: 4, turn_id: 'turn-1' },
+    { event: 'turn_complete', event_sequence: 5, turn_id: 'turn-1', terminal_state: 'interrupted' },
+    { event: 'turn_failed', event_sequence: 6, turn_id: 'turn-2', terminal_state: 'failed' },
+    { event: 'tool_call', event_sequence: 7, turn_id: 'turn-2' },
+  ];
+  writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n'));
+
+  try {
+    const conversation = readNarsEventLogPage({ eventsPath, view: 'conversation', limit: 20 });
+    assert.deepEqual(conversation.events.map((event) => event.event_sequence), [2, 3, 4, 5, 6]);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test('operations view carries current carrier tool lifecycle evidence', () => {
+  const directory = mkdtempSync(join(tmpdir(), 'narada-event-log-carrier-tools-'));
+  const eventsPath = join(directory, 'events.jsonl');
+  const events = [
+    { event: 'assistant_message', event_sequence: 1 },
+    { event: 'carrier_tool_requested', event_sequence: 2, tool_name: 'fixture_echo' },
+    { event: 'tool_execution_state_transition', event_sequence: 3, tool_name: 'fixture_echo', execution_state: 'executing' },
+    { event: 'tool_execution_completed', event_sequence: 4, tool_name: 'fixture_echo' },
+    { event: 'tool_execution_refused', event_sequence: 5, tool_name: 'fixture_denied' },
+    { event: 'tool_admitted', event_sequence: 6, tool_name: 'fixture_echo' },
+    { event: 'tool_refused', event_sequence: 7, tool_name: 'fixture_denied' },
+    { event: 'carrier_tool_completed', event_sequence: 8, tool_name: 'fixture_echo' },
+    { event: 'turn_lifecycle_transition', event_sequence: 9, turn_state: 'completed' },
+  ];
+  writeFileSync(eventsPath, events.map((event) => JSON.stringify(event)).join('\n'));
+  try {
+    const page = readNarsEventLogPage({ eventsPath, view: 'operations', limit: 20 });
+    assert.deepEqual(page.events.map((event) => event.event_sequence), events.map((event) => event.event_sequence));
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

@@ -64,7 +64,7 @@ export function useNarsEvents(
   const activeTurnId = computed(() => activity.value.activeTurnId ?? null);
   const operatorDelivery = computed<OperatorInputDeliveryProjection>(() => projection.value.operatorDelivery as OperatorInputDeliveryProjection);
   const sessionIdentity = computed(() => {
-    const snapshot = Array.from({ length: events.length }, (_, index) => events[index]);
+    const snapshot = Array.from({ length: events.length }, (_: any, index: any) => events[index]);
     return summarizeProjectedSessionIdentity(snapshot, healthIdentity?.value) as SessionIdentitySummary;
   });
   return { projection, rows, summarizedStateSampleCount, activity, activeTurnId, operatorDelivery, sessionIdentity };

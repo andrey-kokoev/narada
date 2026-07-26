@@ -15,7 +15,7 @@ export function useOperatorInterruptPrompt(options: OperatorInterruptPromptOptio
   let interruptShowTimer: ReturnType<typeof setTimeout> | null = null;
   let interruptCountdownTimer: ReturnType<typeof setInterval> | null = null;
 
-  watch(options.canInterrupt, (canInterrupt) => {
+  watch(options.canInterrupt, (canInterrupt: any) => {
     if (!canInterrupt) clearInterruptPrompt();
   });
 

@@ -74,6 +74,88 @@ test('site agents transport carries the selected operator surface explicitly', a
   assert.deepEqual(requestBody, { site_id: 'sonar', agent_id: 'sonar.resident', operator_surface: 'agent-tui' });
 });
 
+test('site agents admission transport and adapter preserve authoritative choices', async () => {
+  const authority = {
+    schema: 'narada.invokable-intelligence.selection-authority.v1',
+    owner: '@narada2/invokable-intelligence-runtime',
+    resolution_phase: 'runtime-invocation',
+    authority_scope: { kind: 'site', site_id: 'sonar' },
+    catalog: { store_kind: 'node:sqlite', locator: 'D:/code/sonar/.ai/intelligence-registry.db' },
+    launcher_selection: false,
+    authoritative_inputs: ['invocation-intent', 'catalog'],
+  };
+  const options = {
+    schema: 'narada.operator_console.site_agent_admission_options.v1',
+    status: 'success',
+    generated_at: '2026-07-24T00:00:00.000Z',
+    site_id: 'sonar',
+    site_display_name: 'Sonar',
+    revision: 'revision-1',
+    roles: [{ value: 'builder', label: 'builder' }],
+    agent_kinds: [{ value: 'codex_cli', label: 'codex_cli' }],
+    runtimes: [{ value: 'narada-agent-runtime-server', label: 'narada-agent-runtime-server' }],
+    operator_surfaces: [{ value: 'agent-cli', label: 'agent-cli' }],
+    intelligence: {
+      selection_authority: authority,
+      policy_choices: [{ value: 'catalog-and-materialized-policy', label: 'Site catalog + materialized policy' }],
+      provider_choices: [{ value: 'codex', label: 'codex' }],
+      model_choices: [{ value: 'gpt-test', label: 'gpt-test' }],
+    },
+    refusals: [],
+  };
+  const admitted = {
+    schema: 'narada.operator_console.site_agent_admission.v1',
+    status: 'admitted',
+    site_id: 'sonar',
+    agent_id: 'sonar.builder',
+    local_agent_id: 'builder',
+    role: 'builder',
+    agent_kind: 'codex_cli',
+    runtime: 'narada-agent-runtime-server',
+    operator_surface: 'agent-cli',
+    reason: null,
+    message: 'Agent admitted.',
+    request_id: 'admit-1',
+    options_revision: 'revision-1',
+    intelligence: { selection_authority: authority, policy: 'catalog-and-materialized-policy', provider: 'codex', model: 'gpt-test' },
+  };
+  const transport = createSiteAgentsTransport('/console/agents/api', async (input, init) => {
+    if (String(input).includes('/admission/options')) return new Response(JSON.stringify(options), { status: 200 });
+    assert.equal(init?.method, 'POST');
+    assert.deepEqual(JSON.parse(String(init?.body)), {
+      site_id: 'sonar',
+      role: 'builder',
+      agent_kind: 'codex_cli',
+      runtime: 'narada-agent-runtime-server',
+      operator_surface: 'agent-cli',
+      intelligence_policy: 'catalog-and-materialized-policy',
+      provider: 'codex',
+      model: 'gpt-test',
+      options_revision: 'revision-1',
+    });
+    return new Response(JSON.stringify(admitted), { status: 201 });
+  });
+  const client = createSiteAgentsAdapter({
+    overview: async () => overview,
+    launch: async () => null,
+    pending: async () => [],
+    admissionOptions: () => transport.admissionOptions('sonar'),
+    admit: (request) => transport.admit(request),
+  });
+  assert.equal((await client.admissionOptions('sonar')).revision, 'revision-1');
+  assert.equal((await client.admit({
+    site_id: 'sonar',
+    role: 'builder',
+    agent_kind: 'codex_cli',
+    runtime: 'narada-agent-runtime-server',
+    operator_surface: 'agent-cli',
+    intelligence_policy: 'catalog-and-materialized-policy',
+    provider: 'codex',
+    model: 'gpt-test',
+    options_revision: 'revision-1',
+  })).agent_id, 'sonar.builder');
+});
+
 test('site agents adapter refuses malformed authority projections', async () => {
   const adapter = createSiteAgentsAdapter({ overview: async () => ({ ...overview, groups: [{}] }), launch: async () => null });
   await assert.rejects(() => adapter.overview(), (error: unknown) => error instanceof SiteAgentsApiError && error.code === 'invalid_overview');

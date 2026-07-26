@@ -57,13 +57,13 @@ export function isTerminalRuntimeEvent(message: unknown): boolean {
 export function applyRuntimeEventToWebUiState(state: RuntimeUiState, message: unknown): RuntimeUiState {
   const runtimeEvent = unwrapRuntimeEvent(message);
   if (!state || !runtimeEvent || typeof runtimeEvent !== 'object') return state;
-  if (runtimeEvent.event === 'turn_started' || runtimeEvent.event === 'carrier_turn_started') {
+  if (runtimeEvent.event=== 'turn_started' || runtimeEvent.event === 'carrier_turn_started') {
     const turnId = runtimeEvent.turn_id;
     state.activeTurnId = typeof turnId === 'string' || typeof turnId === 'boolean' ? turnId : true;
   } else if (isActiveTurnTerminalEvent(runtimeEvent)) {
     const terminalTurnId = runtimeEvent.turn_id ?? runtimeEvent.input_event_id ?? runtimeEvent.event_id ?? null;
     if (!terminalTurnId || state.activeTurnId === terminalTurnId) state.activeTurnId = null;
-  } else if (runtimeEvent.event === 'session_closed') {
+  } else if (runtimeEvent.event=== 'session_closed') {
     state.activeTurnId = null;
   }
   return state;
@@ -83,11 +83,11 @@ function isActiveTurnTerminalEvent(event: UnknownRecord): boolean {
 function withRenderIdentity(projected: RuntimeProjection): RuntimeProjection {
   if (!projected || typeof projected !== 'object') return projected;
   const event = isRecord(projected.event) ? projected.event : {};
-  if (projected.kind === 'assistant_message' || projected.kind === 'assistant_message_stream') {
+  if (projected.kind=== 'assistant_message' || projected.kind === 'assistant_message_stream') {
     const turnId = event?.turn_id ?? event?.turnId ?? null;
     if (turnId) return { ...projected, label: 'Agent', tone: 'assistant', renderKey: `assistant:${turnId}` };
   }
-  if (projected.kind === 'user_message' || projected.kind === 'operator_input_submitted') {
+  if (projected.kind=== 'user_message' || projected.kind === 'operator_input_submitted') {
     const requestId = event?.request_id ?? null;
     if (requestId) return { ...projected, label: 'Operator', tone: 'operator', renderKey: `operator:${requestId}` };
   }

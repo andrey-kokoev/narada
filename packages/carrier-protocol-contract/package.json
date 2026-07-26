@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/carrier-protocol-contract.mjs",
+    ".": {
+      "types": "./dist/carrier-protocol-contract.d.ts",
+      "import": "./dist/carrier-protocol-contract.js"
+    },
     "./carrier-protocol": "./contracts/carrier-protocol.json"
   },
   "scripts": {
-    "test": "node --test src/carrier-protocol-contract.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-protocol-contract.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/carrier-protocol-contract.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@narada2/carrier-protocol": "workspace:*"

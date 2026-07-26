@@ -4,7 +4,7 @@ import {
   changesetPackageNames,
   publicationAdmissionCommand,
   validatePublicationReleaseSet,
-} from './publication-release-set.js';
+} from './publication-release-set.ts';
 
 test('extracts package names from standard changeset frontmatter', () => {
   assert.deepEqual(
@@ -16,11 +16,11 @@ test('extracts package names from standard changeset frontmatter', () => {
 test('derives the admission lifecycle command from package depth', () => {
   assert.equal(
     publicationAdmissionCommand('packages/ui'),
-    'node ../../scripts/assert-publication-admission.js',
+    'node --import tsx ../../scripts/assert-publication-admission.ts',
   );
   assert.equal(
     publicationAdmissionCommand('packages/layers/cli'),
-    'node ../../../scripts/assert-publication-admission.js',
+    'node --import tsx ../../../scripts/assert-publication-admission.ts',
   );
 });
 

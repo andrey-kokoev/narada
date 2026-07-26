@@ -1,0 +1,436 @@
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+import {
+  createNarsArtifactLifecycle,
+  normalizeNarsArtifactLifecycle,
+  transitionNarsArtifactRecord,
+} from './artifact-lifecycle-state.js';
+import type {
+  NaradaArtifactLifecycle,
+  NaradaArtifactLifecycleEvidence,
+  NaradaArtifactLifecycleState,
+} from './artifact-lifecycle-state.js';
+
+export const NARS_ARTIFACT_RECORD_SCHEMA = 'narada.nars.artifact_record.v1' as const;
+export const NARS_ARTIFACT_INDEX_SCHEMA = 'narada.nars.artifact_index.v1' as const;
+export const NARS_ARTIFACT_PUBLIC_SCHEMA = 'narada.nars.artifact_public.v1' as const;
+
+export type NaradaArtifactKind = 'html' | 'markdown' | 'image' | 'json' | 'text' | 'audio';
+
+export interface NaradaArtifactRecord {
+  schema: typeof NARS_ARTIFACT_RECORD_SCHEMA;
+  artifact_id: string;
+  session_id: string | null;
+  agent_id: string | null;
+  kind: NaradaArtifactKind;
+  title: string | null;
+  source_path: string;
+  content_type: string;
+  created_at: string;
+  access: { scope: 'session' | 'site'; token_required: boolean };
+  render: Record<string, unknown>;
+  lifecycle: NaradaArtifactLifecycle;
+  [key: string]: unknown;
+}
+
+export interface NaradaPublicArtifactIndex {
+  schema: typeof NARS_ARTIFACT_INDEX_SCHEMA;
+  session_id: string | null;
+  agent_id: string | null;
+  generated_at: string;
+  artifacts: NaradaPublicArtifactRecord[];
+}
+
+export interface NaradaArtifactIndex {
+  schema: typeof NARS_ARTIFACT_INDEX_SCHEMA;
+  session_id: string | null;
+  agent_id: string | null;
+  generated_at: string;
+  artifacts: NaradaArtifactRecord[];
+  [key: string]: unknown;
+}
+
+export interface NaradaPublicArtifactRecord {
+  schema: typeof NARS_ARTIFACT_PUBLIC_SCHEMA;
+  artifact_id: string;
+  session_id: string | null;
+  agent_id: string | null;
+  kind: NaradaArtifactKind;
+  title: string | null;
+  content_type: string;
+  created_at: string | null;
+  access: Record<string, unknown>;
+  render: Record<string, unknown>;
+  lifecycle: NaradaArtifactLifecycle;
+}
+
+export interface RegisterArtifactOptions {
+  sessionPath?: string | null;
+  sessionId?: string | null;
+  agentId?: string | null;
+  siteRoot?: string | null;
+  sourcePath?: string | null;
+  kind?: NaradaArtifactKind | string | null;
+  title?: string | null;
+  contentType?: string | null;
+  renderHint?: string;
+  accessScope?: string;
+  now?: Date;
+}
+
+interface ArtifactIndexOptions { sessionPath?: string | null; }
+interface ArtifactReadOptions extends ArtifactIndexOptions { artifactId?: string | null; }
+interface ArtifactTransitionOptions extends ArtifactReadOptions {
+  nextState?: NaradaArtifactLifecycleState;
+  evidence?: NaradaArtifactLifecycleEvidence;
+  now?: Date;
+}
+
+const SUPPORTED_KINDS = new Set<NaradaArtifactKind>(['html', 'markdown', 'image', 'json', 'text', 'audio']);
+const CONTENT_TYPES = new Map<string, string>([
+  ['html', 'text/html; charset=utf-8'],
+  ['markdown', 'text/markdown; charset=utf-8'],
+  ['json', 'application/json; charset=utf-8'],
+  ['text', 'text/plain; charset=utf-8'],
+  ['audio', 'audio/wav'],
+]);
+const AUDIO_CONTENT_TYPES = new Map<string, string>([
+  ['.wav', 'audio/wav'],
+  ['.mp3', 'audio/mpeg'],
+  ['.ogg', 'audio/ogg'],
+  ['.m4a', 'audio/mp4'],
+]);
+const EXTENSION_KIND = new Map<string, NaradaArtifactKind>([
+  ['.html', 'html'],
+  ['.htm', 'html'],
+  ['.md', 'markdown'],
+  ['.markdown', 'markdown'],
+  ['.json', 'json'],
+  ['.txt', 'text'],
+  ['.wav', 'audio'],
+  ['.mp3', 'audio'],
+  ['.ogg', 'audio'],
+  ['.m4a', 'audio'],
+]);
+
+export function narsArtifactsRootFromSessionPath(sessionPath: string): string {
+  if (!sessionPath) throw new Error('session_path_required');
+  return join(dirname(String(sessionPath)), 'artifacts');
+}
+
+function normalizeNarsArtifactRecord(record: NaradaArtifactRecord): NaradaArtifactRecord {
+  return {
+    ...record,
+    lifecycle: normalizeNarsArtifactLifecycle(record.lifecycle),
+  };
+}
+
+function audioContentTypeForPath(path: string | null | undefined): string {
+  const lower = String(path ?? '').toLowerCase();
+  const extension = lower.match(/\.[^.\\/]+$/)?.[0] ?? '';
+  return AUDIO_CONTENT_TYPES.get(extension) ?? contentTypeForKind('audio');
+}
+
+export function registerNarsArtifact({
+  sessionPath,
+  sessionId,
+  agentId,
+  siteRoot,
+  sourcePath,
+  kind = null,
+  title = null,
+  contentType = null,
+  renderHint = 'inline',
+  accessScope = 'session',
+  now = new Date(),
+}: RegisterArtifactOptions = {}): { record: NaradaArtifactRecord; public_record: NaradaPublicArtifactRecord; index: NaradaPublicArtifactIndex } {
+  if (!sessionPath) throw artifactError('session_path_required', 'sessionPath is required to register a NARS artifact.');
+  if (!sourcePath) throw artifactError('source_path_required', 'sourcePath is required to register a NARS artifact.');
+  const artifactsRoot = narsArtifactsRootFromSessionPath(sessionPath);
+  const resolvedSourcePath = resolve(String(sourcePath));
+  const admittedRoots = admittedArtifactRoots({ sessionPath, siteRoot });
+  if (!pathIsWithinAnyRoot(resolvedSourcePath, admittedRoots)) {
+    throw artifactError('artifact_path_outside_admitted_roots', 'Artifact source path is outside admitted NARS roots.', { admitted_roots: admittedRoots });
+  }
+  if (!existsSync(resolvedSourcePath) || !statSync(resolvedSourcePath).isFile()) {
+    throw artifactError('artifact_source_not_found', 'Artifact source path does not exist or is not a file.');
+  }
+  const artifactKind = normalizeArtifactKind(kind ?? inferKindFromPath(resolvedSourcePath));
+  if (!SUPPORTED_KINDS.has(artifactKind)) throw artifactError('artifact_kind_unsupported', `Unsupported artifact kind: ${artifactKind}`);
+  const effectiveContentType = validateArtifactContentType({ kind: artifactKind, contentType, sourcePath: resolvedSourcePath });
+  const record: NaradaArtifactRecord = {
+    schema: NARS_ARTIFACT_RECORD_SCHEMA,
+    artifact_id: `art_${compactTimestamp(now)}_${randomUUID().replace(/-/g, '').slice(0, 10)}`,
+    session_id: sessionId ?? null,
+    agent_id: agentId ?? null,
+    kind: artifactKind,
+    title: title ? String(title) : defaultTitleForPath(resolvedSourcePath),
+    source_path: resolvedSourcePath,
+    content_type: effectiveContentType,
+    created_at: new Date(now).toISOString(),
+    access: {
+      scope: accessScope === 'site' ? 'site' : 'session',
+      token_required: false,
+    },
+    render: {
+      preferred: renderHint === 'link' ? 'link' : 'inline',
+      sandbox: artifactKind === 'html' ? defaultHtmlSandboxPolicy() : null,
+      ...(artifactKind === 'audio' ? { media_controls: true } : {}),
+    },
+    lifecycle: {
+      ...createNarsArtifactLifecycle({
+        owner: 'nars-session',
+        createdAt: new Date(now).toISOString(),
+        now: new Date(now).toISOString(),
+      }),
+    },
+  };
+  const index = readNarsArtifactIndex({ sessionPath });
+  const next: NaradaArtifactIndex = {
+    ...index,
+    session_id: sessionId ?? index.session_id ?? null,
+    agent_id: agentId ?? index.agent_id ?? null,
+    generated_at: new Date(now).toISOString(),
+    artifacts: [...index.artifacts.filter((entry) => entry.artifact_id !== record.artifact_id), record],
+  };
+  writeNarsArtifactIndex({ artifactsRoot, index: next });
+  return { record, public_record: publicNarsArtifactRecord(record)!, index: publicNarsArtifactIndex(next) };
+}
+
+export function readNarsArtifactIndex({ sessionPath }: ArtifactIndexOptions = {}): NaradaArtifactIndex {
+  if (!sessionPath) throw artifactError('session_path_required', 'sessionPath is required.');
+  const artifactsRoot = narsArtifactsRootFromSessionPath(sessionPath);
+  const indexPath = join(artifactsRoot, 'index.json');
+  const parsed = readJson(indexPath);
+  if (parsed?.schema === NARS_ARTIFACT_INDEX_SCHEMA && Array.isArray(parsed.artifacts)) {
+    return {
+      ...parsed,
+      artifacts: parsed.artifacts.map(normalizeNarsArtifactRecord),
+    };
+  }
+  return {
+    schema: NARS_ARTIFACT_INDEX_SCHEMA,
+    session_id: null,
+    agent_id: null,
+    generated_at: new Date().toISOString(),
+    artifacts: [],
+  };
+}
+
+export function readNarsArtifact({ sessionPath, artifactId }: ArtifactReadOptions = {}): NaradaArtifactRecord {
+  if (!artifactId) throw artifactError('artifact_id_required', 'artifactId is required.');
+  if (!sessionPath) throw artifactError('session_path_required', 'sessionPath is required.');
+  const index = readNarsArtifactIndex({ sessionPath });
+  const record = index.artifacts.find((entry) => entry?.artifact_id === artifactId) ?? null;
+  if (!record) throw artifactError('artifact_not_found', `Artifact not found: ${artifactId}`);
+  return normalizeNarsArtifactRecord(record);
+}
+
+export function transitionNarsArtifact({ sessionPath, artifactId, nextState, evidence = {}, now = new Date() }: ArtifactTransitionOptions = {}) {
+  if (!sessionPath) throw artifactError('session_path_required', 'sessionPath is required to transition a NARS artifact.');
+  if (!artifactId) throw artifactError('artifact_id_required', 'artifactId is required.');
+  const index = readNarsArtifactIndex({ sessionPath });
+  const current = index.artifacts.find((entry) => entry?.artifact_id === artifactId) ?? null;
+  if (!current) throw artifactError('artifact_not_found', `Artifact not found: ${artifactId}`);
+  if (!nextState) throw artifactError('artifact_next_state_required', 'nextState is required.');
+  const transitionedAt = evidence.transitioned_at ?? evidence.updated_at ?? new Date(now).toISOString();
+  const next = transitionNarsArtifactRecord(current, nextState, { ...evidence, transitioned_at: transitionedAt });
+  const changed = next.lifecycle.state !== current.lifecycle.state;
+  if (changed) {
+    writeNarsArtifactIndex({
+      artifactsRoot: narsArtifactsRootFromSessionPath(sessionPath),
+      index: {
+        ...index,
+        generated_at: transitionedAt,
+        artifacts: index.artifacts.map((entry) => entry.artifact_id === artifactId ? next : entry),
+      },
+    });
+  }
+  return {
+    changed,
+    previous_record: current,
+    record: next,
+    public_record: publicNarsArtifactRecord(next)!,
+    index: publicNarsArtifactIndex({
+      ...index,
+      generated_at: changed ? transitionedAt : index.generated_at,
+      artifacts: index.artifacts.map((entry) => entry.artifact_id === artifactId ? next : entry),
+    }),
+  };
+}
+
+export function revokeNarsArtifact(options: Omit<ArtifactTransitionOptions, 'nextState'> = {}) {
+  return transitionNarsArtifact({ ...options, nextState: 'revoked' });
+}
+
+export function expireNarsArtifact(options: Omit<ArtifactTransitionOptions, 'nextState'> = {}) {
+  return transitionNarsArtifact({ ...options, nextState: 'expired' });
+}
+
+export function archiveNarsArtifact(options: Omit<ArtifactTransitionOptions, 'nextState'> = {}) {
+  return transitionNarsArtifact({ ...options, nextState: 'archived' });
+}
+
+export function readNarsArtifactContent({ sessionPath, artifactId, siteRoot }: ArtifactReadOptions & { siteRoot?: string | null } = {}) {
+  const record = readNarsArtifact({ sessionPath, artifactId });
+  if (record.lifecycle?.state && record.lifecycle.state !== 'active') {
+    throw artifactError('artifact_not_active', `Artifact is ${record.lifecycle.state}.`, { lifecycle_state: record.lifecycle.state });
+  }
+  const rawSourcePath = typeof record.source_path === 'string' ? record.source_path.trim() : '';
+  if (!rawSourcePath) {
+    throw artifactError('artifact_content_missing', 'Artifact content is missing.');
+  }
+  const sourcePath = resolve(rawSourcePath);
+  const admittedRoots = siteRoot == null ? [] : admittedArtifactRoots({ sessionPath, siteRoot });
+  if (siteRoot != null && !pathIsWithinAnyRoot(sourcePath, admittedRoots)) {
+    throw artifactError('artifact_path_outside_admitted_roots', 'Artifact source path is outside admitted NARS roots.', { admitted_roots: admittedRoots });
+  }
+  let isFile = false;
+  try {
+    isFile = existsSync(sourcePath) && statSync(sourcePath).isFile();
+  } catch {
+    isFile = false;
+  }
+  if (!isFile) {
+    throw artifactError('artifact_content_missing', 'Artifact content is missing.');
+  }
+  let content;
+  try {
+    content = readFileSync(sourcePath);
+  } catch (error) {
+    throw artifactError('artifact_content_unreadable', 'Artifact content could not be read.', {
+      cause_code: error && typeof error === 'object' && 'code' in error ? error.code : null,
+    });
+  }
+  return {
+    record,
+    content,
+    content_type: contentTypeForRecord(record),
+    headers: artifactContentHeaders(record),
+  };
+}
+
+export function publicNarsArtifactRecord(record: NaradaArtifactRecord | null | undefined): NaradaPublicArtifactRecord | null {
+  if (!record || typeof record !== 'object') return null;
+  const lifecycle = normalizeNarsArtifactLifecycle(record.lifecycle);
+  return {
+    schema: NARS_ARTIFACT_PUBLIC_SCHEMA,
+    artifact_id: record.artifact_id,
+    session_id: record.session_id ?? null,
+    agent_id: record.agent_id ?? null,
+    kind: record.kind,
+    title: record.title ?? null,
+    content_type: contentTypeForRecord(record),
+    created_at: record.created_at ?? null,
+    access: record.access ?? { scope: 'session', token_required: false },
+    render: record.render ?? { preferred: 'inline' },
+    lifecycle,
+  };
+}
+
+export function publicNarsArtifactIndex(index: NaradaArtifactIndex): NaradaPublicArtifactIndex {
+  return {
+    schema: NARS_ARTIFACT_INDEX_SCHEMA,
+    session_id: index?.session_id ?? null,
+    agent_id: index?.agent_id ?? null,
+    generated_at: index?.generated_at ?? new Date().toISOString(),
+    artifacts: Array.isArray(index?.artifacts)
+      ? index.artifacts.map(publicNarsArtifactRecord).filter((record): record is NaradaPublicArtifactRecord => record !== null)
+      : [],
+  };
+}
+
+export function artifactContentHeaders(record: NaradaArtifactRecord): Record<string, string> {
+  if (record?.kind !== 'html' && !isHtmlContentType(record?.content_type)) return {};
+  return {
+    'content-security-policy': "sandbox allow-scripts allow-forms; default-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'; connect-src 'none'; base-uri 'none'; form-action 'none'",
+    'x-narada-artifact-id': record.artifact_id,
+    'x-narada-artifact-kind': record.kind,
+  };
+}
+
+export function artifactError(code: string, message: string, extra: Record<string, unknown> = {}): Error & { code: string; details: Record<string, unknown> } {
+  return Object.assign(new Error(message), { code, details: extra });
+}
+
+function writeNarsArtifactIndex({ artifactsRoot, index }: { artifactsRoot: string; index: NaradaArtifactIndex }): void {
+  mkdirSync(artifactsRoot, { recursive: true });
+  const path = join(artifactsRoot, 'index.json');
+  const tmpPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
+  writeFileSync(tmpPath, `${JSON.stringify(index, null, 2)}\n`, 'utf8');
+  renameSync(tmpPath, path);
+}
+
+function readJson(path: string): NaradaArtifactIndex | null {
+  try {
+    if (!path || !existsSync(path) || !statSync(path).isFile()) return null;
+    return JSON.parse(readFileSync(path, 'utf8')) as NaradaArtifactIndex;
+  } catch {
+    return null;
+  }
+}
+
+function admittedArtifactRoots({ sessionPath, siteRoot }: { sessionPath?: string | null; siteRoot?: string | null }): string[] {
+  return [siteRoot, sessionPath ? dirname(String(sessionPath)) : null].filter(Boolean).map((value) => resolve(String(value)));
+}
+
+function pathIsWithinAnyRoot(path: string, roots: readonly string[]): boolean {
+  const normalizedPath = resolve(path).toLowerCase();
+  return roots.some((root) => {
+    const normalizedRoot = resolve(root).toLowerCase();
+    return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}\\`) || normalizedPath.startsWith(`${normalizedRoot}/`);
+  });
+}
+
+function normalizeArtifactKind(kind: unknown): NaradaArtifactKind {
+  const normalized = String(kind ?? '').trim().toLowerCase().replace(/^text\/html$/, 'html');
+  return normalized as NaradaArtifactKind;
+}
+
+function inferKindFromPath(path: string): NaradaArtifactKind {
+  const lower = String(path).toLowerCase();
+  const extension = lower.match(/\.[^.\\/]+$/)?.[0] ?? '';
+  return EXTENSION_KIND.get(extension) ?? 'text';
+}
+
+function contentTypeForKind(kind: string | null | undefined): string {
+  return CONTENT_TYPES.get(kind ?? '') ?? 'application/octet-stream';
+}
+
+function contentTypeForRecord(record: NaradaArtifactRecord): string {
+  if (record?.content_type) return String(record.content_type);
+  if (record?.kind === 'audio') return audioContentTypeForPath(record.source_path);
+  return contentTypeForKind(record?.kind);
+}
+
+function validateArtifactContentType({ kind, contentType, sourcePath }: { kind: NaradaArtifactKind; contentType?: string | null; sourcePath: string }): string {
+  const expected = kind === 'audio' ? audioContentTypeForPath(sourcePath) : contentTypeForKind(kind);
+  if (!contentType) return expected;
+  const supplied = String(contentType).trim().toLowerCase();
+  if (supplied !== expected.toLowerCase()) {
+    throw artifactError('artifact_content_type_mismatch', `Artifact content_type ${contentType} does not match kind ${kind}.`, { expected_content_type: expected });
+  }
+  return expected;
+}
+
+function isHtmlContentType(contentType: unknown): boolean {
+  return String(contentType ?? '').toLowerCase().split(';')[0].trim() === 'text/html';
+}
+
+function defaultTitleForPath(path: string): string {
+  return String(path).split(/[\\/]/).filter(Boolean).at(-1) ?? 'Artifact';
+}
+
+function defaultHtmlSandboxPolicy() {
+  return {
+    allow_scripts: true,
+    allow_forms: true,
+    allow_same_origin: false,
+    allow_top_navigation: false,
+  };
+}
+
+function compactTimestamp(value: Date | string | number): string {
+  return new Date(value).toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
+}

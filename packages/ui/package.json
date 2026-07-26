@@ -25,15 +25,18 @@
     "README.md"
   ],
   "scripts": {
-    "prepublishOnly": "node ../../scripts/assert-publication-admission.js",
+    "prepublishOnly": "node --import tsx ../../scripts/assert-publication-admission.ts",
     "prepack": "pnpm run build",
     "build": "vite build",
-    "test": "pnpm run build && node --test test/ui-foundation.test.mjs test/consumer-contract.test.mjs"
+    "test": "pnpm run build && pnpm run typecheck && node --import tsx --test test/ui-foundation.test.ts test/consumer-contract.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
     "tailwindcss": "^4.1.18",
-    "vite": "^8.1.5"
+    "vite": "^8.1.5",
+    "typescript": "^5.3.0",
+    "tsx": "^4.7.0"
   },
   "engines": {
     "node": ">=22.0.0"

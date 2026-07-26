@@ -51,12 +51,21 @@ importers:
       '@narada2/agent-runtime-server':
         specifier: workspace:*
         version: link:../narada/packages/agent-runtime-server
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
       '@xterm/headless':
         specifier: ^6.0.0
         version: 6.0.0
       node-pty:
         specifier: ^1.0.0
         version: 1.1.0
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   ../agent-tui: {}
 
@@ -273,6 +282,13 @@ importers:
       '@narada2/task-lifecycle-tools':
         specifier: workspace:*
         version: link:../task-lifecycle-tools
+    devDependencies:
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/agent-identity: {}
 
@@ -306,6 +322,9 @@ importers:
       node-pty:
         specifier: ^1.1.0
         version: 1.1.0
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -530,6 +549,9 @@ importers:
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.2
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       type-fest:
         specifier: ^4.41.0
         version: 4.41.0
@@ -621,6 +643,13 @@ importers:
       '@narada2/site-continuity':
         specifier: workspace:*
         version: link:../site-continuity
+    devDependencies:
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/cloudflare-nars-projection:
     dependencies:
@@ -820,7 +849,14 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/launch-process-ownership: {}
+  packages/launch-process-ownership:
+    devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/layers/cli:
     dependencies:
@@ -929,6 +965,9 @@ importers:
       '@narada2/operator-console-overlay':
         specifier: workspace:*
         version: link:../../operator-console-overlay
+      '@narada2/operator-console-runtime':
+        specifier: workspace:*
+        version: link:../../operator-console-runtime
       '@narada2/operator-console-ui':
         specifier: workspace:*
         version: link:../../operator-console-ui
@@ -1120,7 +1159,14 @@ importers:
         specifier: workspace:*
         version: link:../process-launch-posture
 
-  packages/mcp-protocol-contract: {}
+  packages/mcp-protocol-contract:
+    devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/mcp-shell-windows:
     dependencies:
@@ -1268,6 +1314,9 @@ importers:
       '@narada2/operator-console-contract':
         specifier: workspace:*
         version: link:../operator-console-contract
+      '@narada2/operator-console-runtime':
+        specifier: workspace:*
+        version: link:../operator-console-runtime
       '@narada2/operator-router':
         specifier: workspace:*
         version: link:../operator-router
@@ -1278,6 +1327,25 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.19
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
+  packages/operator-console-runtime:
+    dependencies:
+      '@narada2/operator-router':
+        specifier: workspace:*
+        version: link:../operator-router
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -1377,10 +1445,20 @@ importers:
 
   packages/process-launch-posture: {}
 
-  packages/site-authority-map: {}
+  packages/site-authority-map:
+    devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/site-common-tools:
     dependencies:
+      '@narada2/agent-context-mcp':
+        specifier: workspace:*
+        version: link:../../../mcp-surfaces/packages/agent-context-mcp
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-transport
@@ -1390,6 +1468,15 @@ importers:
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../sqlite
+      '@narada2/task-governance':
+        specifier: workspace:*
+        version: link:../task-governance
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
+      ajv-formats:
+        specifier: ^3.0.1
+        version: 3.0.1(ajv@8.20.0)
 
   packages/site-config:
     devDependencies:
@@ -1434,6 +1521,13 @@ importers:
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+    devDependencies:
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/site-operational-dashboard:
     devDependencies:
@@ -1464,6 +1558,9 @@ importers:
       '@cloudflare/workers-types':
         specifier: ^4.20260421.1
         version: 4.20260421.1
+      '@types/node':
+        specifier: ^22.5.0
+        version: 22.19.19
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -1618,6 +1715,9 @@ importers:
 
   packages/task-lifecycle-tools:
     dependencies:
+      '@narada2/agent-identity':
+        specifier: workspace:*
+        version: link:../agent-identity
       '@narada2/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
@@ -1630,6 +1730,13 @@ importers:
       '@narada2/task-governance':
         specifier: workspace:*
         version: link:../task-governance
+    devDependencies:
+      tsx:
+        specifier: ^4.21.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/typed-mcp-surface:
     dependencies:
@@ -1648,6 +1755,12 @@ importers:
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.2
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
       vite:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0)
@@ -1688,6 +1801,9 @@ importers:
       tailwindcss:
         specifier: ^4.1.18
         version: 4.3.2
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       vite:
         specifier: ^8.1.5
         version: 8.1.5(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0)
@@ -1719,11 +1835,21 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.19
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/window-surface-overlay: {}
+  packages/window-surface-overlay:
+    devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/windows-komorebi-yasb-kit:
     devDependencies:

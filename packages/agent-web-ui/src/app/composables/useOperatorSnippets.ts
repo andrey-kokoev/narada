@@ -56,7 +56,7 @@ function snippetIdForName(name: string): string {
   return `snippet-${normalizeName(name)}`;
 }
 
-function normalizeEntry(entry: Record<string, unknown>, timestamp = nowIso()): OperatorSnippet | null {
+function normalizeEntry(entry: Record<string, unknown>, timestamp: any= nowIso()): OperatorSnippet | null {
   const name = normalizeName(String(entry?.name ?? ''));
   const body = String(entry?.body ?? '').trim();
   if (!name || !body) return null;
@@ -77,8 +77,8 @@ function readStoredSnippets(): OperatorSnippet[] {
   try {
     const parsed = readJsonPreference(STORAGE_KEY, []) as unknown;
     if (!Array.isArray(parsed)) return [];
-    const entries = parsed.map((entry) => normalizeEntry(entry)).filter((entry): entry is OperatorSnippet => Boolean(entry));
-    return [...new Map(entries.map((entry) => [entry.name, entry])).values()];
+    const entries = parsed.map((entry: any) => normalizeEntry(entry)).filter((entry): entry is OperatorSnippet => Boolean(entry));
+    return [...new Map(entries.map((entry: any) => [entry.name, entry])).values()];
   } catch {
     return [];
   }
@@ -117,11 +117,11 @@ export function useOperatorSnippets() {
     const normalizedName = normalizeName(name);
     const text = String(body ?? '').trim();
     if (!normalizedName || !text) return commandMessage(`Usage: /snippet ${mode} <name> <text>`);
-    const existing = snippets.value.find((entry) => entry.name === normalizedName) ?? null;
+    const existing = snippets.value.find((entry: any) => entry.name === normalizedName) ?? null;
     if (mode === 'edit' && !existing) return commandMessage(`Snippet not found: ${normalizedName}`);
     const timestamp = nowIso();
     const next = existing
-      ? snippets.value.map((entry) => entry.name === normalizedName ? { ...entry, body: text, updated_at: timestamp } : entry)
+      ? snippets.value.map((entry: any) => entry.name === normalizedName ? { ...entry, body: text, updated_at: timestamp } : entry)
       : [...snippets.value, { id: snippetIdForName(normalizedName), name: normalizedName, body: text, created_at: timestamp, updated_at: timestamp, pinned: false, last_used_at: null, use_count: 0 }];
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not saved.');
     snippets.value = next;
@@ -131,7 +131,7 @@ export function useOperatorSnippets() {
   function restoreSnippet(snippet: OperatorSnippet) {
     const restored = normalizeEntry(snippet as unknown as Record<string, unknown>);
     if (!restored) return commandMessage('Deleted snippet could not be restored.');
-    const existing = snippets.value.find((entry) => entry.name === restored.name) ?? null;
+    const existing = snippets.value.find((entry: any) => entry.name === restored.name) ?? null;
     if (existing) return commandMessage(`Snippet already exists: ${restored.name}`);
     const next = [...snippets.value, restored];
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not restored.');
@@ -143,7 +143,7 @@ export function useOperatorSnippets() {
     const normalizedName = normalizeName(name);
     if (!normalizedName) return commandMessage('Usage: /snippet delete <name>');
     const before = snippets.value.length;
-    const next = snippets.value.filter((entry) => entry.name !== normalizedName);
+    const next = snippets.value.filter((entry: any) => entry.name !== normalizedName);
     if (next.length === before) return commandMessage(`Snippet not found: ${normalizedName}`);
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not deleted.');
     snippets.value = next;
@@ -155,12 +155,12 @@ export function useOperatorSnippets() {
     const normalizedNewName = normalizeName(newName);
     const text = String(body ?? '').trim();
     if (!normalizedOldName || !normalizedNewName || !text) return commandMessage('Usage: rename requires old name, new name, and body');
-    const existing = snippets.value.find((entry) => entry.name === normalizedOldName) ?? null;
+    const existing = snippets.value.find((entry: any) => entry.name === normalizedOldName) ?? null;
     if (!existing) return commandMessage(`Snippet not found: ${normalizedOldName}`);
-    const collision = snippets.value.find((entry) => entry.name === normalizedNewName && entry.name !== normalizedOldName) ?? null;
+    const collision = snippets.value.find((entry: any) => entry.name === normalizedNewName && entry.name !== normalizedOldName) ?? null;
     if (collision) return commandMessage(`Snippet already exists: ${normalizedNewName}`);
     const timestamp = nowIso();
-    const next = snippets.value.map((entry) => entry.name === normalizedOldName
+    const next = snippets.value.map((entry: any) => entry.name === normalizedOldName
       ? { ...entry, id: snippetIdForName(normalizedNewName), name: normalizedNewName, body: text, updated_at: timestamp }
       : entry);
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; snippet was not renamed.');
@@ -170,9 +170,9 @@ export function useOperatorSnippets() {
 
   function togglePinned(name: string) {
     const normalizedName = normalizeName(name);
-    const existing = snippets.value.find((entry) => entry.name === normalizedName) ?? null;
+    const existing = snippets.value.find((entry: any) => entry.name === normalizedName) ?? null;
     if (!existing) return commandMessage(`Snippet not found: ${normalizedName || '<missing>'}`);
-    const next = snippets.value.map((entry) => entry.name === normalizedName ? { ...entry, pinned: !entry.pinned, updated_at: nowIso() } : entry);
+    const next = snippets.value.map((entry: any) => entry.name === normalizedName ? { ...entry, pinned: !entry.pinned, updated_at: nowIso() } : entry);
     if (!persistSnippets(next)) return commandMessage('Snippet storage is unavailable; pin state was not saved.');
     snippets.value = next;
     return commandMessage(`${existing.pinned ? 'Unpinned' : 'Pinned'} snippet: ${normalizedName}`, { ok: true, snippet_name: normalizedName });
@@ -180,7 +180,7 @@ export function useOperatorSnippets() {
 
   function markSnippetUsed(name: string) {
     const normalizedName = normalizeName(name);
-    const next = snippets.value.map((entry) => entry.name === normalizedName
+    const next = snippets.value.map((entry: any) => entry.name === normalizedName
       ? { ...entry, last_used_at: nowIso(), use_count: (entry.use_count ?? 0) + 1 }
       : entry);
     if (!persistSnippets(next)) return false;
@@ -194,10 +194,10 @@ export function useOperatorSnippets() {
       const entries: Record<string, unknown>[] = (Array.isArray(parsed) ? parsed : Array.isArray(parsed?.snippets) ? parsed.snippets : []) as Record<string, unknown>[];
       const timestamp = nowIso();
       const imported = entries
-        .map((entry) => normalizeEntry(entry, timestamp))
+        .map((entry: any) => normalizeEntry(entry, timestamp))
         .filter((entry): entry is OperatorSnippet => Boolean(entry));
       if (!imported.length) return commandMessage('No valid snippets found in import JSON.');
-      const merged = new Map(snippets.value.map((entry) => [entry.name, entry]));
+      const merged = new Map(snippets.value.map((entry: any) => [entry.name, entry]));
       for (const entry of imported) {
         const existing = merged.get(entry.name) ?? null;
         merged.set(entry.name, existing ? {
@@ -217,33 +217,33 @@ export function useOperatorSnippets() {
     }
   }
 
-  function searchSnippets(query = '') {
+  function searchSnippets(query: any= '') {
     const normalizedQuery = String(query ?? '').trim().toLowerCase();
-    const matches = sortedSnippets.value.filter((entry) => (
+    const matches = sortedSnippets.value.filter((entry: any) => (
       !normalizedQuery || entry.name.includes(normalizedQuery) || entry.body.toLowerCase().includes(normalizedQuery)
     ));
     const summary = matches.length
-      ? matches.map((entry) => `${entry.name}: ${entry.body.slice(0, 90)}`).join('\n')
+      ? matches.map((entry: any) => `${entry.name}: ${entry.body.slice(0, 90)}`).join('\n')
       : 'No matching snippets.';
     return commandMessage(summary, { ok: true, snippet_count: matches.length });
   }
 
   function findSnippet(name: string): OperatorSnippet | null {
     const normalizedName = normalizeName(name);
-    return snippets.value.find((entry) => entry.name === normalizedName) ?? null;
+    return snippets.value.find((entry: any) => entry.name === normalizedName) ?? null;
   }
 
   function handleSnippetCommand(value: string) {
     const parsedCommand = parseAgentWebUiSnippetCommand(value);
     const action = parsedCommand.action;
     const remainder = parsedCommand.remainder;
-    if (action?.id === 'save' || action?.id === 'edit') {
+    if (action?.id=== 'save' || action?.id === 'edit') {
       const parsed = parseNameAndBody(remainder);
       return { kind: 'local_event' as const, event: saveSnippet(parsed.name, parsed.body, action.id) };
     }
     if (action?.id === 'delete') return { kind: 'local_event' as const, event: deleteSnippet(parseName(remainder)) };
     if (action?.id === 'search') return { kind: 'local_event' as const, event: searchSnippets(remainder) };
-    if (action?.mode === 'select') {
+    if (action?.mode=== 'select') {
       const snippet = findSnippet(parseName(remainder));
       if (!snippet) return { kind: 'local_event' as const, event: commandMessage(`Snippet not found: ${parseName(remainder) || '<missing>'}`) };
       return { kind: 'run' as const, snippet, deliveryMode: action.deliveryMode === 'enqueue' ? 'enqueue' as const : 'default' as const };

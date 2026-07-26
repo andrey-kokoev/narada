@@ -19,6 +19,7 @@
 
 import {
   readdirSync,
+  readFileSync,
   writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -66,16 +67,16 @@ function parseArgs(): {
   const dependsOn: number[] = [];
   let dryRun = false;
 
-  for (let i = 0; i < args.length; i++) {
+  for (let i= 0; i < args.length; i++) {
     switch (args[i]) {
       case "--title":
         title = args[++i];
         break;
       case "--tasks":
-        tasks.push(...args[++i].split(",").map((s) => s.trim()).filter(Boolean));
+        tasks.push(...args[++i].split(",").map((s: any) => s.trim()).filter(Boolean));
         break;
       case "--depends-on":
-        dependsOn.push(...args[++i].split(",").map((s) => parseInt(s.trim(), 10)).filter((n) => !isNaN(n)));
+        dependsOn.push(...args[++i].split(",").map((s: any) => parseInt(s.trim(), 10)).filter((n: any) => !isNaN(n)));
         break;
       case "--dry-run":
         dryRun = true;
@@ -121,7 +122,7 @@ function writeRegistry(registry: Registry): void {
 
 function findAllTaskNumbers(): Set<number> {
   const nums = new Set<number>();
-  const files = readdirSync(TASKS_DIR).filter((n) => n.endsWith(".md"));
+  const files = readdirSync(TASKS_DIR).filter((n: any) => n.endsWith(".md"));
   for (const f of files) {
     const m = /\d{8}-(\d+)(?:-\d+)?-/.exec(f);
     if (m) nums.add(parseInt(m[1], 10));
@@ -137,8 +138,8 @@ function nextAvailableRange(count: number): { start: number; end: number } {
   const existing = findAllTaskNumbers();
 
   const maxReserved = registry.reservations
-    .filter((r) => r.status === "active")
-    .reduce((max, r) => Math.max(max, r.range_end), registry.last_allocated);
+    .filter((r: any) => r.status === "active")
+    .reduce((max: any, r: any) => Math.max(max, r.range_end), registry.last_allocated);
 
   let candidate = maxReserved + 1;
 
@@ -186,12 +187,12 @@ function buildChapterDag(
 
   const taskRows = stubs
     .map(
-      (s) =>
+      (s: any) =>
         `| **${s.num}** | ${s.title} | _stub — fill during assignment_ |`,
     )
     .join("\n");
 
-  const mermaidNodes = stubs.map((s) => `    ${s.num}[Task ${s.num}]`).join("\n");
+  const mermaidNodes = stubs.map((s: any) => `    ${s.num}[Task ${s.num}]`).join("\n");
 
   const content = `---\nstatus: opened${depsStr}\n---\n\n# Chapter DAG — ${title} (Tasks ${range.start}–${range.end})\n\n> Self-standing chapter for ${title.toLowerCase()}.\n\n---\n\n## Chapter Goal\n\nDefine the boundary, tasks, and acceptance criteria for the ${title} chapter.\n\n---\n\n## Task DAG\n\n\`\`\`mermaid\ngraph TD\n${mermaidNodes}\n\`\`\`\n\n| Task | Title | Purpose |\n|------|-------|---------|\n${taskRows}\n`;
 
@@ -225,13 +226,13 @@ function main(): number {
       return 1;
     }
 
-    if (args.tasks.length === 0) {
+    if (args.tasks.length=== 0) {
       console.error("error: --tasks is required (comma-separated task titles)");
       return 1;
     }
 
     const range = nextAvailableRange(args.tasks.length);
-    const stubs: TaskStub[] = args.tasks.map((t, i) => ({
+    const stubs: TaskStub[] = args.tasks.map((t: any, i: any) => ({
       title: t,
       num: range.start + i,
     }));

@@ -4,7 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test src/operator-surface-carriers.test.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && node --import tsx --test src/operator-surface-carriers.test.ts"
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"
@@ -18,5 +20,8 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "files": [
+    "dist/"
+  ]
 }

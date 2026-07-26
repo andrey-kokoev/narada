@@ -110,14 +110,30 @@
       "types": "./dist/sqlite-database.d.ts",
       "import": "./dist/sqlite-database.js"
     },
-    "./runtime/inbox/admission-log": "./runtime/inbox/admission-log.mjs",
-    "./runtime/inbox/inbox-index": "./runtime/inbox/inbox-index.mjs",
-    "./runtime/inbox/inbox-policy": "./runtime/inbox/inbox-policy.mjs",
-    "./runtime/mcp-freshness-service": "./runtime/mcp-freshness-service.mjs"
+    "./runtime/inbox/admission-log": {
+      "types": "./dist/runtime/inbox/admission-log.d.ts",
+      "import": "./dist/runtime/inbox/admission-log.js"
+    },
+    "./runtime/inbox/inbox-index": {
+      "types": "./dist/runtime/inbox/inbox-index.d.ts",
+      "import": "./dist/runtime/inbox/inbox-index.js"
+    },
+    "./runtime/inbox/inbox-policy": {
+      "types": "./dist/runtime/inbox/inbox-policy.d.ts",
+      "import": "./dist/runtime/inbox/inbox-policy.js"
+    },
+    "./runtime/mcp-freshness-service": {
+      "types": "./dist/runtime/mcp-freshness-service.d.ts",
+      "import": "./dist/runtime/mcp-freshness-service.js"
+    },
+    "./runtime/task-lifecycle/inbox-bridge": {
+      "types": "./dist/runtime/task-lifecycle/inbox-bridge.d.ts",
+      "import": "./dist/runtime/task-lifecycle/inbox-bridge.js"
+    }
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.runtime.json",
     "test": "vitest run",
     "test:smoke": "vitest run test/lib/task-lifecycle-store.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",
     "test:fast": "vitest run test/lib/task-lifecycle-store.test.ts test/lib/task-projection.test.ts test/lib/evidence-admission.test.ts test/lib/task-recommender.test.ts test/lib/task-close-service.test.ts test/lib/task-allocate-service.test.ts test/lib/task-search-service.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",

@@ -18,18 +18,20 @@
   },
   "exports": {
     ".": {
-      "types": "./src/nars-runtime-contract.d.ts",
-      "import": "./src/nars-runtime-contract.mjs"
+      "types": "./dist/nars-runtime-contract.d.ts",
+      "import": "./dist/nars-runtime-contract.js"
     },
     "./runtime-surface-contract": {
-      "types": "./src/runtime-surface-contract.d.ts",
-      "import": "./src/runtime-surface-contract.mjs"
+      "types": "./dist/runtime-surface-contract.d.ts",
+      "import": "./dist/runtime-surface-contract.js"
     },
     "./package.json": "./package.json"
   },
-  "types": "./src/nars-runtime-contract.d.ts",
+  "types": "./dist/nars-runtime-contract.d.ts",
   "scripts": {
-    "test": "node --test src/*.test.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada2/carrier-protocol": "workspace:*"

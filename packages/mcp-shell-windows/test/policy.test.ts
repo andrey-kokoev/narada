@@ -5,10 +5,10 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
 import { buildWindowsShellEnvelope, decideWindowsShellPolicy } from '../src/index.js';
-import { resolveAgentPathPolicy } from '../support/path-policy.mjs';
+import { resolveAgentPathPolicy } from '../support/path-policy.ts';
 
 async function callShellServer(siteRoot: string, request: Record<string, unknown>) {
-  const serverPath = fileURLToPath(new URL('../server.mjs', import.meta.url));
+  const serverPath = fileURLToPath(new URL('../server.ts', import.meta.url));
   const child = spawnTestChild(process.execPath, [serverPath, '--site-root', siteRoot], { stdio: ['pipe', 'pipe', 'pipe'] });
   let stdout = '';
   let stderr = '';

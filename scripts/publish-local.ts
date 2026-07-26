@@ -9,7 +9,7 @@ import {
   canonicalPublicationPackageNames,
 } from './publication-release-set.js';
 
-function run(command: string, environment: Record<string, string> = {}): void {
+function run(command: string, environment: Record<string, string>= {}): void {
   execSync(command, {
     stdio: 'inherit',
     encoding: 'utf8',
@@ -22,7 +22,7 @@ function output(command: string): string {
 }
 
 function changesetFiles(): string[] {
-  return readdirSync('.changeset').filter((name) => name.endsWith('.md'));
+  return readdirSync('.changeset').filter((name: any) => name.endsWith('.md'));
 }
 
 function fail(message: string): never {
@@ -44,7 +44,7 @@ function main(): void {
   }
 
   const changesets = changesetFiles();
-  if (changesets.length === 0) {
+  if (changesets.length=== 0) {
     fail('no changeset files found in .changeset/');
   }
 

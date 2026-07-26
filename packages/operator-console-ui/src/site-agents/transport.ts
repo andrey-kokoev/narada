@@ -1,4 +1,7 @@
-import { OPERATOR_CONSOLE_AGENTS_API_PATH } from '@narada2/operator-console-contract';
+import {
+  OPERATOR_CONSOLE_AGENTS_API_PATH,
+  type OperatorSiteAgentAdmissionWireRequest,
+} from '@narada2/operator-console-contract';
 
 export type SiteAgentsFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -6,6 +9,16 @@ export interface SiteAgentsTransport {
   overview(): Promise<unknown>;
   launch(siteId: string, agentId: string, operatorSurface?: string): Promise<unknown>;
   pending(): Promise<unknown>;
+  admissionOptions(siteId: string): Promise<unknown>;
+  admit(request: OperatorSiteAgentAdmissionWireRequest): Promise<unknown>;
+  stop(siteId: string, agentId: string): Promise<unknown>;
+  delete(siteId: string, agentId: string): Promise<unknown>;
+}
+
+function admissionFailureMessage(payload: unknown, status: number): string {
+  if (isRecord(payload) && typeof payload.message === 'string') return `Agent admission failed: ${payload.message}`;
+  if (isRecord(payload) && typeof payload.reason === 'string') return `Agent admission failed: ${payload.reason}.`;
+  return `Agent admission failed with HTTP ${status}.`;
 }
 
 export class SiteAgentsTransportError extends Error {
@@ -68,6 +81,52 @@ export function createSiteAgentsTransport(
       const response = await fetchLike(`${basePath}/pending`, { headers: { Accept: 'application/json' } });
       const payload = await readJson(response);
       if (!response.ok) throw new SiteAgentsTransportError(response.status, `Sites and Agents pending failed with HTTP ${response.status}.`);
+      return payload;
+    },
+    async admissionOptions(siteId): Promise<unknown> {
+      const response = await fetchLike(`${basePath}/admission/options?site_id=${encodeURIComponent(siteId)}`, {
+        headers: { Accept: 'application/json' },
+      });
+      const payload = await readJson(response);
+      if (!response.ok && response.status !== 409 && response.status !== 503) {
+        throw new SiteAgentsTransportError(response.status, `Agent admission options failed with HTTP ${response.status}.`, payload);
+      }
+      return payload;
+    },
+    async admit(request): Promise<unknown> {
+      const response = await fetchLike(`${basePath}/admission`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
+      });
+      const payload = await readJson(response);
+      if (!response.ok && response.status !== 409 && response.status !== 500) {
+        throw new SiteAgentsTransportError(response.status, admissionFailureMessage(payload, response.status), payload);
+      }
+      return payload;
+    },
+    async stop(siteId, agentId): Promise<unknown> {
+      const response = await fetchLike(`${basePath}/stop`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site_id: siteId, agent_id: agentId }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok && response.status !== 409 && response.status !== 500) {
+        throw new SiteAgentsTransportError(response.status, `Agent stop failed with HTTP ${response.status}.`, payload);
+      }
+      return payload;
+    },
+    async delete(siteId, agentId): Promise<unknown> {
+      const response = await fetchLike(`${basePath}/delete`, {
+        method: 'POST',
+        headers: { Accept: 'application/json', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ site_id: siteId, agent_id: agentId }),
+      });
+      const payload = await readJson(response);
+      if (!response.ok && response.status !== 409 && response.status !== 500) {
+        throw new SiteAgentsTransportError(response.status, `Agent deletion failed with HTTP ${response.status}.`, payload);
+      }
       return payload;
     },
   };

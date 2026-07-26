@@ -503,6 +503,23 @@
       "posture": "operator_console_contracts"
     },
     {
+      "package": "@narada2/operator-console-overlay",
+      "path": "packages/operator-console-overlay",
+      "roles": [
+        "cli_exposure",
+        "descriptor_contract"
+      ],
+      "posture": "operator_console_overlay_projection"
+    },
+    {
+      "package": "@narada2/operator-console-runtime",
+      "path": "packages/operator-console-runtime",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "operator_console_runtime_lifecycle"
+    },
+    {
       "package": "@narada2/operator-console-ui",
       "path": "packages/operator-console-ui",
       "roles": [

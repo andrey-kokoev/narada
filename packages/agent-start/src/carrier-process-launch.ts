@@ -4,15 +4,15 @@ import { createInterface } from 'node:readline/promises';
 import { AiProcessInvocationRefusalError, spawnAiProcessInvocation } from '@narada2/carrier-provider-support/ai-process-invocation';
 import { spawnHiddenPostureProcess, spawnOperatorTerminal } from '@narada2/process-launch-posture';
 
-export function resolveAgentStartExecutionPosture({ runtime, exec, wait, visibleRuntimeTerminal = false } = {}) {
-  const detachRefusalReasons = [];
+export function resolveAgentStartExecutionPosture({ runtime, exec, wait, visibleRuntimeTerminal = false }: any = {}) : any{
+  const detachRefusalReasons: any = [];
   if (runtime !== 'narada-agent-runtime-server') detachRefusalReasons.push('runtime_not_narada_agent_runtime_server');
   if (exec !== true) detachRefusalReasons.push('exec_not_requested');
   if (wait === true) detachRefusalReasons.push('wait_requested');
   if (visibleRuntimeTerminal === true) detachRefusalReasons.push('visible_runtime_terminal_requested');
 
-  const hiddenDetached = detachRefusalReasons.length === 0;
-  const agentStartExecutionMode = hiddenDetached
+  const hiddenDetached: any = detachRefusalReasons.length === 0;
+  const agentStartExecutionMode: any = hiddenDetached
     ? 'hidden_detached'
     : exec === true
       ? 'visible_inherited'
@@ -45,26 +45,26 @@ export async function waitForEnterBeforeCarrier({
   stdout = process.stdout,
   writeStdout,
   loadAgentStartRenderer,
-}) {
+}: any) : Promise<any>{
   if (!stdin.isTTY) {
     await writeStdout(`agent_start_wait_skipped: stdin is not a terminal; starting ${carrierName}\n`);
     return;
   }
-  const rl = createInterface({ input: stdin, output: stdout });
+  const rl: any = createInterface({ input: stdin, output: stdout });
   try {
-    const { formatAgentStartWaitPrompt } = await loadAgentStartRenderer();
+    const { formatAgentStartWaitPrompt }: any = await loadAgentStartRenderer();
     await rl.question(formatAgentStartWaitPrompt(agentId, carrierName, { agentIdentityRef }));
   } finally {
     rl.close();
   }
 }
 
-export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptions = {}, aiProcessInvocation = null, executionMode = 'visible_inherited', hiddenOutputFiles = null, writeStderr = console.error, onSpawn = null, onExit = process.exit }) {
-  let child;
-  let stdoutFd = null;
-  let stderrFd = null;
+export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptions = {}, aiProcessInvocation = null, executionMode = 'visible_inherited', hiddenOutputFiles = null, writeStderr = console.error, onSpawn = null, onExit = process.exit }: any) : any{
+  let child: any;
+  let stdoutFd: any = null;
+  let stderrFd: any = null;
   try {
-    const resolvedSpawnOptions = {
+    const resolvedSpawnOptions: any = {
       stdio: 'inherit',
       cwd,
       env,
@@ -86,8 +86,8 @@ export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptio
       closeSync(stderrFd);
       stdoutFd = null;
       stderrFd = null;
-      let finished = false;
-      child.once('error', (err) => {
+      let finished: any = false;
+      child.once('error', (err: any) => {
         if (finished) return;
         finished = true;
         writeStderr(`[FAIL] Failed to spawn runtime process: ${err.message}`);
@@ -114,14 +114,14 @@ export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptio
       return;
     }
     if (aiProcessInvocation) {
-      const owner = spawnAiProcessInvocation({
+      const owner: any = spawnAiProcessInvocation({
         ...aiProcessInvocation,
         cwd,
         command,
         argv: args,
         env,
       }, {
-        spawnProcess: (spawnCommand, spawnArgs, options) => ({ child: spawnOperatorTerminal(spawnCommand, spawnArgs, options) }),
+        spawnProcess: (spawnCommand: any, spawnArgs: any, options: any) => ({ child: spawnOperatorTerminal(spawnCommand, spawnArgs, options) }),
         spawnOptions: resolvedSpawnOptions,
       });
       child = owner.child;
@@ -141,12 +141,12 @@ export function spawnCarrierProcessAndExit({ command, args, cwd, env, spawnOptio
     return;
   }
 
-  child.on('error', (err) => {
+  child.on('error', (err: any) => {
     writeStderr(`[FAIL] Failed to spawn runtime process: ${err.message}`);
     onExit(1);
   });
 
-  child.on('close', (code) => {
+  child.on('close', (code: any) => {
     onExit(code ?? 0);
   });
 }

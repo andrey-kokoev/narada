@@ -7,9 +7,9 @@ interface PublicationManifest {
 }
 
 export function publicationAdmissionCommand(packagePath: string): string {
-  const guardPath = relative(packagePath, 'scripts/assert-publication-admission.js')
+  const guardPath = relative(packagePath, 'scripts/assert-publication-admission.ts')
     .replaceAll('\\', '/');
-  return `node ${guardPath}`;
+  return `node --import tsx ${guardPath}`;
 }
 
 export function changesetPackageNames(source: string, sourceName: string): string[] {
@@ -23,8 +23,8 @@ export function changesetPackageNames(source: string, sourceName: string): strin
   }
 
   return lines.slice(1, closingIndex)
-    .filter((line) => line.trim().length > 0)
-    .map((line) => {
+    .filter((line: any) => line.trim().length > 0)
+    .map((line: any) => {
       const match = line.match(/^\s*["']?([^"']+?)["']?\s*:\s*(patch|minor|major)\s*$/);
       if (!match) {
         throw new Error(`changeset_frontmatter_entry_invalid: ${sourceName}: ${line}`);
@@ -44,7 +44,7 @@ export function validatePublicationReleaseSet(
     }
   }
 
-  const unlisted = [...requested].filter((name) => !allowedPackageNames.has(name)).sort();
+  const unlisted = [...requested].filter((name: any) => !allowedPackageNames.has(name)).sort();
   if (unlisted.length > 0) {
     throw new Error(`publication_release_set_not_canonical: ${unlisted.join(', ')}`);
   }
@@ -52,13 +52,13 @@ export function validatePublicationReleaseSet(
 }
 
 export function assertPublicationReleaseSet(
-  repositoryRoot = process.cwd(),
+  repositoryRoot: any= process.cwd(),
 ): string[] {
   const allowedPackageNames = canonicalPublicationPackageNames(repositoryRoot);
   const changesetRoot = join(repositoryRoot, '.changeset');
   const changesets = readdirSync(changesetRoot)
-    .filter((name) => name.endsWith('.md') && name.toLowerCase() !== 'readme.md')
-    .map((name) => ({
+    .filter((name: any) => name.endsWith('.md') && name.toLowerCase() !== 'readme.md')
+    .map((name: any) => ({
       name,
       source: readFileSync(join(changesetRoot, name), 'utf8'),
     }));
@@ -66,12 +66,12 @@ export function assertPublicationReleaseSet(
 }
 
 export function canonicalPublicationPackageNames(
-  repositoryRoot = process.cwd(),
+  repositoryRoot: any= process.cwd(),
 ): string[] {
   const manifestPath = join(repositoryRoot, 'config', 'npm-publication-packages.json');
   const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as PublicationManifest;
   if (manifest.schema !== 'narada.npm_publication_packages.v1') {
     throw new Error(`publication_manifest_schema_invalid: ${manifest.schema}`);
   }
-  return manifest.packages.map(({ name }) => name).sort();
+  return manifest.packages.map(({ name }: any) => name).sort();
 }

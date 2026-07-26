@@ -46,7 +46,7 @@ export function useCloudflareProjection(control: CloudflareProjectionControlConf
         body: JSON.stringify({ cloudflare_api_base_url: baseUrl }),
       });
       const body = await response.json().catch(() => null) as { status?: string; reason?: string; projection_id?: string; remote_url?: string } | null;
-      if (!response.ok || !body || body.status === 'refused') {
+      if (!response.ok || !body || body.status=== 'refused') {
         state.value = 'refused';
         message.value = body?.reason ?? `HTTP ${response.status}`;
         return false;

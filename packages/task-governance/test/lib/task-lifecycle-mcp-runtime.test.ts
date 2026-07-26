@@ -17,7 +17,7 @@ describe('task lifecycle MCP runtime cutover', () => {
   });
 
   it('fails clearly when the stale runtime file is executed directly', () => {
-    const runtimePath = resolve(packageRoot, 'runtime/task-lifecycle/task-mcp-server.mjs');
+    const runtimePath = resolve(packageRoot, 'runtime/task-lifecycle/task-mcp-server.ts');
     const result = runHiddenPostureCommandSync(process.execPath, [runtimePath], { encoding: 'utf8', timeout: 3000, posture: 'test_child' });
 
     expect(result.status).toBe(64);

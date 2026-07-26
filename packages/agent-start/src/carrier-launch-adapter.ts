@@ -6,10 +6,10 @@ import {
   operatorSurfaceKindsForRuntimeHost,
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
-const NARS_OPERATOR_SURFACE_KINDS = new Set(operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND));
+const NARS_OPERATOR_SURFACE_KINDS: any = new Set(operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND));
 
-export function stripLegacyIntelligenceSelectionEnvironment(env = {}) {
-  const scrubbed = { ...env };
+export function stripLegacyIntelligenceSelectionEnvironment(env: any = {}) : any{
+  const scrubbed: any = { ...env };
   delete scrubbed.NARADA_INTELLIGENCE_PROVIDER;
   delete scrubbed.NARADA_INTELLIGENCE_PROVIDER_SOURCE_FIELD;
   delete scrubbed.NARADA_INTELLIGENCE_PROVIDER_SOURCE_PATH;
@@ -39,8 +39,8 @@ export function stripLegacyIntelligenceSelectionEnvironment(env = {}) {
   return scrubbed;
 }
 
-export function stripInheritedIntelligenceLaunchContextEnvironment(env = {}) {
-  const scrubbed = { ...env };
+export function stripInheritedIntelligenceLaunchContextEnvironment(env: any = {}) : any{
+  const scrubbed: any = { ...env };
   delete scrubbed.NARADA_INTELLIGENCE_REGISTRY_DB;
   delete scrubbed.NARADA_INTELLIGENCE_TARGET_SITE;
   delete scrubbed.NARADA_INTELLIGENCE_USER_SITE;
@@ -50,22 +50,22 @@ export function stripInheritedIntelligenceLaunchContextEnvironment(env = {}) {
   return scrubbed;
 }
 
-function isNarsOperatorSurface(carrierName) {
+function isNarsOperatorSurface(carrierName: any) : any{
   return NARS_OPERATOR_SURFACE_KINDS.has(carrierName);
 }
 
-function requireCarrierLaunchMatrixRow(launchSelectionKind) {
-  const matrixRow = operatorSurfaceLaunchMatrixRow(launchSelectionKind);
+function requireCarrierLaunchMatrixRow(launchSelectionKind: any) : any{
+  const matrixRow: any = operatorSurfaceLaunchMatrixRow(launchSelectionKind);
   if (!matrixRow) {
     throw new Error('carrier_launch_matrix_row_missing:' + launchSelectionKind);
   }
   return matrixRow;
 }
 
-export function resolveToolFabricAdapter(carrierName, { schema, agentTuiCarrier, runtimeName } = {}) {
-  const launchSelectionKind = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
-  const matrixRow = requireCarrierLaunchMatrixRow(launchSelectionKind);
-  const effectiveRuntimeName = runtimeName == null
+export function resolveToolFabricAdapter(carrierName: any, { schema, agentTuiCarrier, runtimeName }: any = {}) : any{
+  const launchSelectionKind: any = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
+  const matrixRow: any = requireCarrierLaunchMatrixRow(launchSelectionKind);
+  const effectiveRuntimeName: any = runtimeName == null
     ? matrixRow.runtime_substrate_kind
     : normalizeRuntimeAlias(runtimeName);
   if (effectiveRuntimeName !== matrixRow.runtime_substrate_kind) {
@@ -89,16 +89,16 @@ export function resolveToolFabricAdapter(carrierName, { schema, agentTuiCarrier,
   };
 }
 
-function codexTomlString(value) {
+function codexTomlString(value: any) : any{
   return JSON.stringify(String(value));
 }
 
-function codexTomlArray(values) {
+function codexTomlArray(values: any) : any{
   return `[${values.map(codexTomlString).join(', ')}]`;
 }
 
-export function codexMcpDefinitionArgs(servers) {
-  return servers.flatMap((server) => [
+export function codexMcpDefinitionArgs(servers: any) : any{
+  return servers.flatMap((server: any) => [
     '-c',
     `mcp_servers.${server.name}.command=${codexTomlString(server.command)}`,
     '-c',
@@ -112,11 +112,11 @@ export function codexMcpDefinitionArgs(servers) {
   ]);
 }
 
-function startupAffordancePrompt(identity, carrierDescription) {
+function startupAffordancePrompt(identity: any, carrierDescription: any) : any{
   return `You are ${identity}. The human is Operator. This session was launched by Narada agent-start. ${carrierDescription} Use agent_context_startup_sequence first. Treat operator startup nudges as this MCP startup affordance, not shell or file discovery. If the startup MCP tool is unavailable, report the missing MCP capability. When a Narada tool returns reader_tool=mcp_output_show, call mcp_output_show with the returned output_ref before deciding next work.`;
 }
 
-export function buildCarrierSpawnArgs(carrierName, {
+export function buildCarrierSpawnArgs(carrierName: any, {
   agentTuiCarrier,
   identity,
   yoloFlag,
@@ -141,12 +141,12 @@ export function buildCarrierSpawnArgs(carrierName, {
   claudeCodeMcpConfig,
   claudeCodeModel,
   runtimeAuthority,
-}) {
-  const launchSelectionKind = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
-  const matrixRow = requireCarrierLaunchMatrixRow(launchSelectionKind);
+}: any) : any{
+  const launchSelectionKind: any = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
+  const matrixRow: any = requireCarrierLaunchMatrixRow(launchSelectionKind);
 
   if (carrierName === 'codex') {
-    const args = [
+    const args: any = [
       '--ask-for-approval',
       'never',
       ...codexMcpDefinitionArgs(codexMcpServerDefinitions()),
@@ -162,7 +162,7 @@ export function buildCarrierSpawnArgs(carrierName, {
   }
 
   if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) {
-    const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
+    const sessionId: any = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     return [
       agentRuntimeServerScriptPath(),
       '--identity',
@@ -179,7 +179,7 @@ export function buildCarrierSpawnArgs(carrierName, {
   }
 
   if (carrierName === agentTuiCarrier) {
-    const sessionId = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
+    const sessionId: any = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
     return [
       'run',
       '--manifest-path',
@@ -248,14 +248,14 @@ export function buildCarrierSpawnArgs(carrierName, {
     ];
   }
 
-  const spawnArgs = ['-S', identity];
+  const spawnArgs: any = ['-S', identity];
   if (yoloFlag) {
     spawnArgs.push('-y');
   }
   return spawnArgs;
 }
 
-export function resolveCarrierCommand(carrierName, {
+export function resolveCarrierCommand(carrierName: any, {
   agentTuiCarrier,
   processPlatform,
   processExecPath,
@@ -263,9 +263,9 @@ export function resolveCarrierCommand(carrierName, {
   defaultClaudeCodeCommand,
   claudeCodeCommand,
   opencodeCommand,
-}) {
-  const launchSelectionKind = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
-  const matrixRow = requireCarrierLaunchMatrixRow(launchSelectionKind);
+}: any) : any{
+  const launchSelectionKind: any = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
+  const matrixRow: any = requireCarrierLaunchMatrixRow(launchSelectionKind);
   if (processPlatform === 'win32' && carrierName === 'codex') return processExecPath;
   if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return processExecPath;
   if (carrierName === agentTuiCarrier) return 'cargo';
@@ -275,19 +275,19 @@ export function resolveCarrierCommand(carrierName, {
   return carrierName;
 }
 
-export function carrierSpawnOptions(carrierName) {
+export function carrierSpawnOptions(carrierName: any) : any{
   requireCarrierLaunchMatrixRow(carrierName);
   if (carrierName === 'opencode') return { shell: false, windowsHide: true };
   return { windowsHide: true };
 }
 
-export function carrierSpecificEnvironment(carrierName, {
+export function carrierSpecificEnvironment(carrierName: any, {
   processEnv = {},
   defaultPiProvider,
   defaultPiModel,
   defaultClaudeCodeCommand,
   defaultClaudeCodeModel,
-} = {}) {
+}: any = {}) : any{
   requireCarrierLaunchMatrixRow(carrierName);
   if (carrierName === 'pi') {
     return {
@@ -310,22 +310,22 @@ export function carrierSpecificEnvironment(carrierName, {
   return {};
 }
 
-export function redactEnvironmentForOutput(env = {}) {
-  return Object.fromEntries(Object.entries(env).map(([key, value]) => [
+export function redactEnvironmentForOutput(env: any = {}) : any{
+  return Object.fromEntries(Object.entries(env).map(([key, value]: any) => [
     key,
     shouldRedactEnvironmentValue(key, value) ? '<set>' : value,
   ]));
 }
 
-export function stripCodexSubscriptionOpenAIEnvironment(env = {}) {
-  const scrubbed = { ...env };
+export function stripCodexSubscriptionOpenAIEnvironment(env: any = {}) : any{
+  const scrubbed: any = { ...env };
   delete scrubbed.OPENAI_API_KEY;
   delete scrubbed.OPENAI_BASE_URL;
   delete scrubbed.OPENAI_MODEL;
   return scrubbed;
 }
 
-function shouldRedactEnvironmentValue(key, value) {
+function shouldRedactEnvironmentValue(key: any, value: any) : any{
   if (!value) return false;
   return /(_API_KEY|_TOKEN|_SECRET|PASSWORD|CREDENTIAL)/i.test(String(key));
 }
@@ -349,17 +349,17 @@ export function buildCarrierEnvironmentProjection({
   processOwnership = null,
   processRole = null,
   createdByPid = null,
-}) {
-  const projectedCarrierEnvironment = isNarsOperatorSurface(carrierName)
+}: any) : any{
+  const projectedCarrierEnvironment: any = isNarsOperatorSurface(carrierName)
     ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(carrierEnvironment))
     : carrierEnvironment;
-  const projectedStartRequiredEnvironment = isNarsOperatorSurface(carrierName)
+  const projectedStartRequiredEnvironment: any = isNarsOperatorSurface(carrierName)
     ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(startResult.required_environment ?? {}))
     : (startResult.required_environment ?? {});
-  const projectedStartWouldSetEnvironment = isNarsOperatorSurface(carrierName)
+  const projectedStartWouldSetEnvironment: any = isNarsOperatorSurface(carrierName)
     ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(startResult.would_set_environment ?? {}))
     : (startResult.would_set_environment ?? {});
-  const commonEnvironment = {
+  const commonEnvironment: any = {
     ...projectedCarrierEnvironment,
     ...agentTuiEnvironment,
     ...runtimeEnvironment,
@@ -420,9 +420,10 @@ export function buildCarrierSpawnEnvironmentDelta({
   createdByPid = null,
   runtimeProcessCreatorPid = null,
   runtimeProcessRole = 'runtime_server',
-}) {
-  const processEnvironment = buildCarrierProcessEnvironment({
+}: any) : any{
+  const processEnvironment: any = buildCarrierProcessEnvironment({
     processEnvironment: {},
+    carrierEnvironment,
     runtimeEnvironment,
     agentTuiEnvironment,
     codexMcpScope,
@@ -447,7 +448,7 @@ export function buildCarrierSpawnEnvironmentDelta({
     runtimeProcessCreatorPid,
     runtimeProcessRole,
   });
-  const startRequiredEnvironment = isNarsOperatorSurface(carrierName)
+  const startRequiredEnvironment: any = isNarsOperatorSurface(carrierName)
     ? stripLegacyIntelligenceSelectionEnvironment(startResult.required_environment ?? {})
     : (startResult.required_environment ?? {});
   return {
@@ -458,6 +459,7 @@ export function buildCarrierSpawnEnvironmentDelta({
 
 export function buildCarrierProcessEnvironment({
   processEnvironment = process.env,
+  carrierEnvironment = {},
   runtimeEnvironment = {},
   agentTuiEnvironment = {},
   codexMcpScope = null,
@@ -481,22 +483,26 @@ export function buildCarrierProcessEnvironment({
   createdByPid = null,
   runtimeProcessCreatorPid = null,
   runtimeProcessRole = null,
-}) {
-  const effectiveLaunchSessionId = launchSessionId ?? processEnvironment?.NARADA_LAUNCH_SESSION_ID ?? null;
-  const effectiveProcessOwnership = processOwnership ?? processEnvironment?.NARADA_PROCESS_OWNERSHIP ?? null;
-  const effectiveProcessRole = processRole ?? processEnvironment?.NARADA_PROCESS_ROLE ?? null;
-  const effectiveCreatedByPid = createdByPid ?? processEnvironment?.NARADA_CREATED_BY_PID ?? null;
-  const launchProcessEnvironment = {
+}: any) : any{
+  const effectiveLaunchSessionId: any = launchSessionId ?? processEnvironment?.NARADA_LAUNCH_SESSION_ID ?? null;
+  const effectiveProcessOwnership: any = processOwnership ?? processEnvironment?.NARADA_PROCESS_OWNERSHIP ?? null;
+  const effectiveProcessRole: any = processRole ?? processEnvironment?.NARADA_PROCESS_ROLE ?? null;
+  const effectiveCreatedByPid: any = createdByPid ?? processEnvironment?.NARADA_CREATED_BY_PID ?? null;
+  const launchProcessEnvironment: any = {
     ...(effectiveLaunchSessionId ? { NARADA_LAUNCH_SESSION_ID: effectiveLaunchSessionId } : {}),
     ...(effectiveProcessOwnership ? { NARADA_PROCESS_OWNERSHIP: effectiveProcessOwnership } : {}),
     ...(effectiveProcessRole ? { NARADA_PROCESS_ROLE: effectiveProcessRole } : {}),
     ...(effectiveCreatedByPid ? { NARADA_CREATED_BY_PID: effectiveCreatedByPid } : {}),
   };
-  const inheritedEnvironment = isNarsOperatorSurface(carrierName)
+  const inheritedEnvironment: any = isNarsOperatorSurface(carrierName)
     ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(processEnvironment))
     : processEnvironment;
+  const projectedCarrierEnvironment: any = isNarsOperatorSurface(carrierName)
+    ? stripInheritedIntelligenceLaunchContextEnvironment(stripLegacyIntelligenceSelectionEnvironment(carrierEnvironment))
+    : carrierEnvironment;
   return {
     ...inheritedEnvironment,
+    ...projectedCarrierEnvironment,
     ...(carrierName === 'pi' ? {} : runtimeEnvironment),
     ...(isNarsOperatorSurface(carrierName) ? intelligenceEnvironment : {}),
     NARADA_AGENT_ID: identity,
@@ -522,9 +528,9 @@ export function buildCarrierProcessEnvironment({
   };
 }
 
-function runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcessCreatorPid, runtimeProcessRole }) {
+function runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcessCreatorPid, runtimeProcessRole }: any) : any{
   if (!processEnvironment?.NARADA_LAUNCH_SESSION_ID) return {};
-  const createdByPid = Number.isInteger(runtimeProcessCreatorPid) ? String(runtimeProcessCreatorPid) : null;
+  const createdByPid: any = Number.isInteger(runtimeProcessCreatorPid) ? String(runtimeProcessCreatorPid) : null;
   return {
     NARADA_PROCESS_OWNERSHIP: processEnvironment.NARADA_PROCESS_OWNERSHIP ?? 'session_owned',
     NARADA_PROCESS_ROLE: runtimeProcessRole ?? processEnvironment.NARADA_PROCESS_ROLE ?? 'runtime_server',
@@ -532,7 +538,7 @@ function runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcess
   };
 }
 
-export function buildNarsLaunchPacket(carrierName, {
+export function buildNarsLaunchPacket(carrierName: any, {
   processExecPath,
   carrierSessionRegistration,
   targetSiteId,
@@ -541,10 +547,10 @@ export function buildNarsLaunchPacket(carrierName, {
   siteCarrierControlPath,
   siteCarrierSessionPath,
   intelligenceKernelKind = null,
-}) {
-  const matrixRow = operatorSurfaceLaunchMatrixRow(carrierName);
+}: any) : any{
+  const matrixRow: any = operatorSurfaceLaunchMatrixRow(carrierName);
   if (!matrixRow || matrixRow.runtime_host_kind !== NARADA_AGENT_RUNTIME_SERVER_KIND) return null;
-  const sessionId = carrierSessionRegistration.carrier_session_id;
+  const sessionId: any = carrierSessionRegistration.carrier_session_id;
   return {
     schema: 'narada.agent_start.nars_launch.v1',
     session_id: sessionId,
@@ -574,8 +580,8 @@ export function buildNarsLaunchPacket(carrierName, {
   };
 }
 
-export function shellQuote(arg) {
-  const text = String(arg);
+export function shellQuote(arg: any) : any{
+  const text: any = String(arg);
   if (!/[\s"'\\]/.test(text)) return text;
   return '"' + text.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
 }

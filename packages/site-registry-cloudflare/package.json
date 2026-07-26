@@ -28,9 +28,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "smoke:fixture": "vitest run test/smoke-fixture.test.ts",
-    "deploy:preflight": "pnpm build && node scripts/hosted-telemetry-surface.mjs preflight --config wrangler.jsonc",
-    "deploy:verify": "pnpm build && node scripts/hosted-telemetry-surface.mjs verify",
-    "deploy:live": "pnpm build && node scripts/hosted-telemetry-surface.mjs deploy --live --config wrangler.jsonc"
+    "deploy:preflight": "pnpm build && node dist/hosted-telemetry-surface.js preflight --config wrangler.jsonc",
+    "deploy:verify": "pnpm build && node dist/hosted-telemetry-surface.js verify",
+    "deploy:live": "pnpm build && node dist/hosted-telemetry-surface.js deploy --live --config wrangler.jsonc"
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*",
@@ -40,7 +40,8 @@
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260421.1",
     "typescript": "^5.3.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "@types/node": "^22.5.0"
   },
   "engines": {
     "node": ">=18.0.0"

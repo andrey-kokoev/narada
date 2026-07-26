@@ -101,7 +101,7 @@ export function buildOperatorCommandPaletteEntries(state: OperatorCommandControl
   const query = commandQuery(state.draft).trim().toLowerCase();
   const commands: OperatorCommandPaletteEntry[] = filterAgentWebUiCommands(commandQuery(state.draft), {
     supportsProtocolMethod: state.supportsProtocolMethod,
-  }).map((command) => ({
+  }).map((command: any) => ({
     kind: 'command',
     command,
     id: command.id,
@@ -115,9 +115,9 @@ export function buildOperatorCommandPaletteEntries(state: OperatorCommandControl
   return [...commands, ...directSnippets].slice(0, 8);
 }
 
-export function acceptOperatorCommandPaletteEntry(entry: OperatorCommandPaletteEntry | null | undefined, draft: string, submitWhenComplete = false): OperatorCommandAcceptDecision {
+export function acceptOperatorCommandPaletteEntry(entry: OperatorCommandPaletteEntry | null | undefined, draft: string, submitWhenComplete= false): OperatorCommandAcceptDecision {
   if (!entry) return { kind: 'none' };
-  if (entry.kind === 'snippet-action') {
+  if (entry.kind=== 'snippet-action') {
     const currentDraft = String(draft ?? '').trim();
     const normalizedCompletion = entry.completion.trim();
     if (entry.immediate && submitWhenComplete) {
@@ -130,7 +130,7 @@ export function acceptOperatorCommandPaletteEntry(entry: OperatorCommandPaletteE
       focusInput: !entry.immediate || !submitWhenComplete,
     };
   }
-  if (entry.kind === 'snippet') {
+  if (entry.kind=== 'snippet') {
     if (submitWhenComplete) return { kind: 'run-snippet', snippet: entry.snippet, deliveryMode: entry.deliveryMode };
     return { kind: 'fill', draft: entry.slash, dismissForDraft: true, focusInput: true };
   }
@@ -143,13 +143,13 @@ export function isImmediateOperatorCommandPaletteClick(entry: OperatorCommandPal
     || (entry.kind === 'snippet-action' && entry.immediate === true);
 }
 
-function acceptCommandEntry(command: AgentWebUiCommand, draft: string, submitWhenComplete = false): OperatorCommandAcceptDecision {
+function acceptCommandEntry(command: AgentWebUiCommand, draft: string, submitWhenComplete= false): OperatorCommandAcceptDecision {
   const trimmedDraft = String(draft ?? '').trim();
   const token = trimmedDraft.split(/\s+/)[0]?.toLowerCase() ?? '';
   const noArgs = command.usage === command.slash;
   const exact = token === command.slash || command.aliases.includes(token as `/${string}`);
   if (command.id === 'snippet') return { kind: 'fill', draft: '/snippet ', focusInput: true };
-  if (command.id === 'snippets' && submitWhenComplete) {
+  if (command.id=== 'snippets' && submitWhenComplete) {
     return { kind: 'submit', draft: trimmedDraft.toLowerCase().startsWith('/snippets') ? trimmedDraft : command.slash, deliveryMode: 'default' };
   }
   if (submitWhenComplete && noArgs && exact) return { kind: 'submit', deliveryMode: 'default' };
@@ -208,7 +208,7 @@ function immediateSnippetActionDraft(entry: Extract<OperatorCommandPaletteEntry,
 function buildSnippetResultEntries(draft: string, snippets: readonly OperatorSnippet[]): OperatorCommandPaletteEntry[] {
   const deliveryMode = currentSnippetVerb(draft);
   const snippetVerb = deliveryMode === 'enqueue' ? 'enqueue' : 'run';
-  return filterSnippetResults(draft, snippets).map((snippet) => ({
+  return filterSnippetResults(draft, snippets).map((snippet: any) => ({
     kind: 'snippet' as const,
     snippet,
     deliveryMode,
@@ -225,9 +225,9 @@ function buildTopLevelSnippetResultEntries(query: string, snippets: readonly Ope
   const normalizedQuery = query.trim().toLowerCase();
   if (!normalizedQuery) return [];
   return snippets
-    .filter((snippet) => snippet.name.includes(normalizedQuery) || snippet.body.toLowerCase().includes(normalizedQuery))
+    .filter((snippet: any) => snippet.name.includes(normalizedQuery) || snippet.body.toLowerCase().includes(normalizedQuery))
     .sort(compareSnippets)
-    .map((snippet) => ({
+    .map((snippet: any) => ({
       kind: 'snippet' as const,
       snippet,
       deliveryMode: 'default' as const,
@@ -245,7 +245,7 @@ function filterSnippetResults(draft: string, snippets: readonly OperatorSnippet[
   const action = currentSnippetAction(draft);
   if (action && isAgentWebUiSnippetManagementAction(action)) return [];
   return [...snippets]
-    .filter((snippet) => !search || snippet.name.includes(search) || snippet.body.toLowerCase().includes(search))
+    .filter((snippet: any) => !search || snippet.name.includes(search) || snippet.body.toLowerCase().includes(search))
     .sort(compareSnippets);
 }
 

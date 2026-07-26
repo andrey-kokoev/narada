@@ -7,13 +7,15 @@
     "@narada2/process-launch-posture": "workspace:*",
     "@narada2/site-common-tools": "workspace:*",
     "@narada2/sqlite": "workspace:*",
-    "@narada2/task-governance": "workspace:*"
+    "@narada2/task-governance": "workspace:*",
+    "@narada2/agent-identity": "workspace:*"
   },
   "engines": {
     "node": ">=22.0.0"
   },
   "scripts": {
-    "test": "node --test src/task-lifecycle-tools.test.mjs"
+    "test": "node --import tsx --test src/task-lifecycle-tools.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Task lifecycle tool surface",
   "license": "MIT",
@@ -21,5 +23,15 @@
     "type": "git",
     "url": "git+https://github.com/andrey-kokoev/narada.git",
     "directory": "packages/task-lifecycle-tools"
+  },
+  "exports": {
+    "./recovery-truthfulness-guard": "./src/recovery-truthfulness-guard.ts",
+    "./inbox-bridge": "./src/inbox-bridge.ts",
+    "./task-mcp-tool-registry": "./src/task-mcp-tool-registry.ts",
+    "./src/task-mcp-tool-registry.js": "./src/task-mcp-tool-registry.ts"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0",
+    "typescript": "^5.3.0"
   }
 }

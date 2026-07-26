@@ -4,10 +4,10 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
-    "allowJs": true,
-    "checkJs": false,
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.mjs"]
+  "include": [
+    "src/**/*.ts"
+  ]
 }

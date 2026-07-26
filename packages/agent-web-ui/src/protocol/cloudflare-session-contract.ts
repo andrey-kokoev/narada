@@ -19,7 +19,7 @@ export function cloudflareWebSocketEndpoint(endpoint: string, browserToken?: str
 export function applyCloudflareEventQuery(
   url: URL,
   subscribeFrame: unknown,
-  fallbackPageSize = 100,
+  fallbackPageSize: any= 100,
 ): URL {
   const params = isRecord(subscribeFrame) && isRecord(subscribeFrame.params)
     ? subscribeFrame.params

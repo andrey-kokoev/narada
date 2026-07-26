@@ -58,19 +58,19 @@ export function submitOperatorInput(text: string, connection: NarsClientConnecti
     ...(deliveryMode === 'enqueue' ? { deliveryMode: 'enqueue' } : {}),
   });
   if (!action) return { handled: false, shouldClearDraft: false };
-  if (action.kind === 'local_help') {
+  if (action.kind=== 'local_help') {
     return { handled: true, shouldClearDraft: true, localEvent: { event: 'agent_web_ui_help', content: buildAgentWebUiHelpText({ supportsProtocolMethod: supportsProtocolMethod ?? undefined }) } };
   }
-  if (action.kind === 'local_clear') {
+  if (action.kind=== 'local_clear') {
     return { handled: true, shouldClearDraft: true, localEvent: { event: 'agent_web_ui_clear_requested' } };
   }
-  if (action.kind === 'message') {
+  if (action.kind=== 'message') {
     return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: action.message } };
   }
-  if (action.kind === 'snippet_command') {
+  if (action.kind=== 'snippet_command') {
     return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: 'Snippet commands are handled by the Agent Web UI composer.' } };
   }
-  if (action.kind === 'snippet_panel_command') {
+  if (action.kind=== 'snippet_panel_command') {
     return { handled: false, shouldClearDraft: false, localEvent: { event: 'agent_web_ui_message', message: 'Open snippets from the Agent Web UI composer with /snippets.' } };
   }
   const frame = withOperatorInputIdempotencyKey(toSessionProtocolFrame(action.frame), idempotencyKeyOverride);

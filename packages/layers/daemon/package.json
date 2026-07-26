@@ -37,7 +37,7 @@
     "access": "public"
   },
   "scripts": {
-    "prepublishOnly": "node ../../../scripts/assert-publication-admission.js",
+    "prepublishOnly": "node --import tsx ../../../scripts/assert-publication-admission.ts",
     "build": "tsc",
     "typecheck": "tsc --noEmit",
     "start": "node dist/index.js",

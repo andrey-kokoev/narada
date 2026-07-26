@@ -27,13 +27,13 @@ interface ProfileOptions {
  * Start CPU profiling
  */
 async function startProfiling(session: Session): Promise<void> {
-  return new Promise((resolve, reject) => {
-    session.post('Profiler.enable', err => {
+  return new Promise((resolve: any, reject: any) => {
+    session.post('Profiler.enable', (err: any) => {
       if (err) {
         reject(err);
         return;
       }
-      session.post('Profiler.start', err => {
+      session.post('Profiler.start', (err: any) => {
         if (err) {
           reject(err);
           return;
@@ -48,8 +48,8 @@ async function startProfiling(session: Session): Promise<void> {
  * Stop CPU profiling and get profile data
  */
 async function stopProfiling(session: Session): Promise<unknown> {
-  return new Promise((resolve, reject) => {
-    session.post('Profiler.stop', (err, params) => {
+  return new Promise((resolve: any, reject: any) => {
+    session.post('Profiler.stop', (err: any, params: any) => {
       if (err) {
         reject(err);
         return;
@@ -70,22 +70,22 @@ async function profileSync(options: ProfileOptions): Promise<void> {
   console.log('Output:', options.outputPath);
 
   // Import required modules
-  const { createMockAdapter } = await import(
+  const { createMockAdapter }: any = await import(
     '../packages/layers/control-plane/src/adapter/graph/mock-adapter.js'
   );
-  const { DefaultSyncRunner } = await import(
+  const { DefaultSyncRunner }: any = await import(
     '../packages/layers/control-plane/src/runner/sync-once.js'
   );
-  const { FileCursorStore } = await import(
+  const { FileCursorStore }: any = await import(
     '../packages/layers/control-plane/src/persistence/cursor.js'
   );
-  const { FileApplyLogStore } = await import(
+  const { FileApplyLogStore }: any = await import(
     '../packages/layers/control-plane/src/persistence/apply-log.js'
   );
-  const { DefaultProjector } = await import(
+  const { DefaultProjector }: any = await import(
     '../packages/layers/control-plane/src/projector/apply-event.js'
   );
-  const { FileLock } = await import(
+  const { FileLock }: any = await import(
     '../packages/layers/control-plane/src/persistence/lock.js'
   );
 
@@ -147,10 +147,10 @@ async function profileNormalization(options: ProfileOptions): Promise<void> {
 
   console.log(`Starting normalization profile for ${options.durationMs}ms...`);
 
-  const { normalizeMessage } = await import(
+  const { normalizeMessage }: any = await import(
     '../packages/layers/control-plane/src/normalize/message.js'
   );
-  const { buildEventId } = await import(
+  const { buildEventId }: any = await import(
     '../packages/layers/control-plane/src/ids/event-id.js'
   );
 
@@ -223,9 +223,9 @@ async function main(): Promise<void> {
   console.log('================================\n');
 
   try {
-    if (operation === 'sync') {
+    if (operation=== 'sync') {
       await profileSync(options);
-    } else if (operation === 'normalization') {
+    } else if (operation=== 'normalization') {
       await profileNormalization(options);
     } else {
       console.error('Unknown operation:', operation);
@@ -245,7 +245,7 @@ async function main(): Promise<void> {
 }
 
 // Run if executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (import.meta.url=== `file://${process.argv[1]}`) {
   main();
 }
 

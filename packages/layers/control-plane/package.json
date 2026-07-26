@@ -45,7 +45,7 @@
     "access": "public"
   },
   "scripts": {
-    "prepublishOnly": "node ../../../scripts/assert-publication-admission.js",
+    "prepublishOnly": "node --import tsx ../../../scripts/assert-publication-admission.ts",
     "build": "tsc && pnpm run generate:config-schema",
     "typecheck": "tsc --noEmit",
     "generate:config-schema": "node --import tsx scripts/generate-config-schema.ts",

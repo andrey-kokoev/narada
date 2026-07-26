@@ -8,15 +8,34 @@
     "allowJs": false,
     "skipLibCheck": true,
     "noEmit": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node"],
+    "lib": [
+      "ES2022",
+      "DOM",
+      "DOM.Iterable"
+    ],
+    "types": [
+      "node"
+    ],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"],
-      "@narada2/site-registry-contract": ["../site-registry-contract/src/index.ts"],
-      "@narada2/ui-vue": ["../ui-vue/src/index.ts"],
-      "@narada2/ui-vue/styles.css": ["../ui-vue/src/styles.css"]
+      "@/*": [
+        "src/*"
+      ],
+      "@narada2/site-registry-contract": [
+        "../site-registry-contract/src/index.ts"
+      ],
+      "@narada2/ui-vue": [
+        "../ui-vue/src/index.ts"
+      ],
+      "@narada2/ui-vue/styles.css": [
+        "../ui-vue/src/styles.css"
+      ]
     }
   },
-  "include": ["src/**/*.ts", "src/**/*.vue", "src/**/*.d.ts"]
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.vue",
+    "src/**/*.d.ts",
+    "vite.config.ts"
+  ]
 }

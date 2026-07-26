@@ -17,7 +17,7 @@
   "scripts": {
     "build": "tsc",
     "typecheck": "tsc --noEmit",
-    "continuity:windows": "node scripts/windows-site-continuity-sync.mjs",
+    "continuity:windows": "node scripts/windows-site-continuity-sync.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },

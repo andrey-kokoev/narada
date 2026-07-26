@@ -35,23 +35,23 @@ function eventIdentity(event: Record<string, unknown> | null): string {
   return `${kind}:${requestId ?? JSON.stringify(event)}`;
 }
 
-export function createRetainedEventState(maxEvents = DEFAULT_RETAINED_EVENT_LIMIT): RetainedEventState {
+export function createRetainedEventState(maxEvents: any= DEFAULT_RETAINED_EVENT_LIMIT): RetainedEventState {
   return { events: [], droppedCount: 0, maxEvents: normalizeRetainedEventLimit(maxEvents) };
 }
 
 export function retainEvent(state: RetainedEventState, event: unknown): void {
   const sequence = sequenceFromRuntimeMessage(event);
-  if (sequence === null) {
+  if (sequence=== null) {
     state.events.push(event);
     trimRetainedEvents(state);
     return;
   }
-  const existingIndex = state.events.findIndex((retained) => sequenceFromRuntimeMessage(retained) === sequence && sameRuntimeEventIdentity(retained, event));
+  const existingIndex = state.events.findIndex((retained: any) => sequenceFromRuntimeMessage(retained) === sequence && sameRuntimeEventIdentity(retained, event));
   if (existingIndex !== -1) {
     state.events.splice(existingIndex, 1, event);
     return;
   }
-  const insertIndex = state.events.findIndex((retained) => {
+  const insertIndex = state.events.findIndex((retained: any) => {
     const retainedSequence = sequenceFromRuntimeMessage(retained);
     return retainedSequence !== null && retainedSequence > sequence;
   });
@@ -73,7 +73,7 @@ export function oldestRetainedSequence(state: RetainedEventState): number | null
 }
 
 export function newestRetainedSequence(state: RetainedEventState): number | null {
-  for (let index = state.events.length - 1; index >= 0; index -= 1) {
+  for (let index= state.events.length - 1; index >= 0; index -= 1) {
     const sequence = sequenceFromRuntimeMessage(state.events[index]);
     if (sequence !== null) return sequence;
   }

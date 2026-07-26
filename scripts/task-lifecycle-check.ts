@@ -12,7 +12,7 @@
 
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
-import { Database } from "@narada2/control-plane";
+import Database from "../packages/layers/control-plane/src/sqlite/database.js";
 
 const ROOT = process.cwd();
 const TASKS_DIR = join(ROOT, ".ai", "do-not-open", "tasks");
@@ -96,14 +96,14 @@ function parseFrontMatter(content: string): {
         frontMatter[key] = val
           .slice(1, -1)
           .split(",")
-          .map((s) => s.trim())
+          .map((s: any) => s.trim())
           .filter(Boolean);
       }
-    } else if (val === "true") {
+    } else if (val=== "true") {
       frontMatter[key] = true;
-    } else if (val === "false") {
+    } else if (val=== "false") {
       frontMatter[key] = false;
-    } else if (val === "null") {
+    } else if (val=== "null") {
       frontMatter[key] = null;
     } else {
       frontMatter[key] = val;
@@ -145,7 +145,7 @@ function isChapterDag(body: string): boolean {
 function scanTasks(): { tasks: TaskFile[]; inconsistencies: Inconsistency[] } {
   const inconsistencies: Inconsistency[] = [];
   const tasks: TaskFile[] = [];
-  const files = readDirSafe(TASKS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(TASKS_DIR, (n: any) => n.endsWith(".md"));
 
   for (const filename of files) {
     const filepath = join(TASKS_DIR, filename);
@@ -220,7 +220,7 @@ function scanReviews(): ReviewFile[] {
 
 function scanClosures(): ClosureFile[] {
   const closures: ClosureFile[] = [];
-  const files = readDirSafe(DECISIONS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(DECISIONS_DIR, (n: any) => n.endsWith(".md"));
 
   for (const filename of files) {
     const filepath = join(DECISIONS_DIR, filename);
@@ -245,7 +245,7 @@ function scanClosures(): ClosureFile[] {
     }
 
     // Also infer from body text if front matter is absent
-    if (closesTasks.length === 0) {
+    if (closesTasks.length=== 0) {
       const bodyRefs = extractTaskRefsFromBody(body);
       // For closure decisions, check if the body mentions "closure" or "closed"
       if (/\b[Cc]losure\b/.test(body) || /\b[Cc]losed\b/.test(body)) {
@@ -305,9 +305,9 @@ function checkReviewTaskConsistency(
     const taskReviews = reviewsByTask.get(task.number) ?? [];
 
     // Task in_review but review verdict says rejected
-    if (status === "in_review") {
+    if (status=== "in_review") {
       for (const review of taskReviews) {
-        if (review.verdict === "rejected") {
+        if (review.verdict=== "rejected") {
           inconsistencies.push({
             severity: "error",
             checkId: "status-review-mismatch",
@@ -319,9 +319,9 @@ function checkReviewTaskConsistency(
     }
 
     // Task marked closed/confirmed but review says rejected
-    if (status === "closed" || status === "confirmed") {
+    if (status=== "closed" || status === "confirmed") {
       for (const review of taskReviews) {
-        if (review.verdict === "rejected") {
+        if (review.verdict=== "rejected") {
           inconsistencies.push({
             severity: "error",
             checkId: "status-review-mismatch",
@@ -333,9 +333,9 @@ function checkReviewTaskConsistency(
     }
 
     // Task is opened/claimed but has an accepted review (review happened before closure?)
-    if (status === "opened" || status === "claimed") {
+    if (status=== "opened" || status === "claimed") {
       for (const review of taskReviews) {
-        if (review.verdict === "accepted") {
+        if (review.verdict=== "accepted") {
           inconsistencies.push({
             severity: "warning",
             checkId: "premature-review",
@@ -371,7 +371,7 @@ function checkClosureTaskConsistency(
     const taskClosures = closuresByTask.get(task.number) ?? [];
 
     // Task confirmed but no closure decision
-    if (status === "confirmed" && taskClosures.length === 0) {
+    if (status=== "confirmed" && taskClosures.length === 0) {
       inconsistencies.push({
         severity: "warning",
         checkId: "missing-closure",
@@ -399,7 +399,7 @@ function checkOrphanReviews(tasks: TaskFile[], reviews: ReviewFile[]): Inconsist
 
   for (const task of tasks) {
     const status = task.frontMatter["status"];
-    if (status === "in_review" && !reviewedTasks.has(task.number)) {
+    if (status=== "in_review" && !reviewedTasks.has(task.number)) {
       inconsistencies.push({
         severity: "warning",
         checkId: "orphan-review",
@@ -453,7 +453,7 @@ function main(): number {
     inconsistencies.push(...checkOrphanClosures(tasks, closures));
 
     // Sort: errors first, then by file
-    inconsistencies.sort((a, b) => {
+    inconsistencies.sort((a: any, b: any) => {
       if (a.severity !== b.severity) {
         return a.severity === "error" ? -1 : 1;
       }
@@ -464,8 +464,8 @@ function main(): number {
       console.log(`${i.severity}: ${i.checkId}: ${i.file}: ${i.message}`);
     }
 
-    const errors = inconsistencies.filter((i) => i.severity === "error");
-    const warnings = inconsistencies.filter((i) => i.severity === "warning");
+    const errors = inconsistencies.filter((i: any) => i.severity === "error");
+    const warnings = inconsistencies.filter((i: any) => i.severity === "warning");
 
     console.log("");
     console.log(

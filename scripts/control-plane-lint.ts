@@ -164,7 +164,7 @@ export function findStaleAllowlistEntries(): StaleAllowlistEntry[] {
       "utf8",
     );
     for (const patternName of patterns) {
-      const pattern = PATTERNS.find((p) => p.name === patternName);
+      const pattern = PATTERNS.find((p: any) => p.name === patternName);
       if (!pattern) continue;
       if (!pattern.regex.test(content)) {
         stale.push({ file, pattern: patternName });
@@ -212,7 +212,7 @@ function main(): void {
     }
   }
 
-  if (violations.length === 0) {
+  if (violations.length=== 0) {
     console.log("✅ Control-plane lint passed — no mailbox leakage detected.");
     process.exit(0);
   }
@@ -260,7 +260,7 @@ if (process.argv[1]?.includes("control-plane-lint.ts")) {
   if (process.argv.includes("--stats")) {
     const fileKeys = Object.keys(ALLOWLIST).length;
     const patternCount = Object.values(ALLOWLIST).reduce(
-      (sum, p) => sum + p.length,
+      (sum: any, p: any) => sum + p.length,
       0,
     );
     console.log(JSON.stringify({ fileKeys, patternCount }));
@@ -268,8 +268,8 @@ if (process.argv[1]?.includes("control-plane-lint.ts")) {
   }
   if (process.argv.includes("--wildcards")) {
     const wildcards = Object.entries(ALLOWLIST)
-      .filter(([, p]) => p.includes("*"))
-      .map(([f]) => f);
+      .filter(([, p]: any) => p.includes("*"))
+      .map(([f]: any) => f);
     console.log(JSON.stringify(wildcards));
     process.exit(0);
   }

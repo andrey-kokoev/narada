@@ -53,7 +53,7 @@ export function summarizeSessionIdentity(
     const checkpoint = objectField(event, 'checkpoint');
     if (!fallbackFields.siteId) siteId = stringField(checkpoint, 'site_id') ?? siteId;
     const nested = event.event;
-    if (nested && typeof nested === 'object') {
+    if (nested && typeof nested=== 'object') {
       identityRef = normalizeAgentIdentityRef(objectField(nested, 'agent_identity_ref')) ?? identityRef;
       if (!fallbackFields.agentId) agentId = stringField(nested, 'agent_id') ?? agentId;
       if (!fallbackFields.role) role = stringField(nested, 'role') ?? role;

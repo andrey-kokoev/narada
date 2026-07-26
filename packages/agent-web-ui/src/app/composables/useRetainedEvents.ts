@@ -3,7 +3,7 @@ import { clearRetainedEvents, createRetainedEventState, newestRetainedSequence, 
 
 export const DEFAULT_RETAINED_EVENT_LIMIT = 500;
 
-export function useRetainedEvents(maxEvents = DEFAULT_RETAINED_EVENT_LIMIT) {
+export function useRetainedEvents(maxEvents: any= DEFAULT_RETAINED_EVENT_LIMIT) {
   const state = reactive(createRetainedEventState(maxEvents));
   return {
     events: state.events,

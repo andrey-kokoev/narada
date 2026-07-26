@@ -3,16 +3,19 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "types": "./src/site-continuity.d.ts",
+  "types": "./dist/site-continuity.d.ts",
   "exports": {
     ".": {
-      "types": "./src/site-continuity.d.ts",
-      "default": "./src/site-continuity.mjs"
+      "types": "./dist/site-continuity.d.ts",
+      "import": "./dist/site-continuity.js"
     },
     "./fixture-cases": "./fixtures/site-continuity-cases.json"
   },
   "scripts": {
-    "test": "node --test src/site-continuity.test.mjs"
+    "test": "node --import tsx --test src/site-continuity.test.ts",
+    "pretest": "pnpm run build",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Shared v1 vocabulary and pure classifier for continuity between embodiments of the same Narada Site",
   "license": "MIT",
@@ -23,5 +26,9 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "files": [
+    "dist/",
+    "fixtures/"
+  ]
 }

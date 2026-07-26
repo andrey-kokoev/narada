@@ -21,17 +21,19 @@
   },
   "scripts": {
     "build": "tsc",
-    "prebuild:assets": "node scripts/clean-cloudflare-assets.mjs",
-    "build:assets": "pnpm --filter @narada2/operator-console-ui build && pnpm --filter @narada2/agent-web-ui build && node scripts/build-cloudflare-assets.mjs",
-    "typecheck": "tsc --noEmit",
+    "prebuild:assets": "pnpm run build && node scripts-dist/clean-cloudflare-assets.js",
+    "build:assets": "pnpm --filter @narada2/operator-console-ui build && pnpm --filter @narada2/agent-web-ui build && pnpm run build:scripts && node scripts-dist/build-cloudflare-assets.js",
+    "typecheck": "tsc --noEmit && pnpm run typecheck:scripts",
     "test": "vitest run",
     "deploy:dry-run": "pnpm run build:assets && wrangler deploy --dry-run --config wrangler.toml",
     "deploy:live": "pnpm run build:assets && wrangler deploy --config wrangler.toml",
-    "smoke:local-origin-live": "node scripts/cloudflare-nars-web-projection-live-smoke.mjs",
-    "smoke:cloudflare-origin-live": "node scripts/cloudflare-nars-authority-live-smoke.mjs",
-    "smoke:provider-capable-live": "node scripts/cloudflare-nars-provider-live-smoke.mjs",
+    "smoke:local-origin-live": "pnpm run build && node scripts-dist/cloudflare-nars-web-projection-live-smoke.js",
+    "smoke:cloudflare-origin-live": "pnpm run build && node scripts-dist/cloudflare-nars-authority-live-smoke.js",
     "smoke:live": "pnpm run smoke:local-origin-live",
-    "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live"
+    "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live",
+    "build:scripts": "tsc -p tsconfig.scripts.json",
+    "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
+    "prebuild": "pnpm run build:scripts"
   },
   "dependencies": {
     "@narada2/nars-session-core": "workspace:*",

@@ -5,12 +5,21 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/cloudflare-site-registry.mjs",
-    "./local-projection": "./src/cloudflare-site-registry-local-projection.mjs"
+    ".": {
+      "types": "./dist/cloudflare-site-registry.d.ts",
+      "import": "./dist/cloudflare-site-registry.js"
+    },
+    "./local-projection": {
+      "types": "./dist/cloudflare-site-registry-local-projection.d.ts",
+      "import": "./dist/cloudflare-site-registry-local-projection.js"
+    }
   },
   "scripts": {
-    "test": "node --test test/cloudflare-site-registry.test.mjs",
-    "deploy:check": "node --test test/cloudflare-site-registry.test.mjs",
+    "test": "node --import tsx --test test/cloudflare-site-registry.test.ts",
+    "pretest": "pnpm run build",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "deploy:check": "pnpm test",
     "d1:migrations:local": "wrangler d1 migrations apply narada-cloudflare-site-registry --local --config wrangler.toml",
     "d1:migrations:remote": "wrangler d1 migrations apply narada-cloudflare-site-registry --remote --config wrangler.toml",
     "ship": "pnpm test && pnpm deploy:check"
@@ -23,5 +32,12 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "main": "./dist/cloudflare-site-registry.js",
+  "types": "./dist/cloudflare-site-registry.d.ts",
+  "files": [
+    "dist/",
+    "migrations/",
+    "wrangler.toml"
+  ]
 }

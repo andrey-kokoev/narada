@@ -2,10 +2,22 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
 
+type NaradaPackageExportTarget = string | Record<string, any>;
+
 type NaradaPackageJson = {
-  exports?: string | Record<string, string>;
+  exports?: NaradaPackageExportTarget;
   bin?: string | Record<string, string>;
 };
+
+function resolveConditionalExportTarget(value: NaradaPackageExportTarget | undefined): string | null {
+  if (typeof value === 'string') return value;
+  if (!value || typeof value !== 'object') return null;
+  for (const condition of ['import', 'node', 'default', 'require']) {
+    const resolved: any = resolveConditionalExportTarget(value[condition]);
+    if (resolved) return resolved;
+  }
+  return null;
+}
 
 export type NaradaPackageResolver = {
   packageRoot(packageName: string): string;
@@ -15,7 +27,7 @@ export type NaradaPackageResolver = {
 };
 
 function naradaPackageDirectoryName(packageName: string): string {
-  const parts = String(packageName).split('/');
+  const parts: any = String(packageName).split('/');
   return parts[parts.length - 1];
 }
 
@@ -26,13 +38,13 @@ export function createNaradaPackageResolver({
   naradaProperRoot: string;
   importerUrl?: string;
 }): NaradaPackageResolver {
-  const require = createRequire(importerUrl);
+  const require: any = createRequire(importerUrl);
 
   function packageRoot(packageName: string): string {
     try {
       return dirname(require.resolve(`${packageName}/package.json`));
     } catch {
-      const siblingRoot = join(dirname(naradaProperRoot), naradaPackageDirectoryName(packageName));
+      const siblingRoot: any = join(dirname(naradaProperRoot), naradaPackageDirectoryName(packageName));
       if (existsSync(join(siblingRoot, 'package.json'))) return siblingRoot;
       return join(naradaProperRoot, 'packages', naradaPackageDirectoryName(packageName));
     }
@@ -42,12 +54,15 @@ export function createNaradaPackageResolver({
     return JSON.parse(readFileSync(join(packageRoot(packageName), 'package.json'), 'utf8'));
   }
 
-  function resolvePackageExport(packageName: string, exportName = '.'): string {
-    const packageJson = readPackageJson(packageName);
-    const exportsMap = packageJson.exports ?? {};
-    const target = typeof exportsMap === 'string' && exportName === '.'
+  function resolvePackageExport(packageName: string, exportName: any = '.'): string {
+    const packageJson: any = readPackageJson(packageName);
+    const exportsMap: any = packageJson.exports ?? {};
+    const rawTarget: any = typeof exportsMap === 'string' && exportName === '.'
       ? exportsMap
-      : exportsMap[exportName];
+      : typeof exportsMap === 'object' && Object.hasOwn(exportsMap, exportName)
+        ? exportsMap[exportName]
+        : exportName === '.' ? exportsMap : undefined;
+    const target: any = resolveConditionalExportTarget(rawTarget);
     if (!target) {
       throw new Error(`narada_package_export_missing: ${packageName} ${exportName}`);
     }
@@ -55,8 +70,8 @@ export function createNaradaPackageResolver({
   }
 
   function resolvePackageBin(packageName: string, binName: string): string {
-    const packageJson = readPackageJson(packageName);
-    const target = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.[binName];
+    const packageJson: any = readPackageJson(packageName);
+    const target: any = typeof packageJson.bin === 'string' ? packageJson.bin : packageJson.bin?.[binName];
     if (!target) {
       throw new Error(`narada_package_bin_missing: ${packageName} ${binName}`);
     }

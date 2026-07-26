@@ -4,11 +4,17 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/carrier-protocol.mjs",
+    ".": {
+      "types": "./dist/carrier-protocol.d.ts",
+      "import": "./dist/carrier-protocol.js",
+      "default": "./dist/carrier-protocol.js"
+    },
     "./fixtures/*": "./fixtures/*"
   },
   "scripts": {
-    "test": "node --test src/carrier-protocol.test.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/carrier-protocol.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Shared protocol types, constructors, fixtures, and validators for Narada interactive carriers",
   "license": "MIT",

@@ -22,7 +22,7 @@ export function isCaretOnLastLine(value: string, caretPosition: number): boolean
   return value.indexOf('\n', Math.max(0, caretPosition)) === -1;
 }
 
-export function createComposerHistory(limit = DEFAULT_COMPOSER_HISTORY_LIMIT): ComposerHistoryController {
+export function createComposerHistory(limit: any= DEFAULT_COMPOSER_HISTORY_LIMIT): ComposerHistoryController {
   const boundedLimit = Math.max(1, Math.floor(limit));
   let history: string[] = [];
   let historyIndex: number | null = null;
@@ -44,8 +44,8 @@ export function createComposerHistory(limit = DEFAULT_COMPOSER_HISTORY_LIMIT): C
   function navigate(direction: ComposerHistoryNavigation, currentDraft: string): ComposerHistoryNavigationResult {
     if (history.length === 0) return { handled: false };
 
-    if (direction === 'older') {
-      if (historyIndex === null) {
+    if (direction=== 'older') {
+      if (historyIndex=== null) {
         scratchDraft = currentDraft;
         historyIndex = history.length;
       }
@@ -72,6 +72,6 @@ export function createComposerHistory(limit = DEFAULT_COMPOSER_HISTORY_LIMIT): C
   };
 }
 
-export function useComposerHistory(limit = DEFAULT_COMPOSER_HISTORY_LIMIT): ComposerHistoryController {
+export function useComposerHistory(limit: any= DEFAULT_COMPOSER_HISTORY_LIMIT): ComposerHistoryController {
   return createComposerHistory(limit);
 }

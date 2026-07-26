@@ -17,7 +17,7 @@
 
 import { readdirSync, readFileSync, writeFileSync, renameSync, existsSync } from "node:fs";
 import { join, basename, dirname, resolve } from "node:path";
-import { Database } from "@narada2/control-plane";
+import Database from "../packages/layers/control-plane/src/sqlite/database.js";
 
 const ROOT = process.cwd();
 const TASKS_DIR = join(ROOT, ".ai", "do-not-open", "tasks");
@@ -65,7 +65,7 @@ function parseArgs(): {
   let execute = false;
   let file: string | null = null;
 
-  for (let i = 0; i < args.length; i++) {
+  for (let i= 0; i < args.length; i++) {
     switch (args[i]) {
       case "--from":
         from = parseInt(args[++i], 10);
@@ -121,7 +121,7 @@ function zeroPad(n: number, len: number): string {
 
 function findAllTaskFiles(): TaskMatch[] {
   const matches: TaskMatch[] = [];
-  const files = readDirSafe(TASKS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(TASKS_DIR, (n: any) => n.endsWith(".md"));
   for (const filename of files) {
     const filepath = join(TASKS_DIR, filename);
     const content = readFileSafe(filepath);
@@ -138,17 +138,17 @@ function findAllTaskFiles(): TaskMatch[] {
 
 function findMatches(allTasks: TaskMatch[], num: number, explicitFile: string | null): TaskMatch[] {
   if (explicitFile) {
-    const m = allTasks.find((t) => t.filepath === explicitFile);
+    const m = allTasks.find((t: any) => t.filepath === explicitFile);
     return m ? [m] : [];
   }
   // Match by heading first, then by filename
-  const byHeading = allTasks.filter((t) => t.headingNumber === num);
+  const byHeading = allTasks.filter((t: any) => t.headingNumber === num);
   if (byHeading.length > 0) return byHeading;
-  return allTasks.filter((t) => t.fileNumber === num);
+  return allTasks.filter((t: any) => t.fileNumber === num);
 }
 
 function targetExists(allTasks: TaskMatch[], num: number): boolean {
-  return allTasks.some((t) => t.headingNumber === num || t.fileNumber === num);
+  return allTasks.some((t: any) => t.headingNumber === num || t.fileNumber === num);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,7 +167,7 @@ function buildTaskFilePatches(
   // Rename file (preserve original padding length)
   const newFilename = source.filename.replace(
     /(\d{8}-)(\d+)(?=-)/,
-    (_match, prefix: string, numStr: string) => `${prefix}${zeroPad(to, numStr.length)}`,
+    (_match: any, prefix: string, numStr: string) => `${prefix}${zeroPad(to, numStr.length)}`,
   );
   const newPath = join(TASKS_DIR, newFilename);
   patches.push({
@@ -203,7 +203,7 @@ function buildTaskFilePatches(
   const taskRefRe = new RegExp(`\\bTask\\s+${from}\\b`, "g");
   newContent = newContent
     .split("\n")
-    .map((line) => {
+    .map((line: any) => {
       if (/^#{1,6}\s+Task\s+\d+(\s*[:—-]|$)/.test(line)) return line;
       if (/^\s*[-*]\s+\[\s*[ x]\s*\]\s+Task\s+\d+(\s*[:—-]|$)/.test(line)) return line;
       return line.replace(taskRefRe, `Task ${to}`);
@@ -225,7 +225,7 @@ function buildTaskFilePatches(
   if (!newContent.includes("## Corrections")) {
     const correctedContent = newContent + correctionLine;
     // Replace the previous edit patch or add a new one
-    const editIdx = patches.findIndex((p) => p.type === "edit" && p.file === source.filepath);
+    const editIdx = patches.findIndex((p: any) => p.type === "edit" && p.file === source.filepath);
     if (editIdx >= 0) {
       patches[editIdx].newContent = correctedContent;
       patches[editIdx].description += "; append corrections section";
@@ -245,7 +245,7 @@ function buildTaskFilePatches(
 
 function buildChapterDagPatches(from: number, to: number): Patch[] {
   const patches: Patch[] = [];
-  const files = readDirSafe(TASKS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(TASKS_DIR, (n: any) => n.endsWith(".md"));
   for (const filename of files) {
     const filepath = join(TASKS_DIR, filename);
     const content = readFileSafe(filepath);
@@ -273,7 +273,7 @@ function buildChapterDagPatches(from: number, to: number): Patch[] {
 
     // Update "Task NNN" references in mermaid and body
     const taskRefRe = new RegExp(`\\bTask\\s+${from}\\b`, "g");
-    const newLines = newContent.split("\n").map((line) => {
+    const newLines = newContent.split("\n").map((line: any) => {
       if (/^#{1,6}\s+Task\s+\d+(\s*[:—-]|$)/.test(line)) return line;
       if (/^\s*[-*]\s+\[\s*[ x]\s*\]\s+Task\s+\d+(\s*[:—-]|$)/.test(line)) return line;
       const replaced = line.replace(taskRefRe, `Task ${to}`);
@@ -311,7 +311,7 @@ function buildChapterDagPatches(from: number, to: number): Patch[] {
 
 function buildDecisionPatches(from: number, to: number): Patch[] {
   const patches: Patch[] = [];
-  const files = readDirSafe(DECISIONS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(DECISIONS_DIR, (n: any) => n.endsWith(".md"));
   for (const filename of files) {
     const filepath = join(DECISIONS_DIR, filename);
     const content = readFileSafe(filepath);
@@ -380,7 +380,7 @@ function buildRosterPatch(from: number, to: number): Patch[] {
 
 function buildLearningPatches(from: number, to: number): Patch[] {
   const patches: Patch[] = [];
-  const files = readDirSafe(LEARNING_DIR, (n) => n.endsWith(".json"));
+  const files = readDirSafe(LEARNING_DIR, (n: any) => n.endsWith(".json"));
   for (const filename of files) {
     const filepath = join(LEARNING_DIR, filename);
     const content = readFileSafe(filepath);
@@ -413,7 +413,7 @@ function buildLearningPatches(from: number, to: number): Patch[] {
 
 function buildOtherTaskPatches(from: number, to: number, sourcePath: string | null): Patch[] {
   const patches: Patch[] = [];
-  const files = readDirSafe(TASKS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(TASKS_DIR, (n: any) => n.endsWith(".md"));
   for (const filename of files) {
     const filepath = join(TASKS_DIR, filename);
     if (sourcePath && filepath === sourcePath) continue; // skip source, handled separately
@@ -435,7 +435,7 @@ function buildOtherTaskPatches(from: number, to: number, sourcePath: string | nu
 
     // Update body references to the old task number
     const taskRefRe = new RegExp(`\\bTask\\s+${from}\\b`, "g");
-    const newLines = newContent.split("\n").map((line) => {
+    const newLines = newContent.split("\n").map((line: any) => {
       if (/^#{1,6}\s+Task\s+\d+(\s*[:—-]|$)/.test(line)) return line;
       if (/^\s*[-*]\s+\[\s*[ x]\s*\]\s+Task\s+\d+(\s*[:—-]|$)/.test(line)) return line;
       const replaced = line.replace(taskRefRe, `Task ${to}`);
@@ -463,9 +463,9 @@ function buildOtherTaskPatches(from: number, to: number, sourcePath: string | nu
 
 function printPatches(patches: Patch[]): void {
   for (const p of patches) {
-    if (p.type === "rename") {
+    if (p.type=== "rename") {
       console.log(`[RENAME] ${p.oldPath} -> ${p.newPath}`);
-    } else if (p.type === "sqlite_review_update") {
+    } else if (p.type=== "sqlite_review_update") {
       console.log(`[SQLITE] ${p.file}: ${p.description}`);
     } else {
       console.log(`[EDIT]   ${p.file}: ${p.description}`);
@@ -480,9 +480,9 @@ function applyPatches(patches: Patch[]): void {
   const sqliteReviewUpdates: Patch[] = [];
 
   for (const p of patches) {
-    if (p.type === "rename") {
+    if (p.type=== "rename") {
       renames.push(p);
-    } else if (p.type === "sqlite_review_update") {
+    } else if (p.type=== "sqlite_review_update") {
       sqliteReviewUpdates.push(p);
     } else if (p.newContent !== undefined) {
       const arr = editsByFile.get(p.file) ?? [];
@@ -529,12 +529,12 @@ function main(): number {
   try {
     const args = parseArgs();
 
-    if (args.from === null || args.to === null) {
+    if (args.from=== null || args.to === null) {
       console.error("Usage: tsx scripts/task-renumber.ts --from <num> --to <num> [--dry-run | --execute] [--file <path>]");
       return 1;
     }
 
-    if (args.from === args.to) {
+    if (args.from=== args.to) {
       console.error(`error: --from and --to are the same number (${args.from})`);
       return 1;
     }
@@ -550,7 +550,7 @@ function main(): number {
     // Find source matches
     const matches = findMatches(allTasks, args.from, args.file);
 
-    if (matches.length === 0) {
+    if (matches.length=== 0) {
       console.error(`error: no task file found for number ${args.from}`);
       return 1;
     }
@@ -579,7 +579,7 @@ function main(): number {
     patches.push(...buildRosterPatch(args.from, args.to));
     patches.push(...buildLearningPatches(args.from, args.to));
 
-    if (patches.length === 0) {
+    if (patches.length=== 0) {
       console.log("No changes needed.");
       return 0;
     }

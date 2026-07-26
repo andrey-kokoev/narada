@@ -21,20 +21,52 @@
     ]
   },
   "exports": {
-    ".": "./src/index.mjs",
-    "./canonical-invocation-adapter": "./src/canonical-invocation-adapter.mjs",
-    "./canonical-protocol-adapters": "./src/canonical-protocol-adapters.mjs",
-    "./canonical-transports": "./src/canonical-transports.mjs",
-    "./credential-locator": "./src/credential-locator.mjs",
-    "./runtime-tail-utils": "./src/runtime-tail-utils.mjs",
-    "./process-supervisor": "./src/process-supervisor.mjs",
-    "./owned-process-state": "./src/owned-process-state.mjs",
-    "./provider-invocation-state": "./src/provider-invocation-state.mjs",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./canonical-invocation-adapter": {
+      "types": "./dist/canonical-invocation-adapter.d.ts",
+      "import": "./dist/canonical-invocation-adapter.js"
+    },
+    "./canonical-protocol-adapters": {
+      "types": "./dist/canonical-protocol-adapters.d.ts",
+      "import": "./dist/canonical-protocol-adapters.js"
+    },
+    "./canonical-transports": {
+      "types": "./dist/canonical-transports.d.ts",
+      "import": "./dist/canonical-transports.js"
+    },
+    "./credential-locator": {
+      "types": "./dist/credential-locator.d.ts",
+      "import": "./dist/credential-locator.js"
+    },
+    "./openai-compatible-chat": {
+      "types": "./dist/openai-compatible-chat.d.ts",
+      "import": "./dist/openai-compatible-chat.js"
+    },
+    "./owned-process-state": {
+      "types": "./dist/owned-process-state.d.ts",
+      "import": "./dist/owned-process-state.js"
+    },
+    "./process-supervisor": {
+      "types": "./dist/process-supervisor.d.ts",
+      "import": "./dist/process-supervisor.js"
+    },
+    "./provider-invocation-state": {
+      "types": "./dist/provider-invocation-state.d.ts",
+      "import": "./dist/provider-invocation-state.js"
+    },
+    "./runtime-tail-utils": {
+      "types": "./dist/runtime-tail-utils.d.ts",
+      "import": "./dist/runtime-tail-utils.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/canonical-invocation-adapter.mjs src/canonical-protocol-adapters.mjs src/canonical-transports.mjs src/credential-locator.mjs src/provider-invocation-state.mjs src/owned-process-state.mjs src/runtime-tail-utils.mjs src/process-supervisor.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@narada2/carrier-provider-support": "workspace:*",
@@ -50,5 +82,8 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "files": [
+    "dist/"
+  ]
 }

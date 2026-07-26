@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/carrier-routing-contract.mjs",
+    ".": {
+      "types": "./dist/carrier-routing-contract.d.ts",
+      "import": "./dist/carrier-routing-contract.js"
+    },
     "./operator-routing": "./contracts/operator-routing.json"
   },
   "scripts": {
-    "test": "node --test src/carrier-routing-contract.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/carrier-routing-contract.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/carrier-routing-contract.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Carrier routing contracts",
   "license": "MIT",

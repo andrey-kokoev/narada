@@ -139,8 +139,8 @@ export function sanitizeCustomProjectionViews(value: unknown): CustomProjectionV
 
 export function describeFacets(facets: readonly ProjectionViewFacet[]): string {
   const labels = PROJECTION_VIEW_FACET_OPTIONS
-    .filter((option) => facets.includes(option.id))
-    .map((option) => option.label);
+    .filter((option: any) => facets.includes(option.id))
+    .map((option: any) => option.label);
   return labels.join(' · ');
 }
 

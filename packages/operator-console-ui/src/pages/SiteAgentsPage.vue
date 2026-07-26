@@ -1,18 +1,36 @@
 <script setup lang="ts">
 import { ref, type Component } from 'vue';
 import type {
+  OperatorSiteAgentAdmissionWireRequest,
   OperatorSiteAgentLaunchFailureWireRecord,
   OperatorSiteAgentSurfaceOption,
   OperatorSiteAgentWireRecord,
 } from '@narada2/operator-console-contract';
 import {
   Bot,
+  CircleStop,
   Compass,
   Hammer,
+  MoreHorizontal,
+  Plus,
   RefreshCw,
   ScanSearch,
+  Trash2,
   UserRound,
 } from 'lucide-vue-next';
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@narada2/ui-vue';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import { findOperatorRouteTarget } from '../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
@@ -29,6 +47,17 @@ const siteAgents = useSiteAgents();
 const routeDirectory = useOperatorWorkspaceRouteDirectory();
 const busyAgentId = ref<string | null>(null);
 const actionMessage = ref<string | null>(null);
+const admissionSiteId = ref<string | null>(null);
+const admissionRole = ref('');
+const admissionAgentKind = ref('');
+const admissionRuntime = ref('');
+const admissionOperatorSurface = ref('');
+const admissionPolicy = ref('');
+const admissionProvider = ref('');
+const admissionModel = ref('');
+const admissionError = ref<string | null>(null);
+const admissionSubmitting = ref(false);
+const deleteTarget = ref<{ siteId: string; agent: OperatorSiteAgentWireRecord } | null>(null);
 
 const roleIcons: Record<string, Component> = {
   resident: UserRound,
@@ -39,6 +68,78 @@ const roleIcons: Record<string, Component> = {
 
 function roleIcon(role: string): Component {
   return roleIcons[role.toLowerCase()] ?? Bot;
+}
+
+function agentFor(siteId: string, agentId: string): OperatorSiteAgentWireRecord | null {
+  for (const group of siteAgents.groups.value) {
+    const site = group.sites.find((candidate) => candidate.site_id === siteId);
+    const agent = site?.agents.find((candidate) => candidate.agent_id === agentId);
+    if (agent) return agent;
+  }
+  return null;
+}
+
+async function waitForStopped(siteId: string, agentId: string): Promise<boolean> {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    await siteAgents.load();
+    if (agentFor(siteId, agentId)?.runtime.state === 'stopped') return true;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return agentFor(siteId, agentId)?.runtime.state === 'stopped';
+}
+
+async function stopAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Promise<void> {
+  if (busyAgentId.value) return;
+  busyAgentId.value = agent.agent_id;
+  actionMessage.value = `Stopping ${agent.agent_id} through the NARS control sideband...`;
+  try {
+    const result = await siteAgents.stop(siteId, agent.agent_id);
+    if (result.status === 'refused' || result.status === 'failed') {
+      actionMessage.value = result.message ?? result.reason ?? `Could not stop ${agent.agent_id}.`;
+      return;
+    }
+    const stopped = result.status === 'already_stopped' || await waitForStopped(siteId, agent.agent_id);
+    actionMessage.value = stopped
+      ? `${agent.agent_id} stopped.`
+      : `${agent.agent_id} received a stop request; runtime status is still settling.`;
+  } catch (cause) {
+    actionMessage.value = cause instanceof Error ? cause.message : `Could not stop ${agent.agent_id}.`;
+  } finally {
+    busyAgentId.value = null;
+    await siteAgents.load();
+  }
+}
+
+function requestDelete(siteId: string, agent: OperatorSiteAgentWireRecord): void {
+  if (busyAgentId.value) return;
+  deleteTarget.value = { siteId, agent };
+}
+
+function setDeleteOpen(open: boolean): void {
+  if (!open && !siteAgents.lifecycleLoading.value) deleteTarget.value = null;
+}
+
+async function confirmDelete(): Promise<void> {
+  const target = deleteTarget.value;
+  if (!target) return;
+  busyAgentId.value = target.agent.agent_id;
+  actionMessage.value = `Deleting ${target.agent.agent_id} admission...`;
+  try {
+    const result = await siteAgents.delete(target.siteId, target.agent.agent_id);
+    if (result.status !== 'deleted') {
+      actionMessage.value = result.message ?? result.reason ?? `Could not delete ${target.agent.agent_id}.`;
+      return;
+    }
+    deleteTarget.value = null;
+    actionMessage.value = `${target.agent.agent_id} admission deleted. Runtime evidence was preserved.`;
+    await siteAgents.load();
+  } catch (cause) {
+    actionMessage.value = cause instanceof Error ? cause.message : `Could not delete ${target.agent.agent_id}.`;
+  } finally {
+    busyAgentId.value = null;
+    await siteAgents.load();
+  }
 }
 
 function sessionUrl(sessionId: string): string | null {
@@ -217,6 +318,77 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
   event.preventDefault();
   void inspectAgent(siteId, agent);
 }
+
+function siteDisplayName(siteId: string): string {
+  for (const group of siteAgents.groups.value) {
+    const site = group.sites.find((candidate) => candidate.site_id === siteId);
+    if (site) return site.display_name;
+  }
+  return siteId;
+}
+
+function firstAdmissionChoice(choices: Array<{ value: string }> | undefined): string {
+  return choices?.[0]?.value ?? '';
+}
+
+async function openAdmission(siteId: string): Promise<void> {
+  admissionSiteId.value = siteId;
+  admissionError.value = null;
+  siteAgents.admissionOptions.value = null;
+  try {
+    const result = await siteAgents.loadAdmissionOptions(siteId);
+    if (result.status === 'refused') {
+      admissionError.value = result.refusals.join(', ') || 'Agent admission is not available for this Site.';
+      return;
+    }
+    admissionRole.value = firstAdmissionChoice(result.roles);
+    admissionAgentKind.value = firstAdmissionChoice(result.agent_kinds);
+    admissionRuntime.value = firstAdmissionChoice(result.runtimes);
+    admissionOperatorSurface.value = firstAdmissionChoice(result.operator_surfaces);
+    admissionPolicy.value = firstAdmissionChoice(result.intelligence.policy_choices);
+    admissionProvider.value = firstAdmissionChoice(result.intelligence.provider_choices);
+    admissionModel.value = firstAdmissionChoice(result.intelligence.model_choices);
+  } catch (cause) {
+    admissionError.value = cause instanceof Error ? cause.message : 'Agent admission options could not be read.';
+  }
+}
+
+function setAdmissionOpen(open: boolean): void {
+  if (!open && !admissionSubmitting.value) admissionSiteId.value = null;
+}
+
+async function submitAdmission(): Promise<void> {
+  const siteId = admissionSiteId.value;
+  const options = siteAgents.admissionOptions.value;
+  if (!siteId || !options || options.status !== 'success' || !options.revision) return;
+  admissionSubmitting.value = true;
+  admissionError.value = null;
+  const request: OperatorSiteAgentAdmissionWireRequest = {
+    site_id: siteId,
+    role: admissionRole.value,
+    agent_kind: admissionAgentKind.value,
+    runtime: admissionRuntime.value,
+    operator_surface: admissionOperatorSurface.value,
+    intelligence_policy: admissionPolicy.value,
+    provider: admissionProvider.value,
+    model: admissionModel.value,
+    options_revision: options.revision,
+  };
+  try {
+    const result = await siteAgents.admit(request);
+    if (result.status !== 'admitted') {
+      admissionError.value = result.message ?? result.reason ?? 'Agent admission was refused.';
+      return;
+    }
+    admissionSiteId.value = null;
+    actionMessage.value = `${result.agent_id ?? 'Agent'} admitted to ${siteDisplayName(siteId)}. Launch remains a separate action.`;
+    await siteAgents.load();
+  } catch (cause) {
+    admissionError.value = cause instanceof Error ? cause.message : 'Agent admission failed.';
+  } finally {
+    admissionSubmitting.value = false;
+  }
+}
 </script>
 
 <template>
@@ -269,7 +441,7 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
               <span class="site-kind">{{ site.site_kind.replace('_', ' ') }}</span>
             </header>
             <p v-if="!site.agents.length" class="empty compact">No agents admitted.</p>
-            <div v-else class="agent-grid">
+            <div class="agent-grid">
               <div
                 v-for="agent in site.agents"
                 :key="agent.agent_id"
@@ -295,29 +467,158 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
                     <span>{{ isStarting(site.site_id, agent) ? 'starting' : agent.work.state }}</span>
                   </span>
                 </button>
-                <details v-if="surfaceChoices(agent).length" class="surface-menu">
-                  <summary @click.stop>Open in…</summary>
-                  <div class="surface-options" role="menu">
+                <DropdownMenu v-if="surfaceChoices(agent).length">
+                  <DropdownMenuTrigger as-child>
                     <button
+                      class="surface-menu-trigger"
+                      type="button"
+                      aria-label="Open in another operator surface"
+                      @click.stop
+                    >
+                      <MoreHorizontal :size="14" aria-hidden="true" />
+                      <span class="sr-only">Open in another operator surface</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" :side-offset="6" @click.stop>
+                    <DropdownMenuItem
                       v-for="choice in surfaceChoices(agent)"
                       :key="choice.kind"
-                      type="button"
-                      role="menuitem"
                       :disabled="choice.status !== 'available' || busyAgentId !== null"
                       :title="choice.reason ?? `Open in ${choice.label}`"
-                      @click.stop="startAgent(site.site_id, agent, choice.kind)"
+                      @select="startAgent(site.site_id, agent, choice.kind)"
                     >
                       <span>{{ choice.label }}</span>
                       <span v-if="choice.kind === agent.operator_surfaces.default_kind" class="surface-default">default</span>
-                    </button>
-                  </div>
-                </details>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                <button
+                  v-if="agent.runtime.state === 'running' || agent.runtime.state === 'degraded'"
+                  type="button"
+                  class="lifecycle-button stop-button"
+                  :disabled="busyAgentId !== null"
+                  :aria-label="`Stop ${agent.agent_id}`"
+                  @click.stop="stopAgent(site.site_id, agent)"
+                >
+                  <CircleStop :size="13" aria-hidden="true" />
+                  <span class="sr-only">Stop {{ agent.agent_id }}</span>
+                </button>
+                <button
+                  v-if="agent.runtime.state === 'stopped'"
+                  type="button"
+                  class="lifecycle-button delete-button"
+                  :disabled="busyAgentId !== null"
+                  :aria-label="`Delete ${agent.agent_id}`"
+                  @click.stop="requestDelete(site.site_id, agent)"
+                >
+                  <Trash2 :size="13" aria-hidden="true" />
+                  <span class="sr-only">Delete {{ agent.agent_id }}</span>
+                </button>
               </div>
+              <button
+                type="button"
+                class="admission-tile"
+                :disabled="busyAgentId !== null || siteAgents.admissionLoading.value"
+                :aria-label="`Add an agent to ${site.display_name}`"
+                @click="openAdmission(site.site_id)"
+              >
+                <span class="admission-plus" aria-hidden="true"><Plus :size="22" /></span>
+                <span class="admission-copy sr-only">
+                  <strong>Add agent</strong>
+                  <span>Governed admission</span>
+                </span>
+              </button>
             </div>
           </article>
         </div>
       </section>
     </main>
+
+    <Dialog :open="admissionSiteId !== null" @update:open="setAdmissionOpen">
+      <DialogContent class="admission-dialog">
+        <DialogHeader>
+          <DialogTitle>Add agent to {{ admissionSiteId ? siteDisplayName(admissionSiteId) : 'Site' }}</DialogTitle>
+          <DialogDescription>
+            Select from current Site authority. Admission creates the identity and launch record; it does not start a runtime.
+          </DialogDescription>
+        </DialogHeader>
+
+        <p v-if="siteAgents.admissionLoading.value" class="admission-state">Reading authoritative admission options…</p>
+        <p v-if="admissionError" class="admission-state error" role="alert">{{ admissionError }}</p>
+        <form v-if="siteAgents.admissionOptions.value?.status === 'success'" class="admission-form" @submit.prevent="submitAdmission">
+          <label>
+            <span>Role</span>
+            <select v-model="admissionRole" required :disabled="admissionSubmitting">
+              <option v-for="option in siteAgents.admissionOptions.value.roles" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Agent kind</span>
+            <select v-model="admissionAgentKind" required :disabled="admissionSubmitting">
+              <option v-for="option in siteAgents.admissionOptions.value.agent_kinds" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Runtime</span>
+            <select v-model="admissionRuntime" required :disabled="admissionSubmitting">
+              <option v-for="option in siteAgents.admissionOptions.value.runtimes" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Operator surface</span>
+            <select v-model="admissionOperatorSurface" required :disabled="admissionSubmitting">
+              <option v-for="option in siteAgents.admissionOptions.value.operator_surfaces" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Intelligence policy</span>
+            <select v-model="admissionPolicy" required :disabled="admissionSubmitting">
+              <option v-for="option in siteAgents.admissionOptions.value.intelligence.policy_choices" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Provider representation</span>
+            <select v-model="admissionProvider" required :disabled="admissionSubmitting">
+              <option v-for="option in siteAgents.admissionOptions.value.intelligence.provider_choices" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <label>
+            <span>Model representation</span>
+            <select v-model="admissionModel" required :disabled="admissionSubmitting">
+              <option v-for="option in siteAgents.admissionOptions.value.intelligence.model_choices" :key="option.value" :value="option.value">{{ option.label }}</option>
+            </select>
+          </label>
+          <p class="admission-authority">Provider and model are display choices only. Runtime invocation resolves intelligence through the Site catalog and materialized policy.</p>
+          <DialogFooter>
+            <DialogClose as-child>
+              <button type="button" class="secondary-button" :disabled="admissionSubmitting">Cancel</button>
+            </DialogClose>
+            <button type="submit" class="primary-button" :disabled="admissionSubmitting || siteAgents.admissionLoading.value">
+              {{ admissionSubmitting ? 'Admitting…' : 'Admit agent' }}
+            </button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog :open="deleteTarget !== null" @update:open="setDeleteOpen">
+      <DialogContent class="admission-dialog">
+        <DialogHeader>
+          <DialogTitle>Delete {{ deleteTarget?.agent.agent_id }}?</DialogTitle>
+          <DialogDescription>
+            This removes the Site launch admission and operator-surface identity. Session evidence and artifacts are preserved.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <DialogClose as-child>
+            <button type="button" class="secondary-button" :disabled="siteAgents.lifecycleLoading.value">Cancel</button>
+          </DialogClose>
+          <button type="button" class="danger-button" :disabled="siteAgents.lifecycleLoading.value" @click="confirmDelete">
+            {{ siteAgents.lifecycleLoading.value ? 'Deleting…' : 'Delete admission' }}
+          </button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
   </OperatorConsoleShell>
 </template>
@@ -367,16 +668,38 @@ function inspectFromKeyboard(event: KeyboardEvent, siteId: string, agent: Operat
 .agent-copy strong, .agent-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-copy strong { font-size: 12px; font-weight: 650; }
 .agent-copy span { color: var(--muted); font-size: 10px; }
-.surface-menu { position: absolute; right: 2px; bottom: 2px; z-index: 2; }
-.surface-menu summary { padding: 2px 4px; border-radius: 4px; color: var(--muted); font-size: 9px; cursor: pointer; list-style: none; }
-.surface-menu summary::-webkit-details-marker { display: none; }
-.surface-menu summary:hover { background: var(--surface); color: var(--text); }
-.surface-options { position: absolute; right: 0; bottom: 22px; display: grid; min-width: 126px; padding: 4px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); box-shadow: 0 8px 24px rgb(0 0 0 / 14%); }
-.surface-options button { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--text); font: inherit; font-size: 11px; text-align: left; cursor: pointer; }
-.surface-options button:hover:not(:disabled) { background: var(--surface-muted); }
-.surface-options button:disabled { color: var(--muted); cursor: not-allowed; opacity: .6; }
+.surface-menu-trigger { position: absolute; right: 2px; bottom: 2px; z-index: 2; display: grid; width: 24px; height: 22px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; }
+.surface-menu-trigger:hover { background: var(--surface); color: var(--text); }
+.surface-menu-trigger:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
 .surface-default { color: var(--muted); font-size: 9px; }
+.lifecycle-button { position: absolute; top: 2px; z-index: 2; display: grid; width: 24px; height: 22px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; cursor: pointer; }
+.lifecycle-button:disabled { cursor: wait; opacity: .55; }
+.lifecycle-button:hover:not(:disabled) { background: var(--surface); }
+.stop-button { right: 26px; color: var(--warning, #996500); }
+.delete-button { right: 2px; color: var(--danger, #b42318); }
+.lifecycle-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.admission-tile { display: grid; width: 58px; height: 58px; min-height: 58px; place-items: center; padding: 0; border: 1px dashed var(--line-strong); border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
+.admission-tile:hover:not(:disabled) { border-color: var(--operator); background: var(--surface-muted); color: var(--text); }
+.admission-tile:disabled { cursor: wait; opacity: .55; }
+.admission-tile:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+.admission-plus { display: inline-grid; width: 34px; height: 34px; place-items: center; }
+.admission-dialog { width: min(560px, calc(100vw - 28px)); }
+.admission-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 12px; margin-top: 18px; }
+.admission-form label { display: grid; gap: 5px; min-width: 0; }
+.admission-form label > span { color: var(--muted); font-size: 11px; font-weight: 650; }
+.admission-form select { min-width: 0; height: 34px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 0 8px; background: var(--surface); color: var(--text); font: inherit; font-size: 12px; }
+.admission-form select:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.admission-form select:disabled { cursor: wait; opacity: .65; }
+.admission-authority { grid-column: 1 / -1; margin: 0; color: var(--muted); font-size: 11px; line-height: 1.45; }
+.admission-state { margin: 18px 0 0; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.admission-state.error { color: var(--danger); }
+.primary-button, .secondary-button { min-height: 34px; border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 0 12px; font: inherit; font-size: 12px; cursor: pointer; }
+.primary-button { border-color: var(--operator); background: var(--operator); color: white; }
+.secondary-button { background: var(--surface); color: var(--text); }
+.danger-button { min-height: 34px; border: 1px solid var(--danger, #b42318); border-radius: var(--radius); padding: 0 12px; background: var(--danger, #b42318); color: white; font: inherit; font-size: 12px; cursor: pointer; }
+.primary-button:disabled, .secondary-button:disabled { cursor: wait; opacity: .6; }
+.danger-button:disabled { cursor: wait; opacity: .6; }
 .empty.compact { margin: 12px 0 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 700px) { .workspace-main { padding: 18px 12px 28px; } .site-grid { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .workspace-main { padding: 18px 12px 28px; } .site-grid { grid-template-columns: 1fr; } .admission-form { grid-template-columns: 1fr; } .admission-authority { grid-column: auto; } }
 </style>

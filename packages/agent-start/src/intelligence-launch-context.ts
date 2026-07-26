@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { normalizeIntelligenceKernelKind } from '@narada2/nars-intelligence-kernel-contract';
 
-export const INTELLIGENCE_LAUNCH_CONTEXT_SCHEMA = 'narada.intelligence.launch_context.v1';
-export const INTELLIGENCE_PRINCIPAL_BINDING_SCHEMA = 'narada.intelligence.principal_binding.v1';
+export const INTELLIGENCE_LAUNCH_CONTEXT_SCHEMA: any = 'narada.intelligence.launch_context.v1';
+export const INTELLIGENCE_PRINCIPAL_BINDING_SCHEMA: any = 'narada.intelligence.principal_binding.v1';
 
 export interface IntelligencePrincipalBinding {
   schema: typeof INTELLIGENCE_PRINCIPAL_BINDING_SCHEMA;
@@ -29,8 +29,8 @@ function normalizePrincipalBinding(value: unknown, expectedPrincipal: string): I
       { field: 'principal_binding' },
     );
   }
-  const candidate = value as Record<string, unknown>;
-  const actor = candidate.actor;
+  const candidate: any = value as Record<string, unknown>;
+  const actor: any = candidate.actor;
   if (!actor || typeof actor !== 'object' || Array.isArray(actor)) {
     throw new IntelligenceLaunchContextError(
       'intelligence_context_invalid',
@@ -38,10 +38,10 @@ function normalizePrincipalBinding(value: unknown, expectedPrincipal: string): I
       { field: 'principal_binding.actor' },
     );
   }
-  const actorRecord = actor as Record<string, unknown>;
-  const actorPrincipal = normalizePrincipalId(actorRecord.principal_id);
-  const authType = String(actorRecord.auth_type ?? '').trim();
-  const memberships = candidate.memberships;
+  const actorRecord: any = actor as Record<string, unknown>;
+  const actorPrincipal: any = normalizePrincipalId(actorRecord.principal_id);
+  const authType: any = String(actorRecord.auth_type ?? '').trim();
+  const memberships: any = candidate.memberships;
   if (!actorPrincipal || !authType || !Array.isArray(memberships)) {
     throw new IntelligenceLaunchContextError(
       'intelligence_context_invalid',
@@ -56,7 +56,7 @@ function normalizePrincipalBinding(value: unknown, expectedPrincipal: string): I
       { actor_principal_id: actorPrincipal, principal_id: expectedPrincipal },
     );
   }
-  const normalizedMemberships = memberships.map((membership, index) => {
+  const normalizedMemberships: any = memberships.map((membership: any, index: any) => {
     if (!membership || typeof membership !== 'object' || Array.isArray(membership)) {
       throw new IntelligenceLaunchContextError(
         'intelligence_context_invalid',
@@ -64,11 +64,11 @@ function normalizePrincipalBinding(value: unknown, expectedPrincipal: string): I
         { field: `principal_binding.memberships[${index}]` },
       );
     }
-    const item = membership as Record<string, unknown>;
-    const registry = String(item.registry ?? '').trim();
-    const siteId = normalizeSiteId(item.site_id, `principal_binding.memberships[${index}].site_id`);
-    const role = String(item.role ?? '').trim();
-    const evidenceRef = String(item.evidence_ref ?? '').trim();
+    const item: any = membership as Record<string, unknown>;
+    const registry: any = String(item.registry ?? '').trim();
+    const siteId: any = normalizeSiteId(item.site_id, `principal_binding.memberships[${index}].site_id`);
+    const role: any = String(item.role ?? '').trim();
+    const evidenceRef: any = String(item.evidence_ref ?? '').trim();
     if (!registry || !siteId || !role || !evidenceRef) {
       throw new IntelligenceLaunchContextError(
         'intelligence_context_invalid',
@@ -78,8 +78,8 @@ function normalizePrincipalBinding(value: unknown, expectedPrincipal: string): I
     }
     return { registry, site_id: siteId, role, evidence_ref: evidenceRef };
   });
-  const evidenceRefs = candidate.evidence_refs;
-  if (evidenceRefs !== undefined && (!Array.isArray(evidenceRefs) || !evidenceRefs.every((ref) => typeof ref === 'string' && ref.trim()))) {
+  const evidenceRefs: any = candidate.evidence_refs;
+  if (evidenceRefs !== undefined && (!Array.isArray(evidenceRefs) || !evidenceRefs.every((ref: any) => typeof ref === 'string' && ref.trim()))) {
     throw new IntelligenceLaunchContextError(
       'intelligence_context_invalid',
       'principal_binding.evidence_refs must contain only non-empty strings.',
@@ -90,7 +90,7 @@ function normalizePrincipalBinding(value: unknown, expectedPrincipal: string): I
     schema: INTELLIGENCE_PRINCIPAL_BINDING_SCHEMA,
     actor: { principal_id: actorPrincipal, auth_type: authType },
     memberships: normalizedMemberships,
-    ...(Array.isArray(evidenceRefs) ? { evidence_refs: evidenceRefs.map((ref) => ref.trim()) } : {}),
+    ...(Array.isArray(evidenceRefs) ? { evidence_refs: evidenceRefs.map((ref: any) => ref.trim()) } : {}),
   };
 }
 
@@ -107,9 +107,9 @@ export class IntelligenceLaunchContextError extends Error {
 }
 
 function normalizeSiteId(value: unknown, field: string): string | null {
-  const raw = String(value ?? '').trim();
+  const raw: any = String(value ?? '').trim();
   if (!raw) return null;
-  const canonical = raw.startsWith('site:') ? raw : `site:${raw}`;
+  const canonical: any = raw.startsWith('site:') ? raw : `site:${raw}`;
   if (!/^site:[A-Za-z0-9][A-Za-z0-9._-]*$/.test(canonical)) {
     throw new IntelligenceLaunchContextError(
       'intelligence_context_invalid',
@@ -121,9 +121,9 @@ function normalizeSiteId(value: unknown, field: string): string | null {
 }
 
 function normalizePrincipalId(value: unknown): string | null {
-  const raw = String(value ?? '').trim();
+  const raw: any = String(value ?? '').trim();
   if (!raw) return null;
-  const canonical = raw.startsWith('principal:') ? raw : `principal:${raw}`;
+  const canonical: any = raw.startsWith('principal:') ? raw : `principal:${raw}`;
   if (!/^principal:[A-Za-z0-9][A-Za-z0-9._-]*$/.test(canonical)) {
     throw new IntelligenceLaunchContextError(
       'intelligence_context_invalid',
@@ -136,7 +136,7 @@ function normalizePrincipalId(value: unknown): string | null {
 
 function readJsonObject(path: string): Record<string, unknown> {
   try {
-    const parsed = JSON.parse(readFileSync(path, 'utf8'));
+    const parsed: any = JSON.parse(readFileSync(path, 'utf8'));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('document must be a JSON object');
     }
@@ -151,7 +151,7 @@ function readJsonObject(path: string): Record<string, unknown> {
 }
 
 function inferSiteId(siteRoot: string): string | null {
-  const candidates = [
+  const candidates: any = [
     join(siteRoot, '.narada', 'site.identity.json'),
     join(siteRoot, '.narada', 'site.json'),
     join(siteRoot, 'site.identity.json'),
@@ -161,8 +161,8 @@ function inferSiteId(siteRoot: string): string | null {
   for (const path of candidates) {
     if (!existsSync(path)) continue;
     try {
-      const document = readJsonObject(path);
-      const candidate = document.site_id
+      const document: any = readJsonObject(path);
+      const candidate: any = document.site_id
         ?? (document.static_config && typeof document.static_config === 'object'
           ? (document.static_config as Record<string, unknown>).site_id
           : null);
@@ -179,7 +179,7 @@ function inferSiteId(siteRoot: string): string | null {
 
 function resolveConfiguredPath(value: unknown, baseRoot: string): string | null {
   if (!value) return null;
-  const raw = String(value).trim();
+  const raw: any = String(value).trim();
   if (!raw) return null;
   return resolve(baseRoot, raw);
 }
@@ -196,13 +196,13 @@ export function loadIntelligenceLaunchContext({
   userSiteRoot: string;
   registryDbPath: string;
   processEnv?: NodeJS.ProcessEnv;
-}) {
-  const contextPath = resolve(
+}) : any{
+  const contextPath: any = resolve(
     processEnv.NARADA_INTELLIGENCE_CONTEXT_PATH
       ?? join(userSiteRoot, '.narada', 'intelligence-launch-context.json'),
   );
-  const contextExists = existsSync(contextPath);
-  const document = contextExists ? readJsonObject(contextPath) : {};
+  const contextExists: any = existsSync(contextPath);
+  const document: any = contextExists ? readJsonObject(contextPath) : {};
   if (contextExists && document.schema !== INTELLIGENCE_LAUNCH_CONTEXT_SCHEMA) {
     throw new IntelligenceLaunchContextError(
       'intelligence_context_invalid',
@@ -211,32 +211,32 @@ export function loadIntelligenceLaunchContext({
     );
   }
 
-  const target = normalizeSiteId(
+  const target: any = normalizeSiteId(
     targetSiteId
       ?? processEnv.NARADA_INTELLIGENCE_TARGET_SITE
       ?? inferSiteId(sessionSiteRoot),
     'target_site_id',
   );
-  const userSite = normalizeSiteId(
+  const userSite: any = normalizeSiteId(
     document.user_site_id ?? processEnv.NARADA_INTELLIGENCE_USER_SITE ?? inferSiteId(userSiteRoot),
     'user_site_id',
   );
-  const hostSite = normalizeSiteId(
+  const hostSite: any = normalizeSiteId(
     document.host_site_id
       ?? processEnv.NARADA_INTELLIGENCE_HOST_SITE
       ?? processEnv.NARADA_HOST_SITE_ID
       ?? processEnv.NARADA_PC_SITE_ID,
     'host_site_id',
   );
-  const principal = normalizePrincipalId(
+  const principal: any = normalizePrincipalId(
     document.principal_id ?? processEnv.NARADA_INTELLIGENCE_PRINCIPAL_ID,
   );
-  const missing = [
+  const missing: any = [
     ['target_site_id', target],
     ['user_site_id', userSite],
     ['host_site_id', hostSite],
     ['principal_id', principal],
-  ].filter(([, value]) => !value).map(([field]) => field);
+  ].filter(([, value]: any) => !value).map(([field]: any) => field);
   if (missing.length > 0) {
     throw new IntelligenceLaunchContextError(
       'intelligence_context_not_configured',
@@ -252,9 +252,9 @@ export function loadIntelligenceLaunchContext({
     );
   }
 
-  const configuredRegistryDbPath = resolveConfiguredPath(document.registry_db_path, userSiteRoot);
-  const effectiveRegistryDbPath = configuredRegistryDbPath ?? resolve(registryDbPath);
-  const principalBinding = normalizePrincipalBinding(document.principal_binding, principal);
+  const configuredRegistryDbPath: any = resolveConfiguredPath(document.registry_db_path, userSiteRoot);
+  const effectiveRegistryDbPath: any = configuredRegistryDbPath ?? resolve(registryDbPath);
+  const principalBinding: any = normalizePrincipalBinding(document.principal_binding, principal);
   let intelligenceKernelKind: string;
   try {
     intelligenceKernelKind = normalizeIntelligenceKernelKind(

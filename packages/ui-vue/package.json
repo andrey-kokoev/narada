@@ -23,7 +23,7 @@
   "scripts": {
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "pretest": "pnpm --filter @narada2/ui build",
-    "test": "pnpm run typecheck && vite build --config test/vite.config.mjs && node --test test/ui-vue.test.mjs"
+    "test": "pnpm run typecheck && pnpm --filter @narada2/ui build && vite build --config test/vite.config.ts && node --import tsx --test test/ui-vue.test.ts"
   },
   "dependencies": {
     "@narada2/ui": "workspace:*",
@@ -40,7 +40,8 @@
     "shadcn-vue": "^2.4.3",
     "tailwindcss": "^4.1.18",
     "vite": "^8.1.5",
-    "vue-tsc": "^2.2.0"
+    "vue-tsc": "^2.2.0",
+    "tsx": "^4.7.0"
   },
   "license": "MIT",
   "repository": {

@@ -43,7 +43,7 @@ for (const pkg of INTEGRATION_PACKAGES) {
 }
 
 const finishedAt = new Date().toISOString();
-const totalDuration = stepTimings.reduce((sum, s) => sum + s.durationMs, 0);
+const totalDuration = stepTimings.reduce((sum: any, s: any) => sum + s.durationMs, 0);
 
 function severity(c: ReturnType<typeof classifyStep>): number {
   switch (c) {
@@ -53,7 +53,7 @@ function severity(c: ReturnType<typeof classifyStep>): number {
     default: return 2;
   }
 }
-const classification = stepClassifications.reduce((worst, current) =>
+const classification = stepClassifications.reduce((worst: any, current: any) =>
   severity(current) > severity(worst) ? current : worst,
 );
 

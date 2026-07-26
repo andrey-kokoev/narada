@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/mcp-protocol-contract.mjs",
+    ".": {
+      "types": "./dist/mcp-protocol-contract.d.ts",
+      "import": "./dist/mcp-protocol-contract.js"
+    },
     "./json-rpc": "./contracts/json-rpc.json"
   },
   "scripts": {
-    "test": "node --test src/mcp-protocol-contract.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/mcp-protocol-contract.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/mcp-protocol-contract.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "MCP protocol contracts",
   "license": "MIT",
@@ -17,6 +21,10 @@
     "type": "git",
     "url": "git+https://github.com/andrey-kokoev/narada.git",
     "directory": "packages/mcp-protocol-contract"
+  },
+  "devDependencies": {
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
   },
   "engines": {
     "node": ">=22.0.0"

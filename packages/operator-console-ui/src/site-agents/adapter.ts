@@ -1,11 +1,20 @@
 import {
   formatOperatorSiteAgentInvariantViolation,
+  parseOperatorSiteAgentAdmissionOptionsWireResponse,
+  parseOperatorSiteAgentAdmissionWireResponse,
+  parseOperatorSiteAgentDeleteWireResponse,
   parseOperatorSiteAgentOverviewWireResponse,
+  parseOperatorSiteAgentStopWireResponse,
   validateOperatorSiteAgentOverviewInvariants,
   type OperatorSiteAgentLaunchFailureWireRecord,
   type OperatorSiteAgentLaunchHandoffWireRecord,
   type OperatorSiteAgentLaunchWireResponse,
+  type OperatorSiteAgentAdmissionOptionsWireResponse,
+  type OperatorSiteAgentAdmissionWireRequest,
+  type OperatorSiteAgentAdmissionWireResponse,
+  type OperatorSiteAgentDeleteWireResponse,
   type OperatorSiteAgentOverviewWireResponse,
+  type OperatorSiteAgentStopWireResponse,
 } from '@narada2/operator-console-contract';
 import { createSiteAgentsTransport, type SiteAgentsTransport } from './transport';
 
@@ -32,6 +41,10 @@ export interface SiteAgentsClient {
   overview(): Promise<OperatorSiteAgentOverviewWireResponse>;
   launch(siteId: string, agentId: string, operatorSurface?: string): Promise<OperatorSiteAgentLaunchWireResponse>;
   pending(): Promise<SiteAgentsPendingEntry[]>;
+  admissionOptions(siteId: string): Promise<OperatorSiteAgentAdmissionOptionsWireResponse>;
+  admit(request: OperatorSiteAgentAdmissionWireRequest): Promise<OperatorSiteAgentAdmissionWireResponse>;
+  stop(siteId: string, agentId: string): Promise<OperatorSiteAgentStopWireResponse>;
+  delete(siteId: string, agentId: string): Promise<OperatorSiteAgentDeleteWireResponse>;
 }
 
 export class SiteAgentsApiError extends Error {
@@ -111,6 +124,26 @@ export function createSiteAgentsAdapter(
     async pending() {
       const response = parsePending(await transport.pending());
       if (!response) throw new SiteAgentsApiError('invalid_pending', 'Sites and Agents pending did not match its contract.');
+      return response;
+    },
+    async admissionOptions(siteId) {
+      const response = parseOperatorSiteAgentAdmissionOptionsWireResponse(await transport.admissionOptions(siteId));
+      if (!response) throw new SiteAgentsApiError('invalid_admission_options', 'Agent admission options did not match its contract.');
+      return response;
+    },
+    async admit(request) {
+      const response = parseOperatorSiteAgentAdmissionWireResponse(await transport.admit(request));
+      if (!response) throw new SiteAgentsApiError('invalid_admission', 'Agent admission response did not match its contract.');
+      return response;
+    },
+    async stop(siteId, agentId) {
+      const response = parseOperatorSiteAgentStopWireResponse(await transport.stop(siteId, agentId));
+      if (!response) throw new SiteAgentsApiError('invalid_stop', 'Agent stop response did not match its contract.');
+      return response;
+    },
+    async delete(siteId, agentId) {
+      const response = parseOperatorSiteAgentDeleteWireResponse(await transport.delete(siteId, agentId));
+      if (!response) throw new SiteAgentsApiError('invalid_delete', 'Agent deletion response did not match its contract.');
       return response;
     },
   };

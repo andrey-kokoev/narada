@@ -32,7 +32,7 @@ Protocol method shapes come from `@narada2/nars-client-projection-contract`; do 
 - `src/session-projection*.ts`, `src/event-stream.ts`, `src/runtime-events.ts` — session store and projection.
 - `classifyRuntimeMessage()` in `session-projection.ts` separates `operation_fact` evidence (control, request-state, input lifecycle) from `conversation_fact`; `session-projection-boundaries.ts` merges assistant-message streaming boundaries.
 - `src/app/` — Vue 3 surface: `components/`, `composables/`, `lib/` (including `browserPreferences.ts`), `panel-registry.ts`.
-- `bin/narada-agent-web-ui.mjs` — CLI shim.
+- `bin/narada-agent-web-ui.ts` — CLI shim.
 - `test/` — node:test suites at top level, `*.unit.test.ts` (Vitest), `e2e/` (Playwright), `fixtures/`, live-smoke drivers.
 
 ## Boundary Rules
@@ -60,6 +60,6 @@ Escalation:
 - `test:e2e` / `test:projection` — explicit Playwright browser suites; they build first and are not part of the default test command.
 - `test:live:*` / `test:browser:cdp` — explicit live-smoke suites requiring an operator-supplied runtime or projection. `test:live:delegated-task` is the controlled L5 launcher proof (from repo root: `pnpm test:agent-web-ui:live:delegated-task`).
 
-Test ownership map: `agent-web-ui-projection.test.mjs` (event/session projection), `agent-web-ui-protocol.test.mjs` (protocol framing and attachment boundaries), `agent-web-ui.test.mjs` (preferences, feature seams, package wiring, bounded UI contracts).
+Test ownership map: `agent-web-ui-projection.test.ts` (event/session projection), `agent-web-ui-protocol.test.ts` (protocol framing and attachment boundaries), `agent-web-ui.test.ts` (preferences, feature seams, package wiring, bounded UI contracts).
 
-Build produces the launch artifact in `dist/` (`index.html` + `assets/**`); `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.mjs`. `prebuild`/`pretest` build `@narada2/ui` and `@narada2/cloudflare-nars-projection` first — a bare `vite build` or test run without them is not the canonical path.
+Build produces the launch artifact in `dist/` (`index.html` + `assets/**`); `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.ts`. `prebuild`/`pretest` build `@narada2/ui` and `@narada2/cloudflare-nars-projection` first — a bare `vite build` or test run without them is not the canonical path.

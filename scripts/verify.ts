@@ -25,8 +25,8 @@ interface Step {
 
 const steps: Step[] = [
   { name: "Task file guard", command: "node --import tsx scripts/task-file-guard.ts" },
-  { name: "CLI output admission guard", command: "node scripts/cli-output-admission-guard.mjs" },
-  { name: "Process launch posture guard", command: "node scripts/process-launch-posture-guard.mjs" },
+  { name: "CLI output admission guard", command: "node scripts/cli-output-admission-guard.ts" },
+  { name: "Process launch posture guard", command: "node scripts/process-launch-posture-guard.ts" },
   { name: "Typecheck", command: "pnpm typecheck" },
   { name: "Build", command: "pnpm build" },
   { name: "Task lifecycle snapshot guard", command: "pnpm narada:guard-task-db" },
@@ -63,7 +63,7 @@ for (const step of steps) {
   const stepClass = classifyStep(result.exitStatus, result.stderr, result.stdout);
   stepClassifications.push(stepClass);
 
-  if (result.exitStatus === 0) {
+  if (result.exitStatus=== 0) {
     console.log(`${colors.green}✓${colors.reset} ${colors.dim}(${(result.durationMs / 1000).toFixed(1)}s)${colors.reset}`);
   } else {
     console.log(`${colors.red}✗${colors.reset}`);
@@ -78,7 +78,7 @@ for (const step of steps) {
 console.log("");
 
 const finishedAt = new Date().toISOString();
-const totalDuration = stepTimings.reduce((sum, s) => sum + s.durationMs, 0);
+const totalDuration = stepTimings.reduce((sum: any, s: any) => sum + s.durationMs, 0);
 
 function severity(c: ReturnType<typeof classifyStep>): number {
   switch (c) {
@@ -88,7 +88,7 @@ function severity(c: ReturnType<typeof classifyStep>): number {
     default: return 2;
   }
 }
-const classification = stepClassifications.reduce((worst, current) =>
+const classification = stepClassifications.reduce((worst: any, current: any) =>
   severity(current) > severity(worst) ? current : worst,
 );
 

@@ -4,19 +4,42 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./adr-mcp-server": "./src/adr-mcp-server.mjs",
-    "./ee-mcp-server": "./src/ee-mcp-server.mjs",
-    "./generate-carrier-mcp-config": "./src/generate-carrier-mcp-config.mjs",
-    "./inbox-admission-log": "./src/inbox-admission-log.mjs",
-    "./inbox-admit": "./src/inbox-admit.mjs",
-    "./inbox-mcp-server": "./src/inbox-mcp-server.mjs",
+    "./adr-mcp-server": {
+      "types": "./dist/adr-mcp-server.d.ts",
+      "import": "./dist/adr-mcp-server.js"
+    },
+    "./ee-mcp-server": {
+      "types": "./dist/ee-mcp-server.d.ts",
+      "import": "./dist/ee-mcp-server.js"
+    },
+    "./generate-carrier-mcp-config": {
+      "types": "./dist/generate-carrier-mcp-config.d.ts",
+      "import": "./dist/generate-carrier-mcp-config.js"
+    },
+    "./inbox-admission-log": {
+      "types": "./dist/inbox-admission-log.d.ts",
+      "import": "./dist/inbox-admission-log.js"
+    },
+    "./inbox-admit": {
+      "types": "./dist/inbox-admit.d.ts",
+      "import": "./dist/inbox-admit.js"
+    },
+    "./inbox-mcp-server": {
+      "types": "./dist/inbox-mcp-server.d.ts",
+      "import": "./dist/inbox-mcp-server.js"
+    },
+    "./validate-mcp-surface-registry": {
+      "types": "./dist/validate-mcp-surface-registry.d.ts",
+      "import": "./dist/validate-mcp-surface-registry.js"
+    },
     "./invoke-ee-mcp-prototype": "./src/Invoke-EeMcpPrototype.ps1",
     "./invoke-inbox-mcp-prototype": "./src/Invoke-InboxMcpPrototype.ps1",
-    "./validate-mcp-surface-registry": "./src/validate-mcp-surface-registry.mjs",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test src/typed-mcp-surface.test.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && node --import tsx --test src/typed-mcp-surface.test.ts"
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*",
@@ -31,5 +54,10 @@
   },
   "engines": {
     "node": ">=22.0.0"
-  }
+  },
+  "files": [
+    "dist/",
+    "src/Invoke-EeMcpPrototype.ps1",
+    "src/Invoke-InboxMcpPrototype.ps1"
+  ]
 }

@@ -2864,7 +2864,7 @@ function normalizeEventPolicy(value: unknown): ProjectionEventPolicyMode {
 }
 
 function classifyNarsEvent(event: Record<string, unknown>): string {
-  return classifyNarsClientEventProjection(projectNarsClientEvent(event));
+  return classifyNarsClientEventProjection(projectNarsClientEvent(event) ?? {});
 }
 
 function eventClassAllowed(eventClass: string, policy: ProjectionEventPolicyMode): boolean {

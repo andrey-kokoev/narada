@@ -11,26 +11,26 @@ provider detail, or browser surface.
 
 | Responsibility | Current compatibility surface | Target owner |
 |---|---|---|
-| Worker fetch and export wiring | `src/cloudflare-worker.mjs` | `src/worker-entry.mjs` |
-| Durable Object lane, snapshot, and alarms | compatibility export in `src/cloudflare-worker.mjs` | `src/cloudflare-carrier-durable-object.mjs` |
-| HTTP authentication and site admission | callbacks in `src/cloudflare-worker.mjs` | `src/cloudflare-http-router.mjs`, then focused auth/admission modules |
-| Carrier session protocol and state transitions | `src/cloudflare-carrier.mjs` | `src/cloudflare-carrier.mjs` plus focused protocol/effect modules |
-| Raw env translation | scattered `env.*` reads | `src/cloudflare-carrier-config.mjs` |
-| Operation metadata and dispatch | compatibility conditional chain in `src/cloudflare-worker.mjs` | `src/cloudflare-product-operation-registry.mjs`, `src/*-operation-handlers.mjs`, then `src/operations/*` |
-| Site/operation control and read models | `src/cloudflare-worker.mjs` | `src/operations/site/*`, `src/operations/operation/*` |
-| Continuity and resident dispatch | `src/cloudflare-worker.mjs` | `src/operations/continuity/*`, `src/operations/resident-dispatch/*` |
-| Task lifecycle | `src/cloudflare-worker.mjs` | `src/operations/task-lifecycle/*` |
-| Mailbox and Graph | `src/cloudflare-worker.mjs` | `src/operations/mailbox/*`, `src/adapters/graph/*` |
-| Repository publication and GitHub | `src/cloudflare-worker.mjs` | `src/operations/repository-publication/*`, `src/adapters/github/*` |
-| Workers AI transport and intelligence gateway | compatibility export in `src/cloudflare-worker.mjs` | `src/cloudflare-provider-adapter.mjs`, then `src/adapters/workers-ai/*` and `src/adapters/intelligence/*` |
-| Tool-effect admission and execution | compatibility implementation in `src/cloudflare-worker.mjs` | `src/cloudflare-tool-effect-adapter.mjs`, then `src/adapters/tool-effects/*` |
-| D1 task-store adapter | compatibility export in `src/cloudflare-worker.mjs` | `src/cloudflare-d1-task-store-adapter.mjs`, then `src/persistence/*` and `migrations/*` |
-| Carrier persistence ownership | scattered `db.prepare` calls | `src/cloudflare-persistence-registry.mjs` and named bounded-context repositories |
-| Local carrier persistence fixtures | core carrier test SQL interpreter | `src/cloudflare-d1-test-fixtures.mjs` plus the D1/SQLite persistence contract tests |
-| Operator console | compatibility route in `src/cloudflare-worker.mjs` | `src/cloudflare-operator-console.mjs` plus `src/cloudflare-operator-console-asset.mjs` |
-| Operator commands | flat compatibility entrypoints in `scripts/*.mjs` | `scripts/commands/*` |
-| Product read models | flat compatibility entrypoints in `scripts/*.mjs` | `scripts/read-models/*` |
-| Live workflows | flat compatibility entrypoints in `scripts/*.mjs` | `scripts/workflows/*` |
+| Worker fetch and export wiring | `src/cloudflare-worker.ts` | `src/worker-entry.ts` |
+| Durable Object lane, snapshot, and alarms | compatibility export in `src/cloudflare-worker.ts` | `src/cloudflare-carrier-durable-object.ts` |
+| HTTP authentication and site admission | callbacks in `src/cloudflare-worker.ts` | `src/cloudflare-http-router.ts`, then focused auth/admission modules |
+| Carrier session protocol and state transitions | `src/cloudflare-carrier.ts` | `src/cloudflare-carrier.ts` plus focused protocol/effect modules |
+| Raw env translation | scattered `env.*` reads | `src/cloudflare-carrier-config.ts` |
+| Operation metadata and dispatch | compatibility conditional chain in `src/cloudflare-worker.ts` | `src/cloudflare-product-operation-registry.ts`, `src/*-operation-handlers.ts`, then `src/operations/*` |
+| Site/operation control and read models | `src/cloudflare-worker.ts` | `src/operations/site/*`, `src/operations/operation/*` |
+| Continuity and resident dispatch | `src/cloudflare-worker.ts` | `src/operations/continuity/*`, `src/operations/resident-dispatch/*` |
+| Task lifecycle | `src/cloudflare-worker.ts` | `src/operations/task-lifecycle/*` |
+| Mailbox and Graph | `src/cloudflare-worker.ts` | `src/operations/mailbox/*`, `src/adapters/graph/*` |
+| Repository publication and GitHub | `src/cloudflare-worker.ts` | `src/operations/repository-publication/*`, `src/adapters/github/*` |
+| Workers AI transport and intelligence gateway | compatibility export in `src/cloudflare-worker.ts` | `src/cloudflare-provider-adapter.ts`, then `src/adapters/workers-ai/*` and `src/adapters/intelligence/*` |
+| Tool-effect admission and execution | compatibility implementation in `src/cloudflare-worker.ts` | `src/cloudflare-tool-effect-adapter.ts`, then `src/adapters/tool-effects/*` |
+| D1 task-store adapter | compatibility export in `src/cloudflare-worker.ts` | `src/cloudflare-d1-task-store-adapter.ts`, then `src/persistence/*` and `migrations/*` |
+| Carrier persistence ownership | scattered `db.prepare` calls | `src/cloudflare-persistence-registry.ts` and named bounded-context repositories |
+| Local carrier persistence fixtures | core carrier test SQL interpreter | `src/cloudflare-d1-test-fixtures.ts` plus the D1/SQLite persistence contract tests |
+| Operator console | compatibility route in `src/cloudflare-worker.ts` | `src/cloudflare-operator-console.ts` plus `src/cloudflare-operator-console-asset.ts` |
+| Operator commands | flat compatibility entrypoints in `scripts/*.ts` | `scripts/commands/*` |
+| Product read models | flat compatibility entrypoints in `scripts/*.ts` | `scripts/read-models/*` |
+| Live workflows | flat compatibility entrypoints in `scripts/*.ts` | `scripts/workflows/*` |
 | Script auth/HTTP and ownership metadata | duplicated script-local setup | `scripts/shared/*` |
 | Unit/contract/live test orchestration | one package test command | `scripts/contracts/*` and `src/contracts/*` |
 
@@ -43,14 +43,14 @@ provider detail, or browser surface.
 - Operation handlers depend on canonical contracts and named ports/repositories;
   they do not read raw bindings or implement HTTP authentication.
 - Product operation support is registered once in
-  `cloudflare-product-operation-registry.mjs`. Context modules own operation
+  `cloudflare-product-operation-registry.ts`. Context modules own operation
   names and metadata; the compatibility Worker handler is injected behind that
   registry until the remaining extraction tasks move its implementations.
 - Adapters implement named ports and are the only owners of Workers AI, Graph,
   GitHub, KV, Durable Object, or D1 transport details.
 - Persistence modules own schema initialization, queries, row normalization, and
   idempotency semantics for their bounded context.
-- `cloudflare-persistence-registry.mjs` is the ownership map for every carrier
+- `cloudflare-persistence-registry.ts` is the ownership map for every carrier
   table. New persistence code selects a named domain repository; cross-domain
   SQL is rejected at that port and composed read models remain explicit
   compatibility work until their repository extraction task lands.

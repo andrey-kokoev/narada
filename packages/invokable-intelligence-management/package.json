@@ -5,7 +5,7 @@
   "type": "module",
   "main": "./dist/index.js",
   "bin": {
-    "narada-intelligence": "./bin/narada-intelligence.mjs"
+    "narada-intelligence": "./dist/narada-intelligence.js"
   },
   "narada": {
     "package_role": "intelligence_catalog_policy_management_and_migration",
@@ -30,7 +30,6 @@
   },
   "files": [
     "dist",
-    "bin",
     "assets",
     "README.md"
   ],

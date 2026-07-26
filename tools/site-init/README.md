@@ -18,15 +18,15 @@ The live carriers are explicit, authority-gated surfaces. They default to `plan`
 ## Examples
 
 ```powershell
-node tools/site-init/site-live-carriers.mjs --carrier site_local_db_init --mode plan --target-site-root <root> --site-id <site-id> --authority-basis <basis>
-node tools/site-init/site-live-carriers.mjs --carrier site_local_db_init --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --mutation-authorized
-node tools/site-init/site-live-carriers.mjs --carrier site_local_storage_hydration --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-init-verified --mutation-authorized
-node tools/site-init/site-live-carriers.mjs --carrier agent_context_memory_local_storage --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
-node tools/site-init/site-live-carriers.mjs --carrier site_inbox_local_substrate --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
-node tools/site-init/site-live-carriers.mjs --carrier site_config_local_registry --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
-node tools/site-init/site-live-carriers.mjs --carrier site_lift_local_adoption --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
-node tools/site-init/site-live-carriers.mjs --carrier site_mcp_registration_transport --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --runtime-target codex --mcp-server-json '[{"name":"site-task-lifecycle","transport":"stdio","command":"node","args":["server.mjs"]}]' --mutation-authorized
-node tools/site-init/site-live-carriers.mjs --carrier windows_profile_site_binding --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --mcp-registration-verified --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier site_local_db_init --mode plan --target-site-root <root> --site-id <site-id> --authority-basis <basis>
+node tools/site-init/site-live-carriers.ts --carrier site_local_db_init --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier site_local_storage_hydration --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-init-verified --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier agent_context_memory_local_storage --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier site_inbox_local_substrate --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier site_config_local_registry --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier site_lift_local_adoption --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier site_mcp_registration_transport --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --db-verified --storage-verified --runtime-target codex --mcp-server-json '[{"name":"site-task-lifecycle","transport":"stdio","command":"node","args":["server.ts"]}]' --mutation-authorized
+node tools/site-init/site-live-carriers.ts --carrier windows_profile_site_binding --mode apply --target-site-root <root> --site-id <site-id> --authority-basis <basis> --mcp-registration-verified --mutation-authorized
 ```
 
 ## Boundaries

@@ -55,12 +55,12 @@ async function loadJson<T>(path: string): Promise<T | null> {
 function compareResults(
   current: BenchmarkResult[],
   baseline: BenchmarkResult[],
-  threshold = 10,
+  threshold: any= 10,
 ): ComparisonResult[] {
   const results: ComparisonResult[] = [];
 
   for (const curr of current) {
-    const base = baseline.find(b => b.name === curr.name);
+    const base = baseline.find((b: any) => b.name === curr.name);
 
     if (!base) {
       results.push({
@@ -102,10 +102,10 @@ function formatComparison(results: ComparisonResult[]): string {
   lines.push('# Benchmark Comparison\n');
 
   // Group by status
-  const regressed = results.filter(r => r.status === 'regressed');
-  const improved = results.filter(r => r.status === 'improved');
-  const stable = results.filter(r => r.status === 'stable');
-  const new_ = results.filter(r => r.status === 'new');
+  const regressed = results.filter((r: any) => r.status === 'regressed');
+  const improved = results.filter((r: any) => r.status === 'improved');
+  const stable = results.filter((r: any) => r.status === 'stable');
+  const new_ = results.filter((r: any) => r.status === 'new');
 
   if (regressed.length > 0) {
     lines.push('## 🔴 Regressions\n');
@@ -196,11 +196,11 @@ async function main(): Promise<void> {
   console.log(report);
 
   // Exit with error code if regressions found
-  const hasRegressions = comparison.some(c => c.status === 'regressed');
+  const hasRegressions = comparison.some((c: any) => c.status === 'regressed');
   process.exit(hasRegressions ? 1 : 0);
 }
 
-main().catch(err => {
+main().catch((err: any) => {
   console.error('Comparison failed:', err);
   process.exit(1);
 });

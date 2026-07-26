@@ -66,7 +66,7 @@ export function readInjectedConfig(documentRef: Document | undefined = globalThi
 }
 
 export function resolveAttachConfig(
-  search = '',
+  search: any= '',
   injectedConfig: UnknownRecord = {},
 ): AttachConfig {
   const params = new URLSearchParams(String(search).replace(/^\?/, ''));

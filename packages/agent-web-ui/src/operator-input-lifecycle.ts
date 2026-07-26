@@ -102,7 +102,7 @@ export function canTransitionOperatorInput(from: unknown, to: unknown): boolean 
 export function transitionOperatorInputLifecycle(
   lifecycle: OperatorInputLifecycle | null | undefined,
   phase: string,
-  updatedAt = new Date().toISOString(),
+  updatedAt: any= new Date().toISOString(),
 ): boolean {
   if (!lifecycle || !canTransitionOperatorInput(lifecycle.phase, phase)) return false;
   lifecycle.phase = phase;

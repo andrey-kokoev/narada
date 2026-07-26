@@ -1,5 +1,5 @@
 name = "narada-cloudflare-carrier"
-main = "src/worker-entry.mjs"
+main = "src/worker-entry.ts"
 compatibility_date = "2026-06-06"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true

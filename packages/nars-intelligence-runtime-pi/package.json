@@ -3,7 +3,12 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "files": ["src", "docs", "README.md", "LICENSE-PI-NOTICE.md"],
+  "files": [
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE-PI-NOTICE.md"
+  ],
   "narada": {
     "package_role": "nars_intelligence_kernel",
     "implements": "@narada2/nars-intelligence-kernel-contract",
@@ -14,23 +19,23 @@
   "exports": {
     ".": {
       "types": "./src/index.d.ts",
-      "import": "./src/index.mjs"
+      "import": "./src/index.ts"
     },
     "./kernel": {
       "types": "./src/index.d.ts",
-      "import": "./src/kernel.mjs"
+      "import": "./src/kernel.ts"
     },
-    "./pi-sdk-host": "./src/pi/pi-sdk-host.mjs",
-    "./pi-rpc-host": "./src/pi/pi-rpc-host.mjs",
-    "./event-adapter": "./src/adapters/event-adapter.mjs",
-    "./tool-adapter": "./src/adapters/tool-adapter.mjs",
-    "./context-adapter": "./src/adapters/context-adapter.mjs",
-    "./runtime-isolation": "./src/pi/pi-runtime-isolation.mjs",
+    "./pi-sdk-host": "./src/pi/pi-sdk-host.ts",
+    "./pi-rpc-host": "./src/pi/pi-rpc-host.ts",
+    "./event-adapter": "./src/adapters/event-adapter.ts",
+    "./tool-adapter": "./src/adapters/tool-adapter.ts",
+    "./context-adapter": "./src/adapters/context-adapter.ts",
+    "./runtime-isolation": "./src/pi/pi-runtime-isolation.ts",
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test src/**/*.test.mjs src/*.test.mjs",
-    "test:live": "node --test src/live/*.test.mjs",
+    "test": "node --import tsx --test src/**/*.test.ts src/*.test.ts",
+    "test:live": "node --import tsx --test src/live/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

@@ -13,7 +13,7 @@
 
 import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { join, basename } from "node:path";
-import { Database } from "@narada2/control-plane";
+import Database from "../packages/layers/control-plane/src/sqlite/database.js";
 
 const ROOT = process.cwd();
 const TASKS_DIR = join(ROOT, ".ai", "do-not-open", "tasks");
@@ -82,14 +82,14 @@ function parseFrontMatter(content: string): {
         frontMatter[key] = val
           .slice(1, -1)
           .split(",")
-          .map((s) => s.trim())
+          .map((s: any) => s.trim())
           .filter(Boolean);
       }
-    } else if (val === "true") {
+    } else if (val=== "true") {
       frontMatter[key] = true;
-    } else if (val === "false") {
+    } else if (val=== "false") {
       frontMatter[key] = false;
-    } else if (val === "null") {
+    } else if (val=== "null") {
       frontMatter[key] = null;
     } else {
       frontMatter[key] = val;
@@ -153,7 +153,7 @@ function extractTaskRefsFromBody(body: string): number[] {
 function scanTasks(): { tasks: TaskFile[]; findings: Finding[] } {
   const findings: Finding[] = [];
   const tasks: TaskFile[] = [];
-  const files = readDirSafe(TASKS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(TASKS_DIR, (n: any) => n.endsWith(".md"));
 
   for (const filename of files) {
     const filepath = join(TASKS_DIR, filename);
@@ -215,7 +215,7 @@ function checkDuplicateTaskNumbers(tasks: TaskFile[]): Finding[] {
   // Heading-based duplicates
   for (const [num, arr] of byHeading.entries()) {
     if (arr.length > 1) {
-      const others = arr.map((a) => a.filename).join(", ");
+      const others = arr.map((a: any) => a.filename).join(", ");
       for (const t of arr) {
         findings.push({
           severity: "error",
@@ -247,7 +247,7 @@ function checkDuplicateTaskNumbers(tasks: TaskFile[]): Finding[] {
       // Report same-date collisions
       for (const [date, dateArr] of byDate.entries()) {
         if (dateArr.length > 1) {
-          const others = dateArr.map((a) => a.filename).join(", ");
+          const others = dateArr.map((a: any) => a.filename).join(", ");
           for (const t of dateArr) {
             findings.push({
               severity: "error",
@@ -339,7 +339,7 @@ function checkStaleBlockers(
 function checkMissingHeading(tasks: TaskFile[]): Finding[] {
   const findings: Finding[] = [];
   for (const t of tasks) {
-    if (t.headingNumber === null && !t.isChapterDag) {
+    if (t.headingNumber=== null && !t.isChapterDag) {
       findings.push({
         severity: "warning",
         checkId: "missing-heading",
@@ -386,7 +386,7 @@ function checkRangeCollisions(tasks: TaskFile[]): Finding[] {
     for (let n = range.start; n <= range.end; n++) {
       if (executableNumbers.has(n)) {
         // Check if this executable task is actually part of the chapter
-        const taskFile = tasks.find((tf) => tf.headingNumber === n);
+        const taskFile = tasks.find((tf: any) => tf.headingNumber === n);
         if (taskFile) {
           // It's okay if the task is inside the chapter range
           continue;
@@ -553,7 +553,7 @@ function scanReviews(
   // Orphan review check: tasks in in_review with no review file
   for (const [num, task] of taskByNumber.entries()) {
     const status = task.frontMatter["status"];
-    if (status === "in_review" && !tasksWithReviews.has(num)) {
+    if (status=== "in_review" && !tasksWithReviews.has(num)) {
       findings.push({
         severity: "warning",
         checkId: "orphan-review",
@@ -571,7 +571,7 @@ function scanDecisions(
   taskByNumber: Map<number, TaskFile>,
 ): Finding[] {
   const findings: Finding[] = [];
-  const files = readDirSafe(DECISIONS_DIR, (n) => n.endsWith(".md"));
+  const files = readDirSafe(DECISIONS_DIR, (n: any) => n.endsWith(".md"));
 
   // Track which tasks have closure decisions (by task number)
   const tasksWithClosures = new Set<number>();
@@ -621,7 +621,7 @@ function scanDecisions(
   // Orphan closure check: tasks marked closed with no closure decision
   for (const [num, task] of taskByNumber.entries()) {
     const status = task.frontMatter["status"];
-    if (status === "closed" && !tasksWithClosures.has(num)) {
+    if (status=== "closed" && !tasksWithClosures.has(num)) {
       findings.push({
         severity: "warning",
         checkId: "orphan-closure",
@@ -696,7 +696,7 @@ function checkCrossingRegimeDeclarations(tasks: TaskFile[]): Finding[] {
 
 function scanLearning(allTaskNumbers: Set<number>): Finding[] {
   const findings: Finding[] = [];
-  const files = readDirSafe(LEARNING_DIR, (n) => n.endsWith(".json"));
+  const files = readDirSafe(LEARNING_DIR, (n: any) => n.endsWith(".json"));
   for (const filename of files) {
     const filepath = join(LEARNING_DIR, filename);
     const content = readFileSafe(filepath);
@@ -767,7 +767,7 @@ function main(): number {
     findings.push(...checkCrossingRegimeDeclarations(tasks));
 
     // Sort: errors first, then by file
-    findings.sort((a, b) => {
+    findings.sort((a: any, b: any) => {
       if (a.severity !== b.severity) {
         return a.severity === "error" ? -1 : 1;
       }
@@ -778,8 +778,8 @@ function main(): number {
       console.log(`${f.severity}: ${f.checkId}: ${f.file}: ${f.message}`);
     }
 
-    const errors = findings.filter((f) => f.severity === "error");
-    const warnings = findings.filter((f) => f.severity === "warning");
+    const errors = findings.filter((f: any) => f.severity === "error");
+    const warnings = findings.filter((f: any) => f.severity === "warning");
 
     console.log("");
     console.log(`Task Graph Lint complete. ${errors.length} error(s), ${warnings.length} warning(s).`);

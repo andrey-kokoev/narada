@@ -33,7 +33,7 @@ export interface SchedulerSummaryError {
 export function useSchedulerSummary(events: Ref<unknown[]> | unknown[]) {
   const summary = computed<SchedulerSummary>(() => {
     const retainedEvents = Array.isArray(events) ? events : events.value;
-    for (let index = retainedEvents.length - 1; index >= 0; index -= 1) {
+    for (let index= retainedEvents.length - 1; index >= 0; index -= 1) {
       const event = unwrapRuntimeEvent(retainedEvents[index]);
       if (!event || typeof event !== 'object') continue;
       const record = event as Record<string, unknown>;

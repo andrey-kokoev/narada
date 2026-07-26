@@ -13,6 +13,7 @@ Initial exported set:
 - `Tooltip`, `TooltipContent`, `TooltipProvider`, `TooltipTrigger`
 - `Command`, `CommandEmpty`, `CommandItem`, `CommandList`
 - `Dialog`, `DialogClose`, `DialogContent`, `DialogDescription`, `DialogFooter`, `DialogHeader`, `DialogTitle`, `DialogTrigger`
+- `DropdownMenu`, `DropdownMenuContent`, `DropdownMenuItem`, `DropdownMenuTrigger`
 - `cn`
 
 The current Agent Web UI components are all generic enough for this initial export. The operator command palette, session shell, panels, composables, and protocol-facing components remain Agent Web UI-local. Future generated primitives are added here only when they have no session or site-domain semantics.

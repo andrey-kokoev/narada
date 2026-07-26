@@ -68,7 +68,7 @@ export function buildOperatorInputAction(
 ): OperatorAction | null {
   const action = buildAgentWebUiOperatorInputAction(text, options) as OperatorAction | null;
   const command = String(text ?? '').trim().toLowerCase();
-  if (command.startsWith('/json ') && action?.kind === 'message') {
+  if (command.startsWith('/json ') && action?.kind=== 'message') {
     try {
       const frame: unknown = JSON.parse(String(text).trim().slice(5));
       if (isAgentWebUiCloudflareProtocolFrame(frame)) return { kind: 'frame', frame };
@@ -83,7 +83,7 @@ export function buildOperatorInputAction(
   });
   const normalizedFrame = toSessionProtocolFrame(frame);
   if (!normalizedFrame) return { kind: 'message', message: 'Protocol frame is not admitted by agent-web-ui.' };
-  if (command === '/status' && normalizedFrame.method === 'session.health') {
+  if (command=== '/status' && normalizedFrame.method === 'session.health') {
     return { ...action, frame: { ...normalizedFrame, method: 'session.status' } };
   }
   return { ...action, frame: normalizedFrame };
@@ -105,15 +105,15 @@ export function sendOperatorMessage(
     ...(deliveryMode === 'enqueue' ? { deliveryMode: 'enqueue' } : {}),
   });
   if (!action) return false;
-  if (action.kind === 'local_help') {
+  if (action.kind=== 'local_help') {
     appendEvent({ event: 'agent_web_ui_help', content: buildAgentWebUiHelpText() }, documentRef);
     return true;
   }
-  if (action.kind === 'local_clear') {
+  if (action.kind=== 'local_clear') {
     clearEvents(documentRef);
     return true;
   }
-  if (action.kind === 'message') {
+  if (action.kind=== 'message') {
     appendEvent({ event: 'agent_web_ui_message', message: action.message ?? '' }, documentRef);
     return false;
   }
@@ -128,7 +128,7 @@ export function sendOperatorMessage(
     return false;
   }
   if (!isAgentWebUiCloudflareProtocolFrame(frame)) throw new Error('unsupported_agent_web_ui_protocol_frame');
-  if (typeof connection?.sendFrame === 'function') {
+  if (typeof connection?.sendFrame=== 'function') {
     const sent = connection.sendFrame(frame);
     if (!sent) {
       appendEvent({ event: 'web_ui_input_not_sent', message: 'event stream is not open' }, documentRef);
@@ -190,7 +190,7 @@ export function bindComposer(connection: ConnectionLike | null, documentRef: Doc
   const form = documentRef?.getElementById('operator-form');
   const input = documentRef?.getElementById('operator-input');
   if (!(form instanceof HTMLFormElement) || !(input instanceof HTMLInputElement || input instanceof HTMLTextAreaElement)) return;
-  form.addEventListener('submit', (event) => {
+  form.addEventListener('submit', (event: any) => {
     event.preventDefault();
     if (sendOperatorMessage(connection, input.value, documentRef)) input.value = '';
   });

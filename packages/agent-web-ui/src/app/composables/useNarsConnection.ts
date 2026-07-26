@@ -23,7 +23,7 @@ export interface NarsEventHistoryState {
 export function useNarsConnection(
   config: NarsConnectionConfig,
   retain: (event: unknown) => void,
-  retainMany: (events: unknown[]) => void = (events) => events.forEach(retain),
+  retainMany: (events: unknown[]) => void = (events: any) => events.forEach(retain),
   onEventsRead?: (event: { event: 'session_events_read'; events: unknown[]; event_count?: number; has_more?: boolean; truncated?: boolean; history_truncated?: boolean }) => void,
 ) {
   const streamText = ref(config.eventEndpoint ? 'starting' : 'event endpoint not configured');
@@ -54,9 +54,9 @@ export function useNarsConnection(
     sessionId: config.sessionId,
     maxReplay: config.maxReplay,
     view: config.view?.value ?? 'conversation',
-    onStatus(status) { streamText.value = status; },
-    onTransportState(phase) { streamLive.value = isTransportLive(phase); },
-    onEvent(event) {
+    onStatus(status: any) { streamText.value = status; },
+    onTransportState(phase: any) { streamLive.value = isTransportLive(phase); },
+    onEvent(event: any) {
       activeTurnId.value = connection.value?.activeTurnId ?? null;
       if (isSubscriptionLifecycleEvent(event)) updateHistory(event);
       if (isEventsReadResponse(event)) {
@@ -69,13 +69,13 @@ export function useNarsConnection(
       }
       retain(event);
     },
-    onDecodeError(message) {
+    onDecodeError(message: any) {
       retain({ event: 'web_ui_decode_error', message });
     },
   });
 
   if (config.view) {
-    watch(config.view, (view) => {
+    watch(config.view, (view: any) => {
       const state = historyFor(view);
       state.hasMore = false;
       state.historyTruncated = false;

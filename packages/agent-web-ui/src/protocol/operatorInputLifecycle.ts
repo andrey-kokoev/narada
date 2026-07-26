@@ -14,9 +14,9 @@ export const PENDING_OPERATOR_INPUT_PHASES = Object.freeze({
 
 export type PendingOperatorInputPhase = typeof PENDING_OPERATOR_INPUT_PHASES[keyof typeof PENDING_OPERATOR_INPUT_PHASES];
 
-const pendingPhaseValues = new Set(Object.values(PENDING_OPERATOR_INPUT_PHASES));
+const pendingPhaseValues = new Set<PendingOperatorInputPhase>(Object.values(PENDING_OPERATOR_INPUT_PHASES) as PendingOperatorInputPhase[]);
 export const PENDING_OPERATOR_INPUT_TRANSITIONS: Readonly<Record<PendingOperatorInputPhase, readonly PendingOperatorInputPhase[]>> = Object.freeze(
-  Object.fromEntries(Object.values(PENDING_OPERATOR_INPUT_PHASES).map((phase) => [
+  Object.fromEntries((Object.values(PENDING_OPERATOR_INPUT_PHASES) as PendingOperatorInputPhase[]).map((phase) => [
     phase,
     Object.freeze((OPERATOR_INPUT_TRANSITIONS[phase] ?? []).filter((nextPhase: string) => pendingPhaseValues.has(nextPhase as PendingOperatorInputPhase))) as readonly PendingOperatorInputPhase[],
   ])),
@@ -38,7 +38,7 @@ export interface PendingOperatorInputLifecycle {
 export function transitionPendingOperatorInput(
   lifecycle: PendingOperatorInputLifecycle,
   phase: PendingOperatorInputPhase,
-  updatedAt = new Date().toISOString(),
+  updatedAt: any= new Date().toISOString(),
 ): boolean {
   if (!canTransitionPendingOperatorInput(lifecycle.phase, phase)) return false;
   return transitionOperatorInputLifecycle(lifecycle, phase, updatedAt);

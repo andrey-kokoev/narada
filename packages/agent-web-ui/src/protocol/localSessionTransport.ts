@@ -11,7 +11,7 @@ const LOCAL_ACTIVE_RECONCILE_DELAY_MS = 500;
 export function startLocalSessionTransport(context: NarsClientAdapterContext): void {
   const { options, connection, state, WebSocketCtor, setTimeoutFn, clearTimeoutFn } = context;
 
-  const scheduleLocalReconcile = (delayMs = LOCAL_RECONCILE_INTERVAL_MS) => {
+  const scheduleLocalReconcile = (delayMs: any= LOCAL_RECONCILE_INTERVAL_MS) => {
     if (isNarsTransportClosed(state.lifecycle) || isNarsTransportOpening(state.lifecycle) || state.reconcileTimer) return;
     state.reconcileTimer = setTimeoutFn(() => {
       state.reconcileTimer = null;
@@ -30,7 +30,7 @@ export function startLocalSessionTransport(context: NarsClientAdapterContext): v
     }, delayMs);
   };
 
-  const rescheduleLocalReconcile = (delayMs = LOCAL_RECONCILE_INTERVAL_MS) => {
+  const rescheduleLocalReconcile = (delayMs: any= LOCAL_RECONCILE_INTERVAL_MS) => {
     if (state.reconcileTimer) {
       clearTimeoutFn(state.reconcileTimer);
       state.reconcileTimer = null;
@@ -63,7 +63,7 @@ export function startLocalSessionTransport(context: NarsClientAdapterContext): v
       }
       if (!connection.sendFrame(frame)) options.onStatus?.('not open');
     });
-    socket.addEventListener('message', (event) => {
+    socket.addEventListener('message', (event: any) => {
       if (!isCurrent()) return;
       try {
         const message = JSON.parse(event.data);
@@ -92,10 +92,10 @@ export function startLocalSessionTransport(context: NarsClientAdapterContext): v
           applyRuntimeEventToWebUiState(state, message);
         }
         const runtimeEvent = unwrapRuntimeEvent(message);
-        if (runtimeEvent?.event === 'session_events_replay_completed') {
+        if (runtimeEvent?.event=== 'session_events_replay_completed') {
           scheduleLocalReconcile();
         }
-        if (runtimeEvent?.event === 'turn_started' || runtimeEvent?.event === 'carrier_turn_started') {
+        if (runtimeEvent?.event=== 'turn_started' || runtimeEvent?.event === 'carrier_turn_started') {
           rescheduleLocalReconcile(LOCAL_ACTIVE_RECONCILE_DELAY_MS);
         }
         options.onStatus?.('connected');
@@ -141,7 +141,7 @@ export function startLocalSessionTransport(context: NarsClientAdapterContext): v
     });
   };
 
-  state.subscribeView = (view) => {
+  state.subscribeView = (view: any) => {
     state.lastSequence = null;
     const frame = toSessionProtocolFrame(buildAgentWebUiSubscribeFrame({
       maxReplay: options.maxReplay,
@@ -167,10 +167,10 @@ function sequenceFromEventsReadMessage(message: unknown): number | null {
   const candidate = message as Record<string, unknown>;
   const cursor = candidate.cursor && typeof candidate.cursor === 'object' ? candidate.cursor as Record<string, unknown> : {};
   const events = eventsFromReadMessage(message) ?? [];
-  const values = [candidate.last_sequence, cursor.after_sequence, ...events.map((event) => sequenceFromRuntimeMessage(event))];
+  const values = [candidate.last_sequence, cursor.after_sequence, ...events.map((event: any) => sequenceFromRuntimeMessage(event))];
   const sequences = values
-    .filter((value) => value !== null && value !== undefined && value !== '')
-    .map((value) => typeof value === 'number' ? value : Number(value))
-    .filter((value) => Number.isFinite(value));
+    .filter((value: any) => value !== null && value !== undefined && value !== '')
+    .map((value: any) => typeof value === 'number' ? value : Number(value))
+    .filter((value: any) => Number.isFinite(value));
   return sequences.length > 0 ? Math.max(...sequences) : null;
 }

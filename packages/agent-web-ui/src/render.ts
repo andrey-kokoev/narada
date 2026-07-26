@@ -69,23 +69,23 @@ function sessionIdFromProjection(projection: RenderProjection): string | null {
 
 function appendStructuredSummaryContent(container: RenderElement, parts: readonly MessageContentPart[], documentRef: Document, context: RenderContext = {}): void {
   for (const part of parts) {
-    if (part?.kind === 'artifact_ref' && part.artifact) {
+    if (part?.kind=== 'artifact_ref' && part.artifact) {
       container.append(createArtifactReferenceCard(part.artifact, documentRef, context));
       continue;
     }
-    if (part?.kind === 'intent_ref' && part.intent) {
+    if (part?.kind=== 'intent_ref' && part.intent) {
       container.append(createIntentReferenceButton(part.intent, documentRef));
       continue;
     }
-    if (part?.kind === 'markdown') {
+    if (part?.kind=== 'markdown') {
       container.append(createRenderedMarkdownFrame(part.content, documentRef));
       continue;
     }
-    if (part?.kind === 'plain_text') {
+    if (part?.kind=== 'plain_text') {
       container.append(documentRef.createTextNode(part.content));
       continue;
     }
-    if (part?.kind === 'code_block' || part?.kind === 'json_block' || part?.kind === 'mermaid_diagram') {
+    if (part?.kind=== 'code_block' || part?.kind === 'json_block' || part?.kind === 'mermaid_diagram') {
       container.append(createCanonicalCodeBlock(part, documentRef));
       continue;
     }
@@ -135,14 +135,14 @@ function createArtifactReferenceCard(part: UnknownRecord, documentRef: Document,
   }
   header.append(titleWrap, actions);
   card.append(header);
-  if (String(part.kind ?? '') === 'html' && contentPath) {
+  if (String(part.kind ?? '')=== 'html' && contentPath) {
     const frame = documentRef.createElement('iframe');
     frame.className = 'artifact-html-preview';
     frame.sandbox = 'allow-scripts allow-forms';
     frame.src = contentPath;
     frame.title = String(part.title ?? artifactId);
     card.append(frame);
-  } else if (String(part.kind ?? '') === 'audio' && contentPath) {
+  } else if (String(part.kind ?? '')=== 'audio' && contentPath) {
     const audio = documentRef.createElement('audio');
     audio.className = 'artifact-audio-preview';
     audio.controls = true;
@@ -215,7 +215,7 @@ function artifactContentPath({ basePath, artifactTransport, sessionId, artifactI
 
 function appendSummaryContent(container: RenderElement, value: unknown, documentRef: Document, context: RenderContext = {}): void {
   const parts = parseMessageContent(value);
-  if (parts.length === 1 && parts[0].kind === 'plain_text') {
+  if (parts.length=== 1 && parts[0].kind === 'plain_text') {
     container.textContent = parts[0].content;
     return;
   }
@@ -330,7 +330,7 @@ function renderMarkdownToDom(markdownText: string, documentRef: Document): HTMLE
   const wrapper = documentRef.createElement('div');
   wrapper.className = 'message-markdown';
   const lines = markdownText.split('\n');
-  for (let index = 0; index < lines.length; index += 1) {
+  for (let index= 0; index < lines.length; index += 1) {
     const line = lines[index];
     if (!line.trim()) continue;
     const fence = line.match(/^```([^`]*)\s*$/);
@@ -383,7 +383,7 @@ function renderMarkdownToDom(markdownText: string, documentRef: Document): HTMLE
 }
 
 function appendInlineMarkdown(parent: RenderElement, text: string, documentRef: Document): void {
-  const segments = String(text ?? '').split(/(`[^`]+`|\[[^\]]+\]\([^)]+\))/g).filter((segment) => segment.length > 0);
+  const segments = String(text ?? '').split(/(`[^`]+`|\[[^\]]+\]\([^)]+\))/g).filter((segment: any) => segment.length > 0);
   for (const segment of segments) {
     if (/^`[^`]+`$/.test(segment)) {
       const code = documentRef.createElement('code');
@@ -480,7 +480,7 @@ function isMarkdownTableDivider(line: unknown): boolean {
 }
 
 function splitMarkdownTableRow(line: unknown): string[] {
-  return String(line ?? '').trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+  return String(line ?? '').trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell: any) => cell.trim());
 }
 
 function normalizeAssistantText(value: unknown): string {
@@ -610,7 +610,7 @@ function renderEvent(event: unknown, documentRef: Document = document, options: 
   item.dataset.eventDisposition = disposition;
   if (projection.renderKey) item.dataset.eventRenderKey = projection.renderKey;
   if (projection.streamContent !== undefined) item.dataset.streamContent = projection.streamContent;
-  if (projection.kind === 'assistant_message' || projection.kind === 'assistant_message_stream') {
+  if (projection.kind=== 'assistant_message' || projection.kind === 'assistant_message_stream') {
     const scope = eventScope(projection.event);
     item.dataset.assistantAgentId = scope.agentId ?? '';
     item.dataset.assistantSessionId = scope.sessionId ?? '';
@@ -641,7 +641,7 @@ function renderEvent(event: unknown, documentRef: Document = document, options: 
   summary.className = 'event-summary';
   appendSummaryContent(summary, projection.summary || projection.event, documentRef, { sessionId: sessionIdFromProjection(projection) });
   detail.append(summary);
-  if (verbosity === 'raw') {
+  if (verbosity=== 'raw') {
     const raw = documentRef.createElement('details');
     raw.className = 'event-raw';
     const rawSummary = documentRef.createElement('summary');
@@ -747,7 +747,7 @@ function isRenderedEventChild(list: RenderElement, item: RenderElement): boolean
 }
 
 function clearNode(node: RenderElement): void {
-  if (typeof node.replaceChildren === 'function') {
+  if (typeof node.replaceChildren=== 'function') {
     node.replaceChildren();
   } else if (Array.isArray(node.children)) {
     node.children.length = 0;
@@ -757,7 +757,7 @@ function clearNode(node: RenderElement): void {
 
 function stringSummary(value: unknown): string {
   if (value === null || value === undefined) return '';
-  if (Array.isArray(value)) return value.map((part) => stringSummary(part)).join('\n');
+  if (Array.isArray(value)) return value.map((part: any) => stringSummary(part)).join('\n');
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean') return String(value);
   if (typeof value === 'object') return JSON.stringify(value, null, 2);

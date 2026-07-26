@@ -1,0 +1,182 @@
+import { randomUUID } from 'crypto';
+import { resolve } from 'path';
+import { readFileSync, writeFileSync } from 'node:fs';
+import { findTaskFile, readTaskFile, writeTaskProjection, isValidTransition } from '@narada2/task-governance/task-governance';
+import { admitTaskEvidence } from '@narada2/task-governance/evidence-admission';
+import { deriveClosureAuthority } from './closure-authority.js';
+
+export async function claimLifecycleTask({ siteRoot, store, taskNumber, agentId }: any) : Promise<any> {
+  const lifecycle: any = store.getLifecycleByNumber(taskNumber);
+  if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
+  const closureAuthority: any = deriveClosureAuthority(lifecycle);
+  if (closureAuthority.closure_dominates) {
+    return {
+      status: 'closure_authority_blocks_claim',
+      task_number: taskNumber,
+      task_id: lifecycle.task_id,
+      closure_authority: closureAuthority,
+      remediation: 'Use a valid reopen/continue transition before claiming this task.',
+    };
+  }
+  const existing: any = store.getActiveAssignment(lifecycle.task_id);
+  if (existing) return { status: 'already_claimed', assignment: existing, lifecycle };
+
+  const assignmentId: any = `assign-${randomUUID()}`;
+  store.insertAssignment({
+    assignment_id: assignmentId,
+    task_id: lifecycle.task_id,
+    agent_id: agentId,
+    claimed_at: new Date().toISOString(),
+    released_at: null,
+    release_reason: null,
+    intent: 'primary',
+  });
+  store.updateStatus(lifecycle.task_id, 'claimed', agentId, {});
+  await writeTaskStatusProjection(siteRoot, taskNumber, 'claimed');
+  return { status: 'claimed', assignment_id: assignmentId, task_number: taskNumber, lifecycle };
+}
+
+export async function unclaimLifecycleTask({ siteRoot, store, taskNumber, agentId, reason }: any) : Promise<any> {
+  const lifecycle: any = store.getLifecycleByNumber(taskNumber);
+  if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
+  const existing: any = store.getActiveAssignment(lifecycle.task_id);
+  if (!existing) return { status: 'not_claimed', task_number: taskNumber };
+  if (agentId && existing.agent_id !== agentId) return { status: 'claimed_by_other', claimed_by: existing.agent_id };
+  const closureAuthority: any = deriveClosureAuthority(lifecycle);
+  if (closureAuthority.closure_dominates) {
+    return {
+      status: 'closure_authority_blocks_unclaim',
+      task_number: taskNumber,
+      task_id: lifecycle.task_id,
+      closure_authority: closureAuthority,
+      remediation: 'Use a valid reopen transition before releasing a stale active assignment into opened state.',
+    };
+  }
+
+  store.releaseAssignment(existing.assignment_id, reason ?? 'mcp_unclaim');
+  store.updateStatus(lifecycle.task_id, 'opened', agentId ?? existing.agent_id, {});
+  await writeTaskStatusProjection(siteRoot, taskNumber, 'opened');
+  return { status: 'unclaimed', task_number: taskNumber, previous_agent: existing.agent_id, task_id: lifecycle.task_id };
+}
+
+export async function transitionLifecycleTask({ siteRoot, store, taskNumber, agentId, reason, toStatus, resultStatus }: any) : Promise<any> {
+  const lifecycle: any = store.getLifecycleByNumber(taskNumber);
+  if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
+  if (!isValidTransition(lifecycle.status, toStatus)) {
+    return {
+      status: 'error',
+      error: 'invalid_transition',
+      task_number: taskNumber,
+      from: lifecycle.status,
+      to: toStatus,
+      message: `Cannot transition from '${lifecycle.status}' to '${toStatus}'.`,
+    };
+  }
+  const updates: any = { reason };
+  if (toStatus === 'opened' && ['closed', 'confirmed'].includes(lifecycle.status)) {
+    updates.reopened_at = new Date().toISOString();
+    updates.reopened_by = agentId;
+  }
+  store.updateStatus(lifecycle.task_id, toStatus, agentId, updates);
+  await writeTaskStatusProjection(siteRoot, taskNumber, toStatus);
+  return { status: resultStatus, task_number: taskNumber, task_id: lifecycle.task_id };
+}
+
+export async function unDeferLifecycleTask({ siteRoot, store, taskNumber, agentId, reason, authorityBasis }: any) : Promise<any> {
+  const lifecycle: any = store.getLifecycleByNumber(taskNumber);
+  if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
+  if (lifecycle.status !== 'deferred') {
+    return {
+      status: 'error',
+      error: 'invalid_transition',
+      task_number: taskNumber,
+      from: lifecycle.status,
+      to: 'opened_or_claimed',
+      message: `Cannot un-defer a task from '${lifecycle.status}'.`,
+    };
+  }
+
+  const assignment: any = store.getActiveAssignment(lifecycle.task_id) ?? null;
+  const nextStatus: any = assignment ? 'claimed' : 'opened';
+  if (assignment && assignment.agent_id !== agentId && !isOperatorDirectAuthority(authorityBasis)) {
+    return {
+      status: 'error',
+      error: 'authority_basis_required',
+      task_number: taskNumber,
+      active_assignment_agent_id: assignment.agent_id,
+      actor_agent_id: agentId,
+      message: 'Un-deferring a task assigned to another agent requires authority_basis.kind=operator_direct_instruction.',
+    };
+  }
+
+  store.updateStatus(lifecycle.task_id, nextStatus, agentId, {
+    reason,
+    un_defer_authority_basis_json: authorityBasis ? JSON.stringify(authorityBasis) : null,
+  });
+  await writeTaskStatusProjection(siteRoot, taskNumber, nextStatus);
+  return {
+    status: 'un_deferred',
+    task_number: taskNumber,
+    task_id: lifecycle.task_id,
+    from: 'deferred',
+    to: nextStatus,
+    active_assignment: assignment ? {
+      assignment_id: assignment.assignment_id,
+      agent_id: assignment.agent_id,
+      claimed_at: assignment.claimed_at,
+      intent: assignment.intent,
+    } : null,
+  };
+}
+
+export async function proveTaskCriteria({ siteRoot, store, taskNumber, agentId }: any) : Promise<any> {
+  const lifecycle: any = store.getLifecycleByNumber(taskNumber);
+  if (!lifecycle) throw new Error(`task_not_found: ${taskNumber}`);
+  const taskPath: any = resolve(siteRoot, '.ai', 'do-not-open', 'tasks', `${lifecycle.task_id}.md`);
+  let body: any;
+  try {
+    body = readFileSync(taskPath, 'utf8');
+  } catch (err) {
+    throw new Error(`Failed to read task file: ${err instanceof Error ? err.message : String(err)}`);
+  }
+
+  const updatedBody: any = body.replace(/^(\s*)- \[ \](.*)$/gm, '$1- [x]$2');
+  if (updatedBody === body) return { status: 'no_changes', task_number: taskNumber, message: 'No unchecked acceptance criteria found.' };
+
+  const now: any = new Date().toISOString();
+  let updatedContent: any = updatedBody;
+  if (/^---\r?\n/.test(updatedBody)) {
+    updatedContent = updatedBody.replace(/^(---\r?\n[\s\S]*?\r?\n---)/, (match: any) : any => {
+      let fm: any = match;
+      if (!fm.includes('criteria_proved_by:')) {
+        fm = fm.replace(/\n---$/, `\ncriteria_proved_by: ${agentId}\ncriteria_proved_at: ${now}\n---`);
+      }
+      return fm;
+    });
+  }
+  writeFileSync(taskPath, updatedContent, 'utf8');
+  const admission: any = await admitTaskEvidence({ cwd: siteRoot, taskNumber, admittedBy: agentId, methods: ['criteria_proof'] });
+  return {
+    status: admission.blockers.length === 0 ? 'proved' : 'proved_with_blockers',
+    task_number: taskNumber,
+    admission_id: admission.result.admission_id,
+    blockers: admission.blockers,
+    schema: 'narada.task.mcp.prove_criteria.v0',
+  };
+}
+
+function isOperatorDirectAuthority(value: any) : any {
+  return value && typeof value === 'object' && value.kind === 'operator_direct_instruction' && typeof value.summary === 'string' && value.summary.trim().length > 0;
+}
+
+async function writeTaskStatusProjection(siteRoot: any, taskNumber: any, status: any) : Promise<any> {
+  try {
+    const taskFile: any = await findTaskFile(siteRoot, taskNumber);
+    if (!taskFile) return;
+    const { frontMatter, body }: any = await readTaskFile(taskFile.path);
+    frontMatter.status = status;
+    await writeTaskProjection(taskFile.path, frontMatter, body);
+  } catch {
+    // Projection writes are compatibility updates; SQLite remains authoritative.
+  }
+}

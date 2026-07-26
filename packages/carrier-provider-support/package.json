@@ -16,18 +16,40 @@
     ]
   },
   "exports": {
-    ".": "./src/index.mjs",
-    "./ai-process-invocation": "./src/ai-process-invocation.mjs",
-    "./ai-process-invocation-state": "./src/ai-process-invocation-state.mjs",
-    "./codex-subscription-auth": "./src/codex-subscription-auth.mjs",
-    "./codex-subscription-command": "./src/codex-subscription-command.mjs",
-    "./codex-subscription-models": "./src/codex-subscription-models.mjs",
-    "./codex-subscription-readiness": "./src/codex-subscription-readiness.mjs",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./ai-process-invocation": {
+      "types": "./dist/ai-process-invocation.d.ts",
+      "import": "./dist/ai-process-invocation.js"
+    },
+    "./ai-process-invocation-state": {
+      "types": "./dist/ai-process-invocation-state.d.ts",
+      "import": "./dist/ai-process-invocation-state.js"
+    },
+    "./codex-subscription-auth": {
+      "types": "./dist/codex-subscription-auth.d.ts",
+      "import": "./dist/codex-subscription-auth.js"
+    },
+    "./codex-subscription-command": {
+      "types": "./dist/codex-subscription-command.d.ts",
+      "import": "./dist/codex-subscription-command.js"
+    },
+    "./codex-subscription-models": {
+      "types": "./dist/codex-subscription-models.d.ts",
+      "import": "./dist/codex-subscription-models.js"
+    },
+    "./codex-subscription-readiness": {
+      "types": "./dist/codex-subscription-readiness.d.ts",
+      "import": "./dist/codex-subscription-readiness.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/codex-subscription-auth.mjs src/codex-subscription-command.mjs src/codex-subscription-models.mjs src/codex-subscription-readiness.mjs src/ai-process-invocation-state.mjs src/ai-process-invocation.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada2/process-launch-posture": "workspace:*"

@@ -15,13 +15,20 @@
     ]
   },
   "exports": {
-    ".": "./src/index.mjs",
-    "./carrier-turn-adapter": "./src/carrier-turn-adapter.mjs",
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./carrier-turn-adapter": {
+      "types": "./dist/carrier-turn-adapter.d.ts",
+      "import": "./dist/carrier-turn-adapter.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --test src/*.test.mjs",
-    "typecheck": "tsc --noEmit --allowJs --checkJs false src/index.mjs src/carrier-turn-adapter.mjs"
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --import tsx --test src/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "NARS carrier runtime substrate",
   "license": "MIT",

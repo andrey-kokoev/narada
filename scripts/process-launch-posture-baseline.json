@@ -5,72 +5,72 @@
   "note": "Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.",
   "entries": [
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:260cba6339b915a5",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:260cba6339b915a5",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 160,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync() {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:3d39ad29b22b5556",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:3d39ad29b22b5556",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 123,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync(command, args, options) {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:807388d0a2121333",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:807388d0a2121333",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 206,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync() {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:80ded0024707f2f9",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:80ded0024707f2f9",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 236,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync(command, args, spawnOptions) {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:80ded0024707f2f9",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:80ded0024707f2f9",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 308,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync(command, args, spawnOptions) {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:80ded0024707f2f9",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:80ded0024707f2f9",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 354,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync(command, args, spawnOptions) {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:db33d8383c9be33e",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:db33d8383c9be33e",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 272,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync() {"
     },
     {
-      "id": "packages/agent-start/test/provider-module-contract.test.mjs:child_process.spawnSync:fd4d4e4e060b3a42",
-      "file": "packages/agent-start/test/provider-module-contract.test.mjs",
+      "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:fd4d4e4e060b3a42",
+      "file": "packages/agent-start/test/provider-module-contract.test.ts",
       "line": 367,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync() {"
     },
     {
-      "id": "packages/agent-web-ui/test/live-delegated-task-launcher-e2e.mjs:child_process.spawn:39366fe7a9bbb960",
-      "file": "packages/agent-web-ui/test/live-delegated-task-launcher-e2e.mjs",
+      "id": "packages/agent-web-ui/test/live-delegated-task-launcher-e2e.ts:child_process.spawn:39366fe7a9bbb960",
+      "file": "packages/agent-web-ui/test/live-delegated-task-launcher-e2e.ts",
       "line": 86,
       "api": "child_process.spawn",
       "posture": "test_child",
@@ -82,27 +82,27 @@
       "line": 76,
       "api": "child_process.execFileSync",
       "posture": "test_child",
-      "text": "const output = execFileSync(process.execPath, ['scripts/cloudflare-nars-provider-live-smoke.mjs', '--format', 'json'], {"
+      "text": "const output = execFileSync(process.execPath, ['scripts/cloudflare-nars-provider-live-smoke.ts', '--format', 'json'], {"
     },
     {
-      "id": "packages/layers/cli/scripts/run-launcher-focused.mjs:child_process.spawnSync:fcaea3f85e2af7a4",
-      "file": "packages/layers/cli/scripts/run-launcher-focused.mjs",
+      "id": "packages/layers/cli/scripts/run-launcher-focused.ts:child_process.spawnSync:fcaea3f85e2af7a4",
+      "file": "packages/layers/cli/scripts/run-launcher-focused.ts",
       "line": 17,
       "api": "child_process.spawnSync",
       "posture": "operator_terminal",
       "text": "const result = spawnSync(command, args, {"
     },
     {
-      "id": "packages/layers/cli/scripts/run-publication-boundary-e2e.mjs:child_process.spawnSync:230801189a581c42",
-      "file": "packages/layers/cli/scripts/run-publication-boundary-e2e.mjs",
+      "id": "packages/layers/cli/scripts/run-publication-boundary-e2e.ts:child_process.spawnSync:230801189a581c42",
+      "file": "packages/layers/cli/scripts/run-publication-boundary-e2e.ts",
       "line": 7,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",
       "text": "const result = spawnSync(process.execPath, ['--test', '--test-concurrency=1', testPath], {"
     },
     {
-      "id": "packages/layers/cli/scripts/run-vitest-quiet.mjs:child_process.spawnSync:de3c86200a656b9b",
-      "file": "packages/layers/cli/scripts/run-vitest-quiet.mjs",
+      "id": "packages/layers/cli/scripts/run-vitest-quiet.ts:child_process.spawnSync:de3c86200a656b9b",
+      "file": "packages/layers/cli/scripts/run-vitest-quiet.ts",
       "line": 24,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",
@@ -493,120 +493,120 @@
       "text": "execFileSync(gitBinary(), ['config', 'user.name', 'Test Agent'], { cwd: tempDir });"
     },
     {
-      "id": "packages/layers/cli/test/integration/clean-install-onboarding.test.mjs:child_process.spawnSync:7403645fa7e2a194",
-      "file": "packages/layers/cli/test/integration/clean-install-onboarding.test.mjs",
+      "id": "packages/layers/cli/test/integration/clean-install-onboarding.test.ts:child_process.spawnSync:7403645fa7e2a194",
+      "file": "packages/layers/cli/test/integration/clean-install-onboarding.test.ts",
       "line": 14,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "return spawnSync(process.execPath, [builtCliEntrypoint, ...args], {"
     },
     {
-      "id": "packages/layers/cli/test/integration/history-realfs.test.mjs:child_process.execFileSync:431d470a0d77b9fb",
-      "file": "packages/layers/cli/test/integration/history-realfs.test.mjs",
+      "id": "packages/layers/cli/test/integration/history-realfs.test.ts:child_process.execFileSync:431d470a0d77b9fb",
+      "file": "packages/layers/cli/test/integration/history-realfs.test.ts",
       "line": 505,
       "api": "child_process.execFileSync",
       "posture": "test_child",
       "text": "execFileSync('git', ['init', '-q'], { cwd: root, stdio: 'ignore' });"
     },
     {
-      "id": "packages/layers/cli/test/integration/history-realfs.test.mjs:child_process.execFileSync:62139ba9c8563860",
-      "file": "packages/layers/cli/test/integration/history-realfs.test.mjs",
+      "id": "packages/layers/cli/test/integration/history-realfs.test.ts:child_process.execFileSync:62139ba9c8563860",
+      "file": "packages/layers/cli/test/integration/history-realfs.test.ts",
       "line": 586,
       "api": "child_process.execFileSync",
       "posture": "test_child",
       "text": "execFileSync('git', ['init', '-q'], { cwd: workspaceRoot, stdio: 'ignore' });"
     },
     {
-      "id": "packages/layers/cli/test/integration/history-realfs.test.mjs:child_process.execFileSync:6d0d3790e61dcb2b",
-      "file": "packages/layers/cli/test/integration/history-realfs.test.mjs",
+      "id": "packages/layers/cli/test/integration/history-realfs.test.ts:child_process.execFileSync:6d0d3790e61dcb2b",
+      "file": "packages/layers/cli/test/integration/history-realfs.test.ts",
       "line": 49,
       "api": "child_process.execFileSync",
       "posture": "test_child",
       "text": "execFileSync('git', ['init', '-q'], { cwd: root, stdio: 'ignore' });"
     },
     {
-      "id": "packages/layers/cli/test/integration/history-realfs.test.mjs:child_process.spawnSync:b63001474f033ddb",
-      "file": "packages/layers/cli/test/integration/history-realfs.test.mjs",
+      "id": "packages/layers/cli/test/integration/history-realfs.test.ts:child_process.spawnSync:b63001474f033ddb",
+      "file": "packages/layers/cli/test/integration/history-realfs.test.ts",
       "line": 54,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync(process.execPath, [cliPath, '--format', 'json', ...args], {"
     },
     {
-      "id": "packages/layers/cli/test/integration/onboarding-domain-journey.test.mjs:child_process.spawnSync:8510aaad2a9b5a4a",
-      "file": "packages/layers/cli/test/integration/onboarding-domain-journey.test.mjs",
+      "id": "packages/layers/cli/test/integration/onboarding-domain-journey.test.ts:child_process.spawnSync:8510aaad2a9b5a4a",
+      "file": "packages/layers/cli/test/integration/onboarding-domain-journey.test.ts",
       "line": 14,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "return spawnSync(process.execPath, [cliEntrypoint, ...args], {"
     },
     {
-      "id": "packages/layers/cli/test/integration/onboarding-journey.test.mjs:child_process.spawnSync:723c4264f4d69135",
-      "file": "packages/layers/cli/test/integration/onboarding-journey.test.mjs",
+      "id": "packages/layers/cli/test/integration/onboarding-journey.test.ts:child_process.spawnSync:723c4264f4d69135",
+      "file": "packages/layers/cli/test/integration/onboarding-journey.test.ts",
       "line": 15,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync('pwsh', ["
     },
     {
-      "id": "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.mjs:child_process.spawn:3400e924300ddc63",
-      "file": "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.mjs",
+      "id": "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.ts:child_process.spawn:3400e924300ddc63",
+      "file": "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.ts",
       "line": 676,
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const child = spawn(process.execPath, ["
     },
     {
-      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs:child_process.spawnSync:1fad8814b1d164fd",
-      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs",
+      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.ts:child_process.spawnSync:1fad8814b1d164fd",
+      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.ts",
       "line": 93,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync('pwsh', ["
     },
     {
-      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs:child_process.spawnSync:22ee36931aae5b87",
-      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs",
+      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.ts:child_process.spawnSync:22ee36931aae5b87",
+      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.ts",
       "line": 314,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync('pwsh', ["
     },
     {
-      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs:child_process.spawnSync:db7dc412a3bd0c8d",
-      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs",
+      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.ts:child_process.spawnSync:db7dc412a3bd0c8d",
+      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.ts",
       "line": 66,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore' });"
     },
     {
-      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs:child_process.spawnSync:fd2d64264d102bb6",
-      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs",
+      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.ts:child_process.spawnSync:fd2d64264d102bb6",
+      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.ts",
       "line": 158,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync('pwsh', ["
     },
     {
-      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs:child_process.spawnSync:fd2d64264d102bb6",
-      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.mjs",
+      "id": "packages/layers/cli/test/integration/operator-launch-journey.test.ts:child_process.spawnSync:fd2d64264d102bb6",
+      "file": "packages/layers/cli/test/integration/operator-launch-journey.test.ts",
       "line": 225,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync('pwsh', ["
     },
     {
-      "id": "packages/layers/cli/test/integration/published-cli-install.test.mjs:child_process.spawn:7cdf43d224cae8fb",
-      "file": "packages/layers/cli/test/integration/published-cli-install.test.mjs",
+      "id": "packages/layers/cli/test/integration/published-cli-install.test.ts:child_process.spawn:7cdf43d224cae8fb",
+      "file": "packages/layers/cli/test/integration/published-cli-install.test.ts",
       "line": 253,
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const consoleProcess = spawn(process.execPath, ["
     },
     {
-      "id": "packages/layers/cli/test/integration/published-cli-install.test.mjs:child_process.spawnSync:ebc450dffb6f7bf7",
-      "file": "packages/layers/cli/test/integration/published-cli-install.test.mjs",
+      "id": "packages/layers/cli/test/integration/published-cli-install.test.ts:child_process.spawnSync:ebc450dffb6f7bf7",
+      "file": "packages/layers/cli/test/integration/published-cli-install.test.ts",
       "line": 46,
       "api": "child_process.spawnSync",
       "posture": "test_child",
@@ -773,40 +773,40 @@
       "text": "Start-Process node -ArgumentList $serverPath -WindowStyle Hidden"
     },
     {
-      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs:child_process.spawnSync:8ae559f1a9f44f61",
-      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs",
+      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts:child_process.spawnSync:8ae559f1a9f44f61",
+      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts",
       "line": 87,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const checkResult = spawnSync(process.execPath, [generator, '--site-root', siteRoot, '--carrier', 'all', '--check'], { encoding: 'utf8' });"
     },
     {
-      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs:child_process.spawnSync:90023f001141bfc0",
-      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs",
+      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts:child_process.spawnSync:90023f001141bfc0",
+      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts",
       "line": 100,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const materializeResult = spawnSync(process.execPath, materializeArgs, { encoding: 'utf8' });"
     },
     {
-      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs:child_process.spawnSync:a0b2c96d5d9cba26",
-      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs",
+      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts:child_process.spawnSync:a0b2c96d5d9cba26",
+      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts",
       "line": 109,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const repeatMaterializeResult = spawnSync(process.execPath, materializeArgs, { encoding: 'utf8' });"
     },
     {
-      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs:child_process.spawnSync:a0b59b6120f83f6d",
-      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs",
+      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts:child_process.spawnSync:a0b59b6120f83f6d",
+      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts",
       "line": 68,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const writeResult = spawnSync(process.execPath, [generator, '--site-root', siteRoot, '--carrier', 'all', '--write'], { encoding: 'utf8' });"
     },
     {
-      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs:child_process.spawnSync:aee25082455a0ec9",
-      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.mjs",
+      "id": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts:child_process.spawnSync:aee25082455a0ec9",
+      "file": "packages/typed-mcp-surface/src/typed-mcp-surface.test.ts",
       "line": 114,
       "api": "child_process.spawnSync",
       "posture": "test_child",
@@ -821,256 +821,256 @@
       "text": "Start-Process -WindowStyle Hidden -FilePath $exe -ArgumentList @("
     },
     {
-      "id": "scripts/cloudflare-operator-check.mjs:child_process.spawn:9472b6b9094fc7af",
-      "file": "scripts/cloudflare-operator-check.mjs",
+      "id": "scripts/cloudflare-operator-check.ts:child_process.spawn:9472b6b9094fc7af",
+      "file": "scripts/cloudflare-operator-check.ts",
       "line": 2996,
       "api": "child_process.spawn",
       "posture": "governed_command_execution",
       "text": "const child = spawn(command, commandArgs, {"
     },
     {
-      "id": "scripts/cloudflare-operator-check.test.mjs:child_process.spawn:fdf4d194394878fc",
-      "file": "scripts/cloudflare-operator-check.test.mjs",
+      "id": "scripts/cloudflare-operator-check.test.ts:child_process.spawn:fdf4d194394878fc",
+      "file": "scripts/cloudflare-operator-check.test.ts",
       "line": 11,
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const child = spawn(process.execPath, [SCRIPT_PATH, '--help'], {"
     },
     {
-      "id": "scripts/cloudflare-operator-login.mjs:browser.open-command:3f8d6582a9665e55",
-      "file": "scripts/cloudflare-operator-login.mjs",
+      "id": "scripts/cloudflare-operator-login.ts:browser.open-command:3f8d6582a9665e55",
+      "file": "scripts/cloudflare-operator-login.ts",
       "line": 129,
       "api": "browser.open-command",
       "posture": "governed_command_execution",
       "text": ": ['xdg-open', [url]];"
     },
     {
-      "id": "scripts/cloudflare-operator-login.mjs:child_process.spawn:21ba692786e8d309",
-      "file": "scripts/cloudflare-operator-login.mjs",
+      "id": "scripts/cloudflare-operator-login.ts:child_process.spawn:21ba692786e8d309",
+      "file": "scripts/cloudflare-operator-login.ts",
       "line": 131,
       "api": "child_process.spawn",
       "posture": "governed_command_execution",
       "text": "const child = spawn(command[0], command[1], { windowsHide: true, detached: true, stdio: 'ignore' });"
     },
     {
-      "id": "scripts/cloudflare-operator-login.mjs:child_process.spawn:37478fad809c6b0e",
-      "file": "scripts/cloudflare-operator-login.mjs",
+      "id": "scripts/cloudflare-operator-login.ts:child_process.spawn:37478fad809c6b0e",
+      "file": "scripts/cloudflare-operator-login.ts",
       "line": 169,
       "api": "child_process.spawn",
       "posture": "governed_command_execution",
       "text": "const child = spawn(command, commandArgs, {"
     },
     {
-      "id": "scripts/cloudflare-operator-login.mjs:windows.cmd-start:b1c03dbb270e5b77",
-      "file": "scripts/cloudflare-operator-login.mjs",
+      "id": "scripts/cloudflare-operator-login.ts:windows.cmd-start:b1c03dbb270e5b77",
+      "file": "scripts/cloudflare-operator-login.ts",
       "line": 126,
       "api": "windows.cmd-start",
       "posture": "governed_command_execution",
       "text": "? ['cmd.exe', ['/c', 'start', '', url]]"
     },
     {
-      "id": "scripts/cloudflare-product-readiness.mjs:child_process.spawn:e720070968105a2d",
-      "file": "scripts/cloudflare-product-readiness.mjs",
+      "id": "scripts/cloudflare-product-readiness.ts:child_process.spawn:e720070968105a2d",
+      "file": "scripts/cloudflare-product-readiness.ts",
       "line": 36,
       "api": "child_process.spawn",
       "posture": "governed_command_execution",
       "text": "const child = spawn(process.execPath, [operatorCheckScript, '--require-human-operator-action'], {"
     },
     {
-      "id": "scripts/oxbuild-probe.mjs:child_process.execFileSync:2501f060e4195394",
-      "file": "scripts/oxbuild-probe.mjs",
+      "id": "scripts/oxbuild-probe.ts:child_process.execFileSync:2501f060e4195394",
+      "file": "scripts/oxbuild-probe.ts",
       "line": 17,
       "api": "child_process.execFileSync",
       "posture": "governed_command_execution",
       "text": "return execFileSync(command, args, {"
     },
     {
-      "id": "scripts/process-launch-posture-guard.mjs:browser.open-command:9ba8d6c47c12698d",
-      "file": "scripts/process-launch-posture-guard.mjs",
+      "id": "scripts/process-launch-posture-guard.ts:browser.open-command:9ba8d6c47c12698d",
+      "file": "scripts/process-launch-posture-guard.ts",
       "line": 86,
       "api": "browser.open-command",
       "posture": "governed_command_execution",
       "text": "if (/browser|agent-web-ui|render/i.test(file) && /cmd|xdg-open|open|start|spawn/i.test(text)) return 'browser_open';"
     },
     {
-      "id": "scripts/process-launch-posture-guard.mjs:browser.open-command:c306fcb55c425305",
-      "file": "scripts/process-launch-posture-guard.mjs",
+      "id": "scripts/process-launch-posture-guard.ts:browser.open-command:c306fcb55c425305",
+      "file": "scripts/process-launch-posture-guard.ts",
       "line": 44,
       "api": "browser.open-command",
       "posture": "governed_command_execution",
       "text": "{ api: 'browser.open-command', pattern: /\\bcommand\\s*=\\s*['\\\"]open['\\\"]|\\bcommand\\s*=\\s*['\\\"]xdg-open['\\\"]|\\bxdg-open\\b/ },"
     },
     {
-      "id": "scripts/process-launch-posture-guard.mjs:PowerShell.Start-Process:085535632e779acc",
-      "file": "scripts/process-launch-posture-guard.mjs",
+      "id": "scripts/process-launch-posture-guard.ts:PowerShell.Start-Process:085535632e779acc",
+      "file": "scripts/process-launch-posture-guard.ts",
       "line": 42,
       "api": "PowerShell.Start-Process",
       "posture": "governed_command_execution",
       "text": "{ api: 'PowerShell.Start-Process', pattern: /\\bStart-Process\\b/i },"
     },
     {
-      "id": "scripts/site-continuity-loop.mjs:child_process.spawnSync:218a98b512ff3467",
-      "file": "scripts/site-continuity-loop.mjs",
+      "id": "scripts/site-continuity-loop.ts:child_process.spawnSync:218a98b512ff3467",
+      "file": "scripts/site-continuity-loop.ts",
       "line": 32,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",
       "text": "const result = spawnSync('pnpm', ['--filter', '@narada2/windows-site', 'continuity:windows', ...commandArgs], {"
     },
     {
-      "id": "scripts/site-continuity-loop.test.mjs:child_process.spawn:6a707f66756719b2",
-      "file": "scripts/site-continuity-loop.test.mjs",
+      "id": "scripts/site-continuity-loop.test.ts:child_process.spawn:6a707f66756719b2",
+      "file": "scripts/site-continuity-loop.test.ts",
       "line": 21,
       "api": "child_process.spawn",
       "posture": "test_child",
       "text": "const child = spawn(process.execPath, [SCRIPT_PATH, ...args], {"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:097ec3a447f91392",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:097ec3a447f91392",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 35,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('git', ['init'], { cwd: root, stdio: 'ignore' });"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:0d50be9df7b8a3db",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:0d50be9df7b8a3db",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 30,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'layers', 'control-plane', 'dist', 'index.js')], { check: true });"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:2efd5671709eba6b",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:2efd5671709eba6b",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 28,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'layers', 'cli', 'dist', 'main.js')], { check: true });"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:303e436eb86421db",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:303e436eb86421db",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 29,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'layers', 'cli', 'dist', 'mcp-main.js')], { check: true });"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:8aa6a0b9c7f79b1e",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:8aa6a0b9c7f79b1e",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 45,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync('bash', [join(root, 'scripts', 'install-narada-shim.sh')], {"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:99a029cb63a81e81",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:99a029cb63a81e81",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 31,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('touch', ['-t', '202001010000', join(root, 'packages', 'task-governance', 'dist', 'index.js')], { check: true });"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:a4283a52c3599b82",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:a4283a52c3599b82",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 55,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "return spawnSync(shim, args, {"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:ca2d554eb21a8033",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:ca2d554eb21a8033",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 36,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('git', ['add', '.'], { cwd: root, stdio: 'ignore' });"
     },
     {
-      "id": "scripts/test-narada-shim-posture.mjs:child_process.spawnSync:f76cc8e97e7b3728",
-      "file": "scripts/test-narada-shim-posture.mjs",
+      "id": "scripts/test-narada-shim-posture.ts:child_process.spawnSync:f76cc8e97e7b3728",
+      "file": "scripts/test-narada-shim-posture.ts",
       "line": 32,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "spawnSync('touch', ['-t', '203001010000', join(root, 'packages', 'layers', 'cli', 'src', 'main.ts')], { check: true });"
     },
     {
-      "id": "tools/agent-start/agent-tui-live-turn-acceptance.mjs:child_process.spawnSync:5132fcb0e4678c0d",
-      "file": "tools/agent-start/agent-tui-live-turn-acceptance.mjs",
+      "id": "tools/agent-start/agent-tui-live-turn-acceptance.ts:child_process.spawnSync:5132fcb0e4678c0d",
+      "file": "tools/agent-start/agent-tui-live-turn-acceptance.ts",
       "line": 237,
       "api": "child_process.spawnSync",
       "posture": "operator_terminal",
       "text": "return spawnSync(process.execPath, launcherArgs, {"
     },
     {
-      "id": "tools/agent-start/claude-code-canonical-handoff.mjs:child_process.spawnSync:46427c781566b562",
-      "file": "tools/agent-start/claude-code-canonical-handoff.mjs",
+      "id": "tools/agent-start/claude-code-canonical-handoff.ts:child_process.spawnSync:46427c781566b562",
+      "file": "tools/agent-start/claude-code-canonical-handoff.ts",
       "line": 120,
       "api": "child_process.spawnSync",
       "posture": "operator_terminal",
       "text": "const result = spawnSync(command.executable, command.args, {"
     },
     {
-      "id": "tools/agent-start/start-agent.test.mjs:child_process.spawnSync:783b083c7c55a415",
-      "file": "tools/agent-start/start-agent.test.mjs",
+      "id": "tools/agent-start/start-agent.test.ts:child_process.spawnSync:783b083c7c55a415",
+      "file": "tools/agent-start/start-agent.test.ts",
       "line": 118,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync(process.execPath, ["
     },
     {
-      "id": "tools/agent-start/start-agent.test.mjs:child_process.spawnSync:bb74908ee61a6838",
-      "file": "tools/agent-start/start-agent.test.mjs",
+      "id": "tools/agent-start/start-agent.test.ts:child_process.spawnSync:bb74908ee61a6838",
+      "file": "tools/agent-start/start-agent.test.ts",
       "line": 13,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const result = spawnSync(process.execPath, ["
     },
     {
-      "id": "tools/narada-native-carrier/supervisor.test.mjs:child_process.spawnSync:0d045d62baa7b728",
-      "file": "tools/narada-native-carrier/supervisor.test.mjs",
+      "id": "tools/narada-native-carrier/supervisor.test.ts:child_process.spawnSync:0d045d62baa7b728",
+      "file": "tools/narada-native-carrier/supervisor.test.ts",
       "line": 463,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const started = spawnSync(process.execPath, ["
     },
     {
-      "id": "tools/narada-native-carrier/supervisor.test.mjs:child_process.spawnSync:0d3bed3da9c1d390",
-      "file": "tools/narada-native-carrier/supervisor.test.mjs",
+      "id": "tools/narada-native-carrier/supervisor.test.ts:child_process.spawnSync:0d3bed3da9c1d390",
+      "file": "tools/narada-native-carrier/supervisor.test.ts",
       "line": 471,
       "api": "child_process.spawnSync",
       "posture": "test_child",
       "text": "const doctor = spawnSync(process.execPath, ["
     },
     {
-      "id": "tools/narada-native-carrier/task-handoff.mjs:child_process.spawnSync:4d8661eef9930f1a",
-      "file": "tools/narada-native-carrier/task-handoff.mjs",
+      "id": "tools/narada-native-carrier/task-handoff.ts:child_process.spawnSync:4d8661eef9930f1a",
+      "file": "tools/narada-native-carrier/task-handoff.ts",
       "line": 45,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",
       "text": "const result = spawnSync('narada', ['task', 'read', String(taskNumber), '--format', 'json', '--cwd', siteRoot], {"
     },
     {
-      "id": "tools/narada-native-carrier/to-data-readers.mjs:child_process.spawnSync:5185e7882d71612b",
-      "file": "tools/narada-native-carrier/to-data-readers.mjs",
+      "id": "tools/narada-native-carrier/to-data-readers.ts:child_process.spawnSync:5185e7882d71612b",
+      "file": "tools/narada-native-carrier/to-data-readers.ts",
       "line": 39,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",
       "text": "const result = spawnSync('narada', ['task', 'peek-next', '--agent', agentId, '--format', 'json', '--cwd', siteRoot], {"
     },
     {
-      "id": "tools/narada-native-carrier/to-data-readers.mjs:child_process.spawnSync:b9a36d620994c54c",
-      "file": "tools/narada-native-carrier/to-data-readers.mjs",
+      "id": "tools/narada-native-carrier/to-data-readers.ts:child_process.spawnSync:b9a36d620994c54c",
+      "file": "tools/narada-native-carrier/to-data-readers.ts",
       "line": 26,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",
       "text": "const result = spawnSync('narada', ['task', 'read', String(taskNumber), '--format', 'json', '--cwd', siteRoot], {"
     },
     {
-      "id": "tools/narada-native-carrier/to-data-readers.mjs:child_process.spawnSync:d02c22cdfd5bd349",
-      "file": "tools/narada-native-carrier/to-data-readers.mjs",
+      "id": "tools/narada-native-carrier/to-data-readers.ts:child_process.spawnSync:d02c22cdfd5bd349",
+      "file": "tools/narada-native-carrier/to-data-readers.ts",
       "line": 52,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",

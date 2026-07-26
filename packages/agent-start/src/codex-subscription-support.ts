@@ -5,44 +5,44 @@ import { codexAuthHome as sharedCodexAuthHome } from '@narada2/carrier-provider-
 import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
 import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
 
-function defaultSpawnSync(command, args, options) {
+function defaultSpawnSync(command: any, args: any, options: any) : any{
   return runHiddenPostureCommandSync(command, args, { ...options, posture: 'provider_subprocess' });
 }
 
-export const CODEX_SUBSCRIPTION_PREFLIGHT_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
-export const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS = 60000;
-export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS = 15 * 60 * 1000;
-export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_ENV = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS';
-export const CODEX_SUBSCRIPTION_PREFLIGHT_REFRESH_VALUES = Object.freeze(['force', 'refresh', 'refetch']);
+export const CODEX_SUBSCRIPTION_PREFLIGHT_ENV: any = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT';
+export const CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS: any = 60000;
+export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS: any = 15 * 60 * 1000;
+export const CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_ENV: any = 'NARADA_CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS';
+export const CODEX_SUBSCRIPTION_PREFLIGHT_REFRESH_VALUES: any = Object.freeze(['force', 'refresh', 'refetch']);
 
-export function codexSubscriptionPreflightForced(processEnv = process.env) {
-  const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
+export function codexSubscriptionPreflightForced(processEnv: any = process.env) : any{
+  const mode: any = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
   return CODEX_SUBSCRIPTION_PREFLIGHT_REFRESH_VALUES.includes(mode);
 }
 
-export function codexSubscriptionPreflightDeferred(processEnv = process.env) {
-  const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
+export function codexSubscriptionPreflightDeferred(processEnv: any = process.env) : any{
+  const mode: any = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
   return ['defer', 'deferred', 'skip'].includes(mode);
 }
 
-export function codexPreflightCommand(processEnv = process.env, processPlatform = process.platform) {
+export function codexPreflightCommand(processEnv: any = process.env, processPlatform: any = process.platform) : any{
   return codexCommand({ processEnv, platform: processPlatform, exists: existsSync });
 }
-export function codexAuthHome(processEnv = process.env) {
+export function codexAuthHome(processEnv: any = process.env) : any{
   return sharedCodexAuthHome({ processEnv });
 }
 
-export function codexSubscriptionPreflightEnv(processEnv = process.env) {
-  const env = { ...processEnv };
+export function codexSubscriptionPreflightEnv(processEnv: any = process.env) : any{
+  const env: any = { ...processEnv };
   delete env.OPENAI_API_KEY;
   delete env.OPENAI_BASE_URL;
   delete env.OPENAI_MODEL;
-  const authHome = codexAuthHome(processEnv);
+  const authHome: any = codexAuthHome(processEnv);
   if (authHome && !env.NARADA_CODEX_AUTH_HOME) env.NARADA_CODEX_AUTH_HOME = authHome;
   return env;
 }
 
-export function codexSubscriptionPreflight(provider, {
+export function codexSubscriptionPreflight(provider: any, {
   processEnv = process.env,
   processPlatform = process.platform,
   sessionSiteRoot,
@@ -55,13 +55,13 @@ export function codexSubscriptionPreflight(provider, {
   spawnSync = defaultSpawnSync,
   now = Date.now,
   progressStream = process.stderr,
-} = {}) {
-  const mode = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
-  const authHome = codexAuthHome(processEnv);
-  const authHomeExists = codexSubscriptionAuthAvailable(processEnv);
-  const refreshRequested = codexSubscriptionPreflightForced(processEnv);
+}: any = {}) : any{
+  const mode: any = String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_ENV] ?? '').trim().toLowerCase();
+  const authHome: any = codexAuthHome(processEnv);
+  const authHomeExists: any = codexSubscriptionAuthAvailable(processEnv);
+  const refreshRequested: any = codexSubscriptionPreflightForced(processEnv);
   if (dryRun || codexSubscriptionPreflightDeferred(processEnv)) {
-    const status = dryRun
+    const status: any = dryRun
       ? 'deferred_for_dry_run'
       : 'deferred_by_operator_policy';
     return {
@@ -96,11 +96,11 @@ export function codexSubscriptionPreflight(provider, {
       required_next_step: 'Start the provider preflight from a registered NARS runtime session.',
     };
   }
-  const command = codexPreflightCommand(processEnv, processPlatform);
-  const cacheKey = codexSubscriptionPreflightCacheKey({ provider, processEnv, command });
-  let cacheContext = { status: refreshRequested ? 'refresh_requested' : 'miss' };
+  const command: any = codexPreflightCommand(processEnv, processPlatform);
+  const cacheKey: any = codexSubscriptionPreflightCacheKey({ provider, processEnv, command });
+  let cacheContext: any = { status: refreshRequested ? 'refresh_requested' : 'miss' };
   if (authHomeExists) {
-    const cached = codexSubscriptionPreflightCacheRead({ userSiteRoot, cacheKey, now: now(), processEnv, authHome });
+    const cached: any = codexSubscriptionPreflightCacheRead({ userSiteRoot, cacheKey, now: now(), processEnv, authHome });
     if (!refreshRequested && cached?.status === 'passed_cached') return cached;
     if (cached?.cache && cacheContext.status !== 'refresh_requested') cacheContext = cached.cache;
   } else {
@@ -122,10 +122,10 @@ export function codexSubscriptionPreflight(provider, {
     };
   }
   progressStream?.write?.(`Checking ${provider} local Codex subscription auth...\n`);
-  const prompt = 'Return exactly: ok';
-  const argv = [...command.prefixArgs, 'exec', '--json', prompt];
-  const env = codexSubscriptionPreflightEnv(processEnv);
-  const result = runAiProcessInvocationSync({
+  const prompt: any = 'Return exactly: ok';
+  const argv: any = [...command.prefixArgs, 'exec', '--json', prompt];
+  const env: any = codexSubscriptionPreflightEnv(processEnv);
+  const result: any = runAiProcessInvocationSync({
     adapterKind: 'codex',
     projection: 'codex-subscription',
     purpose: 'auth_probe',
@@ -158,11 +158,11 @@ export function codexSubscriptionPreflight(provider, {
       env,
     },
   });
-  const stdout = String(result.stdout ?? '');
-  const stderrText = String(result.stderr ?? '');
-  const combined = `${stdout}\n${stderrText}`;
-  const unauthorized = /401\s+Unauthorized|Unauthorized/i.test(combined);
-  const preflight = {
+  const stdout: any = String(result.stdout ?? '');
+  const stderrText: any = String(result.stderr ?? '');
+  const combined: any = `${stdout}\n${stderrText}`;
+  const unauthorized: any = /401\s+Unauthorized|Unauthorized/i.test(combined);
+  const preflight: any = {
     schema: 'narada.codex_subscription.preflight.v1',
     status: result.status === 0 ? 'passed_fresh' : unauthorized ? 'failed_unauthorized' : 'failed',
     ok: result.status === 0,
@@ -172,8 +172,8 @@ export function codexSubscriptionPreflight(provider, {
     signal: result.signal,
     error: result.error ? result.error.message : null,
     unauthorized,
-    stdout_first_line: stdout.split(/\r?\n/).find((line) => line.trim()) ?? '',
-    stderr_first_line: stderrText.split(/\r?\n/).find((line) => line.trim()) ?? '',
+    stdout_first_line: stdout.split(/\r?\n/).find((line: any) => line.trim()) ?? '',
+    stderr_first_line: stderrText.split(/\r?\n/).find((line: any) => line.trim()) ?? '',
     timeout_ms: CODEX_SUBSCRIPTION_PREFLIGHT_TIMEOUT_MS,
     ai_process_invocation: result.aiProcessInvocation ?? null,
     cache: {
@@ -189,25 +189,25 @@ export function codexSubscriptionPreflight(provider, {
   return preflight;
 }
 
-function codexSubscriptionPreflightCacheTtlMs(processEnv = process.env) {
-  const configured = Number.parseInt(String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_ENV] ?? ''), 10);
+function codexSubscriptionPreflightCacheTtlMs(processEnv: any = process.env) : any{
+  const configured: any = Number.parseInt(String(processEnv[CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_ENV] ?? ''), 10);
   if (Number.isFinite(configured) && configured >= 0) return configured;
   return CODEX_SUBSCRIPTION_PREFLIGHT_CACHE_TTL_MS;
 }
 
-function codexSubscriptionCliVersion(processEnv = process.env) {
+function codexSubscriptionCliVersion(processEnv: any = process.env) : any{
   return optionalEnvironmentValue('NARADA_CODEX_CLI_VERSION', processEnv)
     ?? optionalEnvironmentValue('CODEX_CLI_VERSION', processEnv)
     ?? optionalEnvironmentValue('CODEX_VERSION', processEnv)
     ?? null;
 }
 
-function codexSubscriptionAuthAvailable(processEnv = process.env) {
-  const authHome = codexAuthHome(processEnv);
+function codexSubscriptionAuthAvailable(processEnv: any = process.env) : any{
+  const authHome: any = codexAuthHome(processEnv);
   return Boolean(authHome && existsSync(authHome));
 }
 
-function codexSubscriptionCommandIdentity(command, processEnv = process.env) {
+function codexSubscriptionCommandIdentity(command: any, processEnv: any = process.env) : any{
   return [
     command.command,
     command.source ?? 'default',
@@ -216,17 +216,17 @@ function codexSubscriptionCommandIdentity(command, processEnv = process.env) {
   ].join('\u0000');
 }
 
-function codexSubscriptionPreflightCachePath({ userSiteRoot }) {
+function codexSubscriptionPreflightCachePath({ userSiteRoot }: any) : any{
   if (!userSiteRoot) return null;
   return join(siteControlRoot(userSiteRoot), 'runtime', 'provider-auth-cache', 'codex-subscription-preflight-cache.json');
 }
 
-function siteControlRoot(siteRoot) {
-  const root = resolve(siteRoot);
+function siteControlRoot(siteRoot: any) : any{
+  const root: any = resolve(siteRoot);
   return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
-function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
+function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }: any) : any{
   return [
     provider,
     command.command,
@@ -237,14 +237,14 @@ function codexSubscriptionPreflightCacheKey({ provider, processEnv, command }) {
   ].join('\u0000');
 }
 
-function codexSubscriptionPreflightCacheRead({ userSiteRoot, cacheKey, now, processEnv, authHome }) {
-  const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
+function codexSubscriptionPreflightCacheRead({ userSiteRoot, cacheKey, now, processEnv, authHome }: any) : any{
+  const ttlMs: any = codexSubscriptionPreflightCacheTtlMs(processEnv);
   if (ttlMs <= 0) return null;
-  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot });
+  const cachePath: any = codexSubscriptionPreflightCachePath({ userSiteRoot });
   if (!cachePath || !existsSync(cachePath)) return null;
   try {
-    const cache = JSON.parse(readFileSync(cachePath, 'utf8'));
-    const entry = cache.entries?.[cacheKey];
+    const cache: any = JSON.parse(readFileSync(cachePath, 'utf8'));
+    const entry: any = cache.entries?.[cacheKey];
     if (!entry) return null;
     if (!entry.ok || !entry.checked_at_ms) return { cache: { status: 'stale', path: cachePath, ttl_ms: ttlMs } };
     if (now - entry.checked_at_ms > ttlMs) {
@@ -291,15 +291,15 @@ function codexSubscriptionPreflightCacheRead({ userSiteRoot, cacheKey, now, proc
   }
 }
 
-function codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, cacheKey, preflight, now, processEnv }) {
-  const ttlMs = codexSubscriptionPreflightCacheTtlMs(processEnv);
+function codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, cacheKey, preflight, now, processEnv }: any) : any{
+  const ttlMs: any = codexSubscriptionPreflightCacheTtlMs(processEnv);
   if (ttlMs <= 0) return;
-  const cachePath = codexSubscriptionPreflightCachePath({ userSiteRoot });
+  const cachePath: any = codexSubscriptionPreflightCachePath({ userSiteRoot });
   if (!cachePath) return;
   try {
-    const cacheDir = join(siteControlRoot(userSiteRoot), 'runtime', 'provider-auth-cache');
+    const cacheDir: any = join(siteControlRoot(userSiteRoot), 'runtime', 'provider-auth-cache');
     mkdirSync(cacheDir, { recursive: true });
-    let cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
+    let cache: any = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
     if (existsSync(cachePath)) {
       try { cache = JSON.parse(readFileSync(cachePath, 'utf8')); } catch { /* replace invalid cache */ }
       if (!cache || typeof cache !== 'object') cache = { schema: 'narada.codex_subscription.preflight_cache.v1', entries: {} };
@@ -323,7 +323,7 @@ function codexSubscriptionPreflightCacheWrite({ userSiteRoot, sessionSiteRoot, c
   }
 }
 
-export function codexContextIsolationStatus({ exec = false, dryRun = false } = {}) {
+export function codexContextIsolationStatus({ exec = false, dryRun = false }: any = {}) : any{
   return {
     status: exec && !dryRun ? 'fresh_launcher_bound' : 'fresh_launch_planned',
     code: exec && !dryRun ? 'codex_fresh_launcher_bound' : 'codex_fresh_launch_planned',
@@ -336,24 +336,24 @@ export function codexContextIsolationStatus({ exec = false, dryRun = false } = {
   };
 }
 
-function optionalEnvironmentValue(name, processEnv = process.env) {
-  const value = processEnv[name];
+function optionalEnvironmentValue(name: any, processEnv: any = process.env) : any{
+  const value: any = processEnv[name];
   return value === undefined || value === '' ? null : value;
 }
 
-function pathDirectories(processEnv = process.env) {
-  const pathValue = processEnv.PATH ?? processEnv.Path ?? '';
-  return pathValue.split(delimiter).filter((entry) => entry.length > 0);
+function pathDirectories(processEnv: any = process.env) : any{
+  const pathValue: any = processEnv.PATH ?? processEnv.Path ?? '';
+  return pathValue.split(delimiter).filter((entry: any) => entry.length > 0);
 }
 
-export function resolveCodexCliScriptFromPackage(requireLike, exists = existsSync) {
-  const candidates = [
+export function resolveCodexCliScriptFromPackage(requireLike: any, exists: any = existsSync) : any{
+  const candidates: any = [
     '@openai/codex/bin/codex.js',
     '@openai/codex/bin/codex',
   ];
   for (const candidate of candidates) {
     try {
-      const resolved = requireLike.resolve(candidate);
+      const resolved: any = requireLike.resolve(candidate);
       if (exists(resolved)) return resolved;
     } catch {
       // Try the next known package entrypoint shape.
@@ -362,16 +362,16 @@ export function resolveCodexCliScriptFromPackage(requireLike, exists = existsSyn
   return null;
 }
 
-export function resolveCodexCliScriptFromPath({ processEnv = process.env, exists = existsSync } = {}) {
+export function resolveCodexCliScriptFromPath({ processEnv = process.env, exists = existsSync }: any = {}) : any{
   for (const directory of pathDirectories(processEnv)) {
-    const adjacentPackageScript = join(directory, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
+    const adjacentPackageScript: any = join(directory, 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
     if (exists(adjacentPackageScript)) return adjacentPackageScript;
   }
   return null;
 }
 
-export function resolveCodexCliScriptPath({ processEnv = process.env, requireLike, exists = existsSync } = {}) {
-  const explicitScriptPath = optionalEnvironmentValue('NARADA_CODEX_CLI_SCRIPT', processEnv);
+export function resolveCodexCliScriptPath({ processEnv = process.env, requireLike, exists = existsSync }: any = {}) : any{
+  const explicitScriptPath: any = optionalEnvironmentValue('NARADA_CODEX_CLI_SCRIPT', processEnv);
   if (explicitScriptPath !== null) {
     if (!exists(explicitScriptPath)) {
       throw new Error(`codex_cli_script_missing: ${explicitScriptPath}`);
@@ -379,7 +379,7 @@ export function resolveCodexCliScriptPath({ processEnv = process.env, requireLik
     return explicitScriptPath;
   }
 
-  const resolvedScriptPath = resolveCodexCliScriptFromPackage(requireLike, exists) ?? resolveCodexCliScriptFromPath({ processEnv, exists });
+  const resolvedScriptPath: any = resolveCodexCliScriptFromPackage(requireLike, exists) ?? resolveCodexCliScriptFromPath({ processEnv, exists });
   if (resolvedScriptPath !== null) return resolvedScriptPath;
 
   throw new Error('codex_cli_script_unresolved: set NARADA_CODEX_CLI_SCRIPT or install @openai/codex on PATH');

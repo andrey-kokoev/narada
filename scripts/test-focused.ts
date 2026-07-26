@@ -42,7 +42,7 @@ function normalizeFocusedCommand(command: string): string {
     const envPrefix = testName
       ? `NARADA_PROOF_TEST_NAME_PATTERN=${JSON.stringify(testName)} `
       : "";
-    return `${envPrefix}node scripts/cli-focused-proof.mjs task-promote-recommendation`;
+    return `${envPrefix}node scripts/cli-focused-proof.ts task-promote-recommendation`;
   }
   if (
     /@narada2\/cli/.test(command) &&
@@ -54,7 +54,7 @@ function normalizeFocusedCommand(command: string): string {
     const envPrefix = testName
       ? `NARADA_PROOF_TEST_NAME_PATTERN=${JSON.stringify(testName)} `
       : "NARADA_PROOF_MODE=compact ";
-    return `${envPrefix}node scripts/cli-focused-proof.mjs task-roster`;
+    return `${envPrefix}node scripts/cli-focused-proof.ts task-roster`;
   }
 
   const isCliVitestSingleFile =

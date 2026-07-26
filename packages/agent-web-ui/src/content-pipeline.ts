@@ -52,7 +52,7 @@ function parseStructuredMessageContent(content: readonly unknown[]): MessageCont
       continue;
     }
     const typed = part;
-    if (typed.type === 'artifact_ref' && typeof typed.artifact_id === 'string' && typed.artifact_id.trim()) {
+    if (typed.type=== 'artifact_ref' && typeof typed.artifact_id === 'string' && typed.artifact_id.trim()) {
       parts.push({
         kind: 'artifact_ref',
         content: typed.title ? String(typed.title) : typed.artifact_id,
@@ -68,7 +68,7 @@ function parseStructuredMessageContent(content: readonly unknown[]): MessageCont
       ordinal += 1;
       continue;
     }
-    if (typed.type === 'intent_ref' && typeof typed.intent === 'string' && typed.intent.trim()) {
+    if (typed.type=== 'intent_ref' && typeof typed.intent === 'string' && typed.intent.trim()) {
       const args = isRecord(typed.args) ? { args: typed.args } : {};
       parts.push({
         kind: 'intent_ref',
@@ -87,11 +87,11 @@ function parseStructuredMessageContent(content: readonly unknown[]): MessageCont
       ordinal += 1;
       continue;
     }
-    if ((typed.type === 'markdown' || typed.type === 'text') && typeof typed.text === 'string') {
+    if ((typed.type === 'markdown' || typed.type === 'text') && typeof typed.text=== 'string') {
       ordinal = appendTextPart(parts, typed.text, ordinal);
       continue;
     }
-    if (typed.type === 'code' && typeof typed.text === 'string') {
+    if (typed.type=== 'code' && typeof typed.text === 'string') {
       const language = normalizeFenceLanguage(typed.language ?? '');
       parts.push({
         kind: renderKindForFence(language, typed.text),
