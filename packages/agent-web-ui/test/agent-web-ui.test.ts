@@ -378,9 +378,9 @@ test('ordinary Agent Web UI browser UX tests stay Playwright-owned', async () =>
   assert.deepEqual(testFiles.filter((file: any) => legacyRawBrowserTests.includes(file)), []);
   assert.equal(packageJson.scripts?.['test:browser'], 'pnpm run test:e2e && pnpm run test:projection');
   assert.match(packageJson.scripts?.['test:e2e'] ?? '', /playwright test/);
-  assert.match(packageJson.scripts?.['test:runtime:slash-commands'] ?? '', /playwright test --config playwright\.config\.js test\/e2e\/live-slash-smoke\.spec\.js/);
+  assert.match(packageJson.scripts?.['test:runtime:slash-commands'] ?? '', /playwright test --config playwright\.config\.ts test\/e2e\/live-slash-smoke\.spec\.ts/);
   assert.equal(packageJson.scripts?.['test:live:slash-commands'], undefined);
-  assert.match(packageJson.scripts?.['test:projection'] ?? '', /playwright test --config playwright\.projection\.config\.js/);
+  assert.match(packageJson.scripts?.['test:projection'] ?? '', /playwright test --config playwright\.projection\.config\.ts/);
   assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-authority-local-surface-artifact-e2e\.test\.ts/);
   assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-html-artifact-e2e\.test\.ts/);
   assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-local-submit-html-artifact-cloudflare-e2e\.test\.ts/);
@@ -514,7 +514,7 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.doesNotMatch(composer, /role="option"/);
   assert.match(commandPaletteComponent, /CommandList/);
   assert.match(commandPalette, /acceptSelectedCommand/);
-  assert.match(commandPalette, /event\.key === 'Escape'[\s\S]*commandPaletteDismissedFor\.value/);
+  assert.match(commandPalette, /event\.key\s*===\s*'Escape'[\s\S]*commandPaletteDismissedFor\.value/);
   assert.match(composer, /event\.key !== 'Enter' \|\| event\.shiftKey/);
   assert.match(composer, /useOperatorInterruptPrompt/);
   assert.doesNotMatch(composer, /setInterval\(/);
@@ -907,7 +907,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(status, /useBoxVisibilityPreference\(\{/);
   assert.match(shell, /useBoxVisibilityPreference\(\{/);
   assert.match(boxVisibilityPreference, /allowEmpty === true && parsed\.length === 0/);
-  assert.match(boxVisibilityPreference, /const orderedIds = options\.itemIds\.filter\(\(id\) => ids\.has\(id\)\)/);
+  assert.match(boxVisibilityPreference, /const orderedIds = options\.itemIds\.filter\(\(id(?:\s*:\s*[^)]+)?\) => ids\.has\(id\)\)/);
   for (const key of ['projectionVerbosity', 'headerItems', 'statusBoxes', 'statusRowOpen', 'operatorFooterItems', 'operatorQueueOpen', 'operatorSnippets']) {
     assert.match(browserPreferences, new RegExp(`${key}:`));
   }

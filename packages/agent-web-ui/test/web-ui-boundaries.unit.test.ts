@@ -174,6 +174,7 @@ describe('agent-web-ui runtime boundaries', () => {
       healthEndpoint: 'http://127.0.0.1/health',
       inputEndpoint: 'http://127.0.0.1/input',
       streamText: shallowRef('connected'),
+      streamLive: shallowRef(true),
       healthText: shallowRef('healthy'),
       healthBody: shallowRef({
         status: 'healthy',
@@ -197,6 +198,44 @@ describe('agent-web-ui runtime boundaries', () => {
       state: 'polling',
       detail: 'control.jsonl',
     });
+  });
+
+  it('uses canonical transport liveness instead of transient display text', () => {
+    for (const streamText of ['subscribing', 'replay connected', 'stream connected']) {
+      const topology = useRuntimeTopology({
+        eventEndpoint: 'ws://127.0.0.1/events',
+        healthEndpoint: 'http://127.0.0.1/health',
+        inputEndpoint: 'http://127.0.0.1/input',
+        streamText: shallowRef(streamText),
+        streamLive: shallowRef(true),
+        healthText: shallowRef('healthy'),
+        healthBody: shallowRef({ status: 'healthy', session_id: 'session-1' }),
+        sessionIdentity: shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' }),
+        authorityTransition: shallowRef(null),
+        mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+      }).topology.value;
+
+      expect(topology.status).toBe('live');
+      expect(topology.verdictLabel).toBe('attached');
+    }
+  });
+
+  it('still marks a genuinely non-live transport as degraded', () => {
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText: shallowRef('connected'),
+      streamLive: shallowRef(false),
+      healthText: shallowRef('healthy'),
+      healthBody: shallowRef({ status: 'healthy', session_id: 'session-1' }),
+      sessionIdentity: shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' }),
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    }).topology.value;
+
+    expect(topology.status).toBe('degraded');
+    expect(topology.verdictLabel).toBe('attached, degraded');
   });
 
   it('filters command discovery and help through runtime method capabilities', () => {

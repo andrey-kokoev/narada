@@ -55,7 +55,10 @@ export interface RuntimeTopologyOptions {
   eventEndpoint: string | null;
   healthEndpoint: string | null;
   inputEndpoint: string | null;
+  /** Human-readable transport detail; presentation only. */
   streamText: Ref<string>;
+  /** Canonical transport lifecycle state. */
+  streamLive: Ref<boolean>;
   healthText: Ref<string>;
   healthBody: Ref<Record<string, unknown> | null>;
   sessionIdentity: Ref<SessionIdentitySummary>;
@@ -198,7 +201,7 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
     ? 'stale'
     : healthUnavailable || !options.healthEndpoint
       ? 'unavailable'
-      : mcpDegraded || streamText !== 'connected'
+      : mcpDegraded || !options.streamLive.value
         ? 'degraded'
         : 'live';
   const posture = runtimePosture({
