@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, dirname, join, resolve } from 'node:path';
 import {
   ADMITTED_RUNTIME_SUBSTRATE_KINDS,
   NARADA_AGENT_RUNTIME_SERVER_KIND,
@@ -9,6 +10,7 @@ import {
   operatorSurfaceKindsForRuntimeHost,
   resolveOperatorSurfaceRuntimeSelection,
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { loadIntelligenceLaunchContext } from '@narada2/agent-start/intelligence-launch-context';
 import { createIntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
 import type {
   OperatorSiteAgentAdmissionChoice,
@@ -59,6 +61,7 @@ export interface SiteAgentAdmissionGatewayDependencies {
   writeLaunchRecord?: (configPath: string, record: RawAgentRecord) => Promise<LaunchRegistryWriteResult | void>;
   addSurfaceIdentity?: typeof operatorSurfaceIdentityAddCommand;
   readSelectionChoices?: (options: { siteRoot: string; registryDbPath?: string }) => Promise<IntelligenceSelectionChoices>;
+  resolveRegistryDbPath?: (template: WorkspaceLaunchRecord) => string;
   now?: () => Date;
   operatorPrincipal?: string;
 }
@@ -79,16 +82,31 @@ function choices(values: readonly string[]): OperatorSiteAgentAdmissionChoice[] 
   return values.map((value) => choice(value));
 }
 
-function selectionAuthority(template: WorkspaceLaunchRecord): OperatorSiteAgentIntelligenceSelectionAuthority {
+function selectionAuthority(
+  template: WorkspaceLaunchRecord,
+  registryDbPath: string,
+): OperatorSiteAgentIntelligenceSelectionAuthority {
   const authority = createIntelligenceSelectionAuthority({
     siteId: template.site,
     storeKind: 'node:sqlite',
-    catalogLocator: join(template.site_root, '.ai', 'intelligence-registry.db'),
+    catalogLocator: registryDbPath,
   });
   return {
     ...authority,
     authoritative_inputs: [...authority.authoritative_inputs],
   };
+}
+
+function registryDbPathFromLaunchContext(template: WorkspaceLaunchRecord): string {
+  const userSiteRoot = resolve(process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
+  const defaultRegistryDbPath = join(template.site_root, '.ai', 'intelligence-registry.db');
+  const context = loadIntelligenceLaunchContext({
+    targetSiteId: template.site,
+    sessionSiteRoot: template.site_root,
+    userSiteRoot,
+    registryDbPath: defaultRegistryDbPath,
+  });
+  return context.registry_db_path;
 }
 
 function revisionFor(records: readonly WorkspaceLaunchRecord[]): string {
@@ -268,6 +286,7 @@ export function createSiteAgentAdmissionGateway(
       model_choices: selection.model_choices.map((value: unknown) => String(value)),
     };
   });
+  const resolveRegistryDbPath = dependencies.resolveRegistryDbPath ?? registryDbPathFromLaunchContext;
   const now = dependencies.now ?? (() => new Date());
   const operatorPrincipal = dependencies.operatorPrincipal ?? 'operator-console';
 
@@ -289,10 +308,11 @@ export function createSiteAgentAdmissionGateway(
   async function options(siteId: string): Promise<OperatorSiteAgentAdmissionOptionsWireResponse> {
     try {
       const loaded = await load(siteId);
-      const authority = selectionAuthority(loaded.template);
+      const registryDbPath = resolveRegistryDbPath(loaded.template);
+      const authority = selectionAuthority(loaded.template, registryDbPath);
       const selection = await readSelectionChoices({
         siteRoot: loaded.template.site_root,
-        registryDbPath: join(loaded.template.site_root, '.ai', 'intelligence-registry.db'),
+        registryDbPath,
       });
       return {
         schema: 'narada.operator_console.site_agent_admission_options.v1',

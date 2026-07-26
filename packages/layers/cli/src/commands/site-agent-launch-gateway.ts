@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
+import { loadIntelligenceLaunchContext } from '@narada2/agent-start/intelligence-launch-context';
 import type {
   OperatorSiteAgentLaunchFailurePhase,
   OperatorSiteAgentLaunchWireResponse,
@@ -27,6 +29,22 @@ export interface SiteAgentLaunchRequest {
   siteId: string;
   agentId: string;
   operatorSurface?: string;
+}
+
+function intelligenceCatalogLocator(record: { site: string; site_root: string }): string {
+  const userSiteRoot = resolve(process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
+  const fallback = join(record.site_root, '.ai', 'intelligence-registry.db');
+  const contextPath = resolve(
+    process.env.NARADA_INTELLIGENCE_CONTEXT_PATH
+      ?? join(userSiteRoot, '.narada', 'intelligence-launch-context.json'),
+  );
+  if (!existsSync(contextPath)) return fallback;
+  return loadIntelligenceLaunchContext({
+    targetSiteId: record.site,
+    sessionSiteRoot: record.site_root,
+    userSiteRoot,
+    registryDbPath: fallback,
+  }).registry_db_path;
 }
 
 function surfaceSelection(
@@ -409,9 +427,13 @@ export function createSiteAgentLaunchGateway(
         handoffFor(selection.surface, 'reused'),
       );
     }
-    if (agent.runtime.state !== 'stopped') {
+    if (agent.runtime.state !== 'stopped' && agent.runtime.state !== 'degraded') {
       return response('refused', request, null, `agent_runtime_${agent.runtime.state}`, requestId);
     }
+
+    // A degraded projection can represent an expired, process-absent authority
+    // lease. Let workspace launch reach session authority admission: that layer
+    // atomically reclaims an abandoned lease and still refuses a live owner.
 
     let launchLoad;
     try {
@@ -432,6 +454,7 @@ export function createSiteAgentLaunchGateway(
         format: 'json',
         suppressResultOutput: true,
         operatorSurface: selection.surface,
+        intelligenceCatalogLocator: intelligenceCatalogLocator(launchRecord),
         resultPath: operatorConsoleWorkspaceResultPath(requestId),
       }, silentCommandContext({}));
     } catch (error) {

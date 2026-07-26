@@ -32,7 +32,7 @@ function agent(state: 'running' | 'stopped' | 'degraded' | 'ambiguous', sessionI
 test('primary activation ensures only stopped or uniquely healthy agents', () => {
   assert.deepEqual(decideAgentPrimaryAction(agent('stopped')), { kind: 'ensure-running' });
   assert.deepEqual(decideAgentPrimaryAction(agent('running', 'session-1')), { kind: 'ensure-running' });
-  assert.equal(decideAgentPrimaryAction(agent('degraded')).kind, 'unavailable');
+  assert.deepEqual(decideAgentPrimaryAction(agent('degraded')), { kind: 'ensure-running' });
   assert.equal(decideAgentPrimaryAction(agent('ambiguous')).kind, 'unavailable');
 });
 

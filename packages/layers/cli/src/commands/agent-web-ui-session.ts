@@ -31,6 +31,12 @@ import type {
   ResolvedAttachSession,
 } from './agent-web-ui-types.js';
 
+// Runtime startup can spend longer than a short probe interval constructing
+// its MCP sidecars before the projection process begins. The workspace
+// launcher gives this exact binding a bounded 60-second wait, so use the same
+// bounded freshness window while still refusing bindings from older launches.
+const LAUNCH_BINDING_FRESHNESS_WINDOW_MS = 60_000;
+
 export class AttachSessionDiscoveryError extends Error {
   constructor(
     message: string,
@@ -491,7 +497,7 @@ function isAttachableLaunchBinding(
   if (!binding) return false;
   if (stringField(binding, 'status') !== 'ready') return false;
   if (args.observedCurrentLaunchStart) return true;
-  return bindingUpdatedAtMs(binding) >= args.startedAt - 10000;
+  return bindingUpdatedAtMs(binding) >= args.startedAt - LAUNCH_BINDING_FRESHNESS_WINDOW_MS;
 }
 
 function isCurrentLaunchBindingFailure(
@@ -501,7 +507,7 @@ function isCurrentLaunchBindingFailure(
   if (!binding) return false;
   if (stringField(binding, 'status') !== 'failed') return false;
   if (args.observedCurrentLaunchStart) return true;
-  return bindingUpdatedAtMs(binding) >= args.startedAt - 10000;
+  return bindingUpdatedAtMs(binding) >= args.startedAt - LAUNCH_BINDING_FRESHNESS_WINDOW_MS;
 }
 
 function bindingUpdatedAtMs(binding: JsonRecord | null): number {

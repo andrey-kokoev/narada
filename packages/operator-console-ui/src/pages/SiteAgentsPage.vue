@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, type Component } from 'vue';
+import { ref, watch, type Component } from 'vue';
 import type {
   OperatorSiteAgentAdmissionWireRequest,
   OperatorSiteAgentLaunchFailureWireRecord,
@@ -47,6 +47,7 @@ const siteAgents = useSiteAgents();
 const routeDirectory = useOperatorWorkspaceRouteDirectory();
 const busyAgentId = ref<string | null>(null);
 const actionMessage = ref<string | null>(null);
+const settlingStop = ref<{ siteId: string; agentId: string } | null>(null);
 const admissionSiteId = ref<string | null>(null);
 const admissionRole = ref('');
 const admissionAgentKind = ref('');
@@ -79,6 +80,13 @@ function agentFor(siteId: string, agentId: string): OperatorSiteAgentWireRecord 
   return null;
 }
 
+watch(siteAgents.groups, () => {
+  const target = settlingStop.value;
+  if (!target || agentFor(target.siteId, target.agentId)?.runtime.state !== 'stopped') return;
+  actionMessage.value = `${target.agentId} stopped.`;
+  settlingStop.value = null;
+});
+
 async function waitForStopped(siteId: string, agentId: string): Promise<boolean> {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
@@ -96,14 +104,18 @@ async function stopAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Pr
   try {
     const result = await siteAgents.stop(siteId, agent.agent_id);
     if (result.status === 'refused' || result.status === 'failed') {
+      settlingStop.value = null;
       actionMessage.value = result.message ?? result.reason ?? `Could not stop ${agent.agent_id}.`;
       return;
     }
+    settlingStop.value = { siteId, agentId: agent.agent_id };
     const stopped = result.status === 'already_stopped' || await waitForStopped(siteId, agent.agent_id);
     actionMessage.value = stopped
       ? `${agent.agent_id} stopped.`
       : `${agent.agent_id} received a stop request; runtime status is still settling.`;
+    if (stopped) settlingStop.value = null;
   } catch (cause) {
+    settlingStop.value = null;
     actionMessage.value = cause instanceof Error ? cause.message : `Could not stop ${agent.agent_id}.`;
   } finally {
     busyAgentId.value = null;
@@ -208,6 +220,7 @@ function surfaceChoices(agent: OperatorSiteAgentWireRecord): OperatorSiteAgentSu
 
 async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, selectedSurface?: string): Promise<void> {
   if (busyAgentId.value) return;
+  settlingStop.value = null;
   const decision = decideAgentPrimaryAction(agent);
   if (decision.kind === 'unavailable') {
     actionMessage.value = decision.reason;

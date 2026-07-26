@@ -12,6 +12,7 @@ export interface WorkspaceLaunchPlanOptions {
   site?: string[];
   configPath?: string[];
   registryPath?: string;
+  intelligenceCatalogLocator?: string;
   operatorSurface?: string;
   onboarding?: boolean;
   runtime?: string;

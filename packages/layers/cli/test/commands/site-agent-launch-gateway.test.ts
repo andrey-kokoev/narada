@@ -213,23 +213,27 @@ describe('site-agent launch gateway', () => {
     expect(launchCommand).not.toHaveBeenCalled();
   });
 
-  it('refuses degraded or unadmitted agents before mutation', async () => {
-    const launchCommand = vi.fn();
+  it('routes degraded agents through authority admission while refusing unadmitted agents', async () => {
+    const launchCommand = vi.fn(async () => ({
+      exitCode: 0,
+      result: { attachment: { sessions: [{ session_id: 'session-recovered' }] } },
+    }));
     const gateway = createSiteAgentLaunchGateway({
       overview: overview('degraded'),
-      launchCommand,
+      readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
+      launchCommand: launchCommand as never,
       launchAdmission: testAdmission(),
       diagnostics: testDiagnostics(),
     });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.resident' })).toMatchObject({
-      status: 'refused',
-      reason: 'agent_runtime_degraded',
+      status: 'launched',
+      session_id: 'session-recovered',
     });
     expect(await gateway.launch({ siteId: 'sonar', agentId: 'sonar.builder' })).toMatchObject({
       status: 'refused',
       reason: 'agent_not_admitted_to_site',
     });
-    expect(launchCommand).not.toHaveBeenCalled();
+    expect(launchCommand).toHaveBeenCalledTimes(1);
   });
 
   it('serializes concurrent launches into one atomic admission', async () => {

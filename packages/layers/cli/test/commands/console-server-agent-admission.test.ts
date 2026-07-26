@@ -31,9 +31,15 @@ function launchRecord(overrides: Partial<WorkspaceLaunchRecord> = {}): Workspace
 function createFixture(records: WorkspaceLaunchRecord[]) {
   let written: unknown = null;
   let identityInput: Record<string, unknown> | null = null;
+  let selectionInput: { siteRoot: string; registryDbPath?: string } | null = null;
+  const registryDbPath = 'D:/code/site/.ai/intelligence-registry.active-v2.db';
   const gateway = createSiteAgentAdmissionGateway({
     readLaunchRecords: async () => ({ records, siteCatalog: [] }),
-    readSelectionChoices: async () => ({ provider_choices: ['codex'], model_choices: ['gpt-test'] }),
+    resolveRegistryDbPath: () => registryDbPath,
+    readSelectionChoices: async (input) => {
+      selectionInput = input;
+      return { provider_choices: ['codex'], model_choices: ['gpt-test'] };
+    },
     writeLaunchRecord: async (_path, record) => { written = record; },
     addSurfaceIdentity: async (options) => {
       identityInput = options as unknown as Record<string, unknown>;
@@ -41,9 +47,14 @@ function createFixture(records: WorkspaceLaunchRecord[]) {
     },
     now: () => new Date('2026-07-24T00:00:00.000Z'),
   });
-  return { gateway, getWritten: () => written, getIdentityInput: () => identityInput };
+  return {
+    gateway,
+    registryDbPath,
+    getWritten: () => written,
+    getIdentityInput: () => identityInput,
+    getSelectionInput: () => selectionInput,
+  };
 }
-
 describe('site-agent admission gateway', () => {
 it('returns catalog-backed options and derives identity server-side', async () => {
   const fixture = createFixture([launchRecord()]);
@@ -51,6 +62,11 @@ it('returns catalog-backed options and derives identity server-side', async () =
   expect(options.status).toBe('success');
   expect(options.revision).toBeTruthy();
   expect(options.intelligence.selection_authority).toBeTruthy();
+  expect(options.intelligence.selection_authority?.catalog.locator).toBe(fixture.registryDbPath);
+  expect(fixture.getSelectionInput()).toEqual({
+    siteRoot: 'D:/code/site',
+    registryDbPath: fixture.registryDbPath,
+  });
   expect(options.intelligence.provider_choices.map((item) => item.value)).toEqual(['codex']);
 
   const result = await fixture.gateway.admit({

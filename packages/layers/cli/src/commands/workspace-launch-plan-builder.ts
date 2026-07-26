@@ -124,7 +124,8 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const intelligenceSelectionAuthority = createIntelligenceSelectionAuthority({
     siteId: record.site,
     storeKind: 'node:sqlite',
-    catalogLocator: join(record.site_root, '.ai', 'intelligence-registry.db'),
+    catalogLocator: options.intelligenceCatalogLocator
+      ?? join(record.site_root, '.ai', 'intelligence-registry.db'),
   });
   const capabilityAdmission = buildWorkspaceLaunchCapabilityAdmission({
     operatorSurface: launchOperatorSurface,

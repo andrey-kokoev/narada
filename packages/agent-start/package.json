@@ -27,6 +27,7 @@
   "exports": {
     ".": "./src/narada-agent-start.ts",
     "./narada-agent-start": "./src/narada-agent-start.ts",
+    "./intelligence-launch-context": "./src/intelligence-launch-context.ts",
     "./launch-result-v0-contract": {
       "types": "./src/launch-result-v0-contract.d.ts",
       "import": "./src/launch-result-v0-contract.ts"

@@ -10,7 +10,11 @@ export type AgentInspectionDecision =
   | { kind: 'unavailable'; reason: string };
 
 export function decideAgentPrimaryAction(agent: OperatorSiteAgentWireRecord): AgentPrimaryDecision {
-  if (agent.runtime.state === 'stopped' || agent.runtime.state === 'running') return { kind: 'ensure-running' };
+  if (
+    agent.runtime.state === 'stopped'
+    || agent.runtime.state === 'running'
+    || agent.runtime.state === 'degraded'
+  ) return { kind: 'ensure-running' };
   return {
     kind: 'unavailable',
     reason: agent.runtime.state === 'ambiguous'
