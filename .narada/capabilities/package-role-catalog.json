@@ -418,15 +418,6 @@
       "posture": "test_contract_no_source_result_import"
     },
     {
-      "package": "@narada2/mcp-transport",
-      "path": "packages/_archive/mcp-transport-legacy",
-      "roles": [
-        "mcp_boundary",
-        "runtime_authority"
-      ],
-      "posture": "mcp_transport_runtime_boundary"
-    },
-    {
       "package": "@narada2/narada-proper-mcp",
       "path": "packages/narada-proper-mcp",
       "roles": [
