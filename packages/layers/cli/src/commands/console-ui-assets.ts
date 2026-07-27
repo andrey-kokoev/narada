@@ -34,9 +34,11 @@ export function readOperatorConsoleUiAsset(pathname: string, artifactRoot?: stri
       ? 'text/javascript; charset=utf-8'
       : extension === '.css'
         ? 'text/css; charset=utf-8'
-        : extension === '.map'
-          ? 'application/json; charset=utf-8'
-          : 'application/octet-stream';
+        : extension === '.svg'
+          ? 'image/svg+xml; charset=utf-8'
+          : extension === '.map'
+            ? 'application/json; charset=utf-8'
+            : 'application/octet-stream';
     return { body: readFileSync(assetPath), contentType };
   } catch {
     return null;

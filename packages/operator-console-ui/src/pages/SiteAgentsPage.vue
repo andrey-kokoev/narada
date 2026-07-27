@@ -10,13 +10,13 @@ import {
   Bot,
   CircleStop,
   Compass,
+  EllipsisVertical,
   Hammer,
-  MoreHorizontal,
-  Plus,
   RefreshCw,
   ScanSearch,
   Trash2,
   UserRound,
+  UserRoundPlus,
 } from 'lucide-vue-next';
 import {
   Dialog,
@@ -189,6 +189,21 @@ function drivePendingWindow(target: Window | null, siteId: string, agent: Operat
   target.document.close();
 }
 
+function preserveHandoffFailure(
+  target: Window | null,
+  siteId: string,
+  agentId: string,
+  message: string,
+  code = 'agent_web_ui_handoff_unavailable',
+): void {
+  driveFailureWindow(target, siteId, agentId, undefined, {
+    phase: 'web_ui_attach',
+    code,
+    message,
+    diagnostic_ref: null,
+  });
+}
+
 function driveFailureWindow(
   target: Window | null,
   siteId: string,
@@ -218,6 +233,13 @@ function surfaceChoices(agent: OperatorSiteAgentWireRecord): OperatorSiteAgentSu
   return agent.operator_surfaces.choices;
 }
 
+function hasAgentActions(agent: OperatorSiteAgentWireRecord): boolean {
+  return surfaceChoices(agent).length > 0
+    || agent.runtime.state === 'running'
+    || agent.runtime.state === 'degraded'
+    || agent.runtime.state === 'stopped';
+}
+
 async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, selectedSurface?: string): Promise<void> {
   if (busyAgentId.value) return;
   settlingStop.value = null;
@@ -243,8 +265,9 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, se
         if (target) driveFailureWindow(target, siteId, agent.agent_id, result.request_id, failure);
         actionMessage.value = failure.message;
       } else {
-        target?.close();
-        actionMessage.value = result.reason ?? `Could not start ${agent.agent_id}.`;
+        const message = result.reason ?? `Could not start ${agent.agent_id}.`;
+        preserveHandoffFailure(target, siteId, agent.agent_id, message, 'workspace_launch_refused');
+        actionMessage.value = message;
       }
       return;
     }
@@ -261,12 +284,13 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, se
           drivePendingWindow(target, siteId, agent, handoff.sessionId);
           actionMessage.value = `${agent.agent_id} is already running. Waiting for its Web UI route...`;
         } else {
-          target?.close();
+          preserveHandoffFailure(target, siteId, agent.agent_id, handoff.reason);
           actionMessage.value = handoff.reason;
         }
       } else {
-        target?.close();
-        actionMessage.value = result.handoff?.message ?? `The existing session was not attachable in ${surfaceLabel(surface)}.`;
+        const message = result.handoff?.message ?? `The existing session was not attachable in ${surfaceLabel(surface)}.`;
+        preserveHandoffFailure(target, siteId, agent.agent_id, message);
+        actionMessage.value = message;
       }
       return;
     }
@@ -283,8 +307,9 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, se
       if (target) driveFailureWindow(target, siteId, agent.agent_id, failed.request_id, failed.failure);
       actionMessage.value = failed.failure.message;
     } else {
-      target?.close();
-      actionMessage.value = cause instanceof Error ? cause.message : `Could not start ${agent.agent_id}.`;
+      const message = cause instanceof Error ? cause.message : `Could not start ${agent.agent_id}.`;
+      preserveHandoffFailure(target, siteId, agent.agent_id, message, 'workspace_launch_exception');
+      actionMessage.value = message;
     }
   } finally {
     busyAgentId.value = null;
@@ -307,7 +332,7 @@ async function inspectAgent(siteId: string, agent: OperatorSiteAgentWireRecord):
       actionMessage.value = `Waiting for ${agent.agent_id}'s Web UI route...`;
       return;
     }
-    target?.close();
+    preserveHandoffFailure(target, siteId, agent.agent_id, handoff.reason);
     actionMessage.value = handoff.reason;
     return;
   }
@@ -451,10 +476,37 @@ async function submitAdmission(): Promise<void> {
                 <h4>{{ site.display_name }}</h4>
                 <code>{{ site.site_id }}</code>
               </div>
-              <span class="site-kind">{{ site.site_kind.replace('_', ' ') }}</span>
+              <div class="site-header-actions">
+                <span class="site-kind">{{ site.site_kind.replace('_', ' ') }}</span>
+                <DropdownMenu>
+                  <DropdownMenuTrigger as-child>
+                    <button
+                      class="site-actions-trigger"
+                      type="button"
+                      :disabled="busyAgentId !== null || siteAgents.admissionLoading.value"
+                      :aria-label="`Actions for ${site.display_name}`"
+                      @click.stop
+                    >
+                      <EllipsisVertical :size="16" aria-hidden="true" />
+                      <span class="sr-only">Actions for {{ site.display_name }}</span>
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" :side-offset="6" class="site-actions-menu" @click.stop>
+                    <DropdownMenuItem
+                      :disabled="busyAgentId !== null || siteAgents.admissionLoading.value"
+                      @select="openAdmission(site.site_id)"
+                    >
+                      <span class="menu-item-label">
+                        <UserRoundPlus :size="14" aria-hidden="true" />
+                        <span>Add agent</span>
+                      </span>
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
             </header>
             <p v-if="!site.agents.length" class="empty compact">No agents admitted.</p>
-            <div class="agent-grid">
+            <div v-if="site.agents.length" class="agent-grid">
               <div
                 v-for="agent in site.agents"
                 :key="agent.agent_id"
@@ -480,19 +532,20 @@ async function submitAdmission(): Promise<void> {
                     <span>{{ isStarting(site.site_id, agent) ? 'starting' : agent.work.state }}</span>
                   </span>
                 </button>
-                <DropdownMenu v-if="surfaceChoices(agent).length">
+                <DropdownMenu v-if="hasAgentActions(agent)">
                   <DropdownMenuTrigger as-child>
                     <button
-                      class="surface-menu-trigger"
+                      class="agent-actions-trigger"
                       type="button"
-                      aria-label="Open in another operator surface"
+                      :disabled="busyAgentId !== null"
+                      :aria-label="`Actions for ${agent.agent_id}`"
                       @click.stop
                     >
-                      <MoreHorizontal :size="14" aria-hidden="true" />
-                      <span class="sr-only">Open in another operator surface</span>
+                      <EllipsisVertical :size="16" aria-hidden="true" />
+                      <span class="sr-only">Actions for {{ agent.agent_id }}</span>
                     </button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" :side-offset="6" @click.stop>
+                  <DropdownMenuContent align="end" :side-offset="6" class="agent-actions-menu" @click.stop>
                     <DropdownMenuItem
                       v-for="choice in surfaceChoices(agent)"
                       :key="choice.kind"
@@ -503,44 +556,31 @@ async function submitAdmission(): Promise<void> {
                       <span>{{ choice.label }}</span>
                       <span v-if="choice.kind === agent.operator_surfaces.default_kind" class="surface-default">default</span>
                     </DropdownMenuItem>
+                    <DropdownMenuItem
+                      v-if="agent.runtime.state === 'running' || agent.runtime.state === 'degraded'"
+                      :disabled="busyAgentId !== null"
+                      class="menu-item-warning"
+                      @select="stopAgent(site.site_id, agent)"
+                    >
+                      <span class="menu-item-label">
+                        <CircleStop :size="14" aria-hidden="true" />
+                        <span>Stop runtime</span>
+                      </span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      v-if="agent.runtime.state === 'stopped'"
+                      :disabled="busyAgentId !== null"
+                      class="menu-item-danger"
+                      @select="requestDelete(site.site_id, agent)"
+                    >
+                      <span class="menu-item-label">
+                        <Trash2 :size="14" aria-hidden="true" />
+                        <span>Delete admission</span>
+                      </span>
+                    </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-                <button
-                  v-if="agent.runtime.state === 'running' || agent.runtime.state === 'degraded'"
-                  type="button"
-                  class="lifecycle-button stop-button"
-                  :disabled="busyAgentId !== null"
-                  :aria-label="`Stop ${agent.agent_id}`"
-                  @click.stop="stopAgent(site.site_id, agent)"
-                >
-                  <CircleStop :size="13" aria-hidden="true" />
-                  <span class="sr-only">Stop {{ agent.agent_id }}</span>
-                </button>
-                <button
-                  v-if="agent.runtime.state === 'stopped'"
-                  type="button"
-                  class="lifecycle-button delete-button"
-                  :disabled="busyAgentId !== null"
-                  :aria-label="`Delete ${agent.agent_id}`"
-                  @click.stop="requestDelete(site.site_id, agent)"
-                >
-                  <Trash2 :size="13" aria-hidden="true" />
-                  <span class="sr-only">Delete {{ agent.agent_id }}</span>
-                </button>
               </div>
-              <button
-                type="button"
-                class="admission-tile"
-                :disabled="busyAgentId !== null || siteAgents.admissionLoading.value"
-                :aria-label="`Add an agent to ${site.display_name}`"
-                @click="openAdmission(site.site_id)"
-              >
-                <span class="admission-plus" aria-hidden="true"><Plus :size="22" /></span>
-                <span class="admission-copy sr-only">
-                  <strong>Add agent</strong>
-                  <span>Governed admission</span>
-                </span>
-              </button>
             </div>
           </article>
         </div>
@@ -664,11 +704,20 @@ async function submitAdmission(): Promise<void> {
 .site-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
 .site-header h4 { margin: 0; font-size: 14px; font-weight: 650; letter-spacing: 0; }
 .site-header code { display: block; margin-top: 3px; color: var(--muted); font: 11px/1.3 var(--mono); overflow-wrap: anywhere; }
+.site-header-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .site-kind { flex: 0 0 auto; color: var(--muted); font-size: 11px; text-transform: capitalize; }
+.site-actions-trigger { display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+.site-box:hover .site-actions-trigger,
+.site-actions-trigger:focus-visible,
+.site-actions-trigger[data-state="open"] { opacity: 1; pointer-events: auto; }
+.site-actions-trigger:hover:not(:disabled) { background: var(--surface-muted); color: var(--text); }
+.site-actions-trigger:disabled { cursor: wait; }
+.site-actions-trigger:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.site-actions-menu { min-width: 150px; }
 .agent-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 3px 8px; padding-top: 10px; }
 .agent-cell { position: relative; min-width: 0; border-radius: var(--radius); }
 .agent-cell:hover { background: var(--surface-muted); }
-.agent-button { display: flex; width: 100%; min-height: 58px; align-items: center; gap: 9px; padding: 7px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
+.agent-button { display: flex; width: 100%; min-height: 58px; align-items: center; gap: 9px; padding: 7px 30px 7px 7px; border: 0; border-radius: var(--radius); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
 .agent-button:disabled { cursor: default; opacity: .62; }
 .agent-icon { position: relative; display: inline-grid; width: 34px; height: 34px; place-items: center; flex: 0 0 34px; border: 1px solid var(--line); border-radius: 50%; background: var(--surface); }
 .state-dot { position: absolute; right: -1px; bottom: 1px; width: 9px; height: 9px; border: 2px solid var(--surface); border-radius: 50%; background: var(--muted); }
@@ -681,21 +730,18 @@ async function submitAdmission(): Promise<void> {
 .agent-copy strong, .agent-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-copy strong { font-size: 12px; font-weight: 650; }
 .agent-copy span { color: var(--muted); font-size: 10px; }
-.surface-menu-trigger { position: absolute; right: 2px; bottom: 2px; z-index: 2; display: grid; width: 24px; height: 22px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; }
-.surface-menu-trigger:hover { background: var(--surface); color: var(--text); }
-.surface-menu-trigger:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.agent-actions-trigger { position: absolute; top: 3px; right: 3px; z-index: 2; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+.agent-cell:hover .agent-actions-trigger,
+.agent-actions-trigger:focus-visible,
+.agent-actions-trigger[data-state="open"] { opacity: 1; pointer-events: auto; }
+.agent-actions-trigger:hover:not(:disabled) { background: var(--surface); color: var(--text); }
+.agent-actions-trigger:disabled { cursor: wait; }
+.agent-actions-trigger:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.agent-actions-menu { min-width: 176px; }
 .surface-default { color: var(--muted); font-size: 9px; }
-.lifecycle-button { position: absolute; top: 2px; z-index: 2; display: grid; width: 24px; height: 22px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; cursor: pointer; }
-.lifecycle-button:disabled { cursor: wait; opacity: .55; }
-.lifecycle-button:hover:not(:disabled) { background: var(--surface); }
-.stop-button { right: 26px; color: var(--warning, #996500); }
-.delete-button { right: 2px; color: var(--danger, #b42318); }
-.lifecycle-button:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
-.admission-tile { display: grid; width: 58px; height: 58px; min-height: 58px; place-items: center; padding: 0; border: 1px dashed var(--line-strong); border-radius: 50%; background: transparent; color: var(--muted); cursor: pointer; }
-.admission-tile:hover:not(:disabled) { border-color: var(--operator); background: var(--surface-muted); color: var(--text); }
-.admission-tile:disabled { cursor: wait; opacity: .55; }
-.admission-tile:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
-.admission-plus { display: inline-grid; width: 34px; height: 34px; place-items: center; }
+.menu-item-label { display: inline-flex; align-items: center; gap: 8px; }
+.menu-item-warning { color: var(--warning, #996500); }
+.menu-item-danger { color: var(--danger, #b42318); }
 .admission-dialog { width: min(560px, calc(100vw - 28px)); }
 .admission-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px 12px; margin-top: 18px; }
 .admission-form label { display: grid; gap: 5px; min-width: 0; }

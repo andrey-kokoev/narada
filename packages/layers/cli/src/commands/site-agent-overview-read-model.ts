@@ -352,6 +352,7 @@ function operatorSurfaces(
     choices: COMPACT_OPERATOR_SURFACE_KINDS.map((kind) => {
       const admitted = runtimeHost === NARADA_AGENT_RUNTIME_SERVER_KIND && runtimeSupports.has(kind);
       const attachable = runtime.state === 'stopped'
+        || runtime.state === 'degraded'
         || (runtime.state === 'running' && kind === 'agent-web-ui');
       const available = admitted && attachable;
       return {
@@ -364,7 +365,9 @@ function operatorSurfaces(
           ? 'This runtime host does not admit this operator surface.'
           : runtime.state === 'running'
             ? 'An existing session can only be attached from the Web UI here.'
-            : 'The agent does not have a single healthy session to attach.',
+            : runtime.state === 'ambiguous'
+              ? 'Choose a session from Agent Sessions before selecting an operator surface.'
+              : 'The runtime state does not admit an operator surface.',
       };
     }),
   };

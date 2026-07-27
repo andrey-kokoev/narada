@@ -92,7 +92,6 @@ export function createOperatorConsoleOverlayDocument({
       { id: 'open-console', label: 'Open console', icon: '↗', tooltip: 'Open console', kind: 'open_url', tone: 'accent', target: consoleUrl },
       ...(restart ? [{ id: 'restart-console', label: 'Restart console', icon: '↻', tooltip: 'Restart console', kind: 'restart' }] : []),
       { id: 'refresh', label: 'Refresh', icon: '⟳', tooltip: 'Refresh overlay', kind: 'refresh' },
-      { id: 'close', label: 'Close', icon: '×', tooltip: 'Close overlay', kind: 'close' },
     ],
   } as any);
 }

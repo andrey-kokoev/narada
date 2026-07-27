@@ -107,7 +107,11 @@ function jsonResponse(res: ServerResponse, status: number, payload: unknown): vo
 
 
 function htmlResponse(res: ServerResponse, status: number, body: string): void {
-  res.writeHead(status, { 'Content-Type': 'text/html; charset=utf-8', 'Content-Length': Buffer.byteLength(body) });
+  res.writeHead(status, {
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Length': Buffer.byteLength(body),
+    'Cache-Control': 'no-cache',
+  });
   res.end(body);
 }
 

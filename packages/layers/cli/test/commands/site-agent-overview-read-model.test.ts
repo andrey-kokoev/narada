@@ -248,6 +248,11 @@ describe('site-agent overview read model', () => {
       healthy_session_ids: [],
       selected_session_id: null,
     });
+    expect(agent?.operator_surfaces.choices).toEqual([
+      { kind: 'agent-web-ui', label: 'Web UI', status: 'available', reason: null },
+      { kind: 'agent-cli', label: 'CLI', status: 'available', reason: null },
+      { kind: 'agent-tui', label: 'TUI', status: 'available', reason: null },
+    ]);
   });
 
   it('reads authority independently for each admitted agent on the same Site', async () => {

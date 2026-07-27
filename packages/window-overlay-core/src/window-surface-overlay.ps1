@@ -253,6 +253,7 @@ $titlePanel.Children.Add($subtitleText) | Out-Null
 $headerActions = New-Object Windows.Controls.StackPanel
 $headerActions.Orientation = 'Horizontal'
 $headerActions.HorizontalAlignment = 'Right'
+$headerActions.VerticalAlignment = 'Top'
 [Windows.Controls.Grid]::SetColumn($headerActions, 1)
 $header.Children.Add($headerActions) | Out-Null
 $script:PinButton = Add-Button $headerActions '📌' 'Pin overlay to Windows Terminal' { $window.Topmost = -not $window.Topmost; Update-PinButton; Set-OverlayVisibility; Save-Preferences $window } -icon
