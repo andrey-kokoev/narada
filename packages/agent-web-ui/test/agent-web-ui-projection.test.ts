@@ -689,6 +689,65 @@ test('conversation projection keeps chat compact while activity summarizes top-l
   assert.equal(completedProjection.activity.active, false);
 });
 
+test('conversation projection renders a collapsed turn summary after the assistant message', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-07-08T20:49:39.000Z' };
+  const events = [
+    { ...base, event: 'user_message', request_id: 'input_summary', content: 'finish task 473' },
+    { ...base, event: 'turn_started', request_id: 'input_summary', turn_id: 'turn_summary_1' },
+    { ...base, event: 'assistant_message', request_id: 'input_summary', turn_id: 'turn_summary_1', content: 'I will restart the MCP and run diagnostics.' },
+    { ...base, event: 'tool_call', request_id: 'input_summary', turn_id: 'turn_summary_1', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_restart' },
+    { ...base, event: 'tool_result', request_id: 'input_summary', turn_id: 'turn_summary_1', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_restart', status: 'ok' },
+    { ...base, event: 'tool_call', request_id: 'input_summary', turn_id: 'turn_summary_1', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_doctor' },
+    { ...base, event: 'tool_result', request_id: 'input_summary', turn_id: 'turn_summary_1', tool_name: 'narada-sonar-task-lifecycle.task_lifecycle_doctor', status: 'error', error: 'unavailable' },
+    { ...base, event: 'turn_complete', request_id: 'input_summary', turn_id: 'turn_summary_1', terminal_state: 'completed', timestamp: '2026-07-08T20:50:12.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const summaryRows = projection.rows.filter((row: any) => row.kind === 'turn_summary');
+  assert.equal(summaryRows.length, 1);
+  const summaryRow = summaryRows[0];
+  assert.equal(summaryRow.disposition, 'conversation_fact');
+  assert.equal(summaryRow.summary.text, 'Turn · 33s · 2 tools · 1 failed');
+  assert.deepEqual(summaryRow.summary.tools, ['narada-sonar-task-lifecycle.task_lifecycle_restart', 'narada-sonar-task-lifecycle.task_lifecycle_doctor']);
+
+  const conversationKinds = projection.rows.filter((row: any) => row.disposition === 'conversation_fact').map((row: any) => row.kind);
+  assert.deepEqual(conversationKinds, ['user_message', 'assistant_message', 'turn_summary']);
+});
+
+test('turn summary aggregates provider-nested tool items', () => {
+  const agentIdentityRef = {
+    schema: 'narada.agent_identity_ref.v1',
+    site_id: 'sonar',
+    local_agent_id: 'resident',
+    canonical_agent_id: 'sonar.resident',
+  };
+  const base = { agent_id: 'resident', agent_identity_ref: agentIdentityRef, session_id: 'carrier_test' };
+  const events = [
+    { ...base, event: 'turn_started', turn_id: 'turn_provider_tools', timestamp: '2026-07-08T20:49:39.000Z' },
+    { ...base, event_sequence: 1, sequence: 1, timestamp: '2026-07-08T20:49:40.000Z', event: { type: 'item.started', item: { id: 'tool_1', type: 'mcp_tool_call', server: 'narada-sonar-agent-context', tool: 'agent_context_startup_sequence' } } },
+    { ...base, event_sequence: 2, sequence: 2, timestamp: '2026-07-08T20:49:41.000Z', event: { type: 'item.completed', item: { id: 'tool_1', type: 'mcp_tool_call', server: 'narada-sonar-agent-context', tool: 'agent_context_startup_sequence', result: { content: [{ type: 'text', text: '{"status":"ok"}' }] } } } },
+    { ...base, event: 'turn_complete', turn_id: 'turn_provider_tools', terminal_state: 'completed', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const summaryRows = projection.rows.filter((row: any) => row.kind === 'turn_summary');
+  assert.equal(summaryRows.length, 1);
+  assert.equal(summaryRows[0].summary.text, 'Turn · 3s · 1 tools');
+  assert.deepEqual(summaryRows[0].summary.tools, ['narada-sonar-agent-context.agent_context_startup_sequence']);
+});
+
+test('turn summary reports zero tools for tool-less turns', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-07-08T20:49:39.000Z' };
+  const events = [
+    { ...base, event: 'turn_started', turn_id: 'turn_no_tools' },
+    { ...base, event: 'assistant_message', turn_id: 'turn_no_tools', content: 'Hello.' },
+    { ...base, event: 'turn_complete', turn_id: 'turn_no_tools', terminal_state: 'completed', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const summaryRows = projection.rows.filter((row: any) => row.kind === 'turn_summary');
+  assert.equal(summaryRows.length, 1);
+  assert.equal(summaryRows[0].summary.text, 'Turn · 3s · 0 tools');
+  assert.deepEqual(summaryRows[0].summary.tools, []);
+});
+
 test('custom projection views filter rendered rows by presentation facet while keeping activity state intact', () => {
   const events = [
     { event: 'user_message', request_id: 'view-input', content: 'show me the result' },

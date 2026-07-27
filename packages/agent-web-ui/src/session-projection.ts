@@ -15,6 +15,15 @@ import {
   normalizeProjectedSummary,
   repairCollapsedAssistantBoundaries,
 } from './session-projection-boundaries.ts';
+import {
+  TURN_SUMMARY_ROW_KIND,
+  createTurnSummaryState,
+  isTurnTerminalEvent,
+  materializeTurnSummary,
+  reduceTurnSummaryState,
+  clearTurnSummaryState,
+  type TurnSummary,
+} from './session-projection-turn-summary.ts';
 import { agentIdentityGroupKey } from '@narada2/agent-identity';
 import {
   createOperatorInputDeliveryState,
@@ -77,6 +86,7 @@ export function createSessionProjection(
   const rowState = createRowProjectionState();
   const activityState = createTurnActivityState();
   const operatorDeliveryState = createOperatorInputDeliveryState();
+  const turnSummaryState = createTurnSummaryState();
   for (const message of events) {
     projection.rawEvents.push(message);
     reduceHealthState(projection.health, message);
@@ -89,6 +99,18 @@ export function createSessionProjection(
     }
     reduceTurnActivity(activityState, message);
     reduceOperatorInputDelivery(operatorDeliveryState, message);
+    reduceTurnSummaryState(turnSummaryState, message);
+    if (isTurnTerminalEvent(message)) {
+      const terminalEvent = unwrapRuntimeEvent(message);
+      if (terminalEvent) {
+        const summary = materializeTurnSummary(turnSummaryState, terminalEvent);
+        if (summary) {
+          insertTurnSummaryRow(rowState, summary);
+          projection.rows = materializedRows(rowState);
+        }
+      }
+      clearTurnSummaryState(turnSummaryState);
+    }
   }
   reconcileTurnActivityWithHealth(activityState, isRecord(options.healthSnapshot) ? options.healthSnapshot : null);
   projection.rows = materializedRows(rowState);
@@ -215,6 +237,45 @@ function materializedRows(state: RowProjectionState): ProjectionRow[] {
   return state.order
     .map((key: any) => state.renderedByKey.get(key))
     .filter((row): row is ProjectionRow => row !== undefined);
+}
+
+function insertTurnSummaryRow(state: RowProjectionState, summary: TurnSummary): void {
+  const row = createTurnSummaryRow(summary);
+  const insertAfter = assistantRenderKeyForTurn(summary.turnId, summary.requestId);
+  const index = insertAfter ? state.order.indexOf(insertAfter) : -1;
+  if (index >= 0) {
+    state.order.splice(index + 1, 0, row.key);
+  } else {
+    state.order.push(row.key);
+  }
+  state.renderedByKey.set(row.key, row);
+}
+
+function createTurnSummaryRow(summary: TurnSummary): ProjectionRow {
+  const durationText = summary.durationSeconds !== null ? `${summary.durationSeconds}s` : '?';
+  const failedFragment = summary.toolFailureCount > 0 ? ` · ${summary.toolFailureCount} failed` : '';
+  return {
+    key: `turn_summary:${summary.turnId}`,
+    kind: TURN_SUMMARY_ROW_KIND,
+    label: 'Turn',
+    tone: 'status',
+    summary: {
+      text: `Turn · ${durationText} · ${summary.toolCallCount} tools${failedFragment}`,
+      tools: summary.uniqueToolNames,
+      durationSeconds: summary.durationSeconds,
+      toolCallCount: summary.toolCallCount,
+      toolResultCount: summary.toolResultCount,
+      toolFailureCount: summary.toolFailureCount,
+    },
+    event: summary,
+    disposition: 'conversation_fact',
+  };
+}
+
+function assistantRenderKeyForTurn(turnId: string, requestId: string | null): string | null {
+  if (turnId) return `assistant:${turnId}`;
+  if (requestId) return `assistant:${requestId}`;
+  return null;
 }
 
 function projectionIdentityKey(event: unknown, projection: RuntimeProjection): string | null {

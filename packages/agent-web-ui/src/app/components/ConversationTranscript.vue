@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import EventRow from './EventRow.vue';
+import TurnSummaryRow from './TurnSummaryRow.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { ProjectedEventRow } from '../lib/eventProjection';
@@ -142,7 +143,10 @@ watch(() => props.loadingEarlier, (loading, wasLoading) => {
       </p>
     </div>
     <ol id="events" class="events narada-list-reset" aria-label="NARS session events">
-      <EventRow v-for="row in rows" :key="row.key" :row="row" :verbosity="verbosity" @intent-selected="emit('intent-selected', $event)" />
+      <template v-for="row in rows" :key="row.key">
+        <TurnSummaryRow v-if="row.kind === 'turn_summary'" :row="row" />
+        <EventRow v-else :row="row" :verbosity="verbosity" @intent-selected="emit('intent-selected', $event)" />
+      </template>
       <li
         v-if="agentActivity.active && (verbosity === 'conversation' || verbosity === 'operations')"
         class="event event-agent-activity event-tone-assistant"
