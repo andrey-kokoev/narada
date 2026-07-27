@@ -22,6 +22,7 @@ Semantic and architecture-boundary concepts. These documents define how the syst
 
 Implementation-facing architecture and ownership contracts.
 
+- [`narada-target-architecture.md`](architecture/narada-target-architecture.md) — Cross-cutting normative destination for authority, intelligence, runtime, embodiment, projection, and operator-surface contracts
 - [`agent-web-ui-architecture.md`](architecture/agent-web-ui-architecture.md) — Agent Web UI layers, ownership boundaries, target source shape, and migration seams
 - [`agent-web-ui-command-ux.md`](architecture/agent-web-ui-command-ux.md) — Browser command palette and slash-command UX target
 - [`launch-artifact-integrity.md`](architecture/launch-artifact-integrity.md) — Source-closure, manifest, and launch-admission contract for generated artifacts
