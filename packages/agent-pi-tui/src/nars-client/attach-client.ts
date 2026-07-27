@@ -195,7 +195,7 @@ export class NarsAttachClient {
     return this.sendFrame(buildCancelFrame());
   }
 
-  async reconfigure(input: { provider?: string; model?: string; thinking?: string; id?: string }): Promise<TransportWriteResult> {
+  async reconfigure(input: { inferenceProvider?: string; model?: string; thinking?: string; id?: string }): Promise<TransportWriteResult> {
     const frame = buildRuntimeReconfigureFrame(input);
     if (!frame) throw new Error('nars_intelligence_reconfigure_input_empty');
     return this.sendFrame(frame);

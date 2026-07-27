@@ -16,7 +16,7 @@ export interface SlashAutocompleteProvider {
 const COMPLETIONS: readonly SlashCompletionItem[] = [
   '/help', '/clear', '/view', '/latest', '/theme',
   '/status', '/health', '/events', '/recovery', '/interrupt', '/exit',
-  '/model', '/provider', '/thinking',
+  '/intelligence',
 ].map((value) => ({ value, label: value }));
 
 export function createSlashAutocompleteProvider(): SlashAutocompleteProvider {

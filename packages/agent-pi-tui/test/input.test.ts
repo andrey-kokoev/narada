@@ -11,12 +11,17 @@ describe('agent-pi-tui input boundary', () => {
     expect(result.frame.params?.idempotency_key).toEqual(expect.any(String));
   });
 
-  it('uses the canonical intelligence reconfigure method for model controls', () => {
-    const result: any = classifyOperatorInput('/model gpt-test');
+  it('uses one qualified target for intelligence reconfiguration', () => {
+    const result: any = classifyOperatorInput('/intelligence codex-subscription gpt-test high');
     expect(result.kind).toBe('known_slash');
     if (result.kind !== 'known_slash' || !result.frame) throw new Error('expected protocol frame');
     expect(result.frame.method).toBe('runtime.intelligence.reconfigure');
-    expect(result.frame.params).toMatchObject({ requested_model: { kind: 'model', id: 'model:gpt-test' } });
+    expect(result.frame.params).toMatchObject({
+      requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:codex-subscription' },
+      requested_model: { kind: 'model', id: 'model:gpt-test' },
+      requested_options: { thinking: 'high' },
+    });
+    expect(classifyOperatorInput('/model gpt-test').kind).toBe('unknown_slash');
   });
 
   it('does not forward unknown slash or shell input', () => {

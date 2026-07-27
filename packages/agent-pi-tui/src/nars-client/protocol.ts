@@ -98,23 +98,25 @@ export function buildQueuedSubmitFrame(content: string, options: Omit<SubmitFram
 }
 
 export function buildRuntimeReconfigureFrame(input: {
-  provider?: string;
+  inferenceProvider?: string;
   model?: string;
   thinking?: string;
   id?: string;
 }): NarsProtocolFrame | null {
   const id = input.id ?? requestId('agent-pi-tui-intelligence');
   const params: JsonObject = { request_id: id };
-  if (input.model) {
-    const modelId = input.model.startsWith('model:') ? input.model : `model:${input.model}`;
-    params.requested_model = { kind: 'model', id: modelId };
-  }
-  if (input.thinking) params.requested_options = { thinking: input.thinking };
-  // Provider selection is intentionally retained as a legacy visible command
-  // so the runtime can reject it explicitly; Pi must not invent a provider
-  // route outside the admitted intelligence plan.
-  if (input.provider) params.provider = input.provider;
-  if (Object.keys(params).length === 1) return null;
+  const inferenceProviderId = String(input.inferenceProvider ?? '').trim();
+  const modelId = String(input.model ?? '').trim();
+  if (!inferenceProviderId || !modelId) return null;
+  params.requested_inference_provider = {
+    kind: 'inference-provider',
+    id: inferenceProviderId.startsWith('inference-provider:') ? inferenceProviderId : `inference-provider:${inferenceProviderId}`,
+  };
+  params.requested_model = {
+    kind: 'model',
+    id: modelId.startsWith('model:') ? modelId : `model:${modelId}`,
+  };
+  params.requested_options = input.thinking ? { thinking: input.thinking } : {};
   return {
     id,
     method: NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,

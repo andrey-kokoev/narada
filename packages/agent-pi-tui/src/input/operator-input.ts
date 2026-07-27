@@ -34,7 +34,7 @@ const DIRECT_COMMANDS = new Map([
   ['/exit', 'session.close'],
   ['/quit', 'session.close'],
 ]);
-const RUNTIME_COMMANDS = new Set(['/model', '/provider', '/thinking']);
+const RUNTIME_COMMANDS = new Set(['/intelligence']);
 
 function parseSlash(raw: string): { command: string; value: string } {
   const [head, ...rest] = raw.split(/\s+/);
@@ -58,9 +58,10 @@ function localAction(command: string, value: string): LocalInputAction | null {
 }
 
 function runtimeFrame(command: string, value: string): NarsProtocolFrame | null {
-  if (!value) return null;
-  const key = command.slice(1) as 'model' | 'provider' | 'thinking';
-  return buildRuntimeReconfigureFrame({ [key]: value });
+  if (command !== '/intelligence') return null;
+  const [inferenceProvider, model, thinking, extra] = value.split(/\s+/).filter(Boolean);
+  if (!inferenceProvider || !model || extra) return null;
+  return buildRuntimeReconfigureFrame({ inferenceProvider, model, ...(thinking ? { thinking } : {}) });
 }
 
 export function classifyOperatorInput(rawInput: string, options: {
@@ -121,7 +122,7 @@ export function classifyOperatorInput(rawInput: string, options: {
     const frame = runtimeFrame(command, argument);
     return frame
       ? { kind: 'known_slash', raw, command, frame }
-      : { kind: 'known_slash', raw, command, local: { kind: 'validation', message: `Usage: ${command} <value>` } };
+      : { kind: 'known_slash', raw, command, local: { kind: 'validation', message: 'Usage: /intelligence <inference-provider> <model> [thinking]' } };
   }
   // Use the shared command registry for aliases and to keep the local command
   // vocabulary discoverable, but never forward an unknown slash to NARS.
