@@ -12,26 +12,26 @@ import {
   normalizeNarsExecutionPolicy,
 } from '@narada2/nars-intelligence-kernel-contract';
 import { createNarsNativeKernel } from '@narada2/nars-intelligence-kernel-contract/native-kernel';
-import { createPiSdkHost } from './pi/pi-sdk-host.js';
-import { createPiRpcHost } from './pi/pi-rpc-host.js';
-import { resolveAdmittedPiModelOptions } from './pi/pi-session-factory.js';
-import { assertPiRuntimeIsolation, createPiRuntimeIsolationConfig } from './pi/pi-runtime-isolation.js';
+import { createPiSdkHost } from './pi/pi-sdk-host.ts';
+import { createPiRpcHost } from './pi/pi-rpc-host.ts';
+import { resolveAdmittedPiModelOptions } from './pi/pi-session-factory.ts';
+import { assertPiRuntimeIsolation, createPiRuntimeIsolationConfig } from './pi/pi-runtime-isolation.ts';
 import {
   negotiatePiCapabilities,
   PI_ADAPTER_VERSION,
   PI_EVENT_ADAPTER_VERSION,
   PI_TOOL_POSTURE_VERSION,
   SUPPORTED_PI_CAPABILITIES,
-} from './pi/pi-version-capabilities.js';
-import { createPiEventAdapter } from './adapters/event-adapter.js';
-import { createNarsPiCapabilityGateway, normalizeNarsGatewayTool } from './adapters/tool-adapter.js';
-import { createNarsPiContextBuilder, buildPiContextFromNarsRecords } from './adapters/context-adapter.js';
-import { runProviderWithBoundedRetry } from './adapters/retry-adapter.js';
-import { createCompactionAdapter } from './adapters/compaction-adapter.js';
-import { createNarsArtifactAdapter } from './adapters/artifact-adapter.js';
-import { createCancellationAdapter } from './adapters/cancellation-adapter.js';
-import { createCorrelationRegistry } from './state/correlation-registry.js';
-import { createContinuationState } from './state/continuation-state.js';
+} from './pi/pi-version-capabilities.ts';
+import { createPiEventAdapter } from './adapters/event-adapter.ts';
+import { createNarsPiCapabilityGateway, normalizeNarsGatewayTool } from './adapters/tool-adapter.ts';
+import { createNarsPiContextBuilder, buildPiContextFromNarsRecords } from './adapters/context-adapter.ts';
+import { runProviderWithBoundedRetry } from './adapters/retry-adapter.ts';
+import { createCompactionAdapter } from './adapters/compaction-adapter.ts';
+import { createNarsArtifactAdapter } from './adapters/artifact-adapter.ts';
+import { createCancellationAdapter } from './adapters/cancellation-adapter.ts';
+import { createCorrelationRegistry } from './state/correlation-registry.ts';
+import { createContinuationState } from './state/continuation-state.ts';
 
 function nonEmpty(value: any) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;

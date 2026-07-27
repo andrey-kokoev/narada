@@ -3,10 +3,10 @@ import {
   createInMemoryPiSession,
   adaptExternalPiSession,
   resolveAdmittedPiModelOptions,
-} from './pi-session-factory.js';
-import { createNarsProjectedPiModelRuntime } from './pi-model-runtime.js';
-import { assertPiRuntimeIsolation, createPiRuntimeIsolationConfig } from './pi-runtime-isolation.js';
-import { negotiatePiCapabilities, PI_ADAPTER_VERSION } from './pi-version-capabilities.js';
+} from './pi-session-factory.ts';
+import { createNarsProjectedPiModelRuntime } from './pi-model-runtime.ts';
+import { assertPiRuntimeIsolation, createPiRuntimeIsolationConfig } from './pi-runtime-isolation.ts';
+import { negotiatePiCapabilities, PI_ADAPTER_VERSION } from './pi-version-capabilities.ts';
 
 function nonEmpty(value: any) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;

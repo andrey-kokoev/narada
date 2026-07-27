@@ -3,8 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
-import { createPiRuntimeIsolationConfig, assertPiRuntimeIsolation } from './pi-runtime-isolation.js';
-import { negotiatePiCapabilities } from './pi-version-capabilities.js';
+import { createPiRuntimeIsolationConfig, assertPiRuntimeIsolation } from './pi-runtime-isolation.ts';
+import { negotiatePiCapabilities } from './pi-version-capabilities.ts';
 
 function nonEmpty(value: any) { return typeof value === 'string' && value.trim() ? value.trim() : null; }
 

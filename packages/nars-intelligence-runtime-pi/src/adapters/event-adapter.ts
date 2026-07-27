@@ -1,5 +1,5 @@
 import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
-import { SUPPORTED_PI_EVENT_KINDS } from '../pi/pi-version-capabilities.js';
+import { SUPPORTED_PI_EVENT_KINDS } from '../pi/pi-version-capabilities.ts';
 
 const EVENT_CLASSIFICATIONS: any = Object.freeze({
   assistant_token: 'assistant_streaming_fragment',
