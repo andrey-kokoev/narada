@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref, type Ref } from 'vue';
 import { createSessionProjection } from '../../session-projection.ts';
 import { summarizeSessionIdentity as summarizeProjectedSessionIdentity } from '../../session-identity.ts';
-import type { ProjectedEventRow } from '../lib/eventProjection';
+import type { ProjectedTranscriptRow } from '../lib/eventProjection';
 import type { HealthIdentitySummary } from './useHealthStatus';
 import type { AgentActivityState } from './useAgentActivity';
 import type { ProjectionVerbosity, ProjectionViewOption } from './useProjectionVerbosity';
@@ -58,7 +58,7 @@ export function useNarsEvents(
     nowMs: nowMs.value,
     healthSnapshot: healthBody?.value ?? null,
   }));
-  const rows = computed(() => projection.value.rows as ProjectedEventRow[]);
+  const rows = computed(() => projection.value.transcriptRows as ProjectedTranscriptRow[]);
   const summarizedStateSampleCount = computed(() => projection.value.droppedStateSampleCount);
   const activity = computed<AgentActivityState>(() => projection.value.activity as AgentActivityState);
   const activeTurnId = computed(() => activity.value.activeTurnId ?? null);

@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import EventRow from './EventRow.vue';
+import TurnGroupRow from './TurnGroupRow.vue';
 import TurnSummaryRow from './TurnSummaryRow.vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
-import type { ProjectedEventRow } from '../lib/eventProjection';
+import { isProjectedTurnGroupRow, type ProjectedTranscriptRow } from '../lib/eventProjection';
 
 const props = defineProps<{
-  rows: ProjectedEventRow[];
+  rows: ProjectedTranscriptRow[];
   verbosity: ProjectionVerbosity;
   agentActivity: AgentActivityState;
   followLatestRevision: number;
@@ -23,7 +24,7 @@ const scroller = ref<HTMLElement | null>(null);
 const scrollAuthority = ref<ScrollAuthority>('auto_follow');
 const hasUnseenRows = ref(false);
 const renderedRowRevision = computed(() => [
-  ...props.rows.map((row) => `${row.key}:${row.kind}:${summaryLength(row.summary)}`),
+  ...props.rows.map(transcriptRowRevision),
   agentActivityRevision(),
 ].filter(Boolean).join('|'));
 let scrollSettleTimer: number | null = null;
@@ -34,6 +35,16 @@ function summaryLength(summary: unknown): number {
   if (Array.isArray(summary)) return summary.length;
   if (summary === null || summary === undefined) return 0;
   return String(summary).length;
+}
+
+function transcriptRowRevision(row: ProjectedTranscriptRow): string {
+  if (!isProjectedTurnGroupRow(row)) return `${row.key}:${row.kind}:${summaryLength(row.summary)}`;
+  return [
+    row.key,
+    row.turnId,
+    row.children.map((child) => `${child.key}:${child.kind}:${summaryLength(child.summary)}`).join(','),
+    row.turnSummary ? `${row.turnSummary.key}:${summaryLength(row.turnSummary.summary)}` : '',
+  ].join(':');
 }
 
 function agentActivityRevision(): string {
@@ -144,7 +155,13 @@ watch(() => props.loadingEarlier, (loading, wasLoading) => {
     </div>
     <ol id="events" class="events narada-list-reset" aria-label="NARS session events">
       <template v-for="row in rows" :key="row.key">
-        <TurnSummaryRow v-if="row.kind === 'turn_summary'" :row="row" />
+        <TurnGroupRow
+          v-if="isProjectedTurnGroupRow(row)"
+          :row="row"
+          :verbosity="verbosity"
+          @intent-selected="emit('intent-selected', $event)"
+        />
+        <TurnSummaryRow v-else-if="row.kind === 'turn_summary'" :row="row" />
         <EventRow v-else :row="row" :verbosity="verbosity" @intent-selected="emit('intent-selected', $event)" />
       </template>
       <li

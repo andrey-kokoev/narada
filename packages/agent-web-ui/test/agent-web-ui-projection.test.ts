@@ -171,13 +171,12 @@ test('operator input delivery ignores backward runtime evidence after admission'
     { event: 'input_event_queued', request_id: 'input-order', event_id: 'nars-input-order' },
   ]);
 
-  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.STEERING);
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.QUEUED);
   assert.deepEqual(projection.history, [
     OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
     OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
     OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
     OPERATOR_INPUT_DELIVERY_PHASES.QUEUED,
-    OPERATOR_INPUT_DELIVERY_PHASES.STEERING,
   ]);
 });
 
@@ -713,6 +712,62 @@ test('conversation projection renders a collapsed turn summary after the assista
   assert.deepEqual(conversationKinds, ['user_message', 'assistant_message', 'turn_summary']);
 });
 
+test('hierarchical transcript projection groups correlated turn work, deduplicates replay, and leaves uncorrelated requests flat', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-07-08T20:49:39.000Z' };
+  const events = [
+    { ...base, event: 'user_message', request_id: 'orphan_request', content: 'outside a turn' },
+    { ...base, event: 'user_message', request_id: 'input_group', content: 'finish task 473' },
+    { ...base, event: 'turn_started', request_id: 'input_group', turn_id: 'turn_group_1' },
+    { ...base, event: 'assistant_message', request_id: 'input_group', turn_id: 'turn_group_1', content: 'I will inspect the task.' },
+    { ...base, event: 'user_message', request_id: 'input_group', content: 'finish task 473', event_sequence: 99 },
+    { ...base, event: 'tool_call', request_id: 'input_group', turn_id: 'turn_group_1', tool_name: 'narada.example.lookup' },
+    { ...base, event: 'tool_result', request_id: 'input_group', turn_id: 'turn_group_1', tool_name: 'narada.example.lookup', status: 'error', error: 'unavailable' },
+    { ...base, event: 'turn_interrupted', request_id: 'input_group', turn_id: 'turn_group_1', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+
+  const conversation = createSessionProjection(events, { verbosity: 'conversation' });
+  assert.deepEqual(conversation.transcriptRows.map((row: any) => row.kind), ['user_message', 'turn_group']);
+  const conversationGroup = conversation.transcriptRows[1] as any;
+  assert.equal(conversationGroup.turnId, 'turn_group_1');
+  assert.equal(conversationGroup.requestId, 'input_group');
+  assert.deepEqual(conversationGroup.children.map((row: any) => row.kind), ['user_message', 'assistant_message']);
+  assert.equal(conversationGroup.turnSummary.kind, 'turn_summary');
+  assert.equal(conversationGroup.turnSummary.summary.text, 'Turn · 3s · 1 tools · 1 failed');
+
+  const operations = createSessionProjection(events, { verbosity: 'operations' });
+  assert.deepEqual(operations.transcriptRows.map((row: any) => row.kind), ['user_message', 'turn_group']);
+  const operationsGroup = operations.transcriptRows[1] as any;
+  assert.deepEqual(operationsGroup.children.map((row: any) => row.kind), ['user_message', 'assistant_message', 'tool_call', 'tool_result']);
+  assert.equal(operationsGroup.turnSummary.kind, 'turn_summary');
+  assert.equal(operationsGroup.turnSummary.event.turnId, 'turn_group_1');
+
+  const diagnostics = createSessionProjection(events, { verbosity: 'diagnostics' });
+  assert.equal(diagnostics.rows.some((row: any) => row.kind === 'turn_summary'), false);
+  assert.equal(diagnostics.transcriptRows.some((row: any) => row.kind === 'turn_summary'), false);
+  assert.equal(diagnostics.transcriptRows.some((row: any) => row.kind === 'turn_group' && row.turnSummary), false);
+});
+
+test('hierarchical transcript projection keeps distinct turns separate when a request is retried', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-07-08T20:49:39.000Z' };
+  const events = [
+    { ...base, event: 'user_message', request_id: 'reused_request', content: 'retry this' },
+    { ...base, event: 'turn_started', request_id: 'reused_request', turn_id: 'turn_first' },
+    { ...base, event: 'assistant_message', request_id: 'reused_request', turn_id: 'turn_first', content: 'First attempt.' },
+    { ...base, event: 'turn_interrupted', request_id: 'reused_request', turn_id: 'turn_first', timestamp: '2026-07-08T20:49:40.000Z' },
+    { ...base, event: 'turn_started', request_id: 'reused_request', turn_id: 'turn_retry' },
+    { ...base, event: 'assistant_message', request_id: 'reused_request', turn_id: 'turn_retry', content: 'Retry attempt.' },
+    { ...base, event: 'turn_complete', request_id: 'reused_request', turn_id: 'turn_retry', terminal_state: 'completed', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const groups = projection.transcriptRows.filter((row: any) => row.kind === 'turn_group') as any[];
+  assert.equal(groups.length, 2);
+  assert.deepEqual(groups.map((group) => group.turnId), ['turn_first', 'turn_retry']);
+  assert.deepEqual(groups[0].children.map((row: any) => row.kind), ['user_message', 'assistant_message']);
+  assert.deepEqual(groups[1].children.map((row: any) => row.kind), ['assistant_message']);
+  assert.equal(groups[0].turnSummary.kind, 'turn_summary');
+  assert.equal(groups[1].turnSummary.kind, 'turn_summary');
+});
+
 test('turn summary aggregates provider-nested tool items', () => {
   const agentIdentityRef = {
     schema: 'narada.agent_identity_ref.v1',
@@ -890,11 +945,27 @@ test('operator input delivery projects submission through NARS acknowledgment an
     OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
     OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
     OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
-    OPERATOR_INPUT_DELIVERY_PHASES.STEERING,
     OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED,
   ]);
   assert.equal(projection.requestId, 'input-1');
   assert.equal(projection.activeTurnId, 'nars-input-1');
+});
+
+test('operator input delivery reserves steering for conversation.steer', () => {
+  const projection = createOperatorInputDeliveryProjection([
+    { event: 'operator_input_submitted', request_id: 'steer-1', method: 'conversation.steer', content: 'change course', operator_delivery_mode: 'default' },
+    { event: 'input_event_queued', request_id: 'steer-1', event_id: 'nars-steer-1' },
+    { event: 'input_event_started', request_id: 'steer-1', event_id: 'nars-steer-1' },
+  ]);
+
+  assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.STEERING);
+  assert.equal(projection.label, 'Steering the active turn');
+  assert.deepEqual(projection.history, [
+    OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
+    OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,
+    OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED,
+    OPERATOR_INPUT_DELIVERY_PHASES.STEERING,
+  ]);
 });
 
 test('operator input delivery projects session.close through accepted to session closed', () => {

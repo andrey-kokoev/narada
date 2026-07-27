@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { shallowRef } from 'vue';
+import { nextTick, shallowRef } from 'vue';
 import {
   createRetainedEventState,
   retainEvent,
@@ -41,6 +41,7 @@ import {
 import { createNarsClient } from '../src/protocol/narsClient';
 import { createSessionProjection } from '../src/session-projection.ts';
 import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
+import { useRuntimeTopologyFailFast } from '../src/app/composables/useRuntimeTopologyFailFast';
 import { buildIntelligenceReconfigureFrame } from '../src/app/lib/narsFrames';
 import { isOperatorInputTransportReady, isTransportLive, operatorInputNotReadyReason } from '../src/app/lib/operatorInputReadiness';
 import { findCorrelatedInput, inputCorrelationFromEvent } from '../src/operator-input-correlation.ts';
@@ -161,10 +162,19 @@ describe('agent-web-ui runtime boundaries', () => {
   });
 
   it('builds the Intelligence box action as a direct local runtime control', () => {
-    expect(buildIntelligenceReconfigureFrame({ model: 'next-model' }, { id: 'ui-reconfigure-1' })).toEqual({
+    expect(buildIntelligenceReconfigureFrame({
+      inferenceProvider: 'kimi-code-api',
+      model: 'next-model',
+      requestedOptions: { thinking: 'high' },
+    }, { id: 'ui-reconfigure-1' })).toEqual({
       id: 'ui-reconfigure-1',
       method: 'runtime.intelligence.reconfigure',
-      params: { request_id: 'ui-reconfigure-1', model: 'next-model' },
+      params: {
+        request_id: 'ui-reconfigure-1',
+        requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:kimi-code-api' },
+        requested_model: { kind: 'model', id: 'model:next-model' },
+        requested_options: { thinking: 'high' },
+      },
     });
   });
 
@@ -236,6 +246,116 @@ describe('agent-web-ui runtime boundaries', () => {
 
     expect(topology.status).toBe('degraded');
     expect(topology.verdictLabel).toBe('attached, degraded');
+  });
+
+  it('does not demote a retained healthy snapshot for transient health poll text', () => {
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText: shallowRef('stream connected'),
+      streamLive: shallowRef(true),
+      healthText: shallowRef('health unavailable · temporary network error'),
+      healthBody: shallowRef({ status: 'healthy', session_id: 'session-1' }),
+      sessionIdentity: shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' }),
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    }).topology.value;
+
+    expect(topology.status).toBe('live');
+    expect(topology.verdictLabel).toBe('attached');
+  });
+
+  it('hard-fails once when a live attachment enters a red topology state', async () => {
+    const streamText = shallowRef('stream connected');
+    const streamLive = shallowRef(true);
+    const healthText = shallowRef('healthy');
+    const healthBody = shallowRef<Record<string, unknown> | null>({ status: 'healthy', session_id: 'session-1' });
+    const sessionIdentity = shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' });
+    const activeTurnId = shallowRef<string | boolean | null>(null);
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    });
+    const stop = vi.fn();
+    const onFault = vi.fn();
+    const errorSink = vi.fn();
+    const guard = useRuntimeTopologyFailFast({
+      topology: topology.topology,
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      activeTurnId,
+      stop,
+      onFault,
+      errorSink,
+    });
+
+    streamLive.value = false;
+    await nextTick();
+
+    expect(guard.fault.value).toMatchObject({ previousStatus: 'live', currentStatus: 'degraded' });
+    expect(stop).toHaveBeenCalledOnce();
+    expect(onFault).toHaveBeenCalledOnce();
+    expect(errorSink).toHaveBeenCalledOnce();
+
+    healthBody.value = { status: 'error', session_id: 'session-1' };
+    await nextTick();
+    expect(stop).toHaveBeenCalledOnce();
+    expect(errorSink).toHaveBeenCalledOnce();
+  });
+
+  it('does not treat startup red state as a fatal transition until live attachment is observed', async () => {
+    const streamText = shallowRef('starting');
+    const streamLive = shallowRef(false);
+    const healthText = shallowRef('checking');
+    const healthBody = shallowRef<Record<string, unknown> | null>({ status: 'healthy', session_id: 'session-1' });
+    const sessionIdentity = shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' });
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    });
+    const stop = vi.fn();
+    const errorSink = vi.fn();
+    useRuntimeTopologyFailFast({
+      topology: topology.topology,
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      activeTurnId: shallowRef(null),
+      stop,
+      errorSink,
+    });
+
+    expect(topology.topology.value.status).toBe('degraded');
+    expect(stop).not.toHaveBeenCalled();
+    streamLive.value = true;
+    await nextTick();
+    streamLive.value = false;
+    await nextTick();
+
+    expect(stop).toHaveBeenCalledOnce();
+    expect(errorSink).toHaveBeenCalledOnce();
   });
 
   it('filters command discovery and help through runtime method capabilities', () => {

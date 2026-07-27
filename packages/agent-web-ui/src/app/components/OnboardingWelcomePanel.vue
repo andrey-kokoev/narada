@@ -3,11 +3,11 @@ import { computed, onMounted, ref, watch } from 'vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
-import type { ProjectedEventRow } from '../lib/eventProjection';
+import { isProjectedTurnGroupRow, type ProjectedTranscriptRow } from '../lib/eventProjection';
 
 const props = defineProps<{
   enabled: boolean;
-  rows: ProjectedEventRow[];
+  rows: ProjectedTranscriptRow[];
   agentActivity: AgentActivityState;
   sessionIdentity: SessionIdentitySummary;
   intelligence: HealthIntelligenceSummary;
@@ -23,8 +23,13 @@ const storageKey = computed(() => {
   return sessionId ? `narada.user-site-onboarding.dismissed.${sessionId}` : null;
 });
 
-const operatorMessageSeen = computed(() => props.rows.some((row) => row.kind === 'user_message' || row.kind === 'operator_input_submitted'));
-const assistantMessageSeen = computed(() => props.rows.some((row) => row.kind === 'assistant_message'));
+function containsRowKind(rows: ProjectedTranscriptRow[], kind: string): boolean {
+  return rows.some((row) => row.kind === kind
+    || (isProjectedTurnGroupRow(row) && containsRowKind(row.children, kind)));
+}
+
+const operatorMessageSeen = computed(() => containsRowKind(props.rows, 'user_message') || containsRowKind(props.rows, 'operator_input_submitted'));
+const assistantMessageSeen = computed(() => containsRowKind(props.rows, 'assistant_message'));
 const phase = computed<'ready' | 'working' | 'complete'>(() => {
   if (assistantMessageSeen.value) return 'complete';
   if (operatorMessageSeen.value || props.agentActivity.active) return 'working';

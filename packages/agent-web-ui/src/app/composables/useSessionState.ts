@@ -41,6 +41,11 @@ export function useSessionState(
   });
   const projection = useNarsEvents(retained.events, verbosity, activeView, health.identity, health.body);
 
+  function stop() {
+    connection.stop();
+    health.stop();
+  }
+
   return {
     ...retained,
     ...projection,
@@ -52,6 +57,7 @@ export function useSessionState(
     loadEarlier: connection.loadEarlier,
     streamText: connection.streamText,
     streamLive: connection.streamLive,
+    stop,
   };
 }
 

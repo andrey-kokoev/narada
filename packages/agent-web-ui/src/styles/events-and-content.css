@@ -692,7 +692,28 @@
 }
 
 .shell .event-turn_summary {
+  grid-template-columns: minmax(0, 1fr);
   opacity: 0.9;
+}
+
+.shell .event-turn_group {
+  display: block;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.shell .event-turn_group > .turn-group-events {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
+}
+
+.shell .event-turn_group > .turn-group-events > .event {
+  width: 100%;
 }
 
 .shell .event-turn_summary .event-heading {

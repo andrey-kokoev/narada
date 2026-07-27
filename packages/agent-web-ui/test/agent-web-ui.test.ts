@@ -863,6 +863,7 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   const shell = await readFile(new URL('../src/app/components/NarsSessionShell.vue', import.meta.url), 'utf8');
   const app = await readFile(new URL('../src/app/App.vue', import.meta.url), 'utf8');
   const transcript = await readFile(new URL('../src/app/components/ConversationTranscript.vue', import.meta.url), 'utf8');
+  const turnGroup = await readFile(new URL('../src/app/components/TurnGroupRow.vue', import.meta.url), 'utf8');
   const status = await readFile(new URL('../src/app/components/SessionStatusBar.vue', import.meta.url), 'utf8');
   const activity = await readFile(new URL('../src/app/composables/useAgentActivity.ts', import.meta.url), 'utf8');
   const retainedEvents = await readFile(new URL('../src/app/composables/useRetainedEvents.ts', import.meta.url), 'utf8');
@@ -966,6 +967,11 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(queuePanel, /canSteerActiveTurn: boolean/);
   assert.match(queuePanel, /!activeTurnId \|\| !canSteerActiveTurn/);
   assert.match(transcript, /followLatestRevision/);
+  assert.match(transcript, /<TurnGroupRow/);
+  assert.match(transcript, /isProjectedTurnGroupRow/);
+  assert.match(turnGroup, /<EventRow/);
+  assert.match(turnGroup, /<TurnSummaryRow v-if/);
+  assert.match(turnGroup, /data-turn-id/);
   assert.match(transcript, /type ScrollAuthority = 'auto_follow' \| 'operator_controlled' \| 'force_follow_once'/);
   assert.match(transcript, /agentActivityRevision/);
   assert.match(transcript, /renderedRowRevision/);
@@ -974,6 +980,8 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(transcript, /New messages/);
   assert.match(transcript, /setTimeout\(\(\) => \{/);
   assert.match(css, /\.new-messages-button/);
+  assert.match(css, /\.shell \.event-turn_group/);
+  assert.match(css, /\.shell \.event-turn_group > \.turn-group-events/);
   assert.match(status, /verbosity === 'diagnostics' \|\| verbosity === 'raw'/);
   assert.match(status, /routine status update\{\{ summarizedStateSampleCount === 1 \? '' : 's' \}\} folded into State/);
   assert.match(retainedEvents, /DEFAULT_RETAINED_EVENT_LIMIT = 500/);

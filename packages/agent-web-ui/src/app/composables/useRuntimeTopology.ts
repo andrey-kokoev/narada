@@ -195,7 +195,8 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
   const sessionId = options.sessionIdentity.value.sessionId ?? stringField(health, 'session_id');
   const healthText = options.healthText.value;
   const streamText = options.streamText.value;
-  const healthUnavailable = healthText.toLowerCase().includes('unavailable');
+  const healthStatus = stringField(health, 'status')?.toLowerCase();
+  const healthUnavailable = !health || healthStatus === 'unavailable' || healthStatus === 'error';
   const mcpDegraded = (options.mcpInventory.value.startupFailureCount ?? 0) > 0 || (options.mcpInventory.value.runtimeFaultCount ?? 0) > 0;
   const status: RuntimeTopologySummary['status'] = stale
     ? 'stale'

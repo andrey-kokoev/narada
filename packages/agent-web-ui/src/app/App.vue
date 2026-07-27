@@ -17,6 +17,7 @@ import { useOperatorSnippets, type OperatorSnippet, type OperatorSnippetCommandE
 import { useProjectionVerbosity } from './composables/useProjectionVerbosity';
 import type { ProjectionViewDraft } from './lib/projectionViews';
 import { useRuntimeTopology } from './composables/useRuntimeTopology';
+import { useRuntimeTopologyFailFast, type RuntimeTopologyFaultSnapshot } from './composables/useRuntimeTopologyFailFast';
 import { useResolvedFavicon } from './composables/useResolvedFavicon.ts';
 import { useSchedulerSummary } from './composables/useSchedulerSummary';
 import { useSopSummary } from './composables/useSopSummary';
@@ -25,6 +26,7 @@ import { useSurfaceFeedbackSummary } from './composables/useSurfaceFeedbackSumma
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
 import { buildAffordanceActionCancelFrame, buildAffordanceActionConfirmFrame, buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildIntelligenceReconfigureFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import type { IntelligenceSelectionDraft } from './lib/intelligenceSelection';
 
 interface AgentWebUiConfig {
   eventEndpoint: string | null;
@@ -42,8 +44,12 @@ interface AgentWebUiConfig {
   admittedMethods?: readonly string[];
 }
 
-function requestIntelligenceReconfiguration(change: { provider?: string; model?: string; thinking?: string }) {
-  const frame = buildIntelligenceReconfigureFrame(change);
+function requestIntelligenceReconfiguration(change: IntelligenceSelectionDraft) {
+  const frame = buildIntelligenceReconfigureFrame({
+    inferenceProvider: change.inferenceProvider,
+    model: change.model,
+    requestedOptions: change.thinking ? { thinking: change.thinking } : {},
+  });
   if (frame) {
     sessionActions.send(frame);
     void session.health.refresh();
@@ -91,6 +97,18 @@ const runtimeTopology = useRuntimeTopology({
   sessionIdentity: session.sessionIdentity,
   authorityTransition: computed(() => props.config.authorityTransition ?? null),
   mcpInventory: mcpInventory.inventory,
+});
+const runtimeTopologyFault = ref<RuntimeTopologyFaultSnapshot | null>(null);
+useRuntimeTopologyFailFast({
+  topology: runtimeTopology.topology,
+  streamText: session.streamText,
+  streamLive: session.streamLive,
+  healthText: session.health.text,
+  healthBody: session.health.body,
+  sessionIdentity: session.sessionIdentity,
+  activeTurnId: session.activeTurnId,
+  stop: session.stop,
+  onFault: (snapshot) => { runtimeTopologyFault.value = snapshot; },
 });
 const operatorQueue = useOperatorQueue(session.health.body);
 const operatorSnippets = useOperatorSnippets();
@@ -354,6 +372,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
 
 <template>
   <NarsSessionShell
+    v-if="!runtimeTopologyFault"
     :supports-protocol-method="supportsProtocolMethod"
     v-model:draft="draft"
     :event-endpoint="config.eventEndpoint"

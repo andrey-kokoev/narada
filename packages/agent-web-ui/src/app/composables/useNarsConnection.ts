@@ -31,6 +31,7 @@ export function useNarsConnection(
   const activeTurnId = ref<string | boolean | null>(null);
   const connection = shallowRef<NarsClientConnection | null>(null);
   const history = reactive<Record<string, NarsEventHistoryState>>({});
+  let stopped = false;
 
   function historyFor(view: string): NarsEventHistoryState {
     history[view] ??= { view, hasMore: false, historyTruncated: false, loading: false, beforeSequence: null };
@@ -54,9 +55,10 @@ export function useNarsConnection(
     sessionId: config.sessionId,
     maxReplay: config.maxReplay,
     view: config.view?.value ?? 'conversation',
-    onStatus(status: any) { streamText.value = status; },
-    onTransportState(phase: any) { streamLive.value = isTransportLive(phase); },
+    onStatus(status: any) { if (!stopped) streamText.value = status; },
+    onTransportState(phase: any) { if (!stopped) streamLive.value = isTransportLive(phase); },
     onEvent(event: any) {
+      if (stopped) return;
       activeTurnId.value = connection.value?.activeTurnId ?? null;
       if (isSubscriptionLifecycleEvent(event)) updateHistory(event);
       if (isEventsReadResponse(event)) {
@@ -70,12 +72,14 @@ export function useNarsConnection(
       retain(event);
     },
     onDecodeError(message: any) {
+      if (stopped) return;
       retain({ event: 'web_ui_decode_error', message });
     },
   });
 
   if (config.view) {
     watch(config.view, (view: any) => {
+      if (stopped) return;
       const state = historyFor(view);
       state.hasMore = false;
       state.historyTruncated = false;
@@ -87,7 +91,7 @@ export function useNarsConnection(
   function loadEarlier(): boolean {
     const view = config.view?.value ?? 'conversation';
     const state = historyFor(view);
-    if (state.loading || !state.hasMore || !connection.value) return false;
+    if (stopped || state.loading || !state.hasMore || !connection.value) return false;
     state.loading = true;
     const sent = connection.value.readEventsPage({
       view,
@@ -99,7 +103,13 @@ export function useNarsConnection(
     return sent;
   }
 
-  onBeforeUnmount(() => connection.value?.close());
+  function stop() {
+    if (stopped) return;
+    stopped = true;
+    connection.value?.close();
+  }
+
+  onBeforeUnmount(stop);
   return {
     connection,
     streamText,
@@ -110,6 +120,7 @@ export function useNarsConnection(
     historyTruncated: computed(() => historyFor(config.view?.value ?? 'conversation').historyTruncated),
     loadingEarlier: computed(() => historyFor(config.view?.value ?? 'conversation').loading),
     loadEarlier,
+    stop,
   };
 }
 

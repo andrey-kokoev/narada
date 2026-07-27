@@ -248,6 +248,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
+    if (record.startedAtMs !== null) return state;
     transition(record, OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED, event);
     transition(record, queuedPhase(record), event);
     return state;
@@ -258,7 +259,8 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
     if (!record.acceptedAtMs) transition(record, OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED, event);
-    transition(record, OPERATOR_INPUT_DELIVERY_PHASES.STEERING, event);
+    record.startedAtMs ??= timestampFromEvent(event) ?? Date.now();
+    transition(record, activeTurnPhase(record), event);
     return state;
   }
 
@@ -338,7 +340,8 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     const record = findRecordByTurnOrRequest(state, requestId, event);
     if (record && !isFinalTerminal(record.phase)) {
       absorbRuntimeMetadata(record, event);
-      transition(record, OPERATOR_INPUT_DELIVERY_PHASES.STEERING, event);
+      record.startedAtMs ??= timestampFromEvent(event) ?? Date.now();
+      transition(record, activeTurnPhase(record), event);
     }
   }
   return state;
@@ -477,10 +480,20 @@ function transition(
 }
 
 function queuedPhase(record: DeliveryRecord): OperatorInputPhase {
-  return record.operatorDeliveryMode === 'enqueue'
-    || (record.operatorDeliveryMode == null && record.deliveryMode === 'admit_after_active_turn')
+  if (record.operatorDeliveryMode === 'enqueue'
+    || (record.operatorDeliveryMode == null && record.deliveryMode === 'admit_after_active_turn')) {
+    return OPERATOR_INPUT_DELIVERY_PHASES.QUEUED;
+  }
+  return record.method === 'conversation.steer'
+    ? OPERATOR_INPUT_DELIVERY_PHASES.STEERING
+    : OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED;
+}
+
+function activeTurnPhase(record: DeliveryRecord): OperatorInputPhase {
+  if (record.method === 'conversation.steer') return OPERATOR_INPUT_DELIVERY_PHASES.STEERING;
+  return record.phase === OPERATOR_INPUT_DELIVERY_PHASES.QUEUED
     ? OPERATOR_INPUT_DELIVERY_PHASES.QUEUED
-    : OPERATOR_INPUT_DELIVERY_PHASES.STEERING;
+    : OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED;
 }
 
 function isFinalTerminal(phase: unknown): boolean {

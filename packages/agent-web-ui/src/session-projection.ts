@@ -40,7 +40,7 @@ export type SessionProjectionOptions = {
   healthSnapshot?: unknown;
 };
 
-type ProjectionRow = {
+export type ProjectionRow = {
   key: string;
   kind: string;
   label: string;
@@ -52,6 +52,23 @@ type ProjectionRow = {
   disposition: string;
   [key: string]: unknown;
 };
+
+export type TurnGroupProjectionRow = {
+  key: string;
+  kind: 'turn_group';
+  label: 'Turn';
+  tone: 'assistant';
+  summary: unknown;
+  event: unknown;
+  disposition: 'conversation_group';
+  turnId: string;
+  requestId: string | null;
+  children: ProjectionRow[];
+  turnSummary: ProjectionRow | null;
+  [key: string]: unknown;
+};
+
+export type SessionProjectionRow = ProjectionRow | TurnGroupProjectionRow;
 
 type RowProjectionState = {
   renderedByKey: Map<string, ProjectionRow>;
@@ -65,6 +82,7 @@ type CustomProjectionView = {
 export type SessionProjection = {
   rawEvents: unknown[];
   rows: unknown[];
+  transcriptRows: SessionProjectionRow[];
   health: ReturnType<typeof createInitialHealthState>;
   activity: ReturnType<typeof materializeTurnActivity>;
   operatorDelivery: ReturnType<typeof materializeOperatorInputDelivery>;
@@ -78,6 +96,7 @@ export function createSessionProjection(
   const projection: SessionProjection = {
     rawEvents: [] as unknown[],
     rows: [] as unknown[],
+    transcriptRows: [],
     health: createInitialHealthState(),
     activity: { ...IDLE_ACTIVITY },
     operatorDelivery: materializeOperatorInputDelivery(createOperatorInputDeliveryState(), options.nowMs ?? Date.now()),
@@ -104,7 +123,7 @@ export function createSessionProjection(
       const terminalEvent = unwrapRuntimeEvent(message);
       if (terminalEvent) {
         const summary = materializeTurnSummary(turnSummaryState, terminalEvent);
-        if (summary) {
+        if (summary && shouldRenderTurnSummary(options)) {
           insertTurnSummaryRow(rowState, summary);
           projection.rows = materializedRows(rowState);
         }
@@ -114,6 +133,7 @@ export function createSessionProjection(
   }
   reconcileTurnActivityWithHealth(activityState, isRecord(options.healthSnapshot) ? options.healthSnapshot : null);
   projection.rows = materializedRows(rowState);
+  projection.transcriptRows = materializeSessionRows(rowState);
   projection.activity = materializeTurnActivity(activityState, options.nowMs ?? Date.now());
   projection.operatorDelivery = materializeOperatorInputDelivery(operatorDeliveryState, options.nowMs ?? Date.now());
   return projection;
@@ -122,6 +142,12 @@ export function createSessionProjection(
 function customViewIncludesDisposition(view: CustomProjectionView, disposition: string): boolean {
   const facet = facetForProjectionDisposition(disposition);
   return Boolean(facet && Array.isArray(view.facets) && view.facets.includes(facet));
+}
+
+function shouldRenderTurnSummary(options: SessionProjectionOptions): boolean {
+  if (options.verbosity?.toLowerCase() === 'diagnostics') return false;
+  if (isRecord(options.customView)) return customViewIncludesDisposition(options.customView as CustomProjectionView, 'conversation_fact');
+  return true;
 }
 
 function includesProjectionDisposition(verbosity: string | undefined, disposition: string): boolean {
@@ -237,6 +263,178 @@ function materializedRows(state: RowProjectionState): ProjectionRow[] {
   return state.order
     .map((key: any) => state.renderedByKey.get(key))
     .filter((row): row is ProjectionRow => row !== undefined);
+}
+
+type RowCorrelation = {
+  turnId: string | null;
+  requestId: string | null;
+};
+
+type TurnGroupAccumulator = {
+  row: TurnGroupProjectionRow;
+  firstIndex: number;
+  children: Array<{ index: number; row: ProjectionRow }>;
+  summaryIndex: number | null;
+  active: boolean;
+};
+
+function materializeSessionRows(state: RowProjectionState): SessionProjectionRow[] {
+  const flatRows = materializedRows(state);
+  const groupsByTurn = new Map<string, TurnGroupAccumulator>();
+  const groupsByRequest = new Map<string, TurnGroupAccumulator>();
+  const pendingByRequest = new Map<string, Array<{ index: number; row: ProjectionRow }>>();
+  const groupedIndexes = new Set<number>();
+  const groups = new Set<TurnGroupAccumulator>();
+
+  for (const [index, row] of flatRows.entries()) {
+    const correlation = projectionRowCorrelation(row);
+    if (!correlation.turnId) {
+      if (correlation.requestId) {
+        const existing = groupsByRequest.get(correlation.requestId);
+        if (existing) {
+          addTurnGroupChild(existing, index, row, groupedIndexes);
+        } else {
+          const pending = pendingByRequest.get(correlation.requestId) ?? [];
+          pending.push({ index, row });
+          pendingByRequest.set(correlation.requestId, pending);
+        }
+      }
+      continue;
+    }
+
+    let group = groupsByTurn.get(correlation.turnId) ?? null;
+    const requestGroup = correlation.requestId ? groupsByRequest.get(correlation.requestId) ?? null : null;
+    if (group && requestGroup && group !== requestGroup && requestGroup.row.turnId === correlation.turnId) {
+      group = mergeTurnGroups(group, requestGroup, groupsByTurn, groupsByRequest);
+    } else if (!group && requestGroup?.row.turnId === correlation.turnId) {
+      group = requestGroup;
+    }
+    if (!group) {
+      group = createTurnGroup(index, correlation);
+      groups.add(group);
+    }
+
+    group.row.turnId = correlation.turnId;
+    if (correlation.requestId) group.row.requestId = correlation.requestId;
+    groupsByTurn.set(correlation.turnId, group);
+    if (correlation.requestId) {
+      groupsByRequest.set(correlation.requestId, group);
+      const pending = pendingByRequest.get(correlation.requestId);
+      if (pending) {
+        for (const pendingRow of pending) addTurnGroupChild(group, pendingRow.index, pendingRow.row, groupedIndexes);
+        pendingByRequest.delete(correlation.requestId);
+      }
+    }
+
+    if (row.kind === TURN_SUMMARY_ROW_KIND) {
+      group.row.turnSummary = row;
+      group.summaryIndex = index;
+      group.firstIndex = Math.min(group.firstIndex, index);
+      groupedIndexes.add(index);
+    } else {
+      addTurnGroupChild(group, index, row, groupedIndexes);
+    }
+  }
+
+  const entries: Array<{ index: number; row: SessionProjectionRow }> = [];
+  for (const [index, row] of flatRows.entries()) {
+    if (!groupedIndexes.has(index)) entries.push({ index, row });
+  }
+  for (const group of groups) {
+    if (!group.active) continue;
+    group.children.sort((left, right) => left.index - right.index);
+    group.row.children = group.children.map(({ row }) => row);
+    group.row.summary = group.row.turnSummary?.summary ?? null;
+    group.row.event = group.row.turnSummary?.event ?? null;
+    entries.push({ index: group.firstIndex, row: group.row });
+  }
+  entries.sort((left, right) => left.index - right.index);
+  return entries.map(({ row }) => row);
+}
+
+function createTurnGroup(index: number, correlation: RowCorrelation): TurnGroupAccumulator {
+  return {
+    row: {
+      key: `turn_group:${correlation.requestId ?? correlation.turnId}`,
+      kind: 'turn_group',
+      label: 'Turn',
+      tone: 'assistant',
+      summary: null,
+      event: null,
+      disposition: 'conversation_group',
+      turnId: correlation.turnId as string,
+      requestId: correlation.requestId,
+      children: [],
+      turnSummary: null,
+    },
+    firstIndex: index,
+    children: [],
+    summaryIndex: null,
+    active: true,
+  };
+}
+
+function addTurnGroupChild(
+  group: TurnGroupAccumulator,
+  index: number,
+  row: ProjectionRow,
+  groupedIndexes: Set<number>,
+): void {
+  group.children.push({ index, row });
+  group.firstIndex = Math.min(group.firstIndex, index);
+  groupedIndexes.add(index);
+}
+
+function mergeTurnGroups(
+  left: TurnGroupAccumulator,
+  right: TurnGroupAccumulator,
+  groupsByTurn: Map<string, TurnGroupAccumulator>,
+  groupsByRequest: Map<string, TurnGroupAccumulator>,
+): TurnGroupAccumulator {
+  const primary = left.firstIndex <= right.firstIndex ? left : right;
+  const secondary = primary === left ? right : left;
+  primary.firstIndex = Math.min(primary.firstIndex, secondary.firstIndex);
+  primary.children.push(...secondary.children);
+  if (secondary.summaryIndex !== null && (primary.summaryIndex === null || secondary.summaryIndex > primary.summaryIndex)) {
+    primary.row.turnSummary = secondary.row.turnSummary;
+    primary.summaryIndex = secondary.summaryIndex;
+  }
+  if (secondary.row.turnId) primary.row.turnId = secondary.row.turnId;
+  if (secondary.row.requestId) primary.row.requestId = secondary.row.requestId;
+  secondary.active = false;
+  for (const [turnId, group] of groupsByTurn) if (group === secondary) groupsByTurn.set(turnId, primary);
+  for (const [requestId, group] of groupsByRequest) if (group === secondary) groupsByRequest.set(requestId, primary);
+  return primary;
+}
+
+function projectionRowCorrelation(row: ProjectionRow): RowCorrelation {
+  const event = isRecord(row.event) ? row.event : null;
+  const nested = isRecord(event?.event) ? event.event : null;
+  return {
+    turnId: firstStringValue(
+      event?.turn_id,
+      event?.turnId,
+      event?.input_event_id,
+      event?.event_id,
+      nested?.turn_id,
+      nested?.turnId,
+    ),
+    requestId: firstStringValue(
+      event?.request_id,
+      event?.requestId,
+      event?.input_request_id,
+      nested?.request_id,
+      nested?.requestId,
+    ),
+  };
+}
+
+function firstStringValue(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value) return value;
+    if (typeof value === 'number') return String(value);
+  }
+  return null;
 }
 
 function insertTurnSummaryRow(state: RowProjectionState, summary: TurnSummary): void {

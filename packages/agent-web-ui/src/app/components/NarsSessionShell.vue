@@ -51,8 +51,9 @@ import type { SopSummary } from '../composables/useSopSummary';
 import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
 import type { SurfaceFeedbackSummary } from '../composables/useSurfaceFeedbackSummary';
 import type { TaskLifecycleSummary } from '../composables/useTaskLifecycleSummary';
-import type { ProjectedEventRow } from '../lib/eventProjection';
+import type { ProjectedTranscriptRow } from '../lib/eventProjection';
 import type { ProjectionViewDraft, ProjectionViewFacetOption } from '../lib/projectionViews';
+import type { IntelligenceSelectionDraft } from '../lib/intelligenceSelection';
 
 const props = defineProps<{
   eventEndpoint: string | null;
@@ -73,7 +74,7 @@ const props = defineProps<{
   viewOptions: readonly ProjectionViewOption[];
   customViews: readonly CustomProjectionView[];
   viewFacetOptions: readonly ProjectionViewFacetOption[];
-  rows: ProjectedEventRow[];
+  rows: ProjectedTranscriptRow[];
   sessionIdentity: SessionIdentitySummary;
   operatorDelivery: OperatorInputDeliveryProjection;
   supportsProtocolMethod: (method: string) => boolean;
@@ -137,7 +138,7 @@ const emit = defineEmits<{
   'request-surface-feedback-summary': [];
   'request-task-lifecycle-summary': [];
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
-  'request-intelligence-reconfiguration': [change: { provider?: string; model?: string; thinking?: string }];
+  'request-intelligence-reconfiguration': [change: IntelligenceSelectionDraft];
   'confirm-affordance-action': [item: AffordanceConfirmationItem];
   'cancel-affordance-action': [item: AffordanceConfirmationItem];
   'intent-selected': [intent: string];
@@ -498,7 +499,6 @@ function resetHeaderItems() {
         :view-facet-options="viewFacetOptions"
         :agent-activity="agentActivity"
         :authority-transition="authorityTransition"
-        :surface-affordances="surfaceAffordances"
         :supports-protocol-method="supportsProtocolMethod"
         :cloudflare-projection="cloudflareProjection"
         collapsible
@@ -506,7 +506,6 @@ function resetHeaderItems() {
         @save-view="emit('save-view', $event)"
         @delete-view="emit('delete-view', $event)"
         @publish-cloudflare="emit('publish-cloudflare', $event)"
-        @request-affordance-action="emit('request-affordance-action', $event)"
         @request-intelligence-reconfiguration="emit('request-intelligence-reconfiguration', $event)"
         @collapse="statusRowOpen = false"
       />
