@@ -26,4 +26,34 @@ describe('healthIntelligence', () => {
       },
     })).toMatchObject({ provider: 'codex-subscription', model: 'gpt-5.5', thinking: 'low' });
   });
+
+  it('projects provider-scoped model and thinking capabilities', () => {
+    expect(healthIntelligence({
+      intelligence: {
+        selection_choices: {
+          providers: [{
+            provider: 'kimi-code-api',
+            models: [{ model: 'k3', thinking_choices: ['high', 'low', 'medium'] }],
+          }],
+        },
+      },
+    }).selectionChoices).toEqual([{
+      provider: 'kimi-code-api',
+      models: [{ model: 'k3', thinkingChoices: ['high', 'low', 'medium'] }],
+    }]);
+  });
+
+  it('accepts array and resource-reference selection projections', () => {
+    expect(healthIntelligence({
+      intelligence: {
+        selection_choices: [{
+          provider: { kind: 'inference-provider', id: 'inference-provider:kimi-code-api' },
+          models: [{ model: { kind: 'model', id: 'model:k3' }, thinking_choices: ['thinking'] }],
+        }],
+      },
+    }).selectionChoices).toEqual([{
+      provider: 'kimi-code-api',
+      models: [{ model: 'k3', thinkingChoices: ['thinking'] }],
+    }]);
+  });
 });

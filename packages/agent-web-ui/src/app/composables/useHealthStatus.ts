@@ -9,6 +9,16 @@ export interface HealthIdentitySummary {
   sessionId: string | null;
 }
 
+export interface IntelligenceModelChoice {
+  model: string;
+  thinkingChoices: readonly string[];
+}
+
+export interface IntelligenceProviderChoice {
+  provider: string;
+  models: readonly IntelligenceModelChoice[];
+}
+
 export interface HealthIntelligenceSummary {
   provider: string | null;
   model: string | null;
@@ -16,6 +26,7 @@ export interface HealthIntelligenceSummary {
   providerChoices: readonly string[];
   modelChoices: readonly string[];
   thinkingChoices: readonly string[];
+  selectionChoices: readonly IntelligenceProviderChoice[];
 }
 
 export interface HealthStatusOptions {
@@ -34,8 +45,10 @@ export function useHealthStatus(options: HealthStatusOptions) {
   const body = ref<Record<string, unknown> | null>(null);
   const fetchFn = options.fetchFn ?? globalThis.fetch;
   let timer: ReturnType<typeof setInterval> | null = null;
+  let stopped = false;
 
   async function refresh() {
+    if (stopped) return;
     if (!hasEndpoint) {
       text.value = 'health endpoint not configured';
       return;
@@ -50,6 +63,7 @@ export function useHealthStatus(options: HealthStatusOptions) {
         return;
       }
       const parsedValue = await response.json() as unknown;
+      if (stopped) return;
       const parsed = parsedValue && typeof parsedValue === 'object' && !Array.isArray(parsedValue) ? parsedValue as Record<string, unknown> : {};
       body.value = parsed;
       const displayAgentId = agentIdentityDisplay(objectField(parsed, 'agent_identity_ref'), stringField(parsed, 'agent_id'));
@@ -62,18 +76,26 @@ export function useHealthStatus(options: HealthStatusOptions) {
       intelligence.value = healthIntelligence(parsed);
       text.value = healthStatusText(parsed, response.status);
     } catch (error) {
-      body.value = null;
-      intelligence.value = emptyIntelligence();
+      // Preserve the last successful snapshot across transient polling failures.
+      // Consumers use the structured snapshot for topology severity; clearing it
+      // here would briefly turn a still-attached runtime into "unavailable".
+      if (stopped) return;
       text.value = `health unavailable · ${error instanceof Error ? error.message : String(error)}`;
+    }
+  }
+
+  function stop() {
+    stopped = true;
+    if (timer) {
+      clearInterval(timer);
+      timer = null;
     }
   }
 
   refresh();
   if (hasEndpoint) timer = setInterval(refresh, options.intervalMs ?? 10000);
-  onBeforeUnmount(() => {
-    if (timer) clearInterval(timer);
-  });
-  return { text, identity, intelligence, body, refresh };
+  onBeforeUnmount(stop);
+  return { text, identity, intelligence, body, refresh, stop };
 }
 
 function healthStatusText(body: Record<string, unknown>, httpStatus: number): string {
@@ -121,6 +143,7 @@ export function healthIntelligence(record: Record<string, unknown>): HealthIntel
     providerChoices: stringArrayField(intelligence, 'provider_choices'),
     modelChoices: stringArrayField(intelligence, 'model_choices'),
     thinkingChoices: stringArrayField(intelligence, 'thinking_choices'),
+    selectionChoices: selectionChoicesField(intelligence?.selection_choices),
   };
 }
 
@@ -131,10 +154,52 @@ function resourceIdField(record: Record<string, unknown> | null, field: string, 
 }
 
 function emptyIntelligence(): HealthIntelligenceSummary {
-  return { provider: null, model: null, thinking: null, providerChoices: [], modelChoices: [], thinkingChoices: [] };
+  return {
+    provider: null,
+    model: null,
+    thinking: null,
+    providerChoices: [],
+    modelChoices: [],
+    thinkingChoices: [],
+    selectionChoices: [],
+  };
 }
 
 function stringArrayField(record: Record<string, unknown> | null, field: string): readonly string[] {
   const value = record?.[field];
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
+}
+
+function selectionChoicesField(value: unknown): readonly IntelligenceProviderChoice[] {
+  const providers = Array.isArray(value)
+    ? value
+    : value && typeof value === 'object' && !Array.isArray(value)
+      ? (value as Record<string, unknown>).providers
+      : null;
+  if (!Array.isArray(providers)) return [];
+  return providers.flatMap((provider): IntelligenceProviderChoice[] => {
+    if (!provider || typeof provider !== 'object' || Array.isArray(provider)) return [];
+    const providerRecord = provider as Record<string, unknown>;
+    const providerId = resourceStringField(providerRecord, 'provider', 'inference-provider:');
+    const models = providerRecord.models;
+    if (!providerId || !Array.isArray(models)) return [];
+    return [{
+      provider: providerId,
+      models: models.flatMap((model): IntelligenceModelChoice[] => {
+        if (!model || typeof model !== 'object' || Array.isArray(model)) return [];
+        const modelRecord = model as Record<string, unknown>;
+        const modelId = resourceStringField(modelRecord, 'model', 'model:');
+        if (!modelId) return [];
+        return [{ model: modelId, thinkingChoices: stringArrayField(modelRecord, 'thinking_choices') }];
+      }),
+    }];
+  });
+}
+
+function resourceStringField(record: Record<string, unknown>, field: string, prefix: string): string | null {
+  const direct = stringField(record, field);
+  if (direct) return direct.startsWith(prefix) ? direct.slice(prefix.length) : direct;
+  const resource = objectField(record, field);
+  const id = stringField(resource, 'id');
+  return id?.startsWith(prefix) ? id.slice(prefix.length) : id;
 }

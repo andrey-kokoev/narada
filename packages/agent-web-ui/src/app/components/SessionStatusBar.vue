@@ -13,9 +13,16 @@ import type { useCloudflareProjection } from '../composables/useCloudflareProjec
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
-import type { SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
 import type { CustomProjectionView } from '../composables/useProjectionVerbosity';
 import type { ProjectionViewDraft, ProjectionViewFacetOption, ProjectionViewOption } from '../lib/projectionViews';
+import {
+  isCompleteIntelligenceSelection,
+  modelsForProvider,
+  providerChoicesFor,
+  sameIntelligenceSelection,
+  thinkingChoicesFor,
+  type IntelligenceSelectionDraft,
+} from '../lib/intelligenceSelection';
 
 const props = defineProps<{
   eventEndpoint: string | null;
@@ -33,7 +40,6 @@ const props = defineProps<{
   viewFacetOptions: readonly ProjectionViewFacetOption[];
   agentActivity: AgentActivityState;
   authorityTransition: Record<string, unknown> | null;
-  surfaceAffordances: SurfaceAffordanceSummary;
   supportsProtocolMethod: (method: string) => boolean;
   cloudflareProjection: ReturnType<typeof useCloudflareProjection>;
   collapsible?: boolean;
@@ -43,15 +49,15 @@ const emit = defineEmits<{
   'save-view': [view: ProjectionViewDraft];
   'delete-view': [id: string];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
-  'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
-  'request-intelligence-reconfiguration': [change: { provider?: string; model?: string; thinking?: string }];
+  'request-intelligence-reconfiguration': [change: IntelligenceSelectionDraft];
   collapse: [];
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
 const copyLabel = ref('Copy');
-const pendingProvider = ref<string | null>(null);
-const pendingModel = ref<string | null>(null);
-const pendingThinking = ref<string | null>(null);
+const draftProvider = ref<string | null>(props.intelligence.provider);
+const draftModel = ref<string | null>(props.intelligence.model);
+const draftThinking = ref<string | null>(props.intelligence.thinking);
+const requestPending = ref(false);
 const STATUS_BOX_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.statusBoxes;
 const DEFAULT_STATUS_BOX_IDS = ['events', 'health', 'intelligence', 'authority', 'view', 'cloudflare'] as const;
 type StatusBoxId = typeof DEFAULT_STATUS_BOX_IDS[number];
@@ -129,43 +135,27 @@ const statusTooltips = {
   cloudflare: 'Optional remote browser projection for exposing this local NARS session through a Cloudflare Worker.',
 };
 
-const intelligenceAffordance = computed(() => props.surfaceAffordances.items.find((item) => item.surfaceKind === 'intelligence') ?? null);
-const intelligenceActions = computed(() => actionList(intelligenceAffordance.value?.raw));
-const setProviderAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_provider') ?? null);
-const setModelAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_model') ?? null);
-const setThinkingAction = computed(() => intelligenceActions.value.find((action) => action.id === 'set_thinking') ?? null);
-const providerActionId = computed(() => setProviderAction.value?.id ?? 'set_provider');
-const modelActionId = computed(() => setModelAction.value?.id ?? 'set_model');
-const thinkingActionId = computed(() => setThinkingAction.value?.id ?? 'set_thinking');
-const providerChoices = computed(() => {
-  const choices = objectField(objectField(setProviderAction.value?.raw, 'args'), 'provider')?.choices;
-  const values = [
-    ...(Array.isArray(choices) ? choices : []),
-    ...props.intelligence.providerChoices,
-  ].filter((choice): choice is string => typeof choice === 'string' && choice.length > 0);
-  const current = props.intelligence.provider;
-  return [...new Set([current, ...values].filter((value): value is string => typeof value === 'string' && value.length > 0))];
-});
-const thinkingChoices = computed(() => {
-  const choices = objectField(objectField(setThinkingAction.value?.raw, 'args'), 'thinking')?.choices;
-  const values = [
-    ...(Array.isArray(choices) ? choices : []),
-    ...props.intelligence.thinkingChoices,
-  ].filter((choice): choice is string => typeof choice === 'string' && choice.length > 0);
-  return values.length ? values : ['none', 'low', 'medium', 'high', 'xhigh'];
-});
-const modelChoices = computed(() => {
-  const choices = objectField(objectField(setModelAction.value?.raw, 'args'), 'model')?.choices;
-  const values = [
-    ...props.intelligence.modelChoices,
-    ...(Array.isArray(choices) ? choices : []),
-  ].filter((choice): choice is string => typeof choice === 'string' && choice.length > 0);
-  const current = props.intelligence.model;
-  return [...new Set([...values, current].filter((value): value is string => typeof value === 'string' && value.length > 0))];
-});
-const providerInputValue = computed(() => pendingProvider.value ?? props.intelligence.provider ?? '');
-const modelInputValue = computed(() => pendingModel.value ?? props.intelligence.model ?? '');
-const thinkingInputValue = computed(() => pendingThinking.value ?? props.intelligence.thinking ?? 'medium');
+const providerChoices = computed(() => providerChoicesFor(props.intelligence).map(({ provider }) => provider));
+const modelChoiceRecords = computed(() => modelsForProvider(props.intelligence, draftProvider.value));
+const modelChoices = computed(() => modelChoiceRecords.value.map(({ model }) => model));
+const thinkingChoices = computed(() => thinkingChoicesFor(props.intelligence, draftProvider.value, draftModel.value));
+const providerInputValue = computed(() => draftProvider.value ?? '');
+const modelInputValue = computed(() => draftModel.value ?? '');
+const thinkingInputValue = computed(() => draftThinking.value ?? '');
+const activeSelection = computed<IntelligenceSelectionDraft>(() => ({
+  inferenceProvider: props.intelligence.provider,
+  model: props.intelligence.model,
+  thinking: props.intelligence.thinking,
+}));
+const draftSelection = computed<IntelligenceSelectionDraft>(() => ({
+  inferenceProvider: draftProvider.value,
+  model: draftModel.value,
+  thinking: draftThinking.value,
+}));
+const draftChanged = computed(() => !sameIntelligenceSelection(activeSelection.value, draftSelection.value));
+const canRequestChange = computed(() => props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)
+  && draftChanged.value
+  && isCompleteIntelligenceSelection(props.intelligence, draftSelection.value));
 const modelSelectStyle = computed(() => ({
   inlineSize: selectInlineSize(modelChoices.value, modelInputValue.value),
 }));
@@ -185,70 +175,60 @@ function selectInlineSizeValue(choices: readonly string[], currentValue: string)
   return `calc(${longest}ch + 28px)`;
 }
 
-watch(() => props.intelligence.provider, (provider) => {
-  if (pendingProvider.value && pendingProvider.value === provider) pendingProvider.value = null;
-});
+watch(
+  () => [props.intelligence.provider, props.intelligence.model, props.intelligence.thinking] as const,
+  () => {
+    if (sameIntelligenceSelection(activeSelection.value, draftSelection.value)) requestPending.value = false;
+    if (!draftChanged.value || !requestPending.value) {
+      draftProvider.value = activeSelection.value.inferenceProvider;
+      draftModel.value = activeSelection.value.model;
+      draftThinking.value = activeSelection.value.thinking;
+    }
+  },
+);
 
-watch(() => props.intelligence.model, (model) => {
-  if (pendingModel.value && pendingModel.value === model) pendingModel.value = null;
-});
-
-watch(() => props.intelligence.thinking, (thinking) => {
-  if (pendingThinking.value && pendingThinking.value === thinking) pendingThinking.value = null;
-});
-
-function requestIntelligenceChange(args: { provider?: string; model?: string; thinking?: string }, actionId: string) {
-  const surfaceId = intelligenceAffordance.value?.surfaceId;
-  if (props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)) {
-    emit('request-intelligence-reconfiguration', args);
-    return;
-  }
-  if (!surfaceId) return;
-  emit('request-affordance-action', { surfaceId, actionId, args });
+function requestIntelligenceChange(change: IntelligenceSelectionDraft) {
+  if (!props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)) return;
+  emit('request-intelligence-reconfiguration', change);
 }
 
 function requestProviderChange(event: Event) {
   const provider = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
-  if (!provider || provider === props.intelligence.provider) return;
-  pendingProvider.value = provider;
-  requestIntelligenceChange({ provider }, providerActionId.value);
+  if (!provider || provider === draftProvider.value) return;
+  draftProvider.value = provider;
+  draftModel.value = null;
+  draftThinking.value = null;
+  requestPending.value = false;
 }
 
 function requestModelChange(event: Event) {
   const model = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
-  if (!model || model === props.intelligence.model) return;
-  pendingModel.value = model;
-  requestIntelligenceChange({ model }, modelActionId.value);
+  if (!model || model === draftModel.value) return;
+  draftModel.value = model;
+  draftThinking.value = null;
+  requestPending.value = false;
 }
 
 function requestThinkingChange(event: Event) {
   const thinking = (event.target as HTMLSelectElement | null)?.value.trim() ?? '';
-  if (!thinking || thinking === props.intelligence.thinking) return;
-  pendingThinking.value = thinking;
-  requestIntelligenceChange({ thinking }, thinkingActionId.value);
+  if (!thinking || thinking === draftThinking.value) return;
+  draftThinking.value = thinking;
+  requestPending.value = false;
 }
 
-function actionList(record: Record<string, unknown> | null | undefined): { id: string; raw: Record<string, unknown> }[] {
-  const actions = arrayField(objectField(record, 'affordance_document'), 'actions');
-  return actions
-    .map((action) => ({ id: stringField(action, 'id'), raw: action }))    .filter((action): action is { id: string; raw: Record<string, unknown> } => Boolean(action.id));
+function requestDraftChange() {
+  if (!canRequestChange.value) return;
+  requestPending.value = true;
+  requestIntelligenceChange(draftSelection.value);
 }
 
-function objectField(record: unknown, field: string): Record<string, unknown> | null {
-  if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
-  const value = (record as Record<string, unknown>)[field];
-  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+function cancelDraftChange() {
+  draftProvider.value = activeSelection.value.inferenceProvider;
+  draftModel.value = activeSelection.value.model;
+  draftThinking.value = activeSelection.value.thinking;
+  requestPending.value = false;
 }
 
-function arrayField(record: Record<string, unknown> | null, field: string): Record<string, unknown>[] {
-  const value = record?.[field];
-  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === 'object' && !Array.isArray(item))) : [];
-}
-
-function stringField(record: Record<string, unknown>, field: string): string | null {
-  const value = record[field];
-  return typeof value === 'string' && value ? value : null;
-}
 </script>
 
 <template>
@@ -281,49 +261,31 @@ function stringField(record: Record<string, unknown>, field: string): string | n
             <span class="label">Intelligence</span>
             <div class="intelligence-control-stack" :style="intelligenceControlStackStyle">
               <select
-                v-if="providerChoices.length"
                 class="intelligence-provider-select"
                 :value="providerInputValue"
+                :disabled="!providerChoices.length"
                 aria-label="Provider"
                 @change="requestProviderChange"
                 @click.stop
                 @keydown.stop
               >
+                <option value="" disabled>{{ providerChoices.length ? 'Select provider' : 'Capabilities unavailable' }}</option>
                 <option v-for="choice in providerChoices" :key="choice" :value="choice">{{ choice }}</option>
               </select>
-              <input
-                v-else
-                class="intelligence-provider-input"
-                :value="providerInputValue"
-                placeholder="Provider name"
-                aria-label="Provider"
-                @change="requestProviderChange"
-                @click.stop
-                @keydown.stop
-              >
               <span class="status-token-line status-secondary-token-line intelligence-control-line">
                 <select
-                  v-if="modelChoices.length"
                   class="intelligence-model-select"
                   :style="modelSelectStyle"
                   :value="modelInputValue"
                   aria-label="Model"
+                  :disabled="!draftProvider || !modelChoices.length"
                   @change="requestModelChange"
                   @click.stop
                   @keydown.stop
                 >
+                  <option value="" disabled>{{ draftProvider ? (modelChoices.length ? 'Select model' : 'Capabilities unavailable') : 'Select provider first' }}</option>
                   <option v-for="choice in modelChoices" :key="choice" :value="choice">{{ choice }}</option>
                 </select>
-                <input
-                  v-else
-                  class="intelligence-model-input"
-                  :value="modelInputValue"
-                  placeholder="model"
-                  aria-label="Model"
-                  @change="requestModelChange"
-                  @click.stop
-                  @keydown.stop
-                />
                 <template v-if="modelChoices.length && thinkingChoices.length">
                   <span class="session-token-separator">·</span>
                 </template>
@@ -333,10 +295,12 @@ function stringField(record: Record<string, unknown>, field: string): string | n
                   :style="thinkingSelectStyle"
                   :value="thinkingInputValue"
                   aria-label="Thinking level"
+                  :disabled="!draftModel"
                   @change="requestThinkingChange"
                   @click.stop
                   @keydown.stop
                 >
+                  <option value="" disabled>Select thinking</option>
                   <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>
                 </select>
                 <template v-else-if="intelligence.thinking">
@@ -344,7 +308,16 @@ function stringField(record: Record<string, unknown>, field: string): string | n
                 </template>
               </span>
             </div>
-            <span v-if="pendingProvider || pendingModel || pendingThinking" class="retention-note">change requested</span>
+            <div class="intelligence-change-actions">
+              <button type="button" :disabled="!canRequestChange || requestPending" @click.stop="requestDraftChange">
+                Request change
+              </button>
+              <button type="button" :disabled="!draftChanged && !requestPending" @click.stop="cancelDraftChange">
+                Cancel
+              </button>
+            </div>
+            <span v-if="requestPending" class="retention-note">change requested</span>
+            <span v-else-if="draftChanged" class="retention-note">draft not requested</span>
           </div>
         </TooltipTrigger>
         <TooltipContent side="bottom" align="start">{{ statusTooltips.intelligence }}</TooltipContent>
