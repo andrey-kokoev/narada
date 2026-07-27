@@ -242,7 +242,7 @@ export function reconcileTurnActivityWithHealth(state: TurnActivityState, event:
       const started = startTurnActivity(state, timestampFromEvent(event) ?? Date.now(), agentLabel(event, label), providerDetail(event), activeTurnId, null);
       started.state = phase;
       started.label = agentLabel(event, label);
-      started.detail = providerDetail(event) ?? 'NARS turn state: ' + activeTurnState;
+      started.detail = toolProgressDetail(started) ?? providerDetail(event) ?? 'NARS turn state: ' + activeTurnState;
       return started;
     }
     const phase = TOOL_TURN_HEALTH_STATES.has(activeTurnState)
@@ -250,7 +250,7 @@ export function reconcileTurnActivityWithHealth(state: TurnActivityState, event:
       : TURN_ACTIVITY_PHASES.THINKING;
     state.state = phase;
     state.label = agentLabel(event, phase === TURN_ACTIVITY_PHASES.TOOL ? 'is using tools...' : 'is thinking...');
-    state.detail = providerDetail(event) ?? 'NARS turn state: ' + activeTurnState;
+    state.detail = toolProgressDetail(state) ?? providerDetail(event) ?? 'NARS turn state: ' + activeTurnState;
     return state;
   }
   if (typeof activeTurnState !== 'string' || !ACTIVE_TURN_HEALTH_STATES.includes(activeTurnState)) {
@@ -366,6 +366,11 @@ function startTurnActivity(state: TurnActivityState, timestampMs: number, label:
   state.lastTerminalTurnId = null;
   state.lastTerminalRequestId = null;
   state.activeRequestId = activeRequestId ?? null;
+  state.activeToolIds.clear();
+  state.toolCallCount = 0;
+  state.toolResultCount = 0;
+  state.toolFailureCount = 0;
+  state.latestToolName = null;
   return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.THINKING, timestampMs, label, detail, activeTurnId);
 }
 

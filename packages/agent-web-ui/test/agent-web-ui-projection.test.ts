@@ -254,6 +254,23 @@ test('detailed active health states keep Chat activity reactive', () => {
   }
 });
 
+test('health reconciliation preserves accumulated tool call counts in activity detail', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-07-08T20:49:39.000Z', provider: 'codex-subscription' };
+  const events = [
+    { ...base, event: 'turn_started', request_id: 'input_health_tools', turn_id: 'turn_health_tools' },
+    { ...base, event: 'tool_call', request_id: 'input_health_tools', turn_id: 'turn_health_tools', tool_name: 'narada.example.success' },
+    { ...base, event: 'tool_result', request_id: 'input_health_tools', turn_id: 'turn_health_tools', tool_name: 'narada.example.success', status: 'ok' },
+    { ...base, event: 'tool_call', request_id: 'input_health_tools', turn_id: 'turn_health_tools', tool_name: 'narada.example.failure' },
+    { ...base, event: 'tool_result', request_id: 'input_health_tools', turn_id: 'turn_health_tools', tool_name: 'narada.example.failure', status: 'error', error: 'unavailable' },
+    { ...base, event: 'session_health', status: 'healthy', active_turn_state: 'evaluating', active_turn_id: 'turn_health_tools', timestamp: '2026-07-08T20:50:00.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation', nowMs: Date.parse('2026-07-08T20:50:12.000Z') });
+  assert.equal(projection.activity.active, true);
+  assert.equal(projection.activity.state, 'thinking');
+  assert.match(projection.activity.label, /resident is thinking/);
+  assert.match(projection.activity.detail, /tools: 2 called · 2 completed · 1 failed · latest narada\.example\.failure/);
+});
+
 test('session projection reconciles incomplete replay from the runtime health snapshot', () => {
   const running = createSessionProjection([], {
     nowMs: Date.parse('2026-07-11T12:01:05.000Z'),
