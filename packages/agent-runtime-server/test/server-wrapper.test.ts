@@ -500,6 +500,7 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
     providerId: 'openai-api',
     endpointBaseUrl: `http://127.0.0.1:${providerAddress.port}`,
     credentialReference: 'OPENAI_API_KEY',
+    disableTopologyRequirements: true,
   });
   let child: any = null;
   try {
@@ -962,6 +963,7 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
     providerId: 'openai-api',
     endpointBaseUrl: `http://127.0.0.1:${address.port}`,
     credentialReference: 'OPENAI_API_KEY',
+    disableTopologyRequirements: true,
   });
   const seededStore: any = await SqliteRegistryStore.open(join(siteRoot, '.ai', 'intelligence-registry.db'));
   assert.ok((await seededStore.listCatalogRecords()).length > 0);
@@ -976,8 +978,9 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
     heldResponse = null;
   };
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.ts', import.meta.url));
     child = spawnTestChild(process.execPath, [
+      '--import', 'tsx',
       binPath,
       '--raw-jsonl',
       '--health-host', '127.0.0.1',
@@ -1094,11 +1097,13 @@ test('spawned runtime reconfigures canonical invocation constraints and binds th
     providerId: 'openai-api',
     endpointBaseUrl: `http://127.0.0.1:${address.port}`,
     credentialReference: 'OPENAI_API_KEY',
+    disableTopologyRequirements: true,
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.ts', import.meta.url));
     child = spawnTestChild(process.execPath, [
+      '--import', 'tsx',
       binPath,
       '--raw-jsonl',
       '--no-health',
@@ -1140,6 +1145,7 @@ test('spawned runtime reconfigures canonical invocation constraints and binds th
       method: 'runtime.intelligence.reconfigure',
       params: {
         request_id: 'switch-provider',
+        requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:openai-api' },
         requested_model: { kind: 'model', id: CANONICAL_LOCAL_TEST_IDS.model },
         requested_options: { thinking: 'low' },
       },
@@ -1166,9 +1172,11 @@ test('spawned runtime reconfigures canonical invocation constraints and binds th
       .filter((event: any) => event.event === 'intelligence_runtime_reconfiguration_state_transition' && event.request_id === 'switch-provider')
       .map((event: any) => event.reconfiguration_state), ['requested', 'validating', 'admitted', 'switching', 'active']);
     assert.equal(switched?.terminal_state, 'active');
+    assert.equal(switched?.active?.requestedInferenceProvider?.id, 'inference-provider:openai-api');
     assert.equal(switched?.active?.requestedModel?.id, CANONICAL_LOCAL_TEST_IDS.model);
     assert.deepEqual(switched?.active?.requestedOptions, { thinking: 'low' });
     assert.equal(health?.intelligence?.requested_model?.id, CANONICAL_LOCAL_TEST_IDS.model);
+    assert.equal(health?.intelligence?.requested_inference_provider?.id, 'inference-provider:openai-api');
     assert.equal(health?.intelligence?.latest_plan?.model?.id, CANONICAL_LOCAL_TEST_IDS.model);
     assert.equal(health?.intelligence?.latest_plan?.options?.thinking, 'low');
     assert.deepEqual(observedModels, ['kimi-k2-thinking']);
@@ -1203,6 +1211,7 @@ test('spawned runtime refuses canonical intelligence reconfiguration across a bu
     providerId: 'openai-api',
     endpointBaseUrl: `http://127.0.0.1:${address.port}`,
     credentialReference: 'OPENAI_API_KEY',
+    disableTopologyRequirements: true,
   });
   let child: any = null;
   const releaseProvider: any = () => {
@@ -1212,8 +1221,9 @@ test('spawned runtime refuses canonical intelligence reconfiguration across a bu
     heldResponse = null;
   };
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.ts', import.meta.url));
     child = spawnTestChild(process.execPath, [
+      '--import', 'tsx',
       binPath,
       '--raw-jsonl',
       '--no-health',
@@ -1247,6 +1257,7 @@ test('spawned runtime refuses canonical intelligence reconfiguration across a bu
       method: 'runtime.intelligence.reconfigure',
       params: {
         request_id: 'busy-reconfigure',
+        requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:openai-api' },
         requested_model: { kind: 'model', id: CANONICAL_LOCAL_TEST_IDS.model },
         requested_options: { thinking: 'low' },
       },
@@ -1267,8 +1278,12 @@ test('spawned runtime refuses canonical intelligence reconfiguration across a bu
   } finally {
     releaseProvider();
     if (child && child.exitCode === null) child.kill();
+    child?.stdin?.destroy();
+    child?.stdout?.destroy();
+    child?.stderr?.destroy();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    await new Promise((resolve: any) => setTimeout(resolve, 250));
+    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
   }
 });
 

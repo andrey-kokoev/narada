@@ -1,5 +1,5 @@
-import { lifecycleBindingFromArgs } from './lifecycle-hooks.js';
-import { valueAfterFlag } from './runtime-server-options.js';
+import { lifecycleBindingFromArgs } from './lifecycle-hooks.ts';
+import { valueAfterFlag } from './runtime-server-options.ts';
 
 function authorityModeFromArgs(args: any = [], env: any = process.env) {
   const value: any = valueAfterFlag(args, '--authority') ?? env.NARADA_AUTHORITY_MODE ?? env.NARADA_DELEGATED_AUTHORITY_MODE ?? null;

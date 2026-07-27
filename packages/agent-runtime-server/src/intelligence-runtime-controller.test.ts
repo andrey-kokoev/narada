@@ -70,6 +70,25 @@ test('controller invokes the canonical gateway with stable delivery identity and
   assert.equal('provider' in fixture.controller.snapshot(), false);
 });
 
+test('controller refuses partial qualified selections without changing active state', async () => {
+  const fixture: any = createFixture();
+  const modelOnly: any = await fixture.controller.reconfigure({
+    request_id: 'partial-model-1',
+    requested_model: { kind: 'model', id: 'model:next' },
+    requested_options: { thinking: 'high' },
+  });
+  assert.equal(modelOnly.terminal_state, 'refused');
+  assert.equal(modelOnly.error, 'intelligence_reconfiguration_complete_selection_required');
+  const thinkingOnly: any = await fixture.controller.reconfigure({
+    request_id: 'partial-thinking-1',
+    requested_options: { thinking: 'high' },
+  });
+  assert.equal(thinkingOnly.terminal_state, 'refused');
+  assert.equal(thinkingOnly.error, 'intelligence_reconfiguration_complete_selection_required');
+  assert.equal(fixture.controller.snapshot().requested_inference_provider, null);
+  assert.equal(fixture.controller.snapshot().requested_model, null);
+});
+
 test('tool-catalog changes cannot reuse the same intent payload identity', async () => {
   const fixture: any = createFixture();
   await fixture.controller.callIntelligence(
@@ -156,6 +175,7 @@ test('controller activates canonical model/options constraints only at a clean t
   const fixture: any = createFixture({ busy: true });
   const refused: any = await fixture.controller.reconfigure({
     request_id: 'busy-1',
+    requested_inference_provider: 'inference-provider:test',
     model_ref: 'model:next',
     requested_options: { thinking: 'high', batch: false },
   });
@@ -164,11 +184,13 @@ test('controller activates canonical model/options constraints only at a clean t
   fixture.setBusy(false);
   const active: any = await fixture.controller.reconfigure({
     request_id: 'active-1',
+    requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:test' },
     requested_model: { kind: 'model', id: 'model:next' },
     requested_options: { thinking: 'high', batch: false },
   });
   assert.equal(active.terminal_state, 'active');
   await fixture.controller.callIntelligence([], [], { inputEventId: 'input-2' });
+  assert.deepEqual(fixture.calls[0].requestedInferenceProvider, { kind: 'inference-provider', id: 'inference-provider:test' });
   assert.deepEqual(fixture.calls[0].requestedModel, { kind: 'model', id: 'model:next' });
   assert.deepEqual(fixture.calls[0].requestedOptions, { thinking: 'high', batch: false });
 });
@@ -214,10 +236,12 @@ test('controller passes the privately admitted plan to the kernel switch', async
   });
   const result: any = await controller.reconfigure({
     request_id: 'plan-switch-1',
+    requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:test' },
     requested_model: { kind: 'model', id: 'model:next' },
     requested_options: { thinking: 'high' },
   });
   assert.equal(result.terminal_state, 'active');
+  assert.equal(switched.target.requestedInferenceProvider.id, 'inference-provider:test');
   assert.equal(switched.target.requestedModel.id, 'model:next');
   assert.equal(switched.admittedPlan, PLAN);
 });

@@ -109,6 +109,7 @@ test('live Pi SDK NARS session is substitutable across four attached clients', a
       schema: 'narada.nars.intelligence_runtime_snapshot.v1',
       authority: 'live-e2e',
       principal: 'principal:live',
+      requested_inference_provider: null,
       requested_model: null,
       requested_options: {},
       latest_plan: null,
@@ -124,8 +125,8 @@ test('live Pi SDK NARS session is substitutable across four attached clients', a
       return kernel.reconfigure({
         admitted_plan: {
           selected: {
+            inference_provider: params.requested_inference_provider ?? params.inference_provider_ref ?? { kind: 'inference-provider', id: 'inference-provider:live' },
             model: params.requested_model ?? params.model_ref ?? { kind: 'model', id: 'model:live' },
-            inference_provider: { kind: 'inference-provider', id: 'inference-provider:live' },
           },
           options: params.requested_options ?? {},
         },
@@ -218,7 +219,11 @@ test('live Pi SDK NARS session is substitutable across four attached clients', a
   await waitFor(() => durableEvents(eventsPath).some((event: any) => event.event === 'turn_interrupted'), 5000, 'turn-interrupted');
   assert.equal((await kernel.inspect()).active_turn_id, null);
 
-  send({ id: 'reconfigure-1', method: 'runtime.intelligence.reconfigure', params: { requested_options: { thinking: 'high' } } });
+  send({ id: 'reconfigure-1', method: 'runtime.intelligence.reconfigure', params: {
+    requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:live' },
+    requested_model: { kind: 'model', id: 'model:live' },
+    requested_options: { thinking: 'high' },
+  } });
   await waitFor(() => durableEvents(eventsPath).some((event: any) => event.event === 'runtime_intelligence_reconfiguration'), 5000, 'reconfigure');
   assert.equal((await kernel.inspect()).thinking, 'high');
 

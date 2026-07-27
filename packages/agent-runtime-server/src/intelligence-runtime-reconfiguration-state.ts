@@ -1,4 +1,4 @@
-import { createNarsStateMachine } from './runtime-state-machine.js';
+import { createNarsStateMachine } from './runtime-state-machine.ts';
 
 export const NARS_INTELLIGENCE_RUNTIME_RECONFIGURATION_STATE_SCHEMA: any = 'narada.nars.intelligence_runtime_reconfiguration_state.v1';
 

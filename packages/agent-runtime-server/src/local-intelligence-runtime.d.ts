@@ -103,9 +103,19 @@ export interface LocalIntelligenceRuntime {
   selectionChoices: {
     provider_choices: readonly string[];
     model_choices: readonly string[];
+    selection_choices: {
+      providers: readonly {
+        provider: string;
+        models: readonly {
+          model: string;
+          thinking_choices: readonly string[];
+        }[];
+      }[];
+    };
   };
   kernelHealth: () => Record<string, unknown> | null;
   preflightSelection(input?: {
+    requestedInferenceProvider?: ResourceRef | null;
     requestedModel?: ResourceRef | null;
     requestedOptions?: Record<string, unknown>;
   }): Promise<InvocationPlan>;
@@ -121,6 +131,15 @@ export declare function readLocalIntelligenceSelectionChoices(
 ): Promise<{
   provider_choices: readonly string[];
   model_choices: readonly string[];
+  selection_choices: {
+    providers: readonly {
+      provider: string;
+      models: readonly {
+        model: string;
+        thinking_choices: readonly string[];
+      }[];
+    }[];
+  };
 }>;
 
 export declare function executionSiteDecisionClock(

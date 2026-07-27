@@ -8,13 +8,13 @@ import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
 import { normalizeNarsExecutionPolicy } from '@narada2/nars-intelligence-kernel-contract';
-import { createRuntimeSessionBinding } from './runtime-session-binding.js';
+import { createRuntimeSessionBinding } from './runtime-session-binding.ts';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
-import { createNarsRuntimeRequestRegistry } from './runtime-request-state.js';
+import { createNarsRuntimeRequestRegistry } from './runtime-request-state.ts';
 import {
   NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD,
   isNarsRuntimeServerMethod,
-} from './runtime-control-contract.js';
+} from './runtime-control-contract.ts';
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS: any = 10_000;
 const HEARTBEAT_FRESH_MS: any = 30_000;
@@ -282,6 +282,9 @@ function currentIntelligenceSnapshot(intelligenceRuntime: any, runtimeContext: a
     schema: 'narada.nars.intelligence_runtime_snapshot.v1',
     authority: 'unavailable',
     principal: runtimeContext.intelligence?.principal ?? null,
+    requested_inference_provider: runtimeContext.intelligence?.requestedInferenceProvider
+      ?? runtimeContext.intelligence?.requested_inference_provider
+      ?? null,
     requested_model: runtimeContext.intelligence?.requestedModel ?? null,
     requested_options: runtimeContext.intelligence?.requestedOptions ?? {},
     latest_plan: null,
@@ -291,6 +294,7 @@ function currentIntelligenceSnapshot(intelligenceRuntime: any, runtimeContext: a
     reconfiguration: null,
     intelligence_kernel_kind: runtimeContext.intelligenceKernelKind ?? null,
     kernel: null,
+    selection_choices: { providers: [] },
   };
 }
 

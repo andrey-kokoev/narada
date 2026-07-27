@@ -1,5 +1,5 @@
 import { canonicalInvocationInput, sha256Digest } from '@narada2/invokable-intelligence-resolver';
-import { createNarsIntelligenceRuntimeReconfigurationStateMachine } from './intelligence-runtime-reconfiguration-state.js';
+import { createNarsIntelligenceRuntimeReconfigurationStateMachine } from './intelligence-runtime-reconfiguration-state.ts';
 
 function nonEmpty(value: any) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -12,6 +12,15 @@ function modelRef(value: any) {
     throw new Error('intelligence_reconfiguration_model_ref_invalid');
   }
   return { kind: 'model', id };
+}
+
+function inferenceProviderRef(value: any) {
+  const id: any = typeof value === 'string' ? nonEmpty(value) : nonEmpty(value?.id);
+  const kind: any = typeof value === 'object' && value !== null ? value.kind : 'inference-provider';
+  if (!id || kind !== 'inference-provider' || !id.startsWith('inference-provider:')) {
+    throw new Error('intelligence_reconfiguration_inference_provider_ref_invalid');
+  }
+  return { kind: 'inference-provider', id };
 }
 
 function requestedOptions(value: any) {
@@ -29,12 +38,16 @@ function targetFromParams(params: any) {
   if (params.provider !== undefined || params.model !== undefined || params.thinking !== undefined) {
     throw new Error('intelligence_reconfiguration_legacy_selection_forbidden');
   }
+  const providerInput: any = params.requested_inference_provider ?? params.inference_provider_ref;
   const modelInput: any = params.requested_model ?? params.model_ref;
+  const hasProvider: any = providerInput !== undefined && providerInput !== null;
   const hasModel: any = modelInput !== undefined && modelInput !== null;
-  const hasOptions: any = params.requested_options !== undefined && params.requested_options !== null;
-  if (!hasModel && !hasOptions) throw new Error('intelligence_reconfiguration_target_required');
+  if (!hasProvider || !hasModel) {
+    throw new Error('intelligence_reconfiguration_complete_selection_required');
+  }
   return {
-    requestedModel: hasModel ? modelRef(modelInput) : null,
+    requestedInferenceProvider: inferenceProviderRef(providerInput),
+    requestedModel: modelRef(modelInput),
     requestedOptions: requestedOptions(params.requested_options),
   };
 }
@@ -116,6 +129,9 @@ export function createNarsIntelligenceRuntimeController({
   const principal: any = nonEmpty(runtimeContext.intelligence?.principal);
   if (!principal) throw new Error('intelligence_runtime_principal_required');
   let selection: any = {
+    requestedInferenceProvider: runtimeContext.intelligence?.requestedInferenceProvider
+      ?? runtimeContext.intelligence?.requested_inference_provider
+      ?? null,
     requestedModel: runtimeContext.intelligence?.requestedModel ?? null,
     requestedOptions: { ...(runtimeContext.intelligence?.requestedOptions ?? {}) },
   };
@@ -150,6 +166,7 @@ export function createNarsIntelligenceRuntimeController({
       schema: 'narada.nars.intelligence_runtime_snapshot.v1',
       authority: 'invokable-intelligence-gateway',
       principal,
+      requested_inference_provider: selection.requestedInferenceProvider,
       requested_model: selection.requestedModel,
       requested_options: { ...selection.requestedOptions },
       latest_plan: publicPlan(latest?.plan),
@@ -166,6 +183,7 @@ export function createNarsIntelligenceRuntimeController({
       model_choices: Array.isArray(projectedSelectionChoices.model_choices)
         ? [...projectedSelectionChoices.model_choices]
         : [],
+      selection_choices: projectedSelectionChoices.selection_choices ?? { providers: [] },
     };
   }
 
@@ -189,6 +207,9 @@ export function createNarsIntelligenceRuntimeController({
       ...(nonEmpty(overrides.intentId) ? { intentId: overrides.intentId.trim() } : {}),
       purpose: 'operator-chat',
       principal,
+      ...(selection.requestedInferenceProvider
+        ? { requestedInferenceProvider: selection.requestedInferenceProvider }
+        : {}),
       ...(selection.requestedModel ? { requestedModel: selection.requestedModel } : {}),
       ...(Object.keys(selection.requestedOptions).length ? { requestedOptions: selection.requestedOptions } : {}),
       messages,
@@ -265,10 +286,20 @@ export function createNarsIntelligenceRuntimeController({
     if (!result || typeof result !== 'object') return;
     if (result.plan) {
       latest = result;
+      selection = {
+        requestedInferenceProvider: result.plan.selected?.inference_provider ?? null,
+        requestedModel: result.plan.selected?.model ?? null,
+        requestedOptions: { ...(result.plan.options ?? {}) },
+      };
       return;
     }
     if (result.schema === 'narada.invokable-intelligence.invocation-plan.v2') {
       latest = { plan: result };
+      selection = {
+        requestedInferenceProvider: result.selected?.inference_provider ?? null,
+        requestedModel: result.selected?.model ?? null,
+        requestedOptions: { ...(result.options ?? {}) },
+      };
     }
   }
 

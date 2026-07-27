@@ -6,9 +6,9 @@ import {
   readNarsEventLogPage,
 } from '@narada2/nars-session-core/event-log';
 import { isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
-import { decodeWebSocketFrames, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.js';
-import { isNarsRuntimeServerMethod } from './runtime-control-contract.js';
-import { parseEndpointOptions } from './runtime-server-options.js';
+import { decodeWebSocketFrames, encodeWebSocketPongFrame, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.ts';
+import { isNarsRuntimeServerMethod } from './runtime-control-contract.ts';
+import { parseEndpointOptions } from './runtime-server-options.ts';
 
 let eventStreamConnectionSequence: any = 0;
 
@@ -307,6 +307,10 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       const decoded: any = decodeWebSocketFrames(pending);
       pending = decoded.rest;
       for (const frame of decoded.frames) {
+        if (frame.opcode === 0x9) {
+          socket.write(encodeWebSocketPongFrame(frame.payload));
+          continue;
+        }
         if (frame.opcode === 0x8) {
           socket.end();
           return;

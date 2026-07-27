@@ -3,15 +3,15 @@ import { PassThrough } from 'node:stream';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
-import { createControlInputBridge } from './control-input-bridge.js';
+import { createControlInputBridge } from './control-input-bridge.ts';
 import {
   createRuntimeCapabilityGateway,
   createSessionCoreRuntimeService,
   normalizeRuntimeMcpScope,
-} from './session-core-runtime-service.js';
-import { createNarsIntelligenceRuntimeController } from './intelligence-runtime-controller.js';
-import { createNarsRuntimeContext } from './runtime-context.js';
-import { createLocalIntelligenceRuntime } from './local-intelligence-runtime.js';
+} from './session-core-runtime-service.ts';
+import { createNarsIntelligenceRuntimeController } from './intelligence-runtime-controller.ts';
+import { createNarsRuntimeContext } from './runtime-context.ts';
+import { createLocalIntelligenceRuntime } from './local-intelligence-runtime.ts';
 import {
   formatPreflightWorkflowEvent,
   formatPreflightWorkflowSummary,
@@ -31,7 +31,7 @@ import {
   formatStartupMcpEvent,
   formatStartupMcpSummary,
   formatWrapperStatusEvent,
-} from './runtime-server-events.js';
+} from './runtime-server-events.ts';
 import {
   createNarsLifecycleHookDispatcher,
   dispatchNarsLifecycleHook,
@@ -39,17 +39,17 @@ import {
   lifecycleBindingFromArgs,
   lifecycleHookFailureLine,
   loadNarsLifecycleHookDispatcher,
-} from './lifecycle-hooks.js';
-import { startEventStreamProjection, parseEventStreamOptions } from './runtime-server-event-stream.js';
-import { createEventHub } from './runtime-server-event-hub.js';
-import { createDelegatedAuthorityHandoff } from './runtime-server-authority.js';
-import { handleArtifactHttpRequest } from './runtime-server-artifacts.js';
-import { createNarsRuntimeHostStateMachine } from './runtime-host-state.js';
-import { createNarsHealthProjectionRequestStateMachine } from './health-projection-request-state.js';
-import { parseEndpointOptions, valueAfterFlag } from './runtime-server-options.js';
+} from './lifecycle-hooks.ts';
+import { startEventStreamProjection, parseEventStreamOptions } from './runtime-server-event-stream.ts';
+import { createEventHub } from './runtime-server-event-hub.ts';
+import { createDelegatedAuthorityHandoff } from './runtime-server-authority.ts';
+import { handleArtifactHttpRequest } from './runtime-server-artifacts.ts';
+import { createNarsRuntimeHostStateMachine } from './runtime-host-state.ts';
+import { createNarsHealthProjectionRequestStateMachine } from './health-projection-request-state.ts';
+import { parseEndpointOptions, valueAfterFlag } from './runtime-server-options.ts';
 import { createSessionAuthorityRuntimeBinding } from '@narada2/nars-session-authority';
 
-export { formatHostStatusEvent } from './runtime-server-events.js';
+export { formatHostStatusEvent } from './runtime-server-events.ts';
 
 export function shouldUseInteractiveTerminalProjection({
   rawJsonl = false,

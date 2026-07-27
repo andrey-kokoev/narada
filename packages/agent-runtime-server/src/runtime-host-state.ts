@@ -1,4 +1,4 @@
-import { createNarsStateMachine } from './runtime-state-machine.js';
+import { createNarsStateMachine } from './runtime-state-machine.ts';
 
 export const NARS_RUNTIME_HOST_STATE_SCHEMA: any = 'narada.nars.runtime_host_state.v1';
 

@@ -23,6 +23,12 @@ export function encodeWebSocketTextFrame(payload: any) {
   return Buffer.concat([header, body]);
 }
 
+export function encodeWebSocketPongFrame(payload: Uint8Array = Buffer.alloc(0)) {
+  const body = Buffer.from(payload);
+  if (body.length > 125) throw new Error('websocket_control_frame_payload_too_large');
+  return Buffer.concat([Buffer.from([0x8a, body.length]), body]);
+}
+
 export function decodeWebSocketFrames(buffer: any) {
   const frames: any = [];
   let offset: any = 0;
@@ -50,7 +56,7 @@ export function decodeWebSocketFrames(buffer: any) {
       const mask: any = buffer.subarray(offset + headerLength, offset + headerLength + 4);
       payload = Buffer.from(payload.map((byte: any, index: any) => byte ^ mask[index % 4]));
     }
-    frames.push({ opcode, text: payload.toString('utf8') });
+    frames.push({ opcode, payload, text: payload.toString('utf8') });
     offset = frameEnd;
   }
   return { frames, rest: buffer.subarray(offset) };
