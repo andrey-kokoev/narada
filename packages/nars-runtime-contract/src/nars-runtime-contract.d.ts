@@ -7,6 +7,14 @@ export function buildNarsRuntimeIntelligenceReconfigureFrame(input?: {
   provider?: unknown;
   model?: unknown;
   thinking?: unknown;
+  inferenceProvider?: unknown;
+  inference_provider?: unknown;
+  requestedModel?: unknown;
+  requested_model?: unknown;
+  requestedInferenceProvider?: unknown;
+  requested_inference_provider?: unknown;
+  requestedOptions?: Record<string, unknown>;
+  requested_options?: Record<string, unknown>;
   requestId?: unknown;
   request_id?: unknown;
 }, options?: { id?: unknown }): Record<string, unknown> | null;

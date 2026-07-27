@@ -21,27 +21,40 @@ test('runtime contract owns the admitted method registry', () => {
   assert.equal(isNarsRuntimeServerMethod('session.submit'), false);
 });
 
-test('runtime contract builds credential-free intelligence reconfiguration frames', () => {
+test('runtime contract builds admitted intelligence reconfiguration frames', () => {
   assert.deepEqual(buildNarsRuntimeIntelligenceReconfigureFrame({
-    provider: 'deepseek-api',
+    inferenceProvider: 'deepseek-api',
     model: 'deepseek-v4-flash',
-    thinking: 'medium',
+    requestedOptions: { thinking: 'medium' },
   }, { id: 'reconfigure-7' }), {
     id: 'reconfigure-7',
     method: 'runtime.intelligence.reconfigure',
     params: {
       request_id: 'reconfigure-7',
-      provider: 'deepseek-api',
-      model: 'deepseek-v4-flash',
-      thinking: 'medium',
+      requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:deepseek-api' },
+      requested_model: { kind: 'model', id: 'model:deepseek-v4-flash' },
+      requested_options: { thinking: 'medium' },
     },
   });
-  assert.deepEqual(buildNarsRuntimeIntelligenceReconfigureFrame({ model: 'next-model' }, { id: 'model-only' }), {
-    id: 'model-only',
+  assert.deepEqual(buildNarsRuntimeIntelligenceReconfigureFrame({
+    requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:kimi-code-api' },
+    requested_model: { kind: 'model', id: 'model:k3' },
+    requested_options: {},
+  }, { id: 'complete-empty-options' }), {
+    id: 'complete-empty-options',
     method: 'runtime.intelligence.reconfigure',
-    params: { request_id: 'model-only', model: 'next-model' },
+    params: {
+      request_id: 'complete-empty-options',
+      requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:kimi-code-api' },
+      requested_model: { kind: 'model', id: 'model:k3' },
+      requested_options: {},
+    },
   });
   assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame(), null);
+  assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ model: 'next-model' }), null);
+  assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ inferenceProvider: 'deepseek-api' }), null);
+  assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ inferenceProvider: 'deepseek-api', model: 'next-model', thinking: 'medium' }), null);
+  assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ provider: 'deepseek-api' }), null);
   assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ provider: '   ' }), null);
 });
 

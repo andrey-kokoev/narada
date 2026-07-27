@@ -7,6 +7,16 @@ interface RuntimeExecutionPolicy extends JsonRecord {
   tool_loop?: JsonRecord;
 }
 
+function resourceRef(value: unknown, kind: string, prefix: string): JsonRecord | null {
+  if (value === undefined || value === null) return null;
+  const raw = typeof value === 'string' ? value.trim() : value;
+  const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw as JsonRecord : null;
+  const id = typeof raw === 'string' ? raw : typeof record?.id === 'string' ? record.id.trim() : '';
+  const actualKind = record?.kind;
+  if (!id || (actualKind !== undefined && actualKind !== kind)) return null;
+  return { kind, id: id.startsWith(prefix) ? id : `${prefix}${id}` };
+}
+
 interface RuntimeExecutionPolicyInput extends JsonRecord {
   executionPolicy?: RuntimeExecutionPolicy;
   execution_policy?: RuntimeExecutionPolicy;
@@ -20,6 +30,14 @@ interface RuntimeIntelligenceInput extends JsonRecord {
   provider?: unknown;
   model?: unknown;
   thinking?: unknown;
+  inferenceProvider?: unknown;
+  inference_provider?: unknown;
+  requestedModel?: unknown;
+  requested_model?: unknown;
+  requestedInferenceProvider?: unknown;
+  requested_inference_provider?: unknown;
+  requestedOptions?: unknown;
+  requested_options?: unknown;
   requestId?: unknown;
   request_id?: unknown;
 }
@@ -84,19 +102,46 @@ export function buildNarsRuntimeIntelligenceReconfigureFrame(
     provider,
     model,
     thinking,
+    inferenceProvider,
+    inference_provider,
+    requestedModel,
+    requested_model,
+    requestedInferenceProvider,
+    requested_inference_provider,
+    requestedOptions,
+    requested_options,
     requestId,
     request_id,
   }: RuntimeIntelligenceInput = {},
   options: { id?: unknown } = {},
 ): JsonRecord | null {
-  const values: JsonRecord = { provider, model, thinking };
+  // Provider-only and legacy provider fields have no admitted representation
+  // at the runtime boundary. The explicit inference-provider/model pair is
+  // the smallest complete qualified selection and is admitted atomically.
+  if (provider !== undefined && provider !== null) return null;
+  if (thinking !== undefined && thinking !== null) return null;
+
+  const modelValue = requested_model ?? requestedModel ?? model;
+  const providerValue = requested_inference_provider
+    ?? requestedInferenceProvider
+    ?? inference_provider
+    ?? inferenceProvider;
+  const requestedModelRef = resourceRef(modelValue, 'model', 'model:');
+  const requestedInferenceProviderRef = resourceRef(providerValue, 'inference-provider', 'inference-provider:');
+  if (!requestedModelRef || !requestedInferenceProviderRef) return null;
+
+  const optionsValue = requested_options ?? requestedOptions;
   const params: JsonRecord = {};
-  for (const [key, value] of Object.entries(values)) {
-    if (value === undefined || value === null) continue;
-    if (typeof value !== 'string' || !value.trim()) return null;
-    params[key] = value.trim();
-  }
-  if (!Object.keys(params).length) return null;
+  const normalizedOptions: JsonRecord = optionsValue === undefined || optionsValue === null
+    ? {}
+    : optionsValue && typeof optionsValue === 'object' && !Array.isArray(optionsValue)
+      ? { ...optionsValue }
+      : {};
+  if (optionsValue !== undefined && optionsValue !== null
+    && (!optionsValue || typeof optionsValue !== 'object' || Array.isArray(optionsValue))) return null;
+  params.requested_inference_provider = requestedInferenceProviderRef;
+  params.requested_model = requestedModelRef;
+  params.requested_options = normalizedOptions;
 
   const id = String(options.id ?? request_id ?? requestId ?? `nars-runtime-intelligence-reconfigure-${Date.now()}`).trim();
   if (!id) return null;

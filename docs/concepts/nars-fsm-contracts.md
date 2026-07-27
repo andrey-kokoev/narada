@@ -227,17 +227,22 @@ switch is terminal for that request:
 
 `switching -> failed`
 
-The request accepts a provider and model, with optional thinking level. It
-does not accept raw credentials. Provider binding resolution selects the
-provider-specific credential and base URL from the already projected runtime
-environment. Validation is local: it checks the provider contract, adapter,
-model, and credential shape without making a provider network call.
+The request accepts one qualified target: an inference-provider reference, a
+model reference, and a complete options object. The model is not interpreted
+as a global name independent of its inference provider. It does not accept raw
+credentials. Provider binding resolution selects the provider-specific
+credential and base URL from the already projected runtime environment.
+Validation is local: it checks the provider contract, adapter, model, and
+credential shape without making a provider network call. Provider-only,
+model-only, or options-only requests are refused and cannot partially mutate
+the active selection.
 
 The switch is atomic at the turn boundary. The active turn keeps its existing
 provider call; only a later turn observes the new binding. Health and
-transition events expose provider, model, thinking, and redacted binding
-metadata, never API keys. Codex continuation state belongs to one provider
-call instance and is not shared through process-global mutable state.
+transition events expose the qualified inference-provider/model selection,
+valid capability choices, and redacted binding metadata, never API keys. Codex
+continuation state belongs to one provider call instance and is not shared
+through process-global mutable state.
 
 ## Site-Registry and Receiving-Site Bootstrap
 

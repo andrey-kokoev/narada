@@ -121,14 +121,24 @@ test('NARS client conformance fixtures remain representation-neutral and complet
 });
 
 test('NARS client projection contract builds the direct runtime intelligence control frame', () => {
-  const frame = buildAgentWebUiIntelligenceReconfigureFrame({ model: 'next-model' }, { id: 'ui-reconfigure-1' });
+  const frame = buildAgentWebUiIntelligenceReconfigureFrame({
+    inferenceProvider: 'kimi-code-api',
+    model: 'k3',
+    requestedOptions: { thinking: 'high' },
+  }, { id: 'ui-reconfigure-1' });
   assert.equal(isAgentWebUiNarsMethod(frame?.method), true);
   assert.equal(isAgentWebUiCloudflareProtocolFrame(frame), false);
   assert.deepEqual(frame, {
     id: 'ui-reconfigure-1',
     method: 'runtime.intelligence.reconfigure',
-    params: { request_id: 'ui-reconfigure-1', model: 'next-model' },
+    params: {
+      request_id: 'ui-reconfigure-1',
+      requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:kimi-code-api' },
+      requested_model: { kind: 'model', id: 'model:k3' },
+      requested_options: { thinking: 'high' },
+    },
   });
+  assert.equal(buildAgentWebUiIntelligenceReconfigureFrame({ model: 'next-model' }), null);
 });
 
 test('NARS client projection contract owns canonical intent references', () => {
@@ -640,12 +650,12 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     summary: 'control input bridge control_input_record_invalid · Unexpected token',
     event: { event: 'runtime_control_input_bridge_error', error_code: 'control_input_record_invalid', error: 'Unexpected token' },
   });
-  assert.deepEqual(projectNarsClientEvent({ event: 'intelligence_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { requestedModel: { kind: 'model', id: 'model:deepseek-chat' }, requestedOptions: { thinking: 'low' } } }), {
+  assert.deepEqual(projectNarsClientEvent({ event: 'intelligence_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { requestedInferenceProvider: { kind: 'inference-provider', id: 'inference-provider:deepseek-api' }, requestedModel: { kind: 'model', id: 'model:deepseek-chat' }, requestedOptions: { thinking: 'low' } } }), {
     kind: 'intelligence_runtime_reconfiguration_state_transition',
     label: 'Intelligence reconfiguration state',
     tone: 'status',
-    summary: 'intelligence reconfiguration validating -> admitted · model:deepseek-chat · thinking=low',
-    event: { event: 'intelligence_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { requestedModel: { kind: 'model', id: 'model:deepseek-chat' }, requestedOptions: { thinking: 'low' } } },
+    summary: 'intelligence reconfiguration validating -> admitted · inference-provider:deepseek-api · model:deepseek-chat · thinking=low',
+    event: { event: 'intelligence_runtime_reconfiguration_state_transition', request_id: 'switch-1', previous_state: 'validating', reconfiguration_state: 'admitted', target: { requestedInferenceProvider: { kind: 'inference-provider', id: 'inference-provider:deepseek-api' }, requestedModel: { kind: 'model', id: 'model:deepseek-chat' }, requestedOptions: { thinking: 'low' } } },
   });
   assert.deepEqual(projectNarsClientEvent({ event: 'runtime_intelligence_reconfiguration', request_id: 'switch-1', reconfiguration_state: 'refused', terminal_state: 'refused', reason: 'runtime_not_at_clean_turn_boundary' }), {
     kind: 'runtime_intelligence_reconfiguration',

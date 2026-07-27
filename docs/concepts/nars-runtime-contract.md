@@ -219,17 +219,67 @@ provider execution policy, not session authority or turn history.
   "method": "runtime.intelligence.reconfigure",
   "params": {
     "request_id": "reconfigure-7",
-    "provider": "deepseek-api",
-    "model": "deepseek-chat",
-    "thinking": "medium"
+    "requested_inference_provider": {
+      "kind": "inference-provider",
+      "id": "inference-provider:kimi-code-api"
+    },
+    "requested_model": {
+      "kind": "model",
+      "id": "model:k3"
+    },
+    "requested_options": {
+      "thinking": "high"
+    }
   }
 }
 ```
 
-`provider` and `model` are explicit target values; `thinking` is optional.
-The request never carries an API key. The controller resolves credentials and
-base URL from the provider-specific environment already admitted by
-`agent-start`.
+The target is one qualified intelligence selection: an inference provider,
+model, and complete options object. The model is not interpreted as a global
+name independent of its inference provider. `requested_options` may be empty
+when the selected model exposes no configurable options. The request never
+carries an API key. The controller resolves credentials and base URL from the
+provider-specific configuration already admitted by `agent-start`.
+
+Provider-only, model-only, or options-only requests are invalid. A rejected
+request leaves the active selection unchanged; the runtime does not apply a
+provider, model, or thinking value through separate partial mutations. The
+health projection exposes the active qualified selection and the capability
+choices that are valid for it:
+
+```json
+{
+  "requested_inference_provider": {
+    "kind": "inference-provider",
+    "id": "inference-provider:kimi-code-api"
+  },
+  "requested_model": {
+    "kind": "model",
+    "id": "model:k3"
+  },
+  "requested_options": {
+    "thinking": "high"
+  },
+  "selection_choices": {
+    "providers": [
+      {
+        "provider": "inference-provider:kimi-code-api",
+        "models": [
+          {
+            "model": "model:k3",
+            "thinking_choices": ["low", "medium", "high"]
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+The web UI treats `selection_choices` as a capability projection. Changing
+provider clears model and options; changing model clears options. The UI
+submits a complete target only after the user requests the change, and cancel
+discards the local draft without changing runtime state.
 
 The reconfiguration request has its own FSM:
 
@@ -247,9 +297,10 @@ caller must wait for a clean turn boundary and retry. The switch replaces the
 provider call atomically; the current turn keeps its existing call and future
 turns use the new one.
 
-The runtime health projection includes the active provider, model, thinking,
-redacted binding metadata, and the latest reconfiguration outcome. Transition
-events include the request id and terminal state, but never raw credentials.
+The runtime health projection includes the active qualified selection,
+capability choices, redacted binding metadata, and the latest reconfiguration
+outcome. Transition events include the request id and terminal state, but
+never raw credentials.
 Provider continuation state, including Codex thread continuation, is scoped
 to the provider-call instance rather than process-global state.
 

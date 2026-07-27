@@ -1195,13 +1195,14 @@ function runtimeIntelligenceReconfigurationSummary(event: AnyRecord): string {
 
 function intelligenceReconfigurationTargetSummary(target: any) {
   if (!target || typeof target !== 'object') return '';
+  const inferenceProvider = target.requestedInferenceProvider?.id ?? target.requested_inference_provider?.id ?? null;
   const model = target.requestedModel?.id ?? target.requested_model?.id ?? null;
   const options = target.requestedOptions ?? target.requested_options ?? null;
   const optionSummary = options && typeof options === 'object' && !Array.isArray(options)
     ? Object.entries(options).sort(([left], [right]) => left.localeCompare(right))
       .map(([key, value]) => `${key}=${String(value)}`).join(', ')
     : '';
-  return [model, optionSummary].filter(Boolean).join(' · ');
+  return [inferenceProvider, model, optionSummary].filter(Boolean).join(' · ');
 }
 
 function intelligenceRuntimeReconfigurationStateSummary(event: AnyRecord): string {
