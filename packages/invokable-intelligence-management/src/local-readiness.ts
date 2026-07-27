@@ -13,6 +13,7 @@ import {
   DATA_GOVERNANCE_REQUIREMENT_SCHEMA,
   evaluateRouteAccess,
   INVOCATION_PRINCIPAL_SCHEMA,
+  latestCatalogRecords,
   QUOTA_OBSERVATION_SCHEMA,
   resolveInvocationPrincipalAdmission,
   SERVICE_ACCOUNT_SCHEMA,
@@ -109,19 +110,6 @@ export interface LocalIntelligenceReadiness {
   required_next_steps: string[];
 }
 
-function latestRecords(records: readonly CanonicalCatalogRecord[]): CanonicalCatalogRecord[] {
-  const current = new Map<string, CanonicalCatalogRecord>();
-  for (const record of records) {
-    const previous = current.get(record.record_id);
-    if (!previous
-      || record.revision > previous.revision
-      || (record.revision === previous.revision && record.id.localeCompare(previous.id) > 0)) {
-      current.set(record.record_id, record);
-    }
-  }
-  return [...current.values()].sort((a, b) => a.record_id.localeCompare(b.record_id));
-}
-
 function check(
   id: string,
   status: LocalReadinessCheckStatus,
@@ -202,7 +190,7 @@ export async function inspectLocalIntelligenceReadiness(
   context: LocalReadinessContext,
 ): Promise<LocalIntelligenceReadiness> {
   const now = context.now ?? new Date().toISOString();
-  const records = latestRecords(await store.listCatalogRecords());
+  const records = latestCatalogRecords(await store.listCatalogRecords());
   const resources = await store.listResources();
   const residuals = await store.listCatalogResiduals();
   const resourceById = new Map(resources.map((resource) => [resource.id, resource]));

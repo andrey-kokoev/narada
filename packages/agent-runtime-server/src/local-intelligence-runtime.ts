@@ -5,7 +5,11 @@ import {
   deriveUserSiteRootFromRegistryPath,
   probeCodexSubscriptionService as probeCodexSubscriptionReadiness,
 } from '@narada2/carrier-provider-support/codex-subscription-readiness';
-import { resolveInvocationPrincipalAdmission } from '@narada2/invokable-intelligence-contract';
+import {
+  latestCatalogRecords,
+  resolveInvocationPrincipalAdmission,
+  resolveRouteCapabilities,
+} from '@narada2/invokable-intelligence-contract';
 import { SqliteMaterializationStore } from '@narada2/invokable-intelligence-materialization';
 import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 import { buildResolverContext, createLocalInvocationGateway } from '@narada2/invokable-intelligence-runtime';
@@ -17,8 +21,8 @@ import {
   normalizeIntelligenceKernelKind,
 } from '@narada2/nars-intelligence-kernel-contract';
 import { createIntelligenceKernel } from '@narada2/nars-pi-kernel';
-import { createLocalTopologyObserver } from './local-topology-observer.js';
-import { LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA } from './local-topology-observer.js';
+import { createLocalTopologyObserver } from './local-topology-observer.ts';
+import { LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA } from './local-topology-observer.ts';
 
 const TOPOLOGY_OBSERVATION_ADMISSION_SCHEMA: any = 'narada.invokable-intelligence.topology-observation-admission.v1';
 const TOPOLOGY_OBSERVATION_SCHEMA: any = 'narada.invokable-intelligence.topology-feasibility.v1';
@@ -46,21 +50,93 @@ function publicResourceId(value: any, prefix: any) {
 }
 
 async function selectionChoicesFromCatalog(store: any) {
-  const [resources, routeRecords]: any = await Promise.all([
+  const [resources, routeRecords, assertionRecords]: any = await Promise.all([
     store.listResources(),
     store.listCatalogRecords({ recordKind: 'route' }),
+    store.listCatalogRecords({ recordKind: 'assertion' }),
   ]);
-  const routes: any = routeRecords
+  const currentRouteRecords = latestCatalogRecords(routeRecords);
+  const currentAssertionRecords = latestCatalogRecords(assertionRecords);
+  const routes: any = currentRouteRecords
     .map((record: any) => record.document)
     .filter((document: any) => document?.schema === 'narada.invokable-intelligence.invocation-route-candidate.v1');
   const candidates: any = assembleCandidates(resources, routes);
+  const routeAssertions: any = currentAssertionRecords
+    .map((record: any) => record.document)
+    .filter((document: any) => document?.schema === 'narada.invokable-intelligence.route-capability-assertion.v1');
+  const policies: any = await store.listPolicies();
+  const offeringByRouteId = new Map<string, string>(routes.map((route: any) => [route.id, route.offering.id]));
+  const defaultOfferingIds = new Set<string>();
+  const preferredOfferingWeights = new Map<string, number>();
+  for (const policy of policies) {
+    for (const rule of Array.isArray(policy.rules) ? policy.rules : []) {
+      if (rule.type === 'default-option' && typeof rule.value === 'string') {
+        const offeringId = rule.option === 'route'
+          ? offeringByRouteId.get(rule.value)
+          : rule.option === 'model_offering' ? rule.value : null;
+        if (offeringId) defaultOfferingIds.add(offeringId);
+      }
+      if (rule.type === 'prefer-resource' && rule.resource?.kind === 'model-offering' && typeof rule.resource.id === 'string') {
+        const weight = Number(rule.weight);
+        preferredOfferingWeights.set(rule.resource.id, Math.max(
+          weight,
+          preferredOfferingWeights.get(rule.resource.id) ?? Number.NEGATIVE_INFINITY,
+        ));
+      }
+    }
+  }
+  const modelChoices = candidates
+    .map((candidate: any) => ({
+      value: nonEmpty(candidate.offering.invocation_model_key),
+      offeringId: candidate.offering.id,
+    }))
+    .filter((candidate: any) => Boolean(candidate.value))
+    .sort((left: any, right: any) => {
+      const defaultDelta = Number(defaultOfferingIds.has(right.offeringId)) - Number(defaultOfferingIds.has(left.offeringId));
+      if (defaultDelta !== 0) return defaultDelta;
+      const preferenceDelta = (preferredOfferingWeights.get(right.offeringId) ?? 0)
+        - (preferredOfferingWeights.get(left.offeringId) ?? 0);
+      return preferenceDelta !== 0 ? preferenceDelta : left.value.localeCompare(right.value);
+    });
+  const providerModels = new Map<string, Map<string, Set<string>>>();
+  for (const candidate of candidates) {
+    const provider = publicResourceId(candidate.inferenceProvider, 'inference-provider:');
+    const model = nonEmpty(candidate.offering.invocation_model_key);
+    if (!provider || !model) continue;
+    const models = providerModels.get(provider) ?? new Map<string, Set<string>>();
+    const thinking = models.get(model) ?? new Set<string>();
+    const capabilities = resolveRouteCapabilities(candidate.route, candidate.offering, routeAssertions).capabilities;
+    const thinkingCapability = capabilities.find((capability: any) => (
+      capability.capability?.family === 'thinking' && capability.capability?.name === 'levels'
+    ));
+    for (const level of Array.isArray(thinkingCapability?.allowed_values) ? thinkingCapability.allowed_values : []) {
+      if (typeof level === 'string' && level.trim()) thinking.add(level.trim());
+    }
+    models.set(model, thinking);
+    providerModels.set(provider, models);
+  }
+  const selectionProviders = [...providerModels.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([provider, models]) => ({
+      provider,
+      models: [...models.entries()]
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([model, thinking]) => ({
+          model,
+          thinking_choices: Object.freeze([...thinking].sort()),
+        })),
+    }));
   return Object.freeze({
     provider_choices: Object.freeze([...new Set(candidates
       .map((candidate: any) => publicResourceId(candidate.inferenceProvider, 'inference-provider:'))
       .filter(Boolean))].sort()),
-    model_choices: Object.freeze([...new Set(candidates
-      .map((candidate: any) => nonEmpty(candidate.offering.invocation_model_key))
-      .filter(Boolean))].sort()),
+    model_choices: Object.freeze([...new Set(modelChoices.map(({ value }: any) => value))]),
+    selection_choices: Object.freeze({
+      providers: Object.freeze(selectionProviders.map((provider) => Object.freeze({
+        ...provider,
+        models: Object.freeze(provider.models.map((model) => Object.freeze(model))),
+      }))),
+    }),
   });
 }
 
@@ -579,13 +655,14 @@ export async function createLocalIntelligenceRuntime({
       selectionChoices,
       kernelHealth: () => kernel.health?.() ?? null,
       store,
-      async preflightSelection({ requestedModel = null, requestedOptions = {} }: any = {}) {
+      async preflightSelection({ requestedInferenceProvider = null, requestedModel = null, requestedOptions = {} }: any = {}) {
         const decisionClock: any = clock();
         const intent: any = {
           schema: 'narada.invokable-intelligence.invocation-intent.v1',
           id: deterministicId('intent-preflight', {
             session: runtimeContext.session,
             principal,
+            requestedInferenceProvider,
             requestedModel,
             requestedOptions,
             clock: decisionClock,
@@ -593,6 +670,7 @@ export async function createLocalIntelligenceRuntime({
           created_at: decisionClock.instant,
           principal,
           purpose: 'operator-chat',
+          ...(requestedInferenceProvider ? { requested_inference_provider: requestedInferenceProvider } : {}),
           ...(requestedModel ? { requested_model: requestedModel } : {}),
           ...(Object.keys(requestedOptions).length ? { requested_options: requestedOptions } : {}),
         };

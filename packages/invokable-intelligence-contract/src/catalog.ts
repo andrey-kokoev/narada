@@ -113,6 +113,33 @@ export interface CanonicalCatalogRecord {
   document: CanonicalCatalogDocument;
 }
 
+/**
+ * Select the authoritative current revision for each logical catalog record.
+ * Catalog storage retains every immutable revision; consumers that build an
+ * effective projection must not treat historical revisions as simultaneous
+ * authority.
+ */
+export function latestCatalogRecords(
+  records: readonly CanonicalCatalogRecord[],
+): CanonicalCatalogRecord[] {
+  const current = new Map<string, CanonicalCatalogRecord>();
+  for (const record of records) {
+    const previous = current.get(record.record_id);
+    if (
+      !previous
+      || record.revision > previous.revision
+      || (record.revision === previous.revision && record.id.localeCompare(previous.id) > 0)
+    ) {
+      current.set(record.record_id, record);
+    }
+  }
+  return [...current.values()].sort(
+    (a, b) => a.record_id.localeCompare(b.record_id)
+      || a.revision - b.revision
+      || a.id.localeCompare(b.id),
+  );
+}
+
 export type CatalogAdmissionResidualCode =
   | "ambiguous-model-provider"
   | "ambiguous-default"

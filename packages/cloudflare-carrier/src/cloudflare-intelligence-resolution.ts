@@ -10,6 +10,7 @@
 import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization/d1';
 import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
 import {
+  latestCatalogRecords,
   resolveInvocationPrincipalAdmission,
   siteMatchesRegistryIdentity,
 } from '@narada2/invokable-intelligence-contract';
@@ -34,17 +35,8 @@ function intelligenceError(code: any, message: any, details: any= {}) {
   return error;
 }
 
-function latestRecords(records: any) {
-  const latest = new Map();
-  for (const record of records) {
-    const current = latest.get(record.record_id);
-    if (!current || record.revision > current.revision) latest.set(record.record_id, record);
-  }
-  return [...latest.values()];
-}
-
 function catalogEvidenceReference(records: any) {
-  const references = latestRecords(records)
+  const references = latestCatalogRecords(records)
     .flatMap((record: any) => record.validation?.evidence ?? [])
     .map(({ ref }: any) => ref)
     .filter((ref: any) => /^site-config:narada-cloudflare:invokable-intelligence:revision-\\d+$/u.test(ref));
@@ -224,7 +216,7 @@ async function admitCarrierInvocationRequest(store: any, request: any) {
     store.listResources(),
     store.listCatalogRecords(),
   ]);
-  const records = latestRecords(catalogRecords);
+  const records = latestCatalogRecords(catalogRecords);
   const targetSites = resources.filter((resource: any) =>
     resource.schema === 'narada.invokable-intelligence.site.v1'
     && siteMatchesRegistryIdentity(resource, carrier.targetRegistrySite.registry, carrier.targetRegistrySite.subject_id));

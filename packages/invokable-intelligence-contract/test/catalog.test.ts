@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   CANONICAL_CATALOG_RECORD_SCHEMA,
+  latestCatalogRecords,
   validateCanonicalCatalogRecord,
 } from "../src/catalog.js";
 import { canonicalSha256, sha256 } from "../src/canonical.js";
@@ -100,4 +101,17 @@ test("authority statements cannot be relabeled as destination-local by their cat
     authority: { ...authorityRecord.authority, site_id: "site:target" },
   };
   assert.ok(validateCanonicalCatalogRecord(relabeled).some(({ code }) => code === "catalog-record-authority-mismatch"));
+});
+
+test("current catalog projection excludes historical revisions", () => {
+  const current = {
+    ...record,
+    id: "catalog-record:resource:model-kimi:r2",
+    revision: 2,
+  };
+
+  assert.deepEqual(
+    latestCatalogRecords([current, record]).map(({ id, revision }) => ({ id, revision })),
+    [{ id: current.id, revision: 2 }],
+  );
 });

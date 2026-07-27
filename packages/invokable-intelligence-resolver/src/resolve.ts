@@ -2,6 +2,7 @@
 
 import {
   PLAN_DECISION_SNAPSHOT_SCHEMA,
+  latestCatalogRecords,
   planIntelligenceAuthorityApplication,
   validateAuthoritativeDecisionClock,
   validateInvocation,
@@ -63,15 +64,6 @@ interface CanonicalResolverState {
   materializations: MaterializedProjection[];
 }
 
-function latestRecords(records: CanonicalCatalogRecord[]): CanonicalCatalogRecord[] {
-  const current = new Map<string, CanonicalCatalogRecord>();
-  for (const record of records) {
-    const prior = current.get(record.record_id);
-    if (!prior || record.revision > prior.revision || (record.revision === prior.revision && record.id.localeCompare(prior.id) > 0)) current.set(record.record_id, record);
-  }
-  return [...current.values()].sort((a, b) => a.record_id.localeCompare(b.record_id) || a.revision - b.revision || a.id.localeCompare(b.id));
-}
-
 function materializationForStatement(
   record: CanonicalCatalogRecord,
   recordsById: Map<string, CanonicalCatalogRecord>,
@@ -102,7 +94,7 @@ async function loadCanonicalState(
   destinationSiteId: string,
   materializedInputs: ResolverMaterializedInputs,
 ): Promise<CanonicalResolverState> {
-  const allRecords = latestRecords(await store.listCatalogRecords());
+  const allRecords = latestCatalogRecords(await store.listCatalogRecords());
   const recordsById = new Map(allRecords.map((record) => [record.record_id, record]));
   const usableStatements: CanonicalCatalogRecord[] = [];
   const materializations: MaterializedProjection[] = [];
