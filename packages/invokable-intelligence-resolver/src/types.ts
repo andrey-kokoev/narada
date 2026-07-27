@@ -83,6 +83,7 @@ export interface Candidate {
 }
 
 export type EliminationReasonCode =
+  | "intent-inference-provider-mismatch"
   | "intent-model-mismatch"
   | "missing-required-capability"
   | "stale-capability"

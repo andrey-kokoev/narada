@@ -38,6 +38,8 @@ export interface InvocationIntent {
   input_digest?: ContentDigest;
   /** Capabilities the invocation requires (hard requirement, not preference). */
   required_capabilities?: CapabilityKey[];
+  /** Explicit inference provider; paired with requested_model for a qualified target. */
+  requested_inference_provider?: ResourceRef;
   /** Explicitly requested model; resolver treats this as a hard filter. */
   requested_model?: ResourceRef;
   /** Requested invocation options, e.g. { thinking: "low" }. */

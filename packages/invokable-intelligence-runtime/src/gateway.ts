@@ -105,6 +105,7 @@ export interface InvokeRequest {
   principal?: string;
   authorityBinding?: InvocationAuthorityBinding;
   requiredCapabilities?: CapabilityKey[];
+  requestedInferenceProvider?: ResourceRef;
   requestedModel?: ResourceRef;
   requestedOptions?: Record<string, unknown>;
   messages?: unknown;
@@ -229,6 +230,7 @@ function normalizedIntentShape(intent: InvocationIntent): unknown {
     purpose: intent.purpose,
     input_digest: intent.input_digest ?? null,
     required_capabilities: intent.required_capabilities ?? [],
+    requested_inference_provider: intent.requested_inference_provider ?? null,
     requested_model: intent.requested_model ?? null,
     requested_options: intent.requested_options ?? {},
   };
@@ -591,6 +593,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
           authorityBinding: request.authorityBinding ?? null,
           inputDigest,
           requiredCapabilities: request.requiredCapabilities ?? [],
+          requestedInferenceProvider: request.requestedInferenceProvider ?? null,
           requestedModel: request.requestedModel ?? null,
           requestedOptions: request.requestedOptions ?? {},
           mode: request.mode ?? "immediate",
@@ -620,6 +623,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
         authorityBinding: request.authorityBinding ?? null,
         inputDigest,
         requiredCapabilities,
+        requestedInferenceProvider: request.requestedInferenceProvider ?? null,
         requestedModel: request.requestedModel ?? null,
         requestedOptions: request.requestedOptions ?? {},
       });
@@ -632,6 +636,7 @@ export function createLocalInvocationGateway(options: LocalInvocationGatewayOpti
         purpose: request.purpose,
         input_digest: inputDigest,
         ...(requiredCapabilities.length ? { required_capabilities: requiredCapabilities } : {}),
+        ...(request.requestedInferenceProvider ? { requested_inference_provider: request.requestedInferenceProvider } : {}),
         ...(request.requestedModel ? { requested_model: request.requestedModel } : {}),
         ...(request.requestedOptions ? { requested_options: request.requestedOptions } : {}),
       };

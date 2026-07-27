@@ -24,6 +24,7 @@ export const CANONICAL_LOCAL_TEST_IDS = {
   userSite: "site:user",
   hostSite: "site:pc",
   principal: "principal:andrey",
+  inferenceProvider: "inference-provider:remote-api",
   model: "model:kimi-k2-thinking",
   offering: "model-offering:kimi-via-local-api",
   route: "route:kimi-local-api",

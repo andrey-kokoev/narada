@@ -151,6 +151,9 @@ export function evaluateCandidate(
     eliminate("host-infeasible", `route access refused: ${access.findings.map(({ code }) => code).join(",")}`);
   }
 
+  if (intent.requested_inference_provider && intent.requested_inference_provider.id !== candidate.inferenceProvider.id) {
+    eliminate("intent-inference-provider-mismatch", `intent requested inference provider '${intent.requested_inference_provider.id}'`);
+  }
   if (intent.requested_model && intent.requested_model.id !== candidate.model.id) {
     eliminate("intent-model-mismatch", `intent requested model '${intent.requested_model.id}'`);
   }

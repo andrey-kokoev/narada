@@ -378,6 +378,9 @@ export function validateInvocation(record: unknown): ContractError[] {
           );
         }
       }
+      if (record.requested_inference_provider !== undefined) {
+        checkRef(record.requested_inference_provider, "$.requested_inference_provider", "inference-provider", errors);
+      }
       if (record.requested_model !== undefined) checkRef(record.requested_model, "$.requested_model", "model", errors);
       if (record.requested_options !== undefined && !isPlainObject(record.requested_options)) {
         err(errors, "$.requested_options", "invalid-invocation", "requested_options must be an object");
