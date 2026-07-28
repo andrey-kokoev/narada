@@ -203,6 +203,8 @@ afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 });
 
+const injectedBrowserOpenerRunsOnCurrentHost = process.platform !== 'linux';
+
 describe('nars CLI commands', () => {
   it('discovers Site-local NARS sessions with display state', async () => {
     const siteRoot = tempSite();
@@ -616,7 +618,7 @@ describe('nars CLI commands', () => {
       schema: 'narada.agent_web_ui.attach_plan.v1',
       status: 'planned',
       session_id: 'carrier_staccato',
-      site_id: null,
+      site_id: 'staccato',
       event_endpoint: 'ws://127.0.0.1:12345/events',
     });
   });
@@ -738,6 +740,7 @@ describe('nars CLI commands', () => {
             session_id: 'carrier_discovery_retry',
             agent_id: 'sonar.resident',
             site_id: 'sonar',
+            site_root: siteRoot,
             display_state: 'active',
             terminal_state: 'running',
             started_at: '2026-07-13T00:00:00.000Z',
@@ -876,7 +879,7 @@ describe('nars CLI commands', () => {
     expect(progress).toContain('agent-web-ui: resolving attach endpoints for carrier_cli_test');
     expect(progress).toContain('agent-web-ui: starting local web UI for carrier_cli_test');
     expect(progress).toContain('agent-web-ui: opening browser http://127.0.0.1:4444');
-    expect(openedUrls).toEqual(['http://127.0.0.1:4444']);
+    expect(openedUrls).toEqual(injectedBrowserOpenerRunsOnCurrentHost ? ['http://127.0.0.1:4444'] : []);
     expect(result.result).toMatchObject({
       status: 'started',
       session_id: 'carrier_cli_test',
@@ -1213,7 +1216,7 @@ describe('nars CLI commands', () => {
     });
 
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
-    expect(openedUrls).toEqual(['http://127.0.0.1:4545']);
+    expect(openedUrls).toEqual(injectedBrowserOpenerRunsOnCurrentHost ? ['http://127.0.0.1:4545'] : []);
     vi.unstubAllGlobals();
   });
 
@@ -1559,7 +1562,7 @@ describe('nars CLI commands', () => {
     expect(result.result).toMatchObject({
       operator_projection_open_request: {
         schema: 'narada.operator_projection_open_request.v1',
-        status: 'opened',
+        status: injectedBrowserOpenerRunsOnCurrentHost ? 'opened' : 'suppressed',
         projection_kind: 'browser_url',
         target_ref: 'http://127.0.0.1:9999/',
         purpose: 'agent_web_ui_attach',
