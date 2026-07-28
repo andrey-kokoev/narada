@@ -115,25 +115,29 @@ async function createRuntimeFixture() {
     ].join('\r\n'));
     sockets.add(socket);
     websocketConnections += 1;
+    let journeyEventSent = false;
+    const sendJourneyEvent = () => {
+      if (journeyEventSent || socket.destroyed) return;
+      journeyEventSent = true;
+      socket.write(websocketTextFrame(JSON.stringify({
+        event: 'assistant_message',
+        content: JOURNEY_EVENT,
+        agent_id: SITE_ID + '.resident',
+        session_id: SESSION_ID,
+        event_sequence: 1,
+        sequence: 1,
+      })));
+    };
     socket.on('data', (chunk) => {
-      if ((chunk[0] & 0x0f) !== 0x08) return;
+      const opcode = chunk[0] & 0x0f;
+      if (opcode !== 0x08) {
+        if (opcode === 0x01 || opcode === 0x02) sendJourneyEvent();
+        return;
+      }
       socket.write(Buffer.from([0x88, 0x00]));
       socket.end();
     });
-    const timer = setTimeout(() => {
-      if (!socket.destroyed) {
-        socket.write(websocketTextFrame(JSON.stringify({
-          event: 'assistant_message',
-          content: JOURNEY_EVENT,
-          agent_id: SITE_ID + '.resident',
-          session_id: SESSION_ID,
-          event_sequence: 1,
-          sequence: 1,
-        })));
-      }
-    }, 100);
     socket.once('close', () => {
-      clearTimeout(timer);
       sockets.delete(socket);
     });
   });
