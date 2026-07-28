@@ -23,4 +23,6 @@ state cleanup belongs to the explicit lifecycle operations.
 The detached child receives an internal runtime nonce. It is used alongside
 the PID and command-line shape to avoid treating a reused PID as the runtime
 that owns the route. Direct foreground `console serve` remains valid without
-that nonce.
+that nonce. On Windows, the default runtime state root is under the user-local
+AppData directory; when a carrier omits `LOCALAPPDATA`, it is derived from
+`USERPROFILE`/`HOME` rather than falling back to the legacy `.narada` root.

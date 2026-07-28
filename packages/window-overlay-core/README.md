@@ -16,4 +16,4 @@ It does not own provider/quota logic, operator-console authority, site discovery
 
 The default state root is %LOCALAPPDATA%/Narada/window-surface-overlays. Set NARADA_WINDOW_SURFACE_OVERLAY_STATE_ROOT only for a deliberate test or isolated installation. A typed `restart` action uses the fixed command supplied by the owning specialization and never accepts executable details from the document.
 
-On Windows, the Node boundary restores the lowercase `windir` environment alias from `SystemRoot` when an MCP carrier omits it. This keeps WPF startup deterministic for headless-stdio MCP launchers without requiring a carrier restart.
+On Windows, the Node boundary restores the lowercase `windir` environment alias from `SystemRoot`, derives `LOCALAPPDATA` from the user profile, and restores executable extensions in `PATHEXT` when an MCP carrier omits them. This keeps PowerShell/WPF startup deterministic for headless-stdio MCP launchers without requiring a carrier restart.

@@ -108,6 +108,7 @@ export async function startOperatorConsoleOverlay({
     ? await ensure_runtime({
         host: parsed.hostname,
         port: Number.parseInt(parsed.port || String(DEFAULT_OPERATOR_ROUTER_PORT), 10),
+        router_state_root: env.NARADA_OPERATOR_ROUTER_STATE_ROOT,
         runtime_state_root: env.NARADA_OPERATOR_CONSOLE_RUNTIME_STATE_ROOT,
         narada_root: env.NARADA_ROOT,
         cli_entrypoint: resolveCliEntrypoint(env),

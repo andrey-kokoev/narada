@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import {
   OVERLAY_DOCUMENT_SCHEMA,
   createOverlayDocument,
+  defaultLocalAppDataRoot,
   defaultOverlayStateRoot,
   normalizeOverlayEnvironment,
   overlayPaths,
@@ -54,6 +55,15 @@ test('normalizes the Windows WPF environment without mutating the caller', () =>
   if (process.platform === 'win32') assert.equal(normalized.windir, 'C:\\WINDOWS');
   else assert.equal(normalized.windir, undefined);
   assert.equal(input.windir, undefined);
+});
+
+test('derives the Windows user-local AppData root when carriers omit LOCALAPPDATA', () => {
+  assert.equal(defaultLocalAppDataRoot({ USERPROFILE: 'C:\\Users\\Carrier' }), 'C:\\Users\\Carrier\\AppData\\Local');
+  if (process.platform === 'win32') {
+    const normalized = normalizeOverlayEnvironment({ USERPROFILE: 'C:\\Users\\Carrier', PATHEXT: '.CPL' });
+    assert.equal(normalized.LOCALAPPDATA, 'C:\\Users\\Carrier\\AppData\\Local');
+    assert.equal(normalized.PATHEXT?.includes('.EXE'), true);
+  }
 });
 
 test('PowerShell host owns presentation mechanics, not provider data logic', async () => {

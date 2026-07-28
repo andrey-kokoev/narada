@@ -140,10 +140,9 @@ export class OperatorConsoleRuntimeError extends Error {
 export function defaultOperatorConsoleRuntimeStateRoot(env: NodeJS.ProcessEnv = process.env): string {
   const configured = env.NARADA_OPERATOR_CONSOLE_RUNTIME_STATE_ROOT?.trim();
   if (configured) return resolve(configured);
-  const localAppData = env.LOCALAPPDATA?.trim();
-  return localAppData
-    ? join(localAppData, 'Narada', 'operator-console-runtime')
-    : join(homedir(), '.narada', 'operator-console-runtime');
+  const localAppData = env.LOCALAPPDATA?.trim()
+    || join(env.USERPROFILE?.trim() || env.HOME?.trim() || homedir(), 'AppData', 'Local');
+  return join(localAppData, 'Narada', 'operator-console-runtime');
 }
 
 export function defaultOperatorConsoleCliEntrypoint(): string {

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile, rename } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -231,8 +231,66 @@ export interface OperatorRouterRouteSet {
 function defaultStateRoot(): string {
   const configured = process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT?.trim();
   if (configured) return configured;
-  const localAppData = process.env.LOCALAPPDATA;
-  return localAppData ? join(localAppData, 'Narada', 'operator-router') : join(homedir(), '.narada', 'operator-router');
+  const localAppData = process.env.LOCALAPPDATA?.trim()
+    || join(process.env.USERPROFILE?.trim() || process.env.HOME?.trim() || homedir(), 'AppData', 'Local');
+  return join(localAppData, 'Narada', 'operator-router');
+}
+
+function processIsAlive(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return Boolean(error && typeof error === 'object' && 'code' in error && error.code === 'EPERM');
+  }
+}
+
+async function quarantineCorruptRouterState(stateRoot: string): Promise<void> {
+  const statePath = join(stateRoot, 'routes.json');
+  let stateText: string;
+  try {
+    stateText = await readFile(statePath, 'utf8');
+  } catch (error) {
+    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') return;
+    throw error;
+  }
+
+  let parsed: unknown;
+  try { parsed = JSON.parse(stateText); } catch { parsed = null; }
+  const validShape = parsed !== null
+    && typeof parsed === 'object'
+    && !Array.isArray(parsed)
+    && (parsed as Record<string, unknown>).schema === OPERATOR_ROUTER_STATE_SCHEMA
+    && Array.isArray((parsed as Record<string, unknown>).routes)
+    && Number.isInteger((parsed as Record<string, unknown>).generation)
+    && Number((parsed as Record<string, unknown>).generation) >= 0;
+  if (validShape) return;
+
+  const lockPath = join(stateRoot, 'router.lock');
+  let lockText: string | null = null;
+  try { lockText = await readFile(lockPath, 'utf8'); } catch (error) {
+    if (!(error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT')) throw error;
+  }
+  if (lockText !== null) {
+    let lock: unknown;
+    try { lock = JSON.parse(lockText); } catch {
+      throw new Error('operator_router_corrupt_state_lock_unknown');
+    }
+    const lockRecord = lock && typeof lock === 'object' && !Array.isArray(lock)
+      ? lock as Record<string, unknown>
+      : null;
+    const pid = lockRecord ? Number(lockRecord.pid) : NaN;
+    if (!Number.isInteger(pid) || pid <= 0 || typeof lockRecord?.instance_nonce !== 'string' || !lockRecord.instance_nonce) {
+      throw new Error('operator_router_corrupt_state_lock_unknown');
+    }
+    if (processIsAlive(pid)) throw new Error('operator_router_corrupt_state_owner_alive');
+  }
+
+  const recoveryRoot = join(stateRoot, 'recovery', `corrupt-${Date.now()}`);
+  await mkdir(recoveryRoot, { recursive: true });
+  await rename(statePath, join(recoveryRoot, 'routes.json'));
+  if (lockText !== null) await rename(lockPath, join(recoveryRoot, 'router.lock'));
 }
 
 function defaultEntrypoint(): string {
@@ -381,6 +439,7 @@ export async function ensureOperatorRouter(options: EnsureOperatorRouterOptions 
   if (attached) return attached;
 
   const entrypoint = options.entrypoint ?? process.env.NARADA_OPERATOR_ROUTER_ENTRYPOINT ?? defaultEntrypoint();
+  await quarantineCorruptRouterState(stateRoot);
   const child = spawnHiddenPostureProcess(process.execPath, [entrypoint, '--host', host, '--port', String(port), '--state-root', stateRoot], {
     posture: 'operator_projection_host',
     spawnImpl: options.spawn_impl ?? spawn,

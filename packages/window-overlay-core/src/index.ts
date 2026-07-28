@@ -119,11 +119,28 @@ function errorCode(error: unknown): string | undefined {
 // every Windows overlay host gets the environment WPF expects.
 export function normalizeOverlayEnvironment(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
   const normalized = { ...env };
+  if (process.platform === 'win32' && !normalized.LOCALAPPDATA) {
+    normalized.LOCALAPPDATA = defaultLocalAppDataRoot(normalized);
+  }
+  if (process.platform === 'win32') {
+    const extensions = (normalized.PATHEXT ?? '').split(';').map((value) => value.trim().toUpperCase()).filter(Boolean);
+    for (const extension of ['.EXE', '.CMD']) {
+      if (!extensions.includes(extension)) extensions.push(extension);
+    }
+    normalized.PATHEXT = extensions.join(';');
+  }
   if (process.platform === 'win32' && !normalized.windir) {
     const windowsRoot = normalized.SystemRoot ?? normalized.WINDIR ?? process.env.SystemRoot;
     if (windowsRoot) normalized.windir = windowsRoot;
   }
   return normalized;
+}
+
+export function defaultLocalAppDataRoot(env: NodeJS.ProcessEnv = process.env): string {
+  const configured = env.LOCALAPPDATA?.trim();
+  if (configured) return configured;
+  const home = env.USERPROFILE?.trim() || env.HOME?.trim() || homedir();
+  return join(home, 'AppData', 'Local');
 }
 
 function normalizeRestartCommand(command: readonly string[] | undefined, workingDirectory: unknown): OverlayRestartCommand | null {
@@ -233,7 +250,7 @@ export function createOverlayDocument(input: OverlayInput = {}): OverlayDocument
 
 export function defaultOverlayStateRoot(env: NodeJS.ProcessEnv = process.env): string {
   return env.NARADA_WINDOW_SURFACE_OVERLAY_STATE_ROOT
-    || join(env.LOCALAPPDATA || join(homedir(), 'AppData', 'Local'), 'Narada', 'window-surface-overlays');
+    || join(defaultLocalAppDataRoot(env), 'Narada', 'window-surface-overlays');
 }
 
 export function overlayStateDirectory(id: string, options: OverlayPathOptions = {}): string {

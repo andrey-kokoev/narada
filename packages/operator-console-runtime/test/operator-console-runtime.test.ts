@@ -82,6 +82,10 @@ test('uses the user-local runtime state root and permits an explicit override', 
     defaultOperatorConsoleRuntimeStateRoot({ NARADA_OPERATOR_CONSOLE_RUNTIME_STATE_ROOT: 'D:\\tmp\\console-runtime' }),
     'D:\\tmp\\console-runtime',
   );
+  assert.match(
+    defaultOperatorConsoleRuntimeStateRoot({ USERPROFILE: 'C:\\Users\\Carrier' }),
+    /Carrier[\\/]AppData[\\/]Local[\\/]Narada[\\/]operator-console-runtime$/,
+  );
 });
 
 test('uses the matched runtime state log path for process diagnostics', async () => {

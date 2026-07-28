@@ -106,8 +106,11 @@ interface RouteStore {
 }
 
 function defaultStateRoot(): string {
-  const localAppData = process.env.LOCALAPPDATA;
-  return localAppData ? join(localAppData, 'Narada', 'operator-router') : join(homedir(), '.narada', 'operator-router');
+  const configured = process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT?.trim();
+  if (configured) return configured;
+  const localAppData = process.env.LOCALAPPDATA?.trim()
+    || join(process.env.USERPROFILE?.trim() || process.env.HOME?.trim() || homedir(), 'AppData', 'Local');
+  return join(localAppData, 'Narada', 'operator-router');
 }
 
 function statePaths(stateRoot: string): { state: string; token: string; lock: string } {
