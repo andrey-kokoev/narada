@@ -199,7 +199,7 @@ The installed Windows handoff is equivalent:
 Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
 ```
 
-`-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, runtime, and provider selection remains on the advanced workspace launcher path. On source checkouts, the installed `Start-NaradaWorkspace.Dev.ps1` (next to the plain shim in the User Site) is the development launcher: it drives the CLI from the checkout with dist-freshness and carrier-projection checks and exposes the full selection surface.
+`-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, and runtime selection remains on the advanced workspace launcher path. Intelligence provider and model resolution are owned by the admitted Site intelligence catalog, not by launcher arguments. On source checkouts, the installed `Start-NaradaWorkspace.Dev.ps1` (next to the plain shim in the User Site) is the development launcher: it drives the CLI from the checkout with dist-freshness and carrier-projection checks.
 
 When the onboarding launch selects the browser surface, the launcher passes an explicit User Site onboarding mode into
 Agent Web UI. The browser then shows a compact first-use panel with the resolved workspace, `resident` General assistant,
@@ -314,7 +314,7 @@ After first-use verification, the user can explicitly expand into:
 
 Each expansion is a separate, explained crossing. None is required for the User Site resident path.
 
-This UX is a projection over the existing launcher and runtime contracts, not a second launcher implementation. The full Site/role/surface/runtime/provider selector remains available as an advanced path for experienced Operators.
+This UX is a projection over the existing launcher and runtime contracts, not a second launcher implementation. The advanced path exposes explicit Site, role, operator-surface, and runtime choices; the Site intelligence catalog remains authoritative for provider, model, route, endpoint, credential, and thinking-level resolution.
 
 ## Verification Rule
 

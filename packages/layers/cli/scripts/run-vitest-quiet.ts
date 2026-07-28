@@ -20,7 +20,7 @@ const env = { ...process.env };
 env.NODE_OPTIONS = appendNodeOption(env.NODE_OPTIONS, '--no-warnings');
 appendGitConfig(env, 'core.autocrlf', 'false');
 
-const vitestEntrypoint = join(process.cwd(), 'node_modules', 'vitest', 'vitest.ts');
+const vitestEntrypoint = join(process.cwd(), 'node_modules', 'vitest', 'vitest.mjs');
 const vitestArgs = process.argv.slice(2).map((arg) => arg === '--silent' ? '--silent=true' : arg);
 const result = spawnSync(process.execPath, ['--no-warnings', vitestEntrypoint, ...vitestArgs], {
   cwd: process.cwd(),

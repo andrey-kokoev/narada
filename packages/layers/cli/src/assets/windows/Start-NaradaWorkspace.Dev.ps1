@@ -20,8 +20,6 @@ param(
 
   [string]$Runtime,
 
-  [string]$IntelligenceProvider,
-
   [ValidateSet('all', 'host', 'user-site', 'local-site', 'none')]
   [string]$McpScope = 'all',
 
@@ -316,8 +314,8 @@ function Invoke-NaradaWorkspaceLaunch {
   Assert-NaradaCliDistFreshness -NaradaProperRoot $naradaProperRoot
 
   if ($Onboarding) {
-    if ($All -or $Agent -or $Role -or $Site -or $OperatorSurface -or $Runtime -or $IntelligenceProvider -or $VisibleRuntimeTerminal) {
-      throw 'onboarding_selection_conflict: -Onboarding owns User Site defaults; use the advanced workspace launcher for explicit selections.'
+    if ($All -or $Agent -or $Role -or $Site -or $OperatorSurface -or $Runtime -or $VisibleRuntimeTerminal) {
+      throw 'onboarding_selection_conflict: -Onboarding owns User Site defaults; use the advanced workspace launcher for explicit Site, role, surface, or runtime selections.'
     }
 
     $onboardingArgs = [System.Collections.Generic.List[string]]::new()
@@ -379,11 +377,6 @@ function Invoke-NaradaWorkspaceLaunch {
   if ($Runtime) {
     $cliArgs.Add('--runtime')
     $cliArgs.Add($Runtime)
-  }
-
-  if ($IntelligenceProvider) {
-    $cliArgs.Add('--intelligence-provider')
-    $cliArgs.Add($IntelligenceProvider)
   }
 
   if ($McpScope) {

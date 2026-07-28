@@ -188,7 +188,9 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     const installedCliRoot = join(consumerRoot, 'node_modules', '@narada2', 'cli');
     const packagedAsset = join(installedCliRoot, 'dist', 'assets', 'windows', 'Start-NaradaWorkspace.ps1');
     assert.equal(existsSync(packagedAsset), true, `published launcher asset missing: ${packagedAsset}`);
-    assert.match(readFileSync(packagedAsset, 'utf8'), /narada-managed-asset: windows-user-site\.v1/);
+    const packagedAssetSource = readFileSync(packagedAsset, 'utf8');
+    assert.match(packagedAssetSource, /narada-managed-asset: windows-user-site\.v1/);
+    assert.doesNotMatch(packagedAssetSource, /IntelligenceProvider|--intelligence-provider/);
     for (const packageName of ['agent-runtime-server', 'agent-web-ui']) {
       const packageRoot = findInstalledPackageRoot(join(consumerRoot, 'node_modules'), `@narada2/${packageName}`);
       assert.ok(packageRoot, `published runtime/UI package missing from bundled dependency tree: @narada2/${packageName}`);
@@ -214,6 +216,10 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     assert.equal(installPayload.package.bundled_components.runtime_server.name, '@narada2/agent-runtime-server');
     assert.equal(installPayload.package.bundled_components.web_ui.name, '@narada2/agent-web-ui');
     assert.equal(existsSync(join(siteRoot, 'Start-NaradaWorkspace.ps1')), true);
+    assert.doesNotMatch(
+      readFileSync(join(siteRoot, 'Start-NaradaWorkspace.ps1'), 'utf8'),
+      /IntelligenceProvider|--intelligence-provider/,
+    );
     assert.equal(existsSync(join(siteRoot, 'tools', 'operator-secrets', 'Set-NaradaProviderSecret.ps1')), true);
 
     const doctor = run(process.execPath, [

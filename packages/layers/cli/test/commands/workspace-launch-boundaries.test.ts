@@ -37,6 +37,15 @@ describe('workspace launch module boundaries', () => {
     expect(existsSync(resolve(commandsRoot, 'workspace-launch-provider-context.ts'))).toBe(false);
   });
 
+  it('keeps Windows launcher assets aligned with catalog-owned intelligence authority', () => {
+    const assetsRoot = resolve(process.cwd(), 'src', 'assets', 'windows');
+    for (const entry of ['Start-NaradaWorkspace.ps1', 'Start-NaradaWorkspace.Dev.ps1']) {
+      const source = readFileSync(resolve(assetsRoot, entry), 'utf8');
+      expect(source, entry).not.toContain('IntelligenceProvider');
+      expect(source, entry).not.toContain('--intelligence-provider');
+    }
+  });
+
   it('keeps the application composition boundary explicit', () => {
     const application = readFileSync(resolve(commandsRoot, 'workspace-launch-application.ts'), 'utf8');
     const applicationExecution = readFileSync(resolve(commandsRoot, 'workspace-launch-application-execution.ts'), 'utf8');
