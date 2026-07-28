@@ -22,7 +22,7 @@
     "./mcp-freshness-service": "./src/mcp-freshness-service.ts",
     "./operator-surface/mcp-runtime-instance-registry": "./src/operator-surface/mcp-runtime-instance-registry.ts",
     "./site-layout": {
-      "types": "./dist/site-layout.d.ts",
+      "types": "./src/site-layout.ts",
       "import": "./dist/site-layout.js"
     },
     "./site-locus-shim": "./src/site-locus-shim.ts",
