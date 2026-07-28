@@ -5,7 +5,9 @@ import { join } from "node:path";
 import {
   envVarName,
   resolveSecret,
+  resolveSecretWithEvidence,
   resolveSecretRequired,
+  checkProviderReadiness,
 } from "../src/credentials.js";
 
 describe("credentials", () => {
@@ -41,6 +43,31 @@ describe("credentials", () => {
   });
 
   describe("resolveSecret", () => {
+    it("resolves systemd credentials before environment and config", async () => {
+      const credentialsDirectory = join(testRoot, "credentials");
+      await mkdir(credentialsDirectory, { recursive: true });
+      await writeFile(join(credentialsDirectory, "api-key"), "systemd-value\n", "utf8");
+      process.env.SITE_TEST_SITE_API_KEY = "env-loses";
+
+      const result = await resolveSecret("test-site", "system", "api-key", {
+        systemdCredentialsDirectory: credentialsDirectory,
+        configValue: "config-loses",
+      });
+      expect(result).toBe("systemd-value");
+    });
+
+    it("rejects credential names that could escape the credential directory", async () => {
+      const credentialsDirectory = join(testRoot, "credentials");
+      await mkdir(credentialsDirectory, { recursive: true });
+      await writeFile(join(testRoot, "outside"), "must-not-read\n", "utf8");
+
+      const result = await resolveSecret("test-site", "system", "../outside", {
+        systemdCredentialsDirectory: credentialsDirectory,
+        configValue: "fallback",
+      });
+      expect(result).toBe("fallback");
+    });
+
     it("returns null when secret is not found anywhere", async () => {
       const result = await resolveSecret("test-site", "user", "missing-secret");
       expect(result).toBeNull();
@@ -186,6 +213,47 @@ describe("credentials", () => {
       await expect(
         resolveSecretRequired("test-site", "user", "api-key")
       ).rejects.toThrow(/Required secret "api-key" for site "test-site"/);
+    });
+  });
+
+  describe("readiness evidence", () => {
+    it("returns redacted provenance without the secret value", async () => {
+      process.env.SITE_TEST_SITE_API_KEY = "do-not-return-this";
+      const evidence = await resolveSecretWithEvidence("test-site", "system", "api-key");
+
+      expect(evidence.status).toBe("resolved");
+      expect(evidence.source).toBe("environment");
+      expect(evidence.value_present).toBe(true);
+      expect(Object.hasOwn(evidence, "value")).toBe(false);
+      expect(JSON.stringify(evidence)).not.toContain("do-not-return-this");
+    });
+
+    it("reports missing sources and provider remediation", async () => {
+      const readiness = await checkProviderReadiness(
+        "test-site",
+        "system",
+        "kimi-code-api",
+        "KIMI_CODE_API_KEY",
+      );
+
+      expect(readiness.status).toBe("missing");
+      expect(readiness.credential.status).toBe("missing");
+      expect(readiness.reason).toMatch(/was not found/i);
+      expect(JSON.stringify(readiness)).not.toContain("KIMI_CODE_API_KEY=");
+    });
+
+    it("classifies malformed and unavailable endpoints without network access", async () => {
+      process.env.SITE_TEST_SITE_API_KEY = "ready-secret";
+      const malformed = await checkProviderReadiness("test-site", "system", "demo", "api-key", {
+        endpoint: "file:///not-an-provider-endpoint",
+      });
+      expect(malformed.status).toBe("malformed");
+
+      const unavailable = await checkProviderReadiness("test-site", "system", "demo", "api-key", {
+        endpoint: "https://provider.example.test",
+        endpointProbe: async () => "unavailable",
+      });
+      expect(unavailable.status).toBe("unavailable");
     });
   });
 });

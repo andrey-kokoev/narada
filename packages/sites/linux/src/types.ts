@@ -14,6 +14,8 @@ export interface LinuxSiteConfig {
   cycle_interval_minutes: number;
   lock_ttl_ms: number;
   ceiling_ms: number;
+  /** Structured CLI invocation used by supervisors; defaults to the running Narada CLI. */
+  cli_command?: string[];
 }
 
 /**

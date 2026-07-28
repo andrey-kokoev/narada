@@ -10,10 +10,10 @@ export function registerOnboardingCommands(program: Command): void {
 
   onboarding
     .command('start')
-    .description('Start the User Site resident with safe Windows defaults')
+    .description('Start the User Site resident with native platform defaults')
     .option('--platform <platform>', 'Onboarding platform', 'windows')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
-    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or %USERPROFILE%\\Narada')
+    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--registry-path <path>', 'User Site launch registry path')
     .option('--interactive', 'Ask for confirmation before starting the resident', false)
     .option('--demo', 'Show the no-credential demo path without starting a resident', false)
@@ -40,7 +40,7 @@ export function registerOnboardingCommands(program: Command): void {
     .description('Verify User Site resident first-use readiness from NARS health and events')
     .option('--platform <platform>', 'Onboarding platform', 'windows')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
-    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or %USERPROFILE%\\Narada')
+    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--session <id>', 'Verify one concrete resident session')
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
     .action(directCommandAction<[CommanderOptionValues]>({
@@ -65,7 +65,7 @@ export function registerOnboardingCommands(program: Command): void {
     .description('Approve architect/builder expansion without silently mutating the Site roster')
     .option('--platform <platform>', 'Onboarding platform', 'windows')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
-    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or %USERPROFILE%\\Narada')
+    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--roles <role...>', 'Roles to approve; defaults to the stored recommendation')
     .option('--confirm', 'Confirm the displayed role expansion preview', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
@@ -88,7 +88,7 @@ export function registerOnboardingCommands(program: Command): void {
     .description('Write approved roles into the launch registry as quiet background entries')
     .option('--platform <platform>', 'Onboarding platform', 'windows')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
-    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or %USERPROFILE%\\Narada')
+    .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--roles <role...>', 'Approved roles to materialize; defaults to all approved roles')
     .option('--format <fmt>', 'Output format: json|human|auto', 'human')
     .action(directCommandAction<[CommanderOptionValues]>({

@@ -26,8 +26,16 @@ export interface OnboardingStartOptions {
   format?: CliFormat;
 }
 
-function userSiteLaunchRegistryJson(root: string): string {
-  return `${JSON.stringify({ NaradaRoot: root, Agents: [userSiteLaunchRegistryAgent(root)] }, null, 2)}\n`;
+export type OnboardingPlatform = 'windows' | 'linux';
+
+export function normalizeOnboardingPlatform(value?: string): OnboardingPlatform {
+  const normalized = (value ?? (process.platform === 'win32' ? 'windows' : 'linux')).trim().toLowerCase();
+  if (normalized === 'windows' || normalized === 'linux') return normalized;
+  throw new Error(`onboarding_platform_unsupported: ${normalized}`);
+}
+
+function userSiteLaunchRegistryJson(root: string, platform: OnboardingPlatform = normalizeOnboardingPlatform()): string {
+  return `${JSON.stringify({ NaradaRoot: root, Agents: [userSiteLaunchRegistryAgent(root, platform)] }, null, 2)}\n`;
 }
 
 export interface OnboardingStatusOptions {
@@ -92,7 +100,7 @@ interface OnboardingStatusResult {
   schema: 'narada.onboarding.status.v1';
   status: 'not_started' | 'launch_requested' | 'first_use_verified' | 'blocked';
   mutation_performed: boolean;
-  platform: 'windows';
+  platform: OnboardingPlatform;
   scope: 'user-site';
   user_site: {
     root: string;
@@ -160,7 +168,7 @@ interface OnboardingResult {
   schema: 'narada.onboarding.start.v1';
   status: 'ready' | 'launched' | 'planned' | 'demo_available' | 'cancelled' | 'blocked' | 'error';
   mutation_performed: boolean;
-  platform: 'windows';
+  platform: OnboardingPlatform;
   scope: 'user-site';
   user_site: {
     root: string;
@@ -187,12 +195,23 @@ interface OnboardingResult {
   next_action: string;
 }
 
-export function userSiteRoot(input?: string): string {
-  return resolve(input ?? process.env.NARADA_USER_SITE_ROOT ?? join(homedir(), 'Narada'));
+export function userSiteRoot(input?: string, platform: OnboardingPlatform = normalizeOnboardingPlatform()): string {
+  if (input || process.env.NARADA_USER_SITE_ROOT) {
+    return resolve(input ?? process.env.NARADA_USER_SITE_ROOT!);
+  }
+  if (platform === 'linux') {
+    return resolve(join(process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share'), 'narada', 'user'));
+  }
+  return resolve(join(homedir(), 'Narada'));
 }
 
-export function userSiteRegistryPath(root: string, input?: string): string {
+export function userSiteRegistryPath(
+  root: string,
+  input?: string,
+  platform: OnboardingPlatform = normalizeOnboardingPlatform(),
+): string {
   if (input) return resolve(input);
+  if (platform === 'linux') return join(root, 'config', 'launch', 'agents.json');
   const configuredUserSiteRoot = process.env.NARADA_USER_SITE_ROOT ? resolve(process.env.NARADA_USER_SITE_ROOT) : null;
   return configuredUserSiteRoot && configuredUserSiteRoot.toLowerCase() === root.toLowerCase()
     ? defaultLaunchRegistryPath()
@@ -373,9 +392,12 @@ function powerShellDataString(value: string): string {
   return `"${value.replace(/"/g, '""')}"`;
 }
 
-function userSiteLaunchRegistryAgent(root: string): Record<string, unknown> {
+function userSiteLaunchRegistryAgent(root: string, platform: OnboardingPlatform = normalizeOnboardingPlatform()): Record<string, unknown> {
   const siteId = defaultUserSiteId(root);
   const launcher = siteId.endsWith('-user') ? `${siteId}.ps1` : 'narada-user.ps1';
+  const launcherPath = platform === 'linux'
+    ? process.env.NARADA_CLI_ENTRYPOINT ?? process.argv[1] ?? 'narada'
+    : undefined;
   return {
     Agent: `${siteId}.resident`,
     Title: 'General assistant',
@@ -384,7 +406,7 @@ function userSiteLaunchRegistryAgent(root: string): Record<string, unknown> {
     NaradaRoot: root,
     WorkspaceRoot: root,
     SiteRoot: root,
-    Launcher: launcher,
+    ...(launcherPath ? { LauncherPath: launcherPath } : { Launcher: launcher }),
     OperatorSurface: 'agent-web-ui',
     Runtime: 'narada-agent-runtime-server',
     EnableNativeShell: false,
@@ -419,19 +441,26 @@ function renderLaunchRegistryAgentBlock(agent: Record<string, unknown>): string[
   return lines;
 }
 
-function userSiteLaunchRegistryText(root: string): string {
+function userSiteLaunchRegistryText(root: string, platform: OnboardingPlatform = normalizeOnboardingPlatform()): string {
   return [
     '@{',
     '  Agents = @(',
-    ...renderLaunchRegistryAgentBlock(userSiteLaunchRegistryAgent(root)),
+    ...renderLaunchRegistryAgentBlock(userSiteLaunchRegistryAgent(root, platform)),
     '  )',
     '}',
   ].join('\n') + '\n';
 }
 
-function userSiteLaunchRegistryRoleAgent(root: string, role: 'architect' | 'builder'): Record<string, unknown> {
+function userSiteLaunchRegistryRoleAgent(
+  root: string,
+  role: 'architect' | 'builder',
+  platform: OnboardingPlatform = normalizeOnboardingPlatform(),
+): Record<string, unknown> {
   const siteId = defaultUserSiteId(root);
   const launcher = siteId.endsWith('-user') ? `${siteId}.ps1` : 'narada-user.ps1';
+  const launcherPath = platform === 'linux'
+    ? process.env.NARADA_CLI_ENTRYPOINT ?? process.argv[1] ?? 'narada'
+    : undefined;
   return {
     Agent: `${siteId}.${role}`,
     Title: role === 'architect' ? 'Architect' : 'Builder',
@@ -440,7 +469,7 @@ function userSiteLaunchRegistryRoleAgent(root: string, role: 'architect' | 'buil
     NaradaRoot: root,
     WorkspaceRoot: root,
     SiteRoot: root,
-    Launcher: launcher,
+    ...(launcherPath ? { LauncherPath: launcherPath } : { Launcher: launcher }),
     OperatorSurface: 'agent-cli',
     Runtime: 'narada-agent-runtime-server',
     EnableNativeShell: false,
@@ -471,6 +500,7 @@ export async function ensureUserSiteProvisioned(
   root: string,
   registryPath: string,
   context: CommandContext,
+  platform: OnboardingPlatform = normalizeOnboardingPlatform(),
 ): Promise<{
   site_created: boolean;
   launch_registry_created: boolean;
@@ -482,7 +512,7 @@ export async function ensureUserSiteProvisioned(
   if (!existsSync(join(root, 'config.json'))) {
     const { sitesInitCommand } = await import('./sites.js');
     const initialized = await sitesInitCommand(defaultUserSiteId(root), {
-      substrate: 'windows-native',
+      substrate: platform === 'linux' ? 'linux-user' : 'windows-native',
       authorityLocus: 'user',
       root,
       sync: 'hybrid_capable_plain_folder',
@@ -501,7 +531,9 @@ export async function ensureUserSiteProvisioned(
     await mkdir(dirname(registryPath), { recursive: true });
     await atomicWriteText(
       registryPath,
-      registryPath.toLowerCase().endsWith('.json') ? userSiteLaunchRegistryJson(root) : userSiteLaunchRegistryText(root),
+      registryPath.toLowerCase().endsWith('.json')
+        ? userSiteLaunchRegistryJson(root, platform)
+        : userSiteLaunchRegistryText(root, platform),
     );
     registryCreated = true;
   }
@@ -522,10 +554,11 @@ async function refreshRoleExpansionRecommendation(
   root: string,
   state: OnboardingState,
   firstUseVerified: boolean,
+  platform: OnboardingPlatform = normalizeOnboardingPlatform(),
 ): Promise<OnboardingRoleExpansionRecommendation> {
   if (state.role_expansion.status === 'approved' || state.role_expansion.status === 'materialized') return state.role_expansion;
   try {
-    const registryPath = state.launch_registry_path ?? userSiteRegistryPath(root);
+    const registryPath = state.launch_registry_path ?? userSiteRegistryPath(root, undefined, platform);
     if (!existsSync(registryPath)) return state.role_expansion;
     const loaded = await readWorkspaceLaunchRecords({ registryPath });
     const resident = findResidentRecord(loaded.records, root);
@@ -560,12 +593,11 @@ export async function onboardingStatusCommand(
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
-    const platform = (options.platform ?? 'windows').trim().toLowerCase();
+    const platform = normalizeOnboardingPlatform(options.platform);
     const scope = (options.scope ?? 'user-site').trim().toLowerCase();
-    if (platform !== 'windows') throw new Error(`onboarding_platform_unsupported: ${platform}`);
     if (scope !== 'user-site') throw new Error(`onboarding_scope_unsupported: ${scope}`);
 
-    const root = userSiteRoot(options.siteRoot);
+    const root = userSiteRoot(options.siteRoot, platform);
     const statePath = onboardingStatePath(root);
     const state = readOnboardingState(root);
     if (!state) {
@@ -573,7 +605,7 @@ export async function onboardingStatusCommand(
         schema: 'narada.onboarding.status.v1',
         status: 'not_started',
         mutation_performed: false,
-        platform: 'windows',
+        platform,
         scope: 'user-site',
         user_site: { root, resident_agent: null },
         session: { id: null, launch_session_id: null, display_state: null, health_status: null },
@@ -635,7 +667,7 @@ export async function onboardingStatusCommand(
         : [...new Set([...state.readiness.evidence, ...verification.evidence])],
     };
     const roleExpansion = currentFirstUseVerified
-      ? await refreshRoleExpansionRecommendation(root, state, true)
+      ? await refreshRoleExpansionRecommendation(root, state, true, platform)
       : state.role_expansion;
     const roleChanged = !roleExpansionEqual(roleExpansion, state.role_expansion);
     const status: OnboardingStatusResult['status'] = verification.status === 'verified'
@@ -656,7 +688,7 @@ export async function onboardingStatusCommand(
       schema: 'narada.onboarding.status.v1',
       status,
       mutation_performed: !priorVerificationIsStable || roleChanged,
-      platform: 'windows',
+      platform: normalizeOnboardingPlatform(options.platform),
       scope: 'user-site',
       user_site: { root, resident_agent: state.resident_agent },
       session: {
@@ -685,9 +717,9 @@ export async function onboardingStatusCommand(
       schema: 'narada.onboarding.status.v1',
       status: 'blocked',
       mutation_performed: false,
-      platform: 'windows',
+      platform: normalizeOnboardingPlatform(options.platform),
       scope: 'user-site',
-      user_site: { root: userSiteRoot(options.siteRoot), resident_agent: null },
+      user_site: { root: userSiteRoot(options.siteRoot, normalizeOnboardingPlatform(options.platform)), resident_agent: null },
       session: { id: null, launch_session_id: null, display_state: null, health_status: null },
       readiness: { status: 'blocked', first_useful_interaction: 'pending', evidence: ['status_check_failed'] },
       verification: null,
@@ -711,12 +743,11 @@ export async function onboardingRoleApprovalCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
-    const platform = (options.platform ?? 'windows').trim().toLowerCase();
+    const platform = normalizeOnboardingPlatform(options.platform);
     const scope = (options.scope ?? 'user-site').trim().toLowerCase();
-    if (platform !== 'windows') throw new Error(`onboarding_platform_unsupported: ${platform}`);
     if (scope !== 'user-site') throw new Error(`onboarding_scope_unsupported: ${scope}`);
 
-    const root = userSiteRoot(options.siteRoot);
+    const root = userSiteRoot(options.siteRoot, platform);
     const state = readOnboardingState(root);
     const blocked = (reasonCode: string, nextAction: string): { exitCode: ExitCode; result: unknown } => {
       const result: OnboardingRoleApprovalResult = {
@@ -741,7 +772,7 @@ export async function onboardingRoleApprovalCommand(
       return blocked('role_expansion_confirmation_required', 'Review the architect/builder preview, then rerun with --confirm.');
     }
 
-    const currentRecommendation = await refreshRoleExpansionRecommendation(root, state, true);
+    const currentRecommendation = await refreshRoleExpansionRecommendation(root, state, true, platform);
     if (currentRecommendation.status !== 'available') {
       return blocked('role_expansion_not_available', 'The current resident roster has no pending role expansion recommendation.');
     }
@@ -820,7 +851,7 @@ export async function onboardingRoleApprovalCommand(
       schema: 'narada.onboarding.role_expansion_approval.v1',
       status: 'blocked',
       mutation_performed: false,
-      user_site: { root: userSiteRoot(options.siteRoot), resident_agent: null },
+      user_site: { root: userSiteRoot(options.siteRoot, normalizeOnboardingPlatform(options.platform)), resident_agent: null },
       approved_roles: [],
       preview: { action: 'add_roles', roles: [], roster_mutation_performed: false },
       approval_path: null,
@@ -896,12 +927,11 @@ export async function onboardingRoleMaterializeCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
-    const platform = (options.platform ?? 'windows').trim().toLowerCase();
+    const platform = normalizeOnboardingPlatform(options.platform);
     const scope = (options.scope ?? 'user-site').trim().toLowerCase();
-    if (platform !== 'windows') throw new Error(`onboarding_platform_unsupported: ${platform}`);
     if (scope !== 'user-site') throw new Error(`onboarding_scope_unsupported: ${scope}`);
 
-    const root = userSiteRoot(options.siteRoot);
+    const root = userSiteRoot(options.siteRoot, platform);
     const state = readOnboardingState(root);
     const blocked = (reasonCode: string, nextAction: string): { exitCode: ExitCode; result: unknown } => {
       const result: OnboardingRoleMaterializeResult = {
@@ -937,7 +967,7 @@ export async function onboardingRoleMaterializeCommand(
       return blocked('role_materialization_roles_not_approved', `Only previously approved roles can be materialized: ${approvedSet.join(', ') || 'none'}.`);
     }
 
-    const registryPath = state.launch_registry_path ?? userSiteRegistryPath(root);
+    const registryPath = state.launch_registry_path ?? userSiteRegistryPath(root, undefined, platform);
     if (!existsSync(registryPath)) {
       return blocked('launch_registry_missing', `Restore the launch registry at ${registryPath}, then retry materialization.`);
     }
@@ -972,7 +1002,7 @@ export async function onboardingRoleMaterializeCommand(
 
     const previousRegistryText = readFileSync(registryPath, 'utf8');
     const previousApprovalText = readFileSync(approvalPath, 'utf8');
-    const newAgents = toMaterialize.map((role) => userSiteLaunchRegistryRoleAgent(root, role as 'architect' | 'builder'));
+    const newAgents = toMaterialize.map((role) => userSiteLaunchRegistryRoleAgent(root, role as 'architect' | 'builder', platform));
     const registryText = registryPath.toLowerCase().endsWith('.json')
       ? appendAgentsToJsonRegistryText(previousRegistryText, newAgents)
       : appendAgentsToPsd1RegistryText(previousRegistryText, newAgents.map((agent) => renderLaunchRegistryAgentBlock(agent)));
@@ -1031,7 +1061,7 @@ export async function onboardingRoleMaterializeCommand(
       schema: 'narada.onboarding.role_expansion_materialization.v1',
       status: 'blocked',
       mutation_performed: false,
-      user_site: { root: userSiteRoot(options.siteRoot), resident_agent: null },
+      user_site: { root: userSiteRoot(options.siteRoot, normalizeOnboardingPlatform(options.platform)), resident_agent: null },
       materialized_roles: [],
       pending_roles: [],
       registry_path: null,
@@ -1419,12 +1449,13 @@ function baseResult(
   registryPath: string,
   record: WorkspaceLaunchRecord | null,
   records: WorkspaceLaunchRecord[],
+  platform: OnboardingPlatform,
 ): OnboardingResult {
   return {
     schema: 'narada.onboarding.start.v1',
     status: 'ready',
     mutation_performed: false,
-    platform: 'windows',
+    platform,
     scope: 'user-site',
     user_site: {
       root,
@@ -1490,16 +1521,15 @@ export async function onboardingStartCommand(
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   try {
-    const platform = (options.platform ?? 'windows').trim().toLowerCase();
+    const platform = normalizeOnboardingPlatform(options.platform);
     const scope = (options.scope ?? 'user-site').trim().toLowerCase();
-    if (platform !== 'windows') throw new Error(`onboarding_platform_unsupported: ${platform}`);
     if (scope !== 'user-site') throw new Error(`onboarding_scope_unsupported: ${scope}`);
 
-    const root = userSiteRoot(options.siteRoot);
-    const registryPath = userSiteRegistryPath(root, options.registryPath);
+    const root = userSiteRoot(options.siteRoot, platform);
+    const registryPath = userSiteRegistryPath(root, options.registryPath, platform);
     if (options.demo) {
       const result: OnboardingResult = {
-        ...baseResult(root, registryPath, null, []),
+        ...baseResult(root, registryPath, null, [], platform),
         status: 'demo_available',
         readiness: {
           status: 'demo_available',
@@ -1513,13 +1543,13 @@ export async function onboardingStartCommand(
 
     let provisioned: Awaited<ReturnType<typeof ensureUserSiteProvisioned>> | null = null;
     if (!options.noExec) {
-      provisioned = await ensureUserSiteProvisioned(root, registryPath, context);
+      provisioned = await ensureUserSiteProvisioned(root, registryPath, context, platform);
     }
 
     if (!existsSync(root) || !existsSync(registryPath)) {
       if (options.noExec) {
         const result: OnboardingResult = {
-          ...baseResult(root, registryPath, null, []),
+          ...baseResult(root, registryPath, null, [], platform),
           status: 'planned',
           reason_code: 'user_site_bootstrap_required',
           message: 'The first-use path will create the User Site and its resident launch record before starting the assistant.',
@@ -1531,7 +1561,7 @@ export async function onboardingStartCommand(
 
     if (!existsSync(root) || !existsSync(registryPath)) {
       const result: OnboardingResult = {
-        ...baseResult(root, registryPath, null, []),
+        ...baseResult(root, registryPath, null, [], platform),
         status: 'blocked',
         reason_code: 'user_site_bootstrap_incomplete',
         message: 'The User Site bootstrap did not produce the required launch authority.',
@@ -1542,7 +1572,7 @@ export async function onboardingStartCommand(
 
     const loaded = await readWorkspaceLaunchRecords({ registryPath });
     const resident = findResidentRecord(loaded.records, root);
-    const result = baseResult(root, registryPath, resident, loaded.records);
+    const result = baseResult(root, registryPath, resident, loaded.records, platform);
     if (provisioned) result.intelligence_catalog = provisioned.intelligence_catalog;
 
     if (!resident) {
@@ -1610,7 +1640,17 @@ export async function onboardingStartCommand(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const result: OnboardingResult = {
-      ...baseResult(userSiteRoot(options.siteRoot), userSiteRegistryPath(userSiteRoot(options.siteRoot), options.registryPath), null, []),
+      ...baseResult(
+        userSiteRoot(options.siteRoot, normalizeOnboardingPlatform(options.platform)),
+        userSiteRegistryPath(
+          userSiteRoot(options.siteRoot, normalizeOnboardingPlatform(options.platform)),
+          options.registryPath,
+          normalizeOnboardingPlatform(options.platform),
+        ),
+        null,
+        [],
+        normalizeOnboardingPlatform(options.platform),
+      ),
       status: 'error',
       reason_code: message.includes('codex_subscription') ? 'provider_auth_required' : 'onboarding_start_failed',
       message,

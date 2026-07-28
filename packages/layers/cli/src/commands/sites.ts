@@ -471,6 +471,110 @@ function siteLifecycleArtifacts(kind: SiteLifecycleKindName): string[] {
   }
 }
 
+export type SitesSupervisorOperation = 'enable' | 'disable' | 'start' | 'stop' | 'status';
+
+export interface SitesSupervisorOptions extends SitesOptions {
+  apply?: boolean;
+  dryRun?: boolean;
+}
+
+/**
+ * Inspect or apply the explicit Linux supervisor lifecycle boundary.
+ * Registration remains owned by `sites enable`; this command only controls
+ * activation of already-written systemd units.
+ */
+export async function sitesSupervisorCommand(
+  siteId: string,
+  operation: SitesSupervisorOperation,
+  options: SitesSupervisorOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const apply = !!options.apply && !options.dryRun;
+
+  try {
+    const {
+      resolveLinuxSiteMode,
+      resolveSiteRoot,
+      siteConfigPath,
+      DefaultLinuxSiteSupervisor,
+    } = await import('@narada2/linux-site');
+    const mode = resolveLinuxSiteMode(siteId);
+    if (!mode) {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          schema: 'narada.linux.supervisor.lifecycle.v1',
+          status: 'refused',
+          reason: `Linux Site "${siteId}" was not found in system or user scope.`,
+          remediation: `Run narada sites init ${siteId} --substrate linux-user or linux-system.`,
+        },
+      };
+    }
+
+    const siteRoot = resolveSiteRoot(siteId, mode);
+    const configPath = siteConfigPath(siteId, mode);
+    let config: {
+      site_id: string;
+      mode: 'system' | 'user';
+      site_root: string;
+      config_path: string;
+      cycle_interval_minutes: number;
+      lock_ttl_ms: number;
+      ceiling_ms: number;
+      cli_command?: string[];
+    };
+    try {
+      config = JSON.parse(await readFile(configPath, 'utf8'));
+    } catch {
+      config = {
+        site_id: siteId,
+        mode,
+        site_root: siteRoot,
+        config_path: configPath,
+        cycle_interval_minutes: 5,
+        lock_ttl_ms: 310_000,
+        ceiling_ms: 300_000,
+      };
+    }
+
+    const supervisor = new DefaultLinuxSiteSupervisor();
+    const lifecycle = await supervisor.lifecycle(config, operation, { apply });
+    if (fmt.getFormat() === 'human') {
+      fmt.message(
+        lifecycle.status === 'applied'
+          ? `Supervisor ${operation} applied for Site: ${siteId}`
+          : lifecycle.status === 'planned'
+            ? `Supervisor ${operation} planned for Site: ${siteId}`
+            : `Supervisor ${operation} ${lifecycle.status} for Site: ${siteId}`,
+        lifecycle.status === 'applied' || lifecycle.status === 'planned' ? 'success' : 'warning',
+      );
+      fmt.kv('Substrate', `linux-${mode}`);
+      fmt.kv('Command', lifecycle.command.join(' '));
+      if (lifecycle.reason) fmt.message(lifecycle.reason, 'warning');
+      if (lifecycle.remediation) fmt.message(`Remediation: ${lifecycle.remediation}`, 'info');
+    }
+
+    return {
+      exitCode: lifecycle.status === 'refused' || lifecycle.status === 'partial'
+        ? ExitCode.GENERAL_ERROR
+        : ExitCode.SUCCESS,
+      result: lifecycle,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        schema: 'narada.linux.supervisor.lifecycle.v1',
+        status: 'refused',
+        reason: message,
+        remediation: 'Run the command with --format json for the structured refusal and inspect the Linux Site prerequisites.',
+      },
+    };
+  }
+}
+
 export async function sitesLineageEventsCommand(
   options: SitesLineageEventsOptions,
   _context: CommandContext,
@@ -5901,6 +6005,7 @@ export async function sitesInitCommand(
         mode,
         site_root: siteRoot,
         config_path: configPath,
+        cli_command: process.argv[1] ? [process.execPath, process.argv[1]] : ['narada'],
         execution: buildExecutionRecord({ execution, siteRoot }),
         cycle_interval_minutes: intervalMinutes,
         lock_ttl_ms: lockTtlMs,

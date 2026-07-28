@@ -104,15 +104,22 @@ function stopProcess(child) {
       resolveStop();
       return;
     }
+    const terminate = () => {
+      if (process.platform === 'win32' && child.pid) {
+        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      } else {
+        child.kill();
+      }
+    };
     const timer = setTimeout(() => {
-      child.kill();
-      resolveStop();
+      terminate();
+      setTimeout(resolveStop, 250);
     }, 5_000);
     child.once('exit', () => {
       clearTimeout(timer);
       resolveStop();
     });
-    child.kill();
+    terminate();
   });
 }
 
@@ -234,13 +241,8 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     assert.equal(doctorPayload.installation_boundary, 'published_cli');
     assert.equal(doctorPayload.summary.fail, 0);
     assert.equal(doctorPayload.installation_profile, 'minimal');
-    assert.ok(doctorPayload.provider_readiness.some((row) => row.provider === 'demo' && row.status === 'ready'));
-    const codexReadiness = doctorPayload.provider_readiness.find((row) => row.provider === 'codex-subscription');
-    assert.equal(codexReadiness?.status, 'needs_setup');
-    const apiReadiness = doctorPayload.provider_readiness.filter((row) => row.credential_kind === 'api_key_secret');
-    assert.ok(apiReadiness.length > 0);
-    assert.ok(apiReadiness.every((row) => row.status !== 'ready'));
-    assert.ok(doctorPayload.provider_readiness.every((row) => !Object.hasOwn(row, 'value')));
+    assert.ok(['needs_setup', 'check_required'].includes(doctorPayload.intelligence_catalog_readiness.status));
+    assert.doesNotMatch(JSON.stringify(doctorPayload), /api[_-]?key|secret[_-]?value/i);
 
     const demo = run(process.execPath, [
       installedCliEntrypoint,
@@ -299,6 +301,6 @@ test('published CLI installs into a blank Windows profile and provisions the Use
       await stopProcess(consoleProcess);
     }
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });

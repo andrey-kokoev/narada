@@ -17,6 +17,28 @@ vi.mock('../../src/commands/nars.js', () => ({ narsSessionsCommand: narsSessions
 // provisioning boundary here.
 vi.mock('../../src/commands/sites.js', () => ({ sitesInitCommand: sitesInitMock }));
 
+vi.mock('@narada2/invokable-intelligence-management', () => ({
+  ensureIntelligenceCatalog: vi.fn(async ({ siteRoot, targetSiteId, userSiteId, hostSiteId }: {
+    siteRoot: string;
+    targetSiteId: string;
+    userSiteId: string;
+    hostSiteId: string;
+  }) => ({
+    schema: 'narada.invokable-intelligence.catalog-bootstrap.v1',
+    status: 'initialized',
+    mutation_performed: true,
+    site_root: siteRoot,
+    registry_db_path: join(siteRoot, '.ai', 'intelligence-registry.db'),
+    source_registry_path: 'test-provider-registry.bootstrap.json',
+    target_site: { kind: 'site', id: `site:${targetSiteId}` },
+    user_site: { kind: 'site', id: `site:${userSiteId}` },
+    host_site: { kind: 'site', id: `site:${hostSiteId}` },
+    counts: { add: 1, update: 0, unchanged: 0 },
+    catalog_record_count: 1,
+    resource_count: 1,
+  })),
+}));
+
 import { appendAgentsToJsonRegistryText, appendAgentsToPsd1RegistryText, onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
@@ -68,9 +90,8 @@ beforeEach(() => {
 describe('User Site onboarding', () => {
   it('offers the no-credential demo even when the User Site is absent', async () => {
     const root = join(process.cwd(), '.ai', 'tmp-tests', `onboarding-missing-${Date.now()}`);
-    tempDirs.push(root);
     const result = await onboardingStartCommand({ siteRoot: root, demo: true, format: 'json' }, createMockContext());
-    expect(result.exitCode, JSON.stringify(result.result, null, 2)).toBe(ExitCode.SUCCESS);
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
     expect(result.result, JSON.stringify(result.result, null, 2)).toMatchObject({
       schema: 'narada.onboarding.start.v1',
       status: 'demo_available',
@@ -78,6 +99,40 @@ describe('User Site onboarding', () => {
       readiness: { status: 'demo_available', first_useful_interaction: 'pending' },
       role_expansion: { status: 'unavailable', recommended_roles: [] },
     });
+  });
+
+  it('uses Linux-native resident-first defaults and JSON launch registry', async () => {
+    const { root, registry } = await tempUserSite(false);
+    const result = await onboardingStartCommand({
+      platform: 'linux',
+      siteRoot: root,
+      registryPath: registry,
+      noExec: false,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      schema: 'narada.onboarding.start.v1',
+      status: 'launched',
+      platform: 'linux',
+      user_site: { root, registry_path: registry, resident_agent: 'user-site.resident' },
+    });
+
+    const launchRegistry = JSON.parse(await readFile(registry, 'utf8')) as {
+      Agents: Array<Record<string, unknown>>;
+    };
+    expect(launchRegistry.Agents).toHaveLength(1);
+    expect(launchRegistry.Agents[0]).toMatchObject({
+      Agent: 'user-site.resident',
+      Role: 'resident',
+      OperatorSurface: 'agent-web-ui',
+      Runtime: 'narada-agent-runtime-server',
+      SiteRoot: root,
+      WorkspaceRoot: root,
+    });
+    expect(typeof launchRegistry.Agents[0].LauncherPath).toBe('string');
+    expect(launchRegistry.Agents[0]).not.toHaveProperty('Launcher');
   });
 
   it('reports a missing User Site registry as an actionable block', async () => {

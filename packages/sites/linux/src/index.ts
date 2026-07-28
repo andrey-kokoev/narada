@@ -26,9 +26,17 @@ export {
 export {
   envVarName,
   resolveSecret,
+  resolveSecretWithEvidence,
   resolveSecretRequired,
+  checkProviderReadiness,
 } from "./credentials.js";
-export type { ResolveSecretOptions } from "./credentials.js";
+export type {
+  ResolveSecretOptions,
+  SecretResolutionSource,
+  SecretResolutionEvidence,
+  ProviderReadinessOptions,
+  ProviderReadiness,
+} from "./credentials.js";
 
 // Coordinator
 export {
@@ -59,12 +67,40 @@ export {
   writeShellScript,
   unitDir,
   validateSystemdService,
+  inspectSystemdCapability,
 } from "./supervisor.js";
 export type {
   LinuxSiteSupervisor,
   SupervisorRegistration,
   ServiceGenerationOptions,
+  SystemdCapability,
+  SystemdCapabilityOptions,
+  SupervisorLifecycleOperation,
+  SupervisorLifecycleResult,
+  SystemctlCommandRunner,
+  LinuxSiteSupervisorOptions,
 } from "./supervisor.js";
+
+// Installation lifecycle
+export {
+  LINUX_INSTALLATION_LIFECYCLE_SCHEMA,
+  LINUX_INSTALLATION_STATE_SCHEMA,
+  LINUX_DATA_REMOVAL_CONFIRMATION,
+  linuxInstallationStatePath,
+  linuxInstallationEvidencePath,
+  readLinuxInstallationState,
+  buildLinuxInstallationLifecyclePlan,
+  applyLinuxInstallationLifecyclePlan,
+} from "./installation-lifecycle.js";
+export type {
+  LinuxInstallationLifecycleOperation,
+  LinuxInstallationLifecycleStatus,
+  LinuxInstallationState,
+  LinuxInstallationLifecycleRequest,
+  LinuxInstallationLifecycleStep,
+  LinuxInstallationLifecyclePlan,
+  LinuxInstallationLifecycleApplyResult,
+} from "./installation-lifecycle.js";
 
 // Observability
 export {

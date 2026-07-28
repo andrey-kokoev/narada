@@ -13,6 +13,7 @@ import {
   DefaultLinuxSiteSupervisor,
   isSystemdAvailable,
   validateSystemdService,
+  inspectSystemdCapability,
 } from "../src/supervisor.js";
 import { resolveSiteRoot } from "../src/path-utils.js";
 
@@ -212,6 +213,58 @@ Type=oneshot
   });
 
   describe("DefaultLinuxSiteSupervisor", () => {
+    it("reports planned registration without claiming activation", async () => {
+      const supervisor = new DefaultLinuxSiteSupervisor({
+        capability: {
+          systemdAvailable: true,
+          systemctlAvailable: true,
+          runtimeDirectory: testRoot,
+        },
+      });
+
+      const registration = await supervisor.register(baseConfig);
+
+      expect(registration.schema).toBe("narada.linux.supervisor.registration.v1");
+      expect(registration.status).toBe("planned");
+      expect(registration.mutation_performed).toBe(true);
+      expect(registration.data_preserved).toBe(true);
+      expect(registration.activation?.status).toBe("planned");
+    });
+
+    it("plans and applies explicit lifecycle operations", async () => {
+      const calls: string[][] = [];
+      const supervisor = new DefaultLinuxSiteSupervisor({
+        capability: {
+          systemdAvailable: true,
+          systemctlAvailable: true,
+          runtimeDirectory: testRoot,
+        },
+        runSystemctl: async (args) => {
+          calls.push(args);
+          return { exitCode: 0, stdout: "active\n", stderr: "" };
+        },
+      });
+
+      const planned = await supervisor.lifecycle(baseConfig, "start");
+      expect(planned.status).toBe("planned");
+      expect(planned.mutation_performed).toBe(false);
+
+      const applied = await supervisor.lifecycle(baseConfig, "start", { apply: true });
+      expect(applied.status).toBe("applied");
+      expect(applied.mutation_performed).toBe(true);
+      expect(calls).toEqual([["--user", "start", "narada-site-test-site.timer"]]);
+    });
+
+    it("refuses system scope without root privileges", async () => {
+      const capability = await inspectSystemdCapability("system", {
+        systemdAvailable: true,
+        systemctlAvailable: true,
+        effectiveUid: 1000,
+      });
+      expect(capability.status).toBe("refused");
+      expect(capability.reasons).toContain("system scope requires root privileges");
+    });
+
     it("lists registered sites from unit files", async () => {
       const supervisor = new DefaultLinuxSiteSupervisor();
 

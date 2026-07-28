@@ -14,6 +14,7 @@ import {
   sitesBootstrapProjectCommand,
   sitesBootstrapWindowsCommand,
   sitesEnableCommand,
+  sitesSupervisorCommand,
   sitesAgentBootstrapCommand,
   sitesTaskLifecycleInitCommand,
   sitesLifecycleExecuteAbsorbCommand,
@@ -930,6 +931,23 @@ export function registerSitesCommands(program: Command): void {
         intervalMinutes: opts.intervalMinutes ? Number(opts.intervalMinutes) : undefined,
         dryRun: opts.dryRun as boolean | undefined,
         format: resolveCommandFormat(),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  sitesCmd
+    .command('supervisor <site-id> <operation>')
+    .description('Plan or apply Linux supervisor lifecycle: enable, disable, start, stop, or status')
+    .option('--apply', 'Apply the lifecycle operation; default is dry-run', false)
+    .option('--dry-run', 'Explicitly request planning without mutation', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (siteId: string, operation: string, opts: CommanderOptionValues) => {
+      const result = await sitesSupervisorCommand(siteId, operation as 'enable' | 'disable' | 'start' | 'stop' | 'status', {
+        apply: opts.apply as boolean | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
+        format: resolveCommandFormat(opts.format, 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));
       emitFormatterBackedCommandResult(result, { format: opts.format });

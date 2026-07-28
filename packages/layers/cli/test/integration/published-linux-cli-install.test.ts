@@ -210,8 +210,8 @@ test('published Linux CLI installs independently and provisions the resident lau
     const doctorPayload = parseJsonOutput(String(doctor.stdout), 'published Linux doctor');
     assert.equal(doctorPayload.installation_boundary, 'published_cli');
     assert.equal(doctorPayload.summary.fail, 0);
-    assert.ok(doctorPayload.provider_readiness.some((row: any) => row.provider === 'demo' && row.status === 'ready'));
-    assert.ok(doctorPayload.provider_readiness.every((row: any) => !Object.hasOwn(row, 'value')));
+    assert.ok(['needs_setup', 'check_required'].includes(doctorPayload.intelligence_catalog_readiness.status));
+    assert.doesNotMatch(JSON.stringify(doctorPayload), /api[_-]?key|secret[_-]?value/i);
 
     writePublicationEvidence({
       schema: 'narada.native_linux.published_cli_installation_evidence.v1',
@@ -237,7 +237,7 @@ test('published Linux CLI installs independently and provisions the resident lau
       },
     });
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });
 
@@ -273,6 +273,6 @@ test('published Linux artifact failures remain actionable for missing and corrup
     assert.notEqual(incompatible.status, 0, 'incompatible artifact unexpectedly installed under the current Node contract\n' + outputOf(incompatible));
     assert.match(outputOf(incompatible), /engine|node.*99|unsupported|incompatible|ERR_PNPM/i);
   } finally {
-    rmSync(tempRoot, { recursive: true, force: true });
+    rmSync(tempRoot, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
   }
 });

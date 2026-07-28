@@ -145,6 +145,7 @@ describe('sitesInitCommand', () => {
     expect(data.substrate).toBe('linux-user');
     expect(data.config.mode).toBe('user');
     expect(data.config.site_id).toBe('test-site');
+    expect(data.config.cli_command).toEqual([process.execPath, process.argv[1]]);
 
     // Config file should be written
     const files = vol.toJSON();
