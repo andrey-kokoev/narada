@@ -19,6 +19,7 @@
     "./classification-cases": "./fixtures/classification-cases.json"
   },
   "scripts": {
+    "prebuild": "pnpm --filter @narada2/site-common-tools build",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test src/carrier-action-admission.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
