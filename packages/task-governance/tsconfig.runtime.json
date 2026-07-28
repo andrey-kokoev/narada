@@ -2,6 +2,10 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
+    "baseUrl": ".",
+    "paths": {
+      "@narada2/task-governance/*": ["src/*"]
+    },
     "rootDir": "./runtime",
     "outDir": "./dist/runtime",
     "declaration": true,
