@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           declare -A sibling_shas=(
             [narada-core]=0f3bf74713a9daf409a8e03b32481e83b763d9d1
-            [mcp-surfaces]=ca3e522936119fb3eb3acb9af88b01a9d22e1528
+            [mcp-surfaces]=c46f864c3d6e2f51bcf2eb2a9c72b41ad2e8341e
             [agent-cli]=4a2f33863e1786b39b378ce64f17b983f6e96904
             [agent-tui]=dc74b46676c6809b975dd6b93c22ba2f72466a4d
           )
