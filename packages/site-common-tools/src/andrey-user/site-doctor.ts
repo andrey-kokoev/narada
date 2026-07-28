@@ -4,7 +4,7 @@ import { join, resolve } from 'path';
 import { runGovernedCommandSync } from '@narada2/process-launch-posture';
 import { validateAgentExecutionPolicy } from '../site-config/agent-execution-policy.js';
 import { taskLifecycleReadinessPaths } from '../task-lifecycle-mcp-resolution.js';
-import { siteControlRoot } from '@narada2/site-common-tools/site-layout';
+import { siteControlRoot } from '../site-layout.js';
 
 const args: any = parseArgs(process.argv.slice(2));
 const siteRoot: any = resolve(args.siteRoot ?? process.cwd());

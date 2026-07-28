@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { siteControlRoot } from '@narada2/site-common-tools/site-layout';
+import { siteControlRoot } from '../site-layout.js';
 import {
   createSiteLiveCarrierLifecycle,
   transitionSiteLiveCarrierLifecycle,

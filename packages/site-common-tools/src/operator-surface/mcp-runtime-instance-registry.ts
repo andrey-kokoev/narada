@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { siteControlRoot } from '@narada2/site-common-tools/site-layout';
+import { siteControlRoot } from '../site-layout.js';
 import {
   NARADA_PC_SITE_LOCUS,
   NARADA_USER_SITE_LOCUS,
