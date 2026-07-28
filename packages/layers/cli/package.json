@@ -114,7 +114,7 @@
   ],
   "scripts": {
     "prepublishOnly": "node --import tsx ../../../scripts/assert-publication-admission.ts && pnpm run test:linux-installation-e2e",
-    "prebuild": "pnpm --filter @narada2/operator-console-contract build && pnpm --filter @narada2/site-registry-contract build && pnpm --filter @narada2/cloudflare-nars-projection... build && pnpm --filter @narada2/agent-start... build && pnpm --filter @narada2/agent-start check:result-contract && pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/operator-console-runtime build && pnpm --filter @narada2/ui build && pnpm --filter @narada2/operator-console-ui build",
+    "prebuild": "node scripts/run-quiet-command.mjs pnpm --filter @narada2/cli... --filter \"!@narada2/cli\" build && node scripts/run-quiet-command.mjs pnpm --filter @narada2/agent-start check:result-contract",
     "build": "tsc && node --import tsx scripts/write-build-manifest.ts",
     "pretypecheck": "pnpm --filter @narada2/cloudflare-nars-projection build",
     "typecheck": "tsc --noEmit",
