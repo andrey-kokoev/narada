@@ -771,7 +771,7 @@ async function readAgentStartResultArtifact(path: string): Promise<{
     const canonicalRecord = asJsonRecord(parseAgentStartResultArtifact(read.record, path));
     const handoff = evaluateAgentStartHandoff(canonicalRecord);
     if (handoff.status === 'invalid') {
-      return { status: 'invalid', record: null, error: handoff.detail ?? handoff.reason };
+      return { status: 'invalid', record: null, error: handoff.detail ?? 'invalid_agent_start_handoff' };
     }
     return { status: 'present', record: canonicalRecord, error: null };
   } catch (error) {
