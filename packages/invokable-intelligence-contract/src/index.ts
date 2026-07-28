@@ -17,3 +17,5 @@ export * from "./catalog.js";
 export * from "./canonical.js";
 export * from "./canonical-fixtures.js";
 export * from "./selection-authority.js";
+export * from "./selection.js";
+export * from "./catalog-observation.js";

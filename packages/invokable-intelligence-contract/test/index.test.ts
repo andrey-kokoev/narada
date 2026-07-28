@@ -10,6 +10,8 @@ import {
   validateInvocation,
   validatePolicy,
   validateResource,
+  validateIntelligenceSelectionChoices,
+  INVOKABLE_INTELLIGENCE_SELECTION_CHOICES_SCHEMA,
 } from "../src/index.js";
 import type { CapabilityAssertion, Model, PolicyDocument } from "../src/index.js";
 
@@ -119,4 +121,33 @@ test("inverted validity intervals are rejected", () => {
   const assertion = fixture.assertions[0];
   assertion.validity = { valid_from: "2026-07-20T00:00:00Z", valid_until: "2026-07-19T00:00:00Z" };
   assert.ok(validateAssertion(assertion).some((e) => e.code === "invalid-validity"));
+});
+
+test("qualified selection choices preserve provider, model publisher, offering, and scoped capabilities", () => {
+  const choices = {
+    schema: INVOKABLE_INTELLIGENCE_SELECTION_CHOICES_SCHEMA,
+    providers: [{
+      provider: "codex-subscription",
+      inference_provider: { kind: "inference-provider", id: "inference-provider:codex-subscription" },
+      models: [{
+        model: "gpt-5.6-luna",
+        model_ref: { kind: "model", id: "model:gpt-5.6-luna" },
+        model_provider: { kind: "model-provider", id: "model-provider:openai" },
+        inference_provider: { kind: "inference-provider", id: "inference-provider:codex-subscription" },
+        offering_refs: [{ kind: "model-offering", id: "model-offering:gpt-via-codex" }],
+        invocation_model_key: "gpt-5.6-luna",
+        capabilities: [{
+          capability: { family: "thinking", name: "levels" },
+          supported: true,
+          allowed_values: ["xhigh"],
+          assertion_ids: ["assert:luna-thinking"],
+          reasons: ["support-intersection-satisfied"],
+        }],
+      }],
+    }],
+  };
+  assert.deepEqual(validateIntelligenceSelectionChoices(choices), []);
+  const invalid = structuredClone(choices);
+  invalid.providers[0].models[0].inference_provider = { kind: "inference-provider", id: "inference-provider:kimi-code-api" };
+  assert.ok(validateIntelligenceSelectionChoices(invalid).some((error) => error.code === "inference-provider-mismatch"));
 });

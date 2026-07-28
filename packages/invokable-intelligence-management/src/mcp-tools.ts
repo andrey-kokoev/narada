@@ -7,6 +7,7 @@ import type {
   MaterializationAdmission,
   MaterializationEnvelope,
   MaterializationRevocation,
+  ResourceRef,
 } from "@narada2/invokable-intelligence-contract";
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
 
@@ -31,6 +32,16 @@ export interface ManagementToolDefinition {
   description: string;
   inputSchema: Record<string, unknown>;
   handler: (input: Record<string, unknown>) => Promise<unknown>;
+}
+
+function inferenceProviderRef(value: unknown): ResourceRef {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    throw new ManagementError("invalid-provider", "A canonical inference-provider id is required.");
+  }
+  const id = value.trim().startsWith("inference-provider:")
+    ? value.trim()
+    : `inference-provider:${value.trim()}`;
+  return { kind: "inference-provider", id };
 }
 
 const COLLECTIONS: ManagementCollection[] = [
@@ -133,6 +144,28 @@ export function createManagementTools(session: ManagementSession): ManagementToo
           ...(typeof input.offset === "number" ? { offset: input.offset } : {}),
           ...(typeof input.limit === "number" ? { limit: input.limit } : {}),
         },
+      })),
+    },
+    {
+      name: "intelligence_management_observe_catalog",
+      description: "Observe one provider catalog through Narada's injected read-only adapter; returns authority/source/access evidence and never returns credentials.",
+      inputSchema: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          provider_id: { type: "string" },
+          observed_at: { type: "string" },
+          access_mode: { type: "string", enum: ["public", "credentialed", "operator_attested"] },
+        },
+        required: ["provider_id", "observed_at"],
+      },
+      handler: (input) => wrap(() => service.execute({
+        operation: "observe-catalog",
+        provider: inferenceProviderRef(input.provider_id),
+        observed_at: String(input.observed_at),
+        ...(input.access_mode === "public" || input.access_mode === "credentialed" || input.access_mode === "operator_attested"
+          ? { access_mode: input.access_mode }
+          : {}),
       })),
     },
     {

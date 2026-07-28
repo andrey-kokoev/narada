@@ -38,6 +38,8 @@ import { resolveInvocation } from "@narada2/invokable-intelligence-resolver";
 import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
 import { inspectLocalIntelligenceReadiness } from "./local-readiness.js";
 import type { LocalReadinessContext } from "./local-readiness.js";
+import { observeCatalog as observeCatalogThroughAdapter } from "./catalog-observation.js";
+import type { CatalogObservationDependencies } from "./catalog-observation.js";
 
 export const MANAGEMENT_RESULT_SCHEMA =
   "narada.invokable-intelligence.management-result.v1" as const;
@@ -151,6 +153,8 @@ export interface ManagementSession {
   store: IntelligenceRegistryStore;
   owningSite: ResourceRef;
   materialization?: IntelligenceMaterializationStore;
+  /** Read-only provider catalog adapters; credential resolution remains injected at the final adapter boundary. */
+  catalogObservation?: CatalogObservationDependencies;
   /** Resolve immutable JSON payload references for MCP projections. */
   resolveInputRef?: (ref: string) => Promise<unknown>;
 }
@@ -227,6 +231,13 @@ export interface ManagementLocalReadinessRequest {
   context: LocalReadinessContext;
 }
 
+export interface ManagementObserveCatalogRequest {
+  operation: "observe-catalog";
+  provider: ResourceRef;
+  observed_at: string;
+  access_mode?: "public" | "credentialed" | "operator_attested";
+}
+
 export interface ManagementExplainResolutionRequest {
   operation: "explain-resolution";
   resolver: "local" | "cloudflare";
@@ -277,6 +288,7 @@ export type ManagementRequest =
   | ManagementShowRequest
   | ManagementValidateRequest
   | ManagementLocalReadinessRequest
+  | ManagementObserveCatalogRequest
   | ManagementExplainResolutionRequest
   | ManagementInspectMaterializationRequest
   | ManagementMutationRequest;
@@ -633,6 +645,17 @@ export class IntelligenceManagementService {
     return result("local-readiness", readiness, readiness.status === "ready");
   }
 
+  private async observeCatalog(request: ManagementObserveCatalogRequest): Promise<ManagementResult> {
+    if (!this.session.catalogObservation) {
+      throw new ManagementError(
+        "catalog-observation-unavailable",
+        "This management session has no injected catalog observation adapter or credential boundary.",
+      );
+    }
+    const observation = await observeCatalogThroughAdapter(this.session.store, request, this.session.catalogObservation);
+    return result(request.operation, observation, observation.status !== "unavailable");
+  }
+
   private async explainResolution(request: ManagementExplainResolutionRequest): Promise<ManagementResult> {
     if (!request.context.clock?.instant || !Number.isFinite(Date.parse(request.context.clock.instant))) {
       throw new ManagementError("explicit-time-required", "Resolution explanation requires an explicit valid decision time.");
@@ -828,6 +851,7 @@ export class IntelligenceManagementService {
       case "show": return this.show(request);
       case "validate": return this.validate();
       case "local-readiness": return this.localReadiness(request);
+      case "observe-catalog": return this.observeCatalog(request);
       case "explain-resolution": return this.explainResolution(request);
       case "inspect-materialization":
       case "explain-materialization": return this.inspectMaterialization(request);

@@ -6,4 +6,5 @@ export * from "./service.js";
 export * from "./deployment.js";
 export * from "./local-readiness.js";
 export * from "./mcp-tools.js";
+export * from "./catalog-observation.js";
 export * from "./cli.js";

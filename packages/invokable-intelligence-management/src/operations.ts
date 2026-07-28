@@ -120,4 +120,5 @@ export type {
   ManagementRequest,
   ManagementResult,
   ManagementSession,
+  ManagementObserveCatalogRequest,
 } from "./service.js";
