@@ -128,6 +128,7 @@ describe('User Site onboarding', () => {
       Role: 'resident',
       OperatorSurface: 'agent-web-ui',
       Runtime: 'narada-agent-runtime-server',
+      McpScope: 'none',
       SiteRoot: root,
       WorkspaceRoot: root,
     });

@@ -409,6 +409,7 @@ function userSiteLaunchRegistryAgent(root: string, platform: OnboardingPlatform 
     ...(launcherPath ? { LauncherPath: launcherPath } : { Launcher: launcher }),
     OperatorSurface: 'agent-web-ui',
     Runtime: 'narada-agent-runtime-server',
+    McpScope: 'none',
     EnableNativeShell: false,
   };
 }

@@ -109,6 +109,7 @@ function installTarball(consumerRoot: string, tarball: string, env: NodeJS.Proce
   return run(packageManager, packageManagerArgs([
     'add',
     '--config.node-linker=hoisted',
+    '--config.engine-strict=true',
     '--ignore-scripts',
     '--config.fetch-retries=1',
     '--config.fetch-timeout=30000',
@@ -195,6 +196,7 @@ test('published Linux CLI installs independently and provisions the resident lau
       LauncherPath: installedCliEntrypoint,
       OperatorSurface: 'agent-web-ui',
       Runtime: 'narada-agent-runtime-server',
+      McpScope: 'none',
       EnableNativeShell: false,
     }]);
     assert.equal(existsSync(env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG!), true);
