@@ -1,0 +1,89 @@
+name: Native Linux installation evidence
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-linux:
+    name: Native Linux installation and first-use evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      CI: "true"
+      NARADA_REQUIRE_NATIVE_LINUX_E2E: "1"
+    steps:
+      - name: Check out Narada
+        uses: actions/checkout@v4
+
+      # Narada's development workspace intentionally spans these sibling repositories.
+      - name: Check out sibling workspace repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in narada-core mcp-surfaces agent-cli agent-tui; do
+            git clone --depth 1 "https://github.com/andrey-kokoev/${repo}.git" "../${repo}"
+          done
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Capture native host identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/narada-linux-evidence"
+          {
+            date -Is
+            uname -a
+            cat /etc/os-release
+            id
+            node --version
+            pnpm --version
+            for repo in . ../narada-core ../mcp-surfaces ../agent-cli ../agent-tui; do
+              printf '\nrepository=%s\n' "$repo"
+              git -C "$repo" rev-parse HEAD
+            done
+          } | tee "$RUNNER_TEMP/narada-linux-evidence/host-and-source.txt"
+
+      - name: Install the clean workspace
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Install the browser runtime
+        run: pnpm --filter @narada2/cli exec playwright install --with-deps chromium
+
+      - name: Run the native Linux installation E2E gate
+        run: pnpm --filter @narada2/cli run test:linux-installation-e2e
+
+      - name: Capture post-run evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            printf '%s\n' 'processes:'
+            ps -eo pid,ppid,user,stat,cmd --forest
+            printf '%s\n' 'user-site roots:'
+            find "${XDG_DATA_HOME:-$HOME/.local/share}/narada" -maxdepth 4 -printf '%M %u:%g %p\n' 2>/dev/null || true
+            printf '%s\n' 'systemd user state:'
+            systemctl --user is-system-running 2>&1 || true
+          } > "$RUNNER_TEMP/narada-linux-evidence/post-run.txt"
+
+      - name: Upload native Linux evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-linux-installation-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/narada-linux-evidence
+          if-no-files-found: error
+          retention-days: 14
