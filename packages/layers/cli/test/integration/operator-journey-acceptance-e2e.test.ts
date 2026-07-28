@@ -488,6 +488,10 @@ test('canonical operator journey remains usable through the stable Router', asyn
     const backingUrls = [consoleUrl, workbenchUrl, agentUrl, runtime.url, runtime.websocketUrl];
 
     await page.goto(routerUrl + '/', { waitUntil: 'domcontentloaded' });
+    await page.waitForURL(routerUrl + '/console/agents');
+    assert.match(await page.locator('title').textContent(), /Operator Console/);
+
+    await page.goto(routerUrl + '/console/surfaces', { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('body[data-narada-surface="operator-workspace"]').count(), 1);
     assert.equal(await page.locator('a[data-surface-id="site-operations"]').count(), 1);
     assert.equal(await page.locator('a[data-surface-id="agent-sessions"]').count(), 1);
@@ -561,7 +565,7 @@ test('canonical operator journey remains usable through the stable Router', asyn
     });
     assert.equal(ownerCsrfRefusal.status(), 403);
 
-    await page.goto(routerUrl + '/', { waitUntil: 'domcontentloaded' });
+    await page.goto(routerUrl + '/console/surfaces', { waitUntil: 'domcontentloaded' });
     await page.locator('a[data-surface-id="site-operations"]').click();
     await page.waitForURL(routerUrl + '/sites/' + SITE_ID + '/operations');
     try {
@@ -572,7 +576,7 @@ test('canonical operator journey remains usable through the stable Router', asyn
     assert.match(await page.locator('body').innerText(), /Task & Agent Operations/);
     assertNoBackingUrl(await page.content(), backingUrls);
 
-    await page.goto(routerUrl + '/', { waitUntil: 'domcontentloaded' });
+    await page.goto(routerUrl + '/console/surfaces', { waitUntil: 'domcontentloaded' });
     await page.locator('a[data-surface-id="agent-sessions"]').click();
     await page.waitForURL(routerUrl + '/console/sessions');
     const agentPagePromise = page.waitForEvent('popup');
@@ -625,7 +629,7 @@ test('canonical operator journey remains usable through the stable Router', asyn
     assert.equal(JSON.stringify(afterRoutes.body).includes(runtime.url), false);
     assert.equal(JSON.stringify(afterRoutes.body).includes(runtime.websocketUrl), false);
 
-    await page.goto(stableRouterUrl + '/', { waitUntil: 'domcontentloaded' });
+    await page.goto(stableRouterUrl + '/console/surfaces', { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('body[data-narada-surface="operator-workspace"]').count(), 1);
     await page.locator('a[data-surface-id="agent-sessions"]').click();
     await page.waitForURL(stableRouterUrl + '/console/sessions');
@@ -718,8 +722,14 @@ test('real console startup projects the stable Router origin', async () => {
     const workspace = await fetch(routerUrl + '/');
     const workspaceHtml = await workspace.text();
     assert.equal(workspace.status, 200);
-    assert.match(workspaceHtml, /data-narada-surface="operator-workspace"/);
+    assert.equal(workspace.url, routerUrl + '/console/agents');
+    assert.match(workspaceHtml, /<title>Operator Console/);
     assert.equal(workspaceHtml.includes('Operator Router:'), false);
+
+    const workspaceProjection = await fetch(routerUrl + '/console/surfaces');
+    const workspaceProjectionHtml = await workspaceProjection.text();
+    assert.equal(workspaceProjection.status, 200);
+    assert.match(workspaceProjectionHtml, /data-narada-surface="operator-workspace"/);
 
     const registry = await fetch(routerUrl + '/console/registry');
     const registryHtml = await registry.text();
@@ -728,7 +738,7 @@ test('real console startup projects the stable Router origin', async () => {
 
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
-    await page.goto(routerUrl + '/', { waitUntil: 'domcontentloaded' });
+    await page.goto(routerUrl + '/console/surfaces', { waitUntil: 'domcontentloaded' });
     assert.equal(await page.locator('body[data-narada-surface="operator-workspace"]').count(), 1);
     await page.locator('a[href="/console/registry"]').first().click();
     await page.waitForURL(routerUrl + '/console/registry');
