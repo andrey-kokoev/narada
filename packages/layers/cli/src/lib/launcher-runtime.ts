@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -347,7 +347,24 @@ function resolveAgentStartEntrypoint(workspaceRoot: string): string {
   try {
     return requireFromLauncherRuntime.resolve('@narada2/agent-start/narada-agent-start');
   } catch {
-    return workspaceEntrypoint;
+    return resolvePackagedAgentStartEntrypoint() ?? workspaceEntrypoint;
+  }
+}
+
+function resolvePackagedAgentStartEntrypoint(): string | null {
+  try {
+    const packageJsonPath = requireFromLauncherRuntime.resolve('@narada2/agent-start/package.json');
+    const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
+      bin?: string | Record<string, string>;
+    };
+    const bin = typeof packageJson.bin === 'string'
+      ? packageJson.bin
+      : packageJson.bin?.['narada-agent-start'];
+    if (typeof bin !== 'string' || !bin.trim()) return null;
+    const entrypoint = join(dirname(packageJsonPath), bin);
+    return existsSync(entrypoint) ? entrypoint : null;
+  } catch {
+    return null;
   }
 }
 
