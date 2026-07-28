@@ -23,8 +23,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          declare -A sibling_shas=(
+            [narada-core]=16edb383852433afdf9bef9ce29f005c55fa248d
+            [mcp-surfaces]=84fd1f5b82b9d27b3e8613a0dfa3cb705ba8b307
+            [agent-cli]=4a2f33863e1786b39b378ce64f17b983f6e96904
+            [agent-tui]=dc74b46676c6809b975dd6b93c22ba2f72466a4d
+          )
           for repo in narada-core mcp-surfaces agent-cli agent-tui; do
             git clone --depth 1 "https://github.com/andrey-kokoev/${repo}.git" "../${repo}"
+            git -C "../${repo}" fetch --depth 1 origin "${sibling_shas[$repo]}"
+            git -C "../${repo}" checkout --detach "${sibling_shas[$repo]}"
           done
 
       - name: Set up pnpm
