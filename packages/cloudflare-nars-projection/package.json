@@ -27,13 +27,12 @@
     "test": "vitest run",
     "deploy:dry-run": "pnpm run build:assets && wrangler deploy --dry-run --config wrangler.toml",
     "deploy:live": "pnpm run build:assets && wrangler deploy --config wrangler.toml",
-    "smoke:local-origin-live": "pnpm run build && node scripts-dist/cloudflare-nars-web-projection-live-smoke.js",
-    "smoke:cloudflare-origin-live": "pnpm run build && node scripts-dist/cloudflare-nars-authority-live-smoke.js",
+    "smoke:local-origin-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-nars-web-projection-live-smoke.js",
+    "smoke:cloudflare-origin-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-nars-authority-live-smoke.js",
     "smoke:live": "pnpm run smoke:local-origin-live",
     "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live",
     "build:scripts": "tsc -p tsconfig.scripts.json",
-    "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json",
-    "prebuild": "pnpm run build:scripts"
+    "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json"
   },
   "dependencies": {
     "@narada2/nars-session-core": "workspace:*",
