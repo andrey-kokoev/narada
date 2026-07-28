@@ -899,6 +899,9 @@ importers:
       '@narada2/carrier-action-admission':
         specifier: workspace:*
         version: link:../../carrier-action-admission
+      '@narada2/carrier-command-contract':
+        specifier: workspace:*
+        version: link:../../carrier-command-contract
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../../carrier-protocol
@@ -941,6 +944,9 @@ importers:
       '@narada2/invokable-intelligence-resolver':
         specifier: workspace:*
         version: link:../../invokable-intelligence-resolver
+      '@narada2/invokable-intelligence-runtime':
+        specifier: workspace:*
+        version: link:../../invokable-intelligence-runtime
       '@narada2/launch-process-ownership':
         specifier: workspace:*
         version: link:../../launch-process-ownership
@@ -968,6 +974,9 @@ importers:
       '@narada2/nars-intelligence-kernel-contract':
         specifier: workspace:*
         version: link:../../nars-intelligence-kernel-contract
+      '@narada2/nars-pi-kernel':
+        specifier: workspace:*
+        version: link:../../nars-intelligence-runtime-pi
       '@narada2/nars-provider-runtime':
         specifier: workspace:*
         version: link:../../nars-provider-runtime
@@ -1031,6 +1040,9 @@ importers:
       '@narada2/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
+      '@narada2/task-governance':
+        specifier: workspace:*
+        version: link:../../task-governance
       '@narada2/task-governance-core':
         specifier: workspace:*
         version: link:../../../../narada-core/packages/task-governance-core
