@@ -3,6 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "files": [
+    "dist/",
+    "src/",
+    "compat/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "@narada2/mcp-transport": "workspace:*",
     "@narada2/process-launch-posture": "workspace:*",
