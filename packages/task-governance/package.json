@@ -132,6 +132,7 @@
     }
   },
   "scripts": {
+    "prebuild": "pnpm --filter @narada2/task-governance-core build",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.runtime.json",
     "test": "vitest run",
