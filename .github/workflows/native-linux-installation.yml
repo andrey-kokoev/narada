@@ -69,7 +69,7 @@ jobs:
         run: pnpm install --no-frozen-lockfile
 
       - name: Install the browser runtime
-        run: pnpm --filter @narada2/cli exec playwright install --with-deps chromium
+        run: pnpm --filter @narada2/cli exec playwright install chromium
 
       - name: Run the native Linux installation E2E gate
         run: pnpm --filter @narada2/cli run test:linux-installation-e2e
