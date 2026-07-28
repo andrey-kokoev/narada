@@ -122,6 +122,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   const dependencyWorkspaceRoot = options.dependencyWorkspaceRoot
     ? resolve(options.dependencyWorkspaceRoot)
     : naradaProperRoot();
+  const publishedCliInstallation = isPublishedCliInstallation();
   const launchSessionId = options.launchSessionId ?? launchSessionIdFromToken(options.launchBindingPath?.split(/[\\/]/).pop());
   const processOwnership = launchSessionId
     ? buildLaunchProcessOwnership({ launchSessionId, siteRoot, workspaceRoot, processRole: 'runtime_start', createdByPid: process.pid })
@@ -169,8 +170,10 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   // workspace launcher relies on the result file and binding as the durable
   // handoff even when agent-start never reaches its entrypoint.
   mkdirSync(resultDir, { recursive: true });
-  const dependencyPreflight = checkWorkspaceDependencyPreflight(dependencyWorkspaceRoot);
-  if (dependencyPreflight.status !== 'ready') {
+  const dependencyPreflight = publishedCliInstallation
+    ? null
+    : checkWorkspaceDependencyPreflight(dependencyWorkspaceRoot);
+  if (dependencyPreflight && dependencyPreflight.status !== 'ready') {
     return failAgentStartBeforeExecution({
       options,
       siteRoot,
@@ -309,6 +312,19 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
     parsed_result: parsedRecord ?? parsed,
     error: execution.status === 'failed' ? execution.stderr || execution.error : undefined,
   };
+}
+
+function isPublishedCliInstallation(): boolean {
+  const cliPackageRoot = resolveCliPackageRoot();
+  return cliPackageRoot !== null && findNaradaProperRoot(cliPackageRoot) === null;
+}
+
+function resolveCliPackageRoot(): string | null {
+  try {
+    return dirname(requireFromLauncherRuntime.resolve('@narada2/cli/package.json'));
+  } catch {
+    return null;
+  }
 }
 
 
