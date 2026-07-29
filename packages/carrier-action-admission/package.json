@@ -24,8 +24,11 @@
     "test": "node --import tsx --test src/carrier-action-admission.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
-  "dependencies": {
+  "peerDependencies": {
     "@narada2/site-common-tools": "0.1.0"
+  },
+  "devDependencies": {
+    "@narada2/site-common-tools": "workspace:*"
   },
   "description": "Carrier-neutral v0 implementation of the Carrier Action Admission Boundary",
   "license": "MIT",

@@ -569,10 +569,13 @@ importers:
         version: 2.2.12(typescript@5.9.3)
 
   packages/carrier-action-admission:
-    dependencies:
+    devDependencies:
+      '@narada2/site-common-tools':
+        specifier: workspace:*
+        version: link:../site-common-tools
+    peerDependencies:
       '@narada2/site-common-tools':
         specifier: 0.1.0
-        version: link:../site-common-tools
 
   packages/carrier-command-contract: {}
 

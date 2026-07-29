@@ -142,11 +142,21 @@ function assertPublishedAdmissionClosure(cliRoot: string): void {
   const admissionRoot = join(cliRoot, 'node_modules', '@narada2', 'carrier-action-admission');
   const admissionManifest = JSON.parse(
     readFileSync(join(admissionRoot, 'package.json'), 'utf8'),
-  ) as { dependencies?: Record<string, unknown> };
+  ) as {
+    dependencies?: Record<string, unknown>;
+    peerDependencies?: Record<string, unknown>;
+  };
+  const siteToolsSpec = admissionManifest.dependencies?.['@narada2/site-common-tools']
+    ?? admissionManifest.peerDependencies?.['@narada2/site-common-tools'];
   assert.notEqual(
     admissionManifest.dependencies?.['@narada2/site-common-tools'],
     'workspace:*',
     'published carrier-action-admission retains a workspace-only dependency',
+  );
+  assert.equal(
+    siteToolsSpec,
+    '0.1.0',
+    'published carrier-action-admission must declare a concrete site-common-tools boundary dependency',
   );
 
   const toolMetadataEntry = join(admissionRoot, 'dist', 'tool-metadata.js');
