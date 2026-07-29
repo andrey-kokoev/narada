@@ -34,6 +34,19 @@ import {
 } from '../src/server-wrapper.js';
 
 const packageJson: any = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+const runtimeBinPath = fileURLToPath(new URL('../dist/bin/narada-agent-runtime-server.js', import.meta.url));
+
+function fixturePathFor(name: string): string {
+  return fileURLToPath(new URL(`./fixtures/${name}.ts`, import.meta.url));
+}
+
+function tsxFixtureArgs(path: string, ...args: string[]): string[] {
+  return ['--import', 'tsx', path, ...args];
+}
+
+function removeTempTree(path: string): void {
+  rmSync(path, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+}
 
 test('unexpected runtime projection closure requests governed shutdown only while serving', () => {
   const healthServer = new EventEmitter();
@@ -107,10 +120,15 @@ function readRawUpgradeResponse(endpoint: any, requestPath: any) {
 
 async function waitForCapturedOutput(child: any, readCaptured: any, predicate: any, timeoutMs: any = 5000) {
   if (predicate(readCaptured())) return readCaptured();
+  let stderr = '';
+  const onErrorData: any = (chunk: any) => { stderr += String(chunk); };
+  child.stderr?.on('data', onErrorData);
   try {
     await waitForOutput(child, () => predicate(readCaptured()), timeoutMs);
   } catch (error) {
-    throw new Error(`${error instanceof Error ? error.message : String(error)}:${readCaptured().slice(-1000)}`);
+    throw new Error(`${error instanceof Error ? error.message : String(error)}:stdout=${readCaptured().slice(-1000)}:stderr=${stderr.slice(-1000)}`);
+  } finally {
+    child.stderr?.off('data', onErrorData);
   }
   return readCaptured();
 }
@@ -528,7 +546,7 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     const launcher: any = [
       '--input-type=module',
       '--eval',
@@ -579,7 +597,7 @@ test('spawned non-raw runtime uses the interactive terminal projection for a TTY
       ]);
     }
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -587,7 +605,7 @@ test('spawned event projection rejects plain HTTP and malformed WebSocket upgrad
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-runtime-event-admission-e2e-'));
   await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   const sessionId: any = 'event-admission-e2e';
-  const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+  const binPath: any = runtimeBinPath;
   let child: any = null;
   try {
     child = spawnTestChild(process.execPath, [
@@ -646,7 +664,7 @@ test('spawned event projection rejects plain HTTP and malformed WebSocket upgrad
     assert.equal(exitCode, 0, stderr);
   } finally {
     if (child && child.exitCode === null) child.kill();
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -724,8 +742,8 @@ test('health projection tracks resolved, timed-out, and failed request lifecycle
 });
 
 test('spawned health projection exposes a real supervisor transport failure', async () => {
-  const fixturePath: any = fileURLToPath(new URL('./fixtures/health-projection-failure-server.js', import.meta.url));
-  const child: any = spawnTestChild(process.execPath, [fixturePath], { stdio: ['ignore', 'pipe', 'pipe'] });
+  const fixturePath: any = fixturePathFor('health-projection-failure-server');
+  const child: any = spawnTestChild(process.execPath, tsxFixtureArgs(fixturePath), { stdio: ['ignore', 'pipe', 'pipe'] });
   let stdout: any = '';
   let stderr: any = '';
   child.stdout.setEncoding('utf8');
@@ -746,7 +764,7 @@ test('spawned health projection exposes a real supervisor transport failure', as
 });
 
 test('spawned runtime enforces startup bindings, projection startup, disabled projections, and wrapper JSONL output', { timeout: 20000 }, async () => {
-  const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+  const binPath: any = runtimeBinPath;
   const siteRoots: any = [];
   const createSiteRoot: any = (suffix: any) => {
     const siteRoot: any = mkdtempSync(join(tmpdir(), `narada-runtime-startup-${suffix}-`));
@@ -903,7 +921,7 @@ test('spawned runtime enforces startup bindings, projection startup, disabled pr
       if (wrapperChild.exitCode === null) wrapperChild.kill();
     }
   } finally {
-    for (const siteRoot of siteRoots) rmSync(siteRoot, { recursive: true, force: true });
+    for (const siteRoot of siteRoots) removeTempTree(siteRoot);
   }
 });
 
@@ -917,7 +935,7 @@ test('spawned runtime loads a lifecycle hook module and dispatches hooks through
     "const record = (hook) => async (payload) => { appendFileSync(process.env.NARADA_TEST_HOOK_LOG, JSON.stringify({ hook, phase: 'start', payload }) + '\\n'); if (hook === 'afterSessionStarted') await new Promise((resolve) => setTimeout(resolve, 25)); appendFileSync(process.env.NARADA_TEST_HOOK_LOG, JSON.stringify({ hook, phase: 'end', payload }) + '\\n'); };",
     "export const hooks = [{ beforeSessionBind: record('beforeSessionBind'), afterSessionStarted: record('afterSessionStarted'), afterSessionClosed: record('afterSessionClosed') }];",
   ].join('\n'));
-  const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+  const binPath: any = runtimeBinPath;
   let child: any = null;
   try {
     child = spawnTestChild(process.execPath, [
@@ -963,7 +981,7 @@ test('spawned runtime loads a lifecycle hook module and dispatches hooks through
     assert.equal(hookEvents[4].payload.event_kind, 'session_closed');
   } finally {
     if (child && child.exitCode === null) child.kill();
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1097,7 +1115,7 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
     client?.close();
     if (child && child.exitCode === null) child.kill();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1212,7 +1230,7 @@ test('spawned runtime reconfigures canonical invocation constraints and binds th
       await exited;
     }
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1307,7 +1325,7 @@ test('spawned runtime refuses canonical intelligence reconfiguration across a bu
     child?.stderr?.destroy();
     await new Promise((resolve: any) => provider.close(resolve));
     await new Promise((resolve: any) => setTimeout(resolve, 250));
-    rmSync(siteRoot, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1342,7 +1360,7 @@ test('spawned runtime serves the complete session-scoped artifact HTTP surface',
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -1465,8 +1483,8 @@ test('spawned runtime serves the complete session-scoped artifact HTTP surface',
   } finally {
     if (child && child.exitCode === null) child.kill();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(outsideRoot, { recursive: true, force: true });
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(outsideRoot);
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1499,7 +1517,7 @@ test('spawned runtime consumes the detached control sideband without raw JSONL',
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [
       binPath,
       '--identity', 'narada.test',
@@ -1569,7 +1587,7 @@ test('spawned runtime consumes the detached control sideband without raw JSONL',
   } finally {
     if (child && child.exitCode === null) child.kill();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1597,7 +1615,7 @@ test('spawned runtime handles WebSocket reads, controls, errors, and isolated su
   let first: any = null;
   let second: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -1731,7 +1749,7 @@ test('spawned runtime handles WebSocket reads, controls, errors, and isolated su
     second?.close();
     if (child && child.exitCode === null) child.kill();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1770,7 +1788,7 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'fifo-e2e'], {
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_API_KEY: 'fifo-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -1818,7 +1836,7 @@ test('spawned runtime exposes active and completed FIFO queue state without prov
       await exited;
     }
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1845,7 +1863,7 @@ test('spawned runtime keeps close request waiting until active request is settle
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'close-wait-e2e'], {
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: 'http://127.0.0.1:' + address.port + '/', OPENAI_API_KEY: 'close-wait-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -1889,7 +1907,7 @@ test('spawned runtime keeps close request waiting until active request is settle
     if (child && child.exitCode === null) child.kill();
     provider.closeAllConnections?.();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1909,7 +1927,7 @@ test('spawned runtime exposes failed input as recoverable', async () => {
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'failed-health-e2e'], {
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'failed-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -1933,7 +1951,7 @@ test('spawned runtime exposes failed input as recoverable', async () => {
       await exited;
     }
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -1941,8 +1959,8 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
   for (const signal of ['SIGINT', 'SIGTERM']) {
     const siteRoot: any = mkdtempSync(join(tmpdir(), `narada-runtime-${signal.toLowerCase()}-e2e-`));
     mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-    const fixturePath: any = fileURLToPath(new URL('./fixtures/mcp-echo-server.js', import.meta.url));
-    writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [fixturePath], surface_id: 'fixture.surface' } } }), 'utf8');
+    const fixturePath: any = fixturePathFor('mcp-echo-server');
+    writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: tsxFixtureArgs(fixturePath), surface_id: 'fixture.surface' } } }), 'utf8');
     let providerCalls: any = 0;
     let markSecondRequest: any;
     const secondRequest: any = new Promise((resolve: any) => { markSecondRequest = resolve; });
@@ -1965,8 +1983,10 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
     });
     try {
       const signalRelay: any = process.platform === 'win32';
-      const entrypoint: any = fileURLToPath(new URL(signalRelay ? './fixtures/signal-relay-runtime.js' : '../bin/narada-agent-runtime-server.js', import.meta.url));
-      const child: any = spawnTestChild(process.execPath, [entrypoint, '--raw-jsonl', '--identity', 'narada.test', '--session', `signal-${signal.toLowerCase()}`], {
+      const entrypointArgs: any = signalRelay
+        ? tsxFixtureArgs(fixturePathFor('signal-relay-runtime'), '--raw-jsonl', '--identity', 'narada.test', '--session', `signal-${signal.toLowerCase()}`)
+        : [runtimeBinPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `signal-${signal.toLowerCase()}`];
+      const child: any = spawnTestChild(process.execPath, entrypointArgs, {
         env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'signal-fixture-key', NARADA_MCP_SCOPE: 'site' },
         stdio: signalRelay ? ['pipe', 'pipe', 'pipe', 'ipc'] : ['pipe', 'pipe', 'pipe'],
       });
@@ -1988,20 +2008,20 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
       assert.ok(events.some((event: any) => event.event === 'session_closed' && event.request_id === `signal-close-${signal.toLowerCase()}`), signal);
     } finally {
       await new Promise((resolve: any) => provider.close(resolve));
-      rmSync(siteRoot, { recursive: true, force: true });
+      removeTempTree(siteRoot);
     }
   }
 });
 
 test('spawned runtime handles Codex subprocess success, malformed JSONL, and non-zero exit', async () => {
-  const fixturePath: any = fileURLToPath(new URL('./fixtures/codex-exec-fixture.js', import.meta.url));
+  const fixturePath: any = fixturePathFor('codex-exec-fixture');
   for (const mode of ['success', 'malformed', 'exit']) {
     const siteRoot: any = mkdtempSync(join(tmpdir(), `narada-codex-${mode}-e2e-`));
     await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
     try {
-      const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+      const binPath: any = runtimeBinPath;
       const child: any = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `codex-${mode}`], {
-        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, mode]), CODEX_MODEL: 'fixture-codex' }, stdio: ['pipe', 'pipe', 'pipe'],
+        env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify(tsxFixtureArgs(fixturePath, mode)), CODEX_MODEL: 'fixture-codex' }, stdio: ['pipe', 'pipe', 'pipe'],
       });
       let stdout: any = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk: any) => { stdout += chunk; });
       child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
@@ -2010,7 +2030,7 @@ test('spawned runtime handles Codex subprocess success, malformed JSONL, and non
       if (mode === 'success') assert.ok(events.some((event: any) => event.event === 'carrier_turn_completed'));
       else assert.ok(events.some((event: any) => event.event === 'session_control_rejected' && event.request_id === 'turn-1'));
     } finally {
-      rmSync(siteRoot, { recursive: true, force: true });
+      removeTempTree(siteRoot);
     }
   }
 });
@@ -2018,11 +2038,11 @@ test('spawned runtime handles Codex subprocess success, malformed JSONL, and non
 test('spawned runtime cancels a hanging Codex subprocess', async () => {
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-codex-cancel-e2e-'));
   await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
-  const fixturePath: any = fileURLToPath(new URL('./fixtures/codex-exec-fixture.js', import.meta.url));
+  const fixturePath: any = fixturePathFor('codex-exec-fixture');
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
-    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'codex-cancel'], { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify([fixturePath, 'hang']) }, stdio: ['pipe', 'pipe', 'pipe'] });
+    const binPath: any = runtimeBinPath;
+    child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'codex-cancel'], { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, NARADA_CODEX_EXEC_COMMAND: process.execPath, NARADA_CODEX_EXEC_PREFIX_ARGS: JSON.stringify(tsxFixtureArgs(fixturePath, 'hang')) }, stdio: ['pipe', 'pipe', 'pipe'] });
     let stdout: any = '';
     let stderr: any = '';
     child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk: any) => { stdout += chunk; });
@@ -2044,7 +2064,7 @@ test('spawned runtime cancels a hanging Codex subprocess', async () => {
       child.kill();
       await exited;
     }
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -2084,7 +2104,7 @@ test('spawned runtime proves the live local topology success matrix across suppo
         endpointBaseUrl: `http://127.0.0.1:${address.port}`,
       });
       try {
-        const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+        const binPath: any = runtimeBinPath;
         const child: any = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', `${providerId}-e2e`], { env: {
           ...process.env,
           OPENAI_API_KEY: 'SECRET_SENTINEL_OPENAI_DECOY',
@@ -2139,7 +2159,7 @@ test('spawned runtime proves the live local topology success matrix across suppo
           assert.equal(rendered.includes('SECRET_SENTINEL_OPENAI_DECOY'), false, `${providerId} leaked decoy credential`);
         }
       } finally {
-        rmSync(siteRoot, { recursive: true, force: true });
+        removeTempTree(siteRoot);
       }
     }
 
@@ -2181,7 +2201,7 @@ test('one spawned runtime preserves intent lineage across provider failure, retr
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', sessionId], {
       env: {
         ...process.env,
@@ -2331,7 +2351,7 @@ test('one spawned runtime preserves intent lineage across provider failure, retr
       provider.closeAllConnections?.();
       await new Promise((resolve: any) => provider.close(resolve));
     }
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -2352,7 +2372,7 @@ test('spawned runtime cancels an in-flight provider request through JSONL contro
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'cancel-e2e'], {
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -2374,7 +2394,7 @@ test('spawned runtime cancels an in-flight provider request through JSONL contro
     assert.ok(invocationEvents.every((event: any) => event.turn_id && event.turn_id === event.input_event_id));
   } finally {
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -2401,7 +2421,7 @@ test('spawned runtime refuses to redispatch an admission-unknown turn after forc
     endpointBaseUrl: `http://127.0.0.1:${address.port}`,
     credentialReference: 'OPENAI_API_KEY',
   });
-  const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+  const binPath: any = runtimeBinPath;
   const args: any = [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'recovery-e2e'];
   const options: any = { env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_API_KEY: 'fixture-key' }, stdio: ['pipe', 'pipe', 'pipe'] };
   let first: any = null;
@@ -2456,17 +2476,17 @@ test('spawned runtime refuses to redispatch an admission-unknown turn after forc
     }
     provider.closeAllConnections?.();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 test('spawned runtime records required MCP startup failure without calling the provider', async () => {
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-failure-'));
   await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  const fixturePath: any = fileURLToPath(new URL('./fixtures/mcp-exit-server.js', import.meta.url));
-  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { broken: { command: process.execPath, args: [fixturePath], surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
+  const fixturePath: any = fixturePathFor('mcp-exit-server');
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { broken: { command: process.execPath, args: tsxFixtureArgs(fixturePath), surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     const child: any = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'mcp-failure'], {
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: 'http://127.0.0.1:1/', OPENAI_API_KEY: 'unused', NARADA_AGENT_CLI_REQUIRE_MCP_FABRIC: '1', NARADA_MCP_SCOPE: 'site' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -2480,17 +2500,17 @@ test('spawned runtime records required MCP startup failure without calling the p
     assert.equal(events.filter((event: any) => ['carrier_turn_failed', 'carrier_turn_interrupted', 'carrier_turn_completed'].includes(event.event)).length, 1);
     assert.equal(events.some((event: any) => event.event === 'carrier_turn_completed'), false);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
 test('spawned runtime executes a provider-requested tool through the site MCP gateway', async () => {
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-e2e-'));
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  const fixturePath: any = fileURLToPath(new URL('./fixtures/mcp-echo-server.js', import.meta.url));
+  const fixturePath: any = fixturePathFor('mcp-echo-server');
   const disconnectMarker: any = join(siteRoot, 'mcp-disconnected-once.txt');
   const generatedArtifactPath: any = join(siteRoot, 'generated-by-mcp.html');
-  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: [fixturePath, disconnectMarker], surface_id: 'fixture.surface' } } }), 'utf8');
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { fixture: { command: process.execPath, args: tsxFixtureArgs(fixturePath, disconnectMarker), surface_id: 'fixture.surface' } } }), 'utf8');
   let providerCalls: any = 0;
   const provider: any = createServer((request: any, response: any) => {
     if (request.method === 'HEAD') {
@@ -2516,7 +2536,7 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
     credentialReference: 'OPENAI_API_KEY',
   });
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     const child: any = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--health-port', '0', '--identity', 'narada.test', '--session', 'mcp-e2e'], {
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key', NARADA_DENIED_CAPABILITY_TOOLS: 'fixture_denied', NARADA_MCP_SCOPE: 'site' }, stdio: ['pipe', 'pipe', 'pipe'],
     });
@@ -2587,7 +2607,7 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
     }
   } finally {
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -2612,7 +2632,7 @@ test('spawned runtime submits a turn through the configured local provider endpo
     credentialReference: 'OPENAI_API_KEY',
   });
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     const child: any = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'provider-e2e'], {
       env: { ...process.env, NARADA_SITE_ROOT: siteRoot, OPENAI_BASE_URL: `http://127.0.0.1:${address.port}/`, OPENAI_API_KEY: 'fixture-key' },
       stdio: ['pipe', 'pipe', 'pipe'],
@@ -2637,12 +2657,12 @@ test('spawned runtime submits a turn through the configured local provider endpo
     assert.ok(invocationEvents.every((event: any) => event.turn_id && event.turn_id === event.input_event_id));
   } finally {
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
 test('default server path does not construct the legacy server runtime or legacy context', () => {
-  const wrapperPath: any = new URL('../src/server-wrapper.js', import.meta.url);
+  const wrapperPath: any = new URL('../src/server-wrapper.ts', import.meta.url);
   const source: any = readFileSync(wrapperPath, 'utf8');
   assert.equal(source.includes('createLegacyRuntimeService'), false);
   assert.equal(source.includes('createCarrierRuntimeContext'), false);
@@ -2711,7 +2731,7 @@ test('WebSocket /events replays and reads durable events.jsonl beyond memory buf
       projection.server.close();
     }
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTempTree(root);
   }
 });
 
@@ -2771,7 +2791,7 @@ test('conversation event streams carry input acknowledgment evidence through rep
       projection.server.close();
     }
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTempTree(root);
   }
 });
 
@@ -3752,7 +3772,7 @@ test('HTTP artifact endpoints register and serve session-scoped HTML and audio a
     ]);
   } finally {
     projection.server.close();
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -3783,7 +3803,7 @@ test('HTTP artifact mutations refuse before session-core authority binding', asy
     assert.equal((await response.json()).error, 'session_core_unavailable');
   } finally {
     projection.server.close();
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -3792,7 +3812,7 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     const child: any = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -3841,7 +3861,7 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
     assert.equal(events.some((event: any) => event.event === 'session_closed' && event.request_id === 'close-1'), true);
     assert.equal(stderr.includes('Fatal error'), false);
   } finally {
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -3852,7 +3872,7 @@ test('spawned runtime serves health and durable/live events through advertised p
   let child: any = null;
   let client: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -3976,7 +3996,7 @@ test('spawned runtime serves health and durable/live events through advertised p
   } finally {
     client?.close();
     if (child && child.exitCode === null) child.kill();
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });
 
@@ -4012,7 +4032,7 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
   });
   let child: any = null;
   try {
-    const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.js', import.meta.url));
+    const binPath: any = runtimeBinPath;
     child = spawnTestChild(process.execPath, [
       binPath,
       '--raw-jsonl',
@@ -4102,6 +4122,6 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
   } finally {
     if (child && child.exitCode === null) child.kill();
     await new Promise((resolve: any) => provider.close(resolve));
-    rmSync(siteRoot, { recursive: true, force: true });
+    removeTempTree(siteRoot);
   }
 });

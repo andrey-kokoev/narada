@@ -112,7 +112,10 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test test/*.test.ts src/*.test.ts",
+    "pretest": "pnpm run build",
+    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=360000 test/*.test.ts src/*.test.ts",
+    "pretest:one-by-one": "pnpm run build",
+    "test:one-by-one": "node --import tsx test/run-one-by-one.ts",
     "test:e2e:pty": "node --import tsx test/pty-e2e.ts",
     "test:live:pi-client-kernel": "node --import tsx test/live-pi-client-kernel-substitutability-fixture-e2e.ts --enable-live-e2e",
     "test:live:codex-provider-admission": "pnpm --filter @narada2/cli build && node --import tsx test/live-codex-provider-admission-e2e.ts --enable-live-codex",
