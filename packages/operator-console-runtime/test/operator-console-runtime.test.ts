@@ -88,6 +88,19 @@ test('uses the user-local runtime state root and permits an explicit override', 
   );
 });
 
+test('stop withdraws the router projection before terminating its backend', async () => {
+  const source = await readFile(new URL('../src/index.ts', import.meta.url), 'utf8');
+  const stopStart = source.indexOf('async function stopOperatorConsoleRuntimeUnlocked');
+  const liveStop = source.indexOf('await unregisterOperatorRoute(', stopStart);
+  const terminate = source.indexOf('await terminateProcess(pid', liveStop);
+  const restoration = source.indexOf('await registerOperatorRoute(', terminate);
+  assert.ok(stopStart >= 0);
+  assert.ok(liveStop > stopStart);
+  assert.ok(terminate > liveStop);
+  assert.ok(restoration > terminate);
+  assert.ok(source.indexOf('operator_console_runtime_termination_failed', restoration) > restoration);
+});
+
 test('uses the matched runtime state log path for process diagnostics', async () => {
   const stateRoot = await mkdtemp(join(tmpdir(), 'narada-console-runtime-'));
   try {

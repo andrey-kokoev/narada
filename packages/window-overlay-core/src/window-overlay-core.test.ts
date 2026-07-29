@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   OVERLAY_DOCUMENT_SCHEMA,
   createOverlayDocument,
@@ -8,6 +10,7 @@ import {
   defaultOverlayStateRoot,
   normalizeOverlayEnvironment,
   overlayPaths,
+  overlayStatus,
 } from './index.js';
 
 test('creates a versioned generic document with controlled actions', () => {
@@ -26,6 +29,35 @@ test('creates a versioned generic document with controlled actions', () => {
   assert.equal(document.actions[1].kind, 'restart');
   assert.equal(document.actions[1].icon, '↻');
   assert.equal(document.actions[1].tooltip, 'Restart overlay');
+});
+
+test('action runner records bounded durable completion only after readiness', async () => {
+  const source = await readFile(new URL('./Invoke-WindowSurfaceOverlayAction.ps1', import.meta.url), 'utf8');
+  assert.match(source, /narada\.window_surface_overlay\.action_state\.v1/);
+  assert.match(source, /Move-Item -Path \$temporary -Destination \$StatePath -Force/);
+  assert.match(source, /success_probe_url/);
+  assert.match(source, /Write-ActionState 'succeeded'/);
+});
+
+test('inspect reconciles an abandoned running action as interrupted', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-overlay-action-'));
+  try {
+    const paths = overlayPaths('example', { stateRoot });
+    await mkdir(paths.stateDirectory, { recursive: true });
+    await writeFile(paths.actionState, JSON.stringify({
+      schema: 'narada.window_surface_overlay.action_state.v1',
+      action_id: 'restart',
+      request_id: 'request-1',
+      status: 'running',
+      started_at: new Date().toISOString(),
+      pid: 2147483647,
+    }), 'utf8');
+    const status = await overlayStatus('example', { stateRoot });
+    assert.equal(status.action_state?.status, 'interrupted');
+    assert.equal(status.action_state?.detail, 'The action process exited without recording a terminal result.');
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+  }
 });
 
 test('restart actions cannot carry executable targets', () => {
@@ -47,6 +79,7 @@ test('state root is user-local and overrideable', () => {
   assert.equal(defaultOverlayStateRoot(env), 'C:\\Local\\Narada\\window-surface-overlays');
   const paths = overlayPaths('example', { stateRoot: 'C:\\State' });
   assert.match(paths.document, /example[\\/]document\.json$/);
+  assert.match(paths.actionState, /example[\\/]action-state\.json$/);
 });
 
 test('normalizes the Windows WPF environment without mutating the caller', () => {
@@ -98,6 +131,10 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /\$application\.Run\(\$window\)/);
   assert.doesNotMatch(source, /\$window\.ShowDialog\(\)/);
   assert.match(source, /Start-RestartCommand/);
+  assert.match(source, /Apply-ActionState/);
+  assert.match(source, /window_surface_overlay_restart_already_running/);
+  assert.match(source, /The prior restart runner is no longer active/);
+  assert.match(source, /Console restarted/);
   assert.doesNotMatch(source, /quota|provider|usage|remaining/);
 });
 

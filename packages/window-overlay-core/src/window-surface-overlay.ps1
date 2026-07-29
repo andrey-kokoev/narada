@@ -16,6 +16,8 @@ $documentPath = Get-OverlayPath 'document.json'
 $preferencesPath = Get-OverlayPath 'preferences.json'
 $refreshPath = Get-OverlayPath 'refresh.signal'
 $restartCommandPath = Get-OverlayPath 'restart.command.json'
+$actionStatePath = Get-OverlayPath 'action-state.json'
+$actionRunnerPath = Join-Path $PSScriptRoot 'Invoke-WindowSurfaceOverlayAction.ps1'
 $hostStderrPath = Get-OverlayPath 'host.stderr.log'
 trap {
     ($_ | Out-String) | Set-Content -Path $hostStderrPath -Encoding UTF8
@@ -148,19 +150,55 @@ function Get-ActionLabel([object]$action) {
 function Start-RestartCommand {
     $spec = Read-JsonFile $restartCommandPath $null
     if ($null -eq $spec -or $null -eq $spec.command) { throw 'window_surface_overlay_restart_command_unavailable' }
-    $command = @($spec.command) | ForEach-Object { [string]$_ }
-    if ($command.Count -lt 1 -or [string]::IsNullOrWhiteSpace($command[0])) {
-        throw 'window_surface_overlay_restart_command_invalid'
+    $existing = Read-JsonFile $actionStatePath $null
+    if ($existing -and $existing.status -eq 'running') {
+        $runnerAlive = $false
+        if ($existing.pid) { $runnerAlive = $null -ne (Get-Process -Id ([int]$existing.pid) -ErrorAction SilentlyContinue) }
+        if ($runnerAlive) { throw 'window_surface_overlay_restart_already_running' }
+        $existing.status = 'interrupted'
+        $existing.finished_at = [DateTime]::UtcNow.ToString('o')
+        $existing.detail = 'The prior restart runner is no longer active.'
+        Write-JsonFile $actionStatePath $existing
     }
-    $arguments = @()
-    if ($command.Count -gt 1) { $arguments = @($command | Select-Object -Skip 1) }
-    $startParameters = @{
-        FilePath = $command[0]
-        WindowStyle = 'Hidden'
+    if (-not (Test-Path $actionRunnerPath)) { throw 'window_surface_overlay_action_runner_missing' }
+    $requestId = [Guid]::NewGuid().ToString('N')
+    $shell = Get-Command pwsh, powershell -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $shell) { throw 'powershell_runtime_not_found' }
+    $runnerArguments = @('-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $actionRunnerPath, '-ActionId', 'restart', '-RequestId', $requestId, '-SpecPath', $restartCommandPath, '-StatePath', $actionStatePath)
+    Write-JsonFile $actionStatePath ([ordered]@{ schema = 'narada.window_surface_overlay.action_state.v1'; action_id = 'restart'; request_id = $requestId; status = 'running'; started_at = [DateTime]::UtcNow.ToString('o'); pid = $null })
+    try {
+        Start-Process -WindowStyle Hidden -FilePath $shell.Source -ArgumentList $runnerArguments | Out-Null
+    } catch {
+        Write-JsonFile $actionStatePath ([ordered]@{ schema = 'narada.window_surface_overlay.action_state.v1'; action_id = 'restart'; request_id = $requestId; status = 'failed'; started_at = [DateTime]::UtcNow.ToString('o'); finished_at = [DateTime]::UtcNow.ToString('o'); pid = $null; detail = $_.Exception.Message })
+        throw
     }
-    if ($arguments.Count -gt 0) { $startParameters.ArgumentList = $arguments }
-    if ($spec.working_directory) { $startParameters.WorkingDirectory = [string]$spec.working_directory }
-    Start-Process @startParameters | Out-Null
+}
+
+function Apply-ActionState {
+    $state = Read-JsonFile $actionStatePath $null
+    if (-not $state) { return }
+    $running = $state.status -eq 'running'
+    if ($script:RestartButton) { $script:RestartButton.IsEnabled = -not $running }
+    if ($running) {
+        $subtitleText.Text = 'Restarting console…'
+        $subtitleText.Visibility = 'Visible'
+        return
+    }
+    if ($state.status -eq 'failed' -or $state.status -eq 'interrupted') {
+        $subtitleText.Text = 'Restart failed: ' + [string]$state.detail
+        $subtitleText.Visibility = 'Visible'
+        return
+    }
+    if ($state.status -eq 'succeeded') {
+        $finished = try { [DateTime]::Parse([string]$state.finished_at) } catch { [DateTime]::UtcNow }
+        if (([DateTime]::UtcNow - $finished.ToUniversalTime()).TotalSeconds -le 5) {
+            $subtitleText.Text = 'Console restarted'
+            $subtitleText.Visibility = 'Visible'
+            return
+        }
+    }
+    $subtitleText.Text = [string]$script:DocumentSubtitle
+    $subtitleText.Visibility = if ([string]::IsNullOrWhiteSpace($subtitleText.Text)) { 'Collapsed' } else { 'Visible' }
 }
 
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
@@ -311,7 +349,8 @@ $border.Add_MouseLeftButtonDown({ if ($_.ButtonState -eq [Windows.Input.MouseBut
 function Render-Document([object]$document) {
     $titleText.Text = [string]($document.title ?? $Id)
     $titleText.Foreground = Get-ToneBrush ([string]($document.title_tone ?? 'default'))
-    $subtitleText.Text = [string]($document.subtitle ?? '')
+    $script:DocumentSubtitle = [string]($document.subtitle ?? '')
+    $subtitleText.Text = $script:DocumentSubtitle
     $subtitleText.Visibility = if ([string]::IsNullOrWhiteSpace($subtitleText.Text)) { 'Collapsed' } else { 'Visible' }
     $body.Children.Clear()
     foreach ($row in @($document.rows)) {
@@ -357,7 +396,7 @@ function Render-Document([object]$document) {
             elseif ($actionKind -eq 'restart') {
                 try {
                     Start-RestartCommand
-                    $subtitleText.Text = 'Restart requested…'
+                    $subtitleText.Text = 'Restarting console…'
                 } catch {
                     $subtitleText.Text = 'Restart unavailable: ' + $_.Exception.Message
                 }
@@ -373,7 +412,9 @@ function Render-Document([object]$document) {
             Add-Button $documentActions $actionLabel $actionTip $handler -tone $actionTone
         }
         if (-not $action.icon -and $actionTone -ne 'accent') { $actionButton.Padding = New-Object Windows.Thickness(6, 0, 6, 0) }
+        if ($actionKind -eq 'restart') { $script:RestartButton = $actionButton }
     }
+    Apply-ActionState
 }
 
 $window.Add_Closed({
@@ -408,11 +449,16 @@ $visibilityTimer = New-Object Windows.Threading.DispatcherTimer
 $visibilityTimer.Interval = [TimeSpan]::FromMilliseconds(250)
 $visibilityTimer.Add_Tick({ Set-OverlayVisibility })
 $visibilityTimer.Start()
+$actionTimer = New-Object Windows.Threading.DispatcherTimer
+$actionTimer.Interval = [TimeSpan]::FromMilliseconds(250)
+$actionTimer.Add_Tick({ Apply-ActionState })
+$actionTimer.Start()
 
 Set-Content -Path $pidPath -Value ([string]$PID)
 $application = New-Object Windows.Application
 try { [void]$application.Run($window) } finally {
     $timer.Stop()
     $visibilityTimer.Stop()
+    $actionTimer.Stop()
     try { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue } catch {}
 }

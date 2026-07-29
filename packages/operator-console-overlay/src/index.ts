@@ -124,6 +124,7 @@ export async function startOperatorConsoleOverlay({
     stateRoot, visibilityPolicy, refreshSeconds, env,
     restartCommand: restart?.command,
     restartWorkingDirectory: restart?.workingDirectory,
+    restartSuccessProbeUrl: restart ? new URL('/health', consoleUrl).toString() : undefined,
   } as any);
   return { ...overlay, runtime };
 }

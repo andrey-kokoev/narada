@@ -21,6 +21,18 @@ export interface OverlayPaths {
   preferences: string;
   refresh: string;
   restartCommand: string;
+  actionState: string;
+}
+export interface OverlayActionState {
+  schema: 'narada.window_surface_overlay.action_state.v1';
+  action_id: 'restart';
+  request_id: string;
+  status: 'running' | 'succeeded' | 'failed' | 'interrupted';
+  started_at: string;
+  finished_at?: string;
+  pid?: number | null;
+  exit_code?: number;
+  detail?: string;
 }
 export interface OverlayStatus {
   schema: 'narada.window_surface_overlay.result.v1';
@@ -30,6 +42,7 @@ export interface OverlayStatus {
   state_directory: string;
   document_path: string;
   document: OverlayDocument | null;
+  action_state: OverlayActionState | null;
 }
 export function createOverlayDocument(input?: Partial<Omit<OverlayDocument, 'schema' | 'updated_at'>> & { updated_at?: string }): OverlayDocument;
 export function defaultOverlayStateRoot(env?: NodeJS.ProcessEnv): string;
@@ -38,7 +51,7 @@ export function overlayPaths(id: string, options?: { stateRoot?: string; env?: N
 export function overlayStatus(id: string, options?: { stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayStatus>;
 export function requestOverlayRefresh(id: string, options?: { stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<Record<string, unknown>>;
 export function overlayHostScriptPath(): string;
-export function startOverlay(options: { id?: string; document: Partial<OverlayDocument>; stateRoot?: string; visibilityPolicy?: OverlayVisibilityPolicy; refreshSeconds?: number; restartCommand?: readonly string[]; restartWorkingDirectory?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayStatus>;
+export function startOverlay(options: { id?: string; document: Partial<OverlayDocument>; stateRoot?: string; visibilityPolicy?: OverlayVisibilityPolicy; refreshSeconds?: number; restartCommand?: readonly string[]; restartWorkingDirectory?: string; restartSuccessProbeUrl?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayStatus>;
 export function stopOverlay(options: { id: string; stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayStatus>;
 export function inspectOverlay(options: { id: string; stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayStatus>;
 export function readOverlayDocument(options: { id: string; stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayDocument | null>;

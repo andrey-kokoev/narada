@@ -45,6 +45,19 @@ export interface OverlayPaths {
   preferences: string;
   refresh: string;
   restartCommand: string;
+  actionState: string;
+}
+
+export interface OverlayActionState {
+  schema: 'narada.window_surface_overlay.action_state.v1';
+  action_id: string;
+  request_id: string;
+  status: 'running' | 'succeeded' | 'failed' | 'interrupted';
+  started_at: string;
+  finished_at?: string;
+  pid?: number;
+  exit_code?: number;
+  detail?: string;
 }
 
 export interface OverlayStatus {
@@ -55,6 +68,7 @@ export interface OverlayStatus {
   state_directory: string;
   document_path: string;
   document: OverlayDocument | null;
+  action_state: OverlayActionState | null;
 }
 
 interface OverlayInput extends Record<string, unknown> {
@@ -83,9 +97,10 @@ interface StartOverlayOptions extends OverlayPathOptions {
   refreshSeconds?: number;
   restartCommand?: readonly string[];
   restartWorkingDirectory?: string;
+  restartSuccessProbeUrl?: string;
 }
 
-type OverlayRestartCommand = { command: string[]; working_directory?: string };
+type OverlayRestartCommand = { command: string[]; working_directory?: string; success_probe_url?: string };
 
 export const OVERLAY_DOCUMENT_SCHEMA = 'narada.window_surface_overlay.document.v1';
 export const OVERLAY_RESULT_SCHEMA = 'narada.window_surface_overlay.result.v1';
@@ -266,6 +281,7 @@ export function overlayPaths(id: string, options: OverlayPathOptions = {}): Over
     preferences: join(stateDirectory, 'preferences.json'),
     refresh: join(stateDirectory, 'refresh.signal'),
     restartCommand: join(stateDirectory, 'restart.command.json'),
+    actionState: join(stateDirectory, 'action-state.json'),
   };
 }
 
@@ -308,6 +324,16 @@ export async function overlayStatus(id: string, options: OverlayPathOptions = {}
     }
   }
   const storedDocument = await readJson(paths.document);
+  let actionState = await readJson(paths.actionState) as OverlayActionState | null;
+  if (actionState?.status === 'running' && actionState.pid && !processIsRunning(actionState.pid)) {
+    actionState = {
+      ...actionState,
+      status: 'interrupted',
+      finished_at: new Date().toISOString(),
+      detail: 'The action process exited without recording a terminal result.',
+    };
+    await writeJson(paths.actionState, actionState);
+  }
   return {
     schema: OVERLAY_RESULT_SCHEMA,
     id: normalizedId,
@@ -316,7 +342,18 @@ export async function overlayStatus(id: string, options: OverlayPathOptions = {}
     state_directory: paths.stateDirectory,
     document_path: paths.document,
     document: storedDocument ? createOverlayDocument(asRecord(storedDocument)) : null,
+    action_state: actionState,
   };
+}
+
+function processIsRunning(pid: number): boolean {
+  if (!Number.isInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error: unknown) {
+    return errorCode(error) === 'EPERM';
+  }
 }
 
 export async function requestOverlayRefresh(id: string, options: OverlayPathOptions = {}): Promise<Record<string, unknown>> {
@@ -364,12 +401,18 @@ export async function startOverlay({
   refreshSeconds = 2,
   restartCommand,
   restartWorkingDirectory,
+  restartSuccessProbeUrl,
   env = process.env,
 }: StartOverlayOptions = {}): Promise<OverlayStatus> {
   const normalized = createOverlayDocument({ ...(document ?? {}), id: id ?? document?.id });
   const paths = await ensureStateDirectory(normalized.id, { stateRoot, env });
   await writeJson(paths.document, normalized);
   const normalizedRestartCommand = normalizeRestartCommand(restartCommand, restartWorkingDirectory);
+  if (normalizedRestartCommand && restartSuccessProbeUrl) {
+    const parsed = new URL(restartSuccessProbeUrl);
+    if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('overlay_restart_success_probe_url_invalid');
+    normalizedRestartCommand.success_probe_url = parsed.toString();
+  }
   if (normalizedRestartCommand) await writeJson(paths.restartCommand, normalizedRestartCommand);
   else {
     try { await unlink(paths.restartCommand); } catch (error: unknown) { if (errorCode(error) !== 'ENOENT') throw error; }

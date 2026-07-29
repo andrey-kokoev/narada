@@ -90,27 +90,41 @@ export function registerConsoleCommands(program: Command): void {
     .option('--port <port>', 'Stable Operator Router port', String(DEFAULT_OPERATOR_CONSOLE_PORT))
     .option('--open', 'Open the Operator Workspace in the default browser after startup', true)
     .option('--no-open', 'Do not open the Operator Workspace in the default browser', false)
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .action(async (opts: CommanderOptionValues) => {
       const host = (opts.host as string) ?? '127.0.0.1';
       const port = opts.port ? Number.parseInt(String(opts.port), 10) : 0;
       if (!Number.isInteger(port) || port < 1 || port > 65_535) throw new Error('operator_console_restart_requires_stable_port');
-      emitLongLivedCommandStartup(['Operator Console restart: stopping the current projection...']);
+      const format = resolveCommandFormat();
+      if (format !== 'json') emitLongLivedCommandStartup(['Operator Console restart: stopping the current projection...']);
       const restarted = await restartOperatorConsoleRuntime({
         host,
         port,
       });
       const workspaceUrl = restarted.started.url;
       const browserOutcome = await openOperatorConsoleWorkspace(workspaceUrl, { shouldOpen: opts.open !== false });
-      emitLongLivedCommandStartup([
-        `Operator Router: ${restarted.started.router_url ?? workspaceUrl}`,
-        `Operator Workspace: ${workspaceUrl}`,
-        formatBrowserOutcome(browserOutcome, workspaceUrl),
-        `Operator Console Site Registry: ${restarted.started.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
-        `Operator Console Site Runtime: ${restarted.started.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
-        `Operator Console First Use: ${restarted.started.url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
-        `Operator Console API base: ${restarted.started.url}/console`,
-        'Operator Console projection: started in a detached runtime host',
-      ]);
+      const result = {
+        schema: 'narada.operator_console.restart_result.v1',
+        status: 'ready',
+        stopped: restarted.stopped,
+        started: restarted.started,
+        workspace_url: workspaceUrl,
+        browser: browserOutcome,
+      };
+      if (format === 'json') {
+        emitFormatterBackedCommandResult({ exitCode: 0, result }, { format });
+      } else {
+        emitLongLivedCommandStartup([
+          `Operator Router: ${restarted.started.router_url ?? workspaceUrl}`,
+          `Operator Workspace: ${workspaceUrl}`,
+          formatBrowserOutcome(browserOutcome, workspaceUrl),
+          `Operator Console Site Registry: ${restarted.started.url}${OPERATOR_CONSOLE_REGISTRY_PATH}`,
+          `Operator Console Site Runtime: ${restarted.started.url}${OPERATOR_CONSOLE_LAUNCH_PATH}`,
+          `Operator Console First Use: ${restarted.started.url}${OPERATOR_CONSOLE_ONBOARDING_PATH}`,
+          `Operator Console API base: ${restarted.started.url}/console`,
+          'Operator Console projection: started in a detached runtime host',
+        ]);
+      }
     });
 
   consoleCmd

@@ -9,6 +9,7 @@ import {
   ensureOperatorRouter,
   readOperatorRouterAdminRoutes,
   readOperatorRouterRoutes,
+  registerOperatorRoute,
   registerOperatorRouteSet,
   routeProjectionMatchesIdentity,
   unregisterOperatorRoute,
@@ -987,12 +988,52 @@ async function stopOperatorConsoleRuntimeUnlocked(
         expected_owner_id: `operator-console:${pid}`,
       });
     }
-    await terminateProcess(pid, normalizeTimeout(options.timeout_ms, 5_000));
     await unregisterOperatorRoute(
       { url: router.url, registration_token: router.registration_token, state_root: router.state_root },
       route.route_id,
       { owner_id: route.owner_id, instance_nonce: route.process_evidence.instance_nonce },
     );
+    try {
+      await terminateProcess(pid, normalizeTimeout(options.timeout_ms, 5_000));
+    } catch (error) {
+      let routeRestoration: 'restored' | 'failed' = 'restored';
+      let routeRestorationError: string | null = null;
+      try {
+        await registerOperatorRoute(
+          { url: router.url, registration_token: router.registration_token, state_root: router.state_root },
+          {
+            route_id: route.route_id,
+            route_class: route.route_class,
+            backend_kind: route.backend_kind,
+            public_path: route.public_path,
+            route_mode: route.route_mode,
+            target_url: route.target_url,
+            websocket_target_url: route.websocket_target_url,
+            health_url: route.health_url,
+            owner_id: route.owner_id,
+            site_id: route.site_id,
+            session_id: route.session_id,
+            process_evidence: route.process_evidence,
+            protocols: route.protocols,
+            methods: route.methods,
+            max_body_bytes: route.max_body_bytes,
+            timeout_ms: route.timeout_ms,
+            websocket_liveness: route.websocket_liveness,
+            lease_ms: route.lease_ms,
+            reconstruction: route.reconstruction,
+          },
+        );
+      } catch (restorationError) {
+        routeRestoration = 'failed';
+        routeRestorationError = restorationError instanceof Error ? restorationError.message : String(restorationError);
+      }
+      throw new OperatorConsoleRuntimeError('operator_console_runtime_termination_failed', {
+        pid,
+        termination_error: error instanceof Error ? error.message : String(error),
+        route_restoration: routeRestoration,
+        route_restoration_error: routeRestorationError,
+      });
+    }
     await removeRuntimeState(runtimeStateRoot);
     return {
       schema: 'narada.operator_console_runtime.stop_result.v1',
