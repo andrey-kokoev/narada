@@ -13,7 +13,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = resolve(fileURLToPath(import.meta.url), '..');
 const naradaProperRoot = resolve(__dirname, '..', '..', '..', '..', '..');
@@ -138,6 +138,29 @@ function assertInstalledCliArtifact(cliRoot: string): void {
   }
 }
 
+function assertPublishedAdmissionClosure(cliRoot: string): void {
+  const admissionRoot = join(cliRoot, 'node_modules', '@narada2', 'carrier-action-admission');
+  const admissionManifest = JSON.parse(
+    readFileSync(join(admissionRoot, 'package.json'), 'utf8'),
+  ) as { dependencies?: Record<string, unknown> };
+  assert.notEqual(
+    admissionManifest.dependencies?.['@narada2/site-common-tools'],
+    'workspace:*',
+    'published carrier-action-admission retains a workspace-only dependency',
+  );
+
+  const toolMetadataEntry = join(admissionRoot, 'dist', 'tool-metadata.js');
+  assert.equal(existsSync(toolMetadataEntry), true, 'published carrier-action-admission entrypoint is missing');
+  const probe = run(process.execPath, [
+    '--input-type=module',
+    '-e',
+    `import(${JSON.stringify(pathToFileURL(toolMetadataEntry).href)})`
+      + '.then(() => process.stdout.write("published_admission_probe_ok\\n"))'
+      + '.catch((error) => { console.error(error); process.exitCode = 1; })',
+  ], { cwd: cliRoot, timeout: 30_000 });
+  assert.equal(probe.status, 0, 'published carrier-action-admission dependency closure failed\n' + outputOf(probe));
+}
+
 function writePublicationEvidence(payload: Record<string, unknown>): void {
   const evidenceRoot = process.env.NARADA_LINUX_INSTALLATION_EVIDENCE_DIR;
   if (!evidenceRoot) return;
@@ -170,6 +193,7 @@ test('published Linux CLI installs independently and provisions the resident lau
     const installedCliRoot = join(consumerRoot, 'node_modules', '@narada2', 'cli');
     const installedCliEntrypoint = join(installedCliRoot, 'dist', 'main.js');
     assertInstalledCliArtifact(installedCliRoot);
+    assertPublishedAdmissionClosure(installedCliRoot);
     assert.notEqual(resolve(installedCliRoot), resolve(cliPackageRoot));
     assert.doesNotMatch(readFileSync(join(installedCliRoot, 'package.json'), 'utf8'), /D:\\\\code\\\\narada/i);
 

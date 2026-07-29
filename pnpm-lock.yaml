@@ -571,7 +571,7 @@ importers:
   packages/carrier-action-admission:
     dependencies:
       '@narada2/site-common-tools':
-        specifier: workspace:*
+        specifier: 0.1.0
         version: link:../site-common-tools
 
   packages/carrier-command-contract: {}

@@ -25,7 +25,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/site-common-tools": "workspace:*"
+    "@narada2/site-common-tools": "0.1.0"
   },
   "description": "Carrier-neutral v0 implementation of the Carrier Action Admission Boundary",
   "license": "MIT",
