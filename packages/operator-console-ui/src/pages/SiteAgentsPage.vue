@@ -451,6 +451,64 @@ async function submitAdmission(): Promise<void> {
 
       <div v-if="siteAgents.launchFailure.value?.failure" class="action-message error" role="alert" aria-live="assertive">
         <p class="action-message-text">{{ actionMessage }}</p>
+        <dl
+          v-if="siteAgents.launchFailure.value.failure.diagnostic_summary?.conflicting_session"
+          class="launch-diagnostics"
+        >
+          <div>
+            <dt>Existing session</dt>
+            <dd><code>{{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.session_id ?? 'unknown' }}</code></dd>
+          </div>
+          <div>
+            <dt>Authority state</dt>
+            <dd><code>{{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.state ?? 'unknown' }}</code></dd>
+          </div>
+          <div>
+            <dt>Process evidence</dt>
+            <dd>
+              <code>
+                {{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.process_status ?? 'unknown' }}
+                <template v-if="siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.pid !== null">
+                  (PID {{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.pid }})
+                </template>
+              </code>
+            </dd>
+          </div>
+          <div>
+            <dt>Lease</dt>
+            <dd><code>{{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.lease_status ?? 'unknown' }}</code></dd>
+          </div>
+          <div>
+            <dt>Heartbeat age</dt>
+            <dd>
+              <code>
+                {{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.heartbeat_age_ms === null
+                  ? 'unknown'
+                  : `${siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.heartbeat_age_ms} ms` }}
+              </code>
+            </dd>
+          </div>
+          <div>
+            <dt>Decision rule</dt>
+            <dd><code>{{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.governing_rule ?? 'unknown' }}</code></dd>
+          </div>
+          <div>
+            <dt>Reclamation</dt>
+            <dd>
+              <code>
+                {{ siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.reclaim_eligible
+                  ? 'eligible'
+                  : `blocked${siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.reclaim_blockers.length
+                    ? `: ${siteAgents.launchFailure.value.failure.diagnostic_summary.conflicting_session.reclaim_blockers.join(', ')}`
+                    : ''}` }}
+              </code>
+            </dd>
+          </div>
+        </dl>
+        <p v-if="siteAgents.launchFailure.value.failure.diagnostic_summary?.required_next_step">
+          <strong>Next action:</strong>
+          {{ siteAgents.launchFailure.value.failure.diagnostic_summary.required_next_step }}
+        </p>
         <details class="launch-diagnostics">
           <summary>Launch diagnostics</summary>
           <dl>

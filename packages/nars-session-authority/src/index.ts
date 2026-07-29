@@ -211,7 +211,74 @@ function attachHandoff({ sessionId, principal, siteRoot = null, operatorSurfaceK
   };
 }
 
-function conflictError(record: AnyRecord, principal: AnyRecord, siteRoot: any, operatorSurfaceKind: any): SessionAuthorityError {
+function conflictDecisionEvidence(record: AnyRecord, evaluatedAt: string, processAlive: boolean): AnyRecord {
+  const evaluatedAtMs = Date.parse(evaluatedAt);
+  const leaseExpiresAtMs = record.lease_expires_at ? Date.parse(record.lease_expires_at) : Number.NaN;
+  const lastHeartbeatAtMs = record.last_heartbeat_at ? Date.parse(record.last_heartbeat_at) : Number.NaN;
+  const leaseStatus = Number.isFinite(leaseExpiresAtMs)
+    ? leaseExpiresAtMs <= evaluatedAtMs ? 'expired' : 'fresh'
+    : 'unknown';
+  const processStatus = record.pid ? processAlive ? 'alive' : 'absent' : 'not_observed';
+  const reclaimEligible = leaseStatus === 'expired' && processStatus !== 'alive';
+  const blockers = [
+    ...(leaseStatus !== 'expired' ? [`lease_${leaseStatus}`] : []),
+    ...(processStatus === 'alive' ? ['process_alive'] : []),
+  ];
+  return {
+    schema: 'narada.nars.session_authority_decision_evidence.v1',
+    evaluated_at: evaluatedAt,
+    governing_rule: 'reclaim_when_lease_expired_and_no_live_process_is_observed',
+    existing_owner: {
+      session_id: record.session_id,
+      launch_session_id: record.launch_session_id,
+      authority_epoch: record.authority_epoch,
+      state: record.state,
+      runtime_kind: record.runtime_kind,
+      operator_surface_kind: record.operator_surface_kind,
+      pid: record.pid,
+      started_at: record.started_at,
+      activated_at: record.activated_at,
+      updated_at: record.updated_at,
+    },
+    observations: {
+      process: {
+        pid: record.pid,
+        status: processStatus,
+      },
+      lease: {
+        status: leaseStatus,
+        expires_at: record.lease_expires_at,
+        remaining_ms: Number.isFinite(leaseExpiresAtMs)
+          ? Math.max(0, leaseExpiresAtMs - evaluatedAtMs)
+          : null,
+      },
+      heartbeat: {
+        last_at: record.last_heartbeat_at,
+        age_ms: Number.isFinite(lastHeartbeatAtMs)
+          ? Math.max(0, evaluatedAtMs - lastHeartbeatAtMs)
+          : null,
+      },
+      health: {
+        status: 'not_consulted',
+        reason: 'runtime_health_is_not_an_authority_admission_input',
+      },
+    },
+    reclamation: {
+      evaluated: true,
+      eligible: reclaimEligible,
+      blockers,
+    },
+    outcome: 'refused_existing_owner',
+  };
+}
+
+function conflictError(
+  record: AnyRecord,
+  principal: AnyRecord,
+  siteRoot: any,
+  operatorSurfaceKind: any,
+  decisionEvidence: AnyRecord,
+): SessionAuthorityError {
   const code = record.state === SESSION_AUTHORITY_STATES.STARTING
     ? SESSION_AUTHORITY_REFUSAL_CODES.STARTING
     : record.state === SESSION_AUTHORITY_STATES.STOPPING
@@ -233,6 +300,7 @@ function conflictError(record: AnyRecord, principal: AnyRecord, siteRoot: any, o
       session_id: record.session_id,
       authority_epoch: record.authority_epoch,
       state: record.state,
+      decision_evidence: decisionEvidence,
       attach: handoff,
       required_next_step: 'Attach to the existing session or reconcile it explicitly before starting another session.',
     },
@@ -342,10 +410,13 @@ export function openLocalSessionAuthority({
               SESSION_AUTHORITY_REFUSAL_CODES.PROCESS_ALIVE,
               `The session process ${existing.pid} is still alive; explicit recovery is refused.`,
               {
+                schema: 'narada.nars.session_authority_refusal.v1',
+                reason_code: SESSION_AUTHORITY_REFUSAL_CODES.PROCESS_ALIVE,
                 principal: normalized,
                 session_id: existing.session_id,
                 pid: existing.pid,
                 recovery_reason: recoveryReason,
+                decision_evidence: conflictDecisionEvidence(existing, at, processAlive),
                 required_next_step: 'Stop the existing process or attach to it before retrying explicit recovery.',
               },
             );
@@ -404,7 +475,13 @@ export function openLocalSessionAuthority({
           });
           existing = null;
         } else {
-          throw conflictError(existing, normalized, siteRoot, operatorSurfaceKind);
+          throw conflictError(
+            existing,
+            normalized,
+            siteRoot,
+            operatorSurfaceKind,
+            conflictDecisionEvidence(existing, at, processAlive),
+          );
         }
       }
       if (existing && ![SESSION_AUTHORITY_STATES.FAILED, SESSION_AUTHORITY_STATES.CLOSED].includes(existing.state)) {
@@ -700,6 +777,7 @@ export function openLocalSessionAuthority({
 
 export function isSessionLive(session: any): boolean {
   if (!session || session.terminal_state === 'closed') return false;
+  if (['unavailable', 'failed', 'closed'].includes(session.health_status)) return false;
   if (['active', 'starting_or_degraded'].includes(session.display_state)) return true;
   if (session.heartbeat_fresh === true) return true;
   return false;

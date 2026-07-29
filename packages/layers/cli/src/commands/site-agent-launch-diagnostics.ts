@@ -4,9 +4,11 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import type {
   OperatorSiteAgentLaunchFailurePhase,
+  OperatorSiteAgentLaunchDiagnosticSummary,
   OperatorSiteAgentLaunchFailureWireRecord,
 } from '@narada2/operator-console-contract';
 import { redactWorkspaceLaunchText } from './workspace-launch-process.js';
+import type { WorkspaceLaunchTerminalFailure } from './workspace-launch-types.js';
 
 export interface SiteAgentLaunchFailureContext {
   exit_code?: number;
@@ -22,6 +24,8 @@ export interface SiteAgentLaunchFailureInput {
   error?: unknown;
   message?: string;
   context?: SiteAgentLaunchFailureContext;
+  diagnosticSummary?: OperatorSiteAgentLaunchDiagnosticSummary | null;
+  diagnosticCause?: WorkspaceLaunchTerminalFailure | null;
 }
 
 export interface SiteAgentLaunchDiagnostics {
@@ -122,6 +126,7 @@ export function createSiteAgentLaunchDiagnostics(
         phase: input.phase,
         code: input.code,
         message,
+        diagnostic_summary: input.diagnosticSummary ?? null,
       } satisfies Omit<OperatorSiteAgentLaunchFailureWireRecord, 'diagnostic_ref'>;
       const occurredAt = new Date(now()).toISOString();
       const artifactName = `failure-${now()}-${input.requestId}-${randomUUID()}.json`;
@@ -138,6 +143,8 @@ export function createSiteAgentLaunchDiagnostics(
         occurred_at: occurredAt,
         failure: failureWithRef,
         error: details,
+        diagnostic_summary: input.diagnosticSummary ?? null,
+        cause: input.diagnosticCause ?? null,
         context: {
           exit_code: input.context?.exit_code ?? null,
           workspace_result_path: input.context?.workspace_result_path

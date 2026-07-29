@@ -60,11 +60,38 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function parseLaunchFailure(value: unknown): OperatorSiteAgentLaunchFailureWireRecord | null {
   if (!isRecord(value)
-    || !['overview_read', 'launch_record_read', 'workspace_launch', 'admission'].includes(String(value.phase))
+    || !['overview_read', 'launch_record_read', 'workspace_launch', 'web_ui_attach', 'admission'].includes(String(value.phase))
     || typeof value.code !== 'string'
     || typeof value.message !== 'string'
-    || !(typeof value.diagnostic_ref === 'string' || value.diagnostic_ref === null)) return null;
+    || !(typeof value.diagnostic_ref === 'string' || value.diagnostic_ref === null)
+    || (value.diagnostic_summary !== undefined
+      && value.diagnostic_summary !== null
+      && !parseLaunchDiagnosticSummary(value.diagnostic_summary))) return null;
   return value as unknown as OperatorSiteAgentLaunchFailureWireRecord;
+}
+
+function parseLaunchDiagnosticSummary(value: unknown): boolean {
+  if (!isRecord(value)
+    || value.source !== 'agent_start'
+    || !(typeof value.source_schema === 'string' || value.source_schema === null)
+    || typeof value.reason_code !== 'string'
+    || !(typeof value.required_next_step === 'string' || value.required_next_step === null)
+    || !(typeof value.source_result_ref === 'string' || value.source_result_ref === null)) return false;
+  if (value.conflicting_session === null) return true;
+  if (!isRecord(value.conflicting_session)) return false;
+  const session = value.conflicting_session;
+  return (typeof session.session_id === 'string' || session.session_id === null)
+    && (typeof session.state === 'string' || session.state === null)
+    && (typeof session.authority_epoch === 'number' || session.authority_epoch === null)
+    && (typeof session.pid === 'number' || session.pid === null)
+    && (['alive', 'absent', 'not_observed'].includes(String(session.process_status)) || session.process_status === null)
+    && (['fresh', 'expired', 'unknown'].includes(String(session.lease_status)) || session.lease_status === null)
+    && (typeof session.lease_expires_at === 'string' || session.lease_expires_at === null)
+    && (typeof session.heartbeat_age_ms === 'number' || session.heartbeat_age_ms === null)
+    && (typeof session.governing_rule === 'string' || session.governing_rule === null)
+    && (typeof session.reclaim_eligible === 'boolean' || session.reclaim_eligible === null)
+    && Array.isArray(session.reclaim_blockers)
+    && session.reclaim_blockers.every((entry) => typeof entry === 'string');
 }
 
 export function parseOperatorSiteAgentLaunchWireResponse(value: unknown): OperatorSiteAgentLaunchWireResponse | null {

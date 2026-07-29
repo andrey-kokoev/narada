@@ -42,15 +42,24 @@ interface RuntimeIntelligenceInput extends JsonRecord {
   request_id?: unknown;
 }
 
+interface RuntimeIntelligenceReconfigureCancelInput extends JsonRecord {
+  targetRequestId?: unknown;
+  target_request_id?: unknown;
+  requestId?: unknown;
+  request_id?: unknown;
+}
+
 const NARS_RUNTIME_EXECUTION_POLICY_SCHEMA = 'narada.nars.execution_policy.v1';
 const NARS_RUNTIME_EXECUTION_POLICY_MIN_MAX_ROUNDS = 1;
 const NARS_RUNTIME_EXECUTION_POLICY_MAX_MAX_ROUNDS = 500;
 
 export const NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD = 'runtime.intelligence.reconfigure' as const;
+export const NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD = 'runtime.intelligence.reconfigure.cancel' as const;
 export const NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD = 'runtime.execution_policy.reconfigure' as const;
 
 export const NARS_RUNTIME_SERVER_METHOD_LIST = Object.freeze([
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
   NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD,
 ] as const);
 
@@ -155,9 +164,33 @@ export function buildNarsRuntimeIntelligenceReconfigureFrame(
   };
 }
 
+export function buildNarsRuntimeIntelligenceReconfigureCancelFrame(
+  {
+    targetRequestId,
+    target_request_id,
+    requestId,
+    request_id,
+  }: RuntimeIntelligenceReconfigureCancelInput = {},
+  options: { id?: unknown } = {},
+): JsonRecord | null {
+  const target = String(target_request_id ?? targetRequestId ?? '').trim();
+  if (!target) return null;
+  const id = String(options.id ?? request_id ?? requestId ?? `nars-runtime-intelligence-reconfigure-cancel-${Date.now()}`).trim();
+  if (!id) return null;
+  return {
+    id,
+    method: NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
+    params: {
+      request_id: id,
+      target_request_id: target,
+    },
+  };
+}
+
 export type {
   JsonRecord,
   RuntimeExecutionPolicy,
   RuntimeExecutionPolicyInput,
   RuntimeIntelligenceInput,
+  RuntimeIntelligenceReconfigureCancelInput,
 };

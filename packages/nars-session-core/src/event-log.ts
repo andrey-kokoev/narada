@@ -182,6 +182,7 @@ const DIAGNOSTIC_EVENT_KINDS = new Set([
   'runtime_output_failure',
   'runtime_control_input_bridge_error',
   'runtime_intelligence_reconfiguration',
+  'runtime_intelligence_reconfiguration_cancel',
   'intelligence_runtime_reconfiguration_state_transition',
   'provider_runtime_fault',
   'provider_error',

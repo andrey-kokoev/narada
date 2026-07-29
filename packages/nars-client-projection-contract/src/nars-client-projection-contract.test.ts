@@ -10,6 +10,7 @@ import {
   NARS_CLIENT_PROJECTION_REGISTRY,
   NARS_CLIENT_CONFORMANCE_FIXTURES,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_SURFACE_ATTACHMENT_SCHEMA,
   NARS_SURFACE_ATTACHMENT_STATES,
@@ -36,6 +37,7 @@ import {
   buildAgentWebUiHelpText,
   buildAgentWebUiInboxSummaryFrame,
   buildAgentWebUiIntelligenceReconfigureFrame,
+  buildAgentWebUiIntelligenceReconfigureCancelFrame,
   buildAgentWebUiMailboxSummaryFrame,
   buildAgentWebUiOperatorInputAction,
   buildAgentWebUiSchedulerSummaryFrame,
@@ -117,11 +119,13 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
     'session.cancel',
     'session.close',
     'runtime.intelligence.reconfigure',
+    'runtime.intelligence.reconfigure.cancel',
     'runtime.execution_policy.reconfigure',
   ]);
   assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('conversation.send'), true);
   assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('session.surface.affordances'), true);
   assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes('runtime.intelligence.reconfigure'), false);
+  assert.equal(AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST.includes(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes(NARS_AFFORDANCE_ACTION_REQUEST_METHOD), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('session.sop.summary'), false);
   assert.equal(AGENT_WEB_UI_NARS_METHOD_LIST.includes('conversation.steer'), false);
@@ -235,6 +239,20 @@ test('NARS client projection contract builds the direct runtime intelligence con
     },
   });
   assert.equal(buildAgentWebUiIntelligenceReconfigureFrame({ model: 'next-model' }), null);
+});
+
+test('NARS client projection contract builds a local-only targeted reconfiguration cancel frame', () => {
+  const frame = buildAgentWebUiIntelligenceReconfigureCancelFrame({ targetRequestId: 'ui-reconfigure-1' }, { id: 'ui-reconfigure-cancel-1' });
+  assert.equal(isAgentWebUiNarsMethod(frame?.method), true);
+  assert.equal(isAgentWebUiCloudflareProtocolFrame(frame), false);
+  assert.deepEqual(frame, {
+    id: 'ui-reconfigure-cancel-1',
+    method: 'runtime.intelligence.reconfigure.cancel',
+    params: {
+      request_id: 'ui-reconfigure-cancel-1',
+      target_request_id: 'ui-reconfigure-1',
+    },
+  });
 });
 
 test('NARS client projection contract owns canonical intent references', () => {

@@ -10,6 +10,7 @@ import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
 import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
 import {
   OPERATOR_ROUTER_IDENTITY,
+  OPERATOR_ROUTER_VERSION,
   OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,
   OPERATOR_ROUTER_STATE_SCHEMA,
   OPERATOR_ROUTER_ROUTES_SCHEMA,
@@ -20,6 +21,7 @@ import {
   registerOperatorRouteSet,
   registerOperatorRoute,
   readOperatorRouterAdminRoutes,
+  readOperatorRouterRoutesBounded,
   reconstructOperatorRouteSet,
   unregisterOperatorRoute,
   projectRouteRegistration,
@@ -39,6 +41,36 @@ function listen(server: ReturnType<typeof createServer>): Promise<string> {
     });
   });
 }
+
+test('bounded route inventory recovers from transient transport failure', async () => {
+  let attempts = 0;
+  const routes = await readOperatorRouterRoutesBounded({
+    url: 'http://127.0.0.1:61729',
+    timeout_ms: 500,
+    fetch_fn: async () => {
+      attempts += 1;
+      if (attempts === 1) throw new Error('transient');
+      return new Response(JSON.stringify({
+        schema: OPERATOR_ROUTER_ROUTES_SCHEMA,
+        identity: OPERATOR_ROUTER_IDENTITY,
+        routes: [],
+      }), { status: 200 });
+    },
+  });
+  assert.equal(attempts, 2);
+  assert.deepEqual(routes.routes, []);
+});
+
+test('bounded route inventory reports endpoint, attempts, elapsed time, and final cause', async () => {
+  await assert.rejects(
+    readOperatorRouterRoutesBounded({
+      url: 'http://127.0.0.1:61729',
+      timeout_ms: 120,
+      fetch_fn: async () => { throw new Error('offline'); },
+    }),
+    /operator_router_routes_unavailable:url=http:\/\/127\.0\.0\.1:61729:attempts=\d+:elapsed_ms=\d+:last_error=operator_router_routes_fetch_failed:offline/,
+  );
+});
 
 function requestStatusPath(baseUrl: string, requestPath: string, headers: Record<string, string> = {}): Promise<number> {
   const parsed = new URL(baseUrl);
@@ -315,6 +347,53 @@ test('route renewal preserves the registered lease duration when the request omi
 
 test('operator router client reserves port zero for diagnostic server construction', async () => {
   await assert.rejects(() => ensureOperatorRouter({ port: 0 }), /operator_router_client_port_invalid/);
+});
+
+test('operator router attachment waits for route inventory readiness after health succeeds', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-readiness-'));
+  await writeFile(join(stateRoot, 'registration-token'), 'test-token\n', 'utf8');
+  let routeReads = 0;
+  const fetchFn: typeof fetch = async (input) => {
+    const url = String(input);
+    if (url.endsWith('/health')) {
+      return Response.json({
+        schema: 'narada.operator_router.health.v1',
+        identity: OPERATOR_ROUTER_IDENTITY,
+        version: OPERATOR_ROUTER_VERSION,
+        status: 'healthy',
+      });
+    }
+    if (url.endsWith('/admin/routes')) {
+      return Response.json({
+        schema: OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,
+        identity: OPERATOR_ROUTER_IDENTITY,
+        routes: [],
+      });
+    }
+    if (url.endsWith('/routes')) {
+      routeReads += 1;
+      if (routeReads < 3) throw new TypeError('fetch failed');
+      return Response.json({
+        schema: OPERATOR_ROUTER_ROUTES_SCHEMA,
+        identity: OPERATOR_ROUTER_IDENTITY,
+        routes: [],
+      });
+    }
+    return new Response(null, { status: 404 });
+  };
+  try {
+    const attached = await attachOperatorRouter({
+      host: '127.0.0.1',
+      port: 61729,
+      state_root: stateRoot,
+      timeout_ms: 1_000,
+      fetch_fn: fetchFn,
+    });
+    assert.equal(attached?.ownership, 'attached');
+    assert.equal(routeReads, 3);
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+  }
 });
 
 test('router fails closed on an unreadable singleton lock', async () => {

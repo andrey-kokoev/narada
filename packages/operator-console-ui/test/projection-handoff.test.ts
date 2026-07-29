@@ -78,11 +78,35 @@ test('failure projection document presents cause and correlation without executa
       code: 'workspace_launch_exit',
       message: 'provider unavailable <script>alert(1)</script>',
       diagnostic_ref: 'D:/runtime/failure.json',
+      diagnostic_summary: {
+        source: 'agent_start',
+        source_schema: 'narada.nars.session_authority_refusal.v1',
+        reason_code: 'session_authority_already_active',
+        required_next_step: 'Attach to the existing session or reconcile it explicitly.',
+        source_result_ref: 'D:/runtime/agent-start-result.json',
+        conflicting_session: {
+          session_id: 'carrier-existing',
+          state: 'active',
+          authority_epoch: 3,
+          pid: 39164,
+          process_status: 'alive',
+          lease_status: 'fresh',
+          lease_expires_at: '2026-07-29T16:24:18.000Z',
+          heartbeat_age_ms: 1_000,
+          governing_rule: 'reclaim_when_lease_expired_and_no_live_process_is_observed',
+          reclaim_eligible: false,
+          reclaim_blockers: ['lease_fresh', 'process_alive'],
+        },
+      },
     },
   });
   assert.ok(document.includes('provider unavailable &lt;script&gt;alert(1)&lt;/script&gt;'));
   assert.ok(document.includes('workspace_launch_exit'));
   assert.ok(document.includes('request-1'));
   assert.ok(document.includes('D:/runtime/failure.json'));
+  assert.ok(document.includes('carrier-existing'));
+  assert.ok(document.includes('alive (PID 39164)'));
+  assert.ok(document.includes('blocked: lease_fresh, process_alive'));
+  assert.ok(document.includes('Next action:'));
   assert.ok(!document.includes('<script>alert(1)</script>'));
 });

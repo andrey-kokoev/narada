@@ -5,6 +5,7 @@ import type { NarsSessionObservation } from '@narada2/nars-session-core/session-
 import { executeWorkspaceLaunchPlan } from '../../src/commands/workspace-launch-executor.js';
 import {
   awaitWorkspaceLaunchSessionAttachments,
+  normalizeWorkspaceLaunchTerminalFailure,
   type WorkspaceLaunchAttachmentDependencies,
 } from '../../src/commands/workspace-launch-attachment.js';
 import {
@@ -234,6 +235,124 @@ describe('workspace launch execution boundaries', () => {
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
+  });
+
+  it('preserves structured session-authority refusal evidence from Agent Start', async () => {
+    const tempDir = await mkdtemp('/tmp/workspace-launch-authority-refusal-');
+    const bindingPath = join(tempDir, 'binding.json');
+    const resultPath = join(tempDir, 'agent-start-result.json');
+    const failedPlan = {
+      ...plan,
+      operator_projection_launch_binding: {
+        path: bindingPath,
+        exact_attach_required: true,
+      },
+    } as unknown as WorkspaceLaunchAgentPlan;
+    const decisionEvidence = {
+      schema: 'narada.nars.session_authority_decision_evidence.v1',
+      evaluated_at: '2026-07-29T16:23:49.000Z',
+      governing_rule: 'reclaim_when_lease_expired_and_no_live_process_is_observed',
+      existing_owner: {
+        session_id: 'carrier-existing',
+        launch_session_id: 'launch-existing',
+        authority_epoch: 3,
+        state: 'active',
+        runtime_kind: 'narada-agent-runtime-server',
+        operator_surface_kind: 'agent-web-ui',
+        pid: 39164,
+        started_at: '2026-07-29T15:10:53.000Z',
+        activated_at: '2026-07-29T15:10:54.000Z',
+        updated_at: '2026-07-29T16:23:48.000Z',
+      },
+      observations: {
+        process: { pid: 39164, status: 'alive' },
+        lease: { status: 'fresh', expires_at: '2026-07-29T16:24:18.000Z', remaining_ms: 29_000 },
+        heartbeat: { last_at: '2026-07-29T16:23:48.000Z', age_ms: 1_000 },
+        health: { status: 'not_consulted', reason: 'runtime_health_is_not_an_authority_admission_input' },
+      },
+      reclamation: { evaluated: true, eligible: false, blockers: ['lease_fresh', 'process_alive'] },
+      outcome: 'refused_existing_owner',
+    };
+    const { writeFile } = await import('node:fs/promises');
+    await writeFile(resultPath, JSON.stringify({
+      schema: 'narada.nars.session_authority_refusal.v1',
+      status: 'refused',
+      reason_code: 'session_authority_already_active',
+      reason: 'The principal already has an active NARS session.',
+      required_next_step: 'Attach to the existing session or reconcile it explicitly.',
+      principal: { principal_key: 'local:andrey-user:resident' },
+      session_id: 'carrier-existing',
+      authority_epoch: 3,
+      state: 'active',
+      decision_evidence: decisionEvidence,
+      attach: {
+        command: 'narada nars attach-command --session carrier-existing',
+        web_ui_command: 'narada agent-web-ui attach --session carrier-existing',
+      },
+      owner_token: 'must-not-propagate',
+    }));
+    await writeFile(bindingPath, JSON.stringify({
+      status: 'failed',
+      reason: 'session_authority_already_active',
+      agent_start_result_file: resultPath,
+    }));
+    try {
+      await expect(awaitWorkspaceLaunchSessionAttachments([failedPlan], {
+        discover: (() => ({ sessions: [] })) as unknown as WorkspaceLaunchAttachmentDependencies['discover'],
+        timeoutMs: 120_000,
+        now: () => 0,
+        sleep: async () => undefined,
+      })).rejects.toMatchObject({
+        evidence: {
+          required_next_step: 'Attach to the existing session or reconcile it explicitly.',
+          sessions: [{
+            reason: 'agent_start_failed:session_authority_already_active',
+            terminal_failure: {
+              source_result_ref: resultPath,
+              reason_code: 'session_authority_already_active',
+              authority_refusal: {
+                session_id: 'carrier-existing',
+                state: 'active',
+                decision_evidence: decisionEvidence,
+              },
+            },
+          }],
+        },
+      });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
+  it('bounds returned terminal failures and drops unrestricted authority fields', () => {
+    const normalized = normalizeWorkspaceLaunchTerminalFailure({
+      schema: 'narada.workspace_launch.terminal_failure.v1',
+      source: 'agent_start',
+      source_schema: 'narada.nars.session_authority_refusal.v1',
+      reason_code: 'session_authority_already_active',
+      message: 'x'.repeat(3_000),
+      required_next_step: 'Inspect the existing session.',
+      source_result_ref: 'D:/runtime/result.json',
+      authority_refusal: {
+        principal_key: 'local:sonar:resident',
+        session_id: 'carrier-existing',
+        authority_epoch: 3,
+        state: 'active',
+        owner_token: 'must-not-propagate',
+        arbitrary_nested_payload: { secret: 'must-not-propagate' },
+      },
+    });
+    expect(normalized?.message).toHaveLength(2_000);
+    expect(normalized?.authority_refusal).toEqual({
+      principal_key: 'local:sonar:resident',
+      session_id: 'carrier-existing',
+      authority_epoch: 3,
+      state: 'active',
+      decision_evidence: null,
+      attach_command: null,
+      web_ui_command: null,
+    });
+    expect(JSON.stringify(normalized)).not.toContain('must-not-propagate');
   });
 
   it('redacts secret argv values while preserving option names', () => {

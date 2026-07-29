@@ -4,6 +4,7 @@ import {
   resolveOperatorSurfaceRuntimeSelection,
 } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type { WorkspaceLaunchRecord } from './workspace-launch-types.js';
+import type { WorkspaceLaunchTerminalFailure } from './workspace-launch-types.js';
 
 export const ADMITTED_WORKSPACE_LAUNCH_MCP_SCOPES = Object.freeze([
   'all',
@@ -48,14 +49,22 @@ export class WorkspaceLaunchContractError extends Error {
   readonly reason: string;
   readonly requiredNextStep: string;
   readonly artifactPath: string | null;
+  readonly diagnosticCause: WorkspaceLaunchTerminalFailure | null;
 
-  constructor(reasonCode: string, reason: string, requiredNextStep: string, artifactPath: string | null = null) {
+  constructor(
+    reasonCode: string,
+    reason: string,
+    requiredNextStep: string,
+    artifactPath: string | null = null,
+    diagnosticCause: WorkspaceLaunchTerminalFailure | null = null,
+  ) {
     super(`${reasonCode}: ${reason}`);
     this.name = 'WorkspaceLaunchContractError';
     this.reasonCode = reasonCode;
     this.reason = reason;
     this.requiredNextStep = requiredNextStep;
     this.artifactPath = artifactPath;
+    this.diagnosticCause = diagnosticCause;
   }
 }
 

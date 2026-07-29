@@ -237,6 +237,55 @@ export interface WorkspaceLaunchProcessLaunch {
 
 export type WorkspaceLaunchAttachmentStatus = 'attached' | 'handoff_pending' | 'not_checked';
 
+export interface WorkspaceLaunchAuthorityDecisionEvidence {
+  schema: 'narada.nars.session_authority_decision_evidence.v1';
+  evaluated_at: string;
+  governing_rule: string;
+  existing_owner: {
+    session_id: string | null;
+    launch_session_id: string | null;
+    authority_epoch: number | null;
+    state: string | null;
+    runtime_kind: string | null;
+    operator_surface_kind: string | null;
+    pid: number | null;
+    started_at: string | null;
+    activated_at: string | null;
+    updated_at: string | null;
+  };
+  observations: {
+    process: { pid: number | null; status: 'alive' | 'absent' | 'not_observed' };
+    lease: { status: 'fresh' | 'expired' | 'unknown'; expires_at: string | null; remaining_ms: number | null };
+    heartbeat: { last_at: string | null; age_ms: number | null };
+    health: { status: 'not_consulted'; reason: string };
+  };
+  reclamation: {
+    evaluated: boolean;
+    eligible: boolean;
+    blockers: string[];
+  };
+  outcome: string;
+}
+
+export interface WorkspaceLaunchTerminalFailure {
+  schema: 'narada.workspace_launch.terminal_failure.v1';
+  source: 'agent_start';
+  source_schema: string | null;
+  reason_code: string;
+  message: string;
+  required_next_step: string | null;
+  source_result_ref: string | null;
+  authority_refusal: {
+    principal_key: string | null;
+    session_id: string | null;
+    authority_epoch: number | null;
+    state: string | null;
+    decision_evidence: WorkspaceLaunchAuthorityDecisionEvidence | null;
+    attach_command: string | null;
+    web_ui_command: string | null;
+  } | null;
+}
+
 export interface WorkspaceLaunchAttachmentEvidence {
   schema: 'narada.workspace_launch.attachment.v1';
   status: WorkspaceLaunchAttachmentStatus;
@@ -260,6 +309,7 @@ export interface WorkspaceLaunchAttachmentEvidence {
     health_status: 'healthy' | 'unavailable' | 'not_checked';
     attempts: number;
     reason?: string;
+    terminal_failure?: WorkspaceLaunchTerminalFailure;
   }>;
   required_next_step: string | null;
 }
@@ -272,6 +322,7 @@ export interface WorkspaceLaunchFailureEvidence {
   error_type: string;
   required_next_step: string;
   retryable: boolean;
+  cause: WorkspaceLaunchTerminalFailure | null;
   artifact_path: string | null;
   artifact_status: 'written' | 'not_requested' | 'write_failed';
   rollback: import('./workspace-launch-contracts.js').WorkspaceLaunchRollbackEvidence;

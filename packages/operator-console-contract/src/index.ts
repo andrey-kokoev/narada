@@ -352,11 +352,33 @@ export type OperatorSiteAgentLaunchFailurePhase =
   | 'workspace_launch'
   | 'admission';
 
+export interface OperatorSiteAgentLaunchDiagnosticSummary {
+  source: 'agent_start';
+  source_schema: string | null;
+  reason_code: string;
+  required_next_step: string | null;
+  source_result_ref: string | null;
+  conflicting_session: {
+    session_id: string | null;
+    state: string | null;
+    authority_epoch: number | null;
+    pid: number | null;
+    process_status: 'alive' | 'absent' | 'not_observed' | null;
+    lease_status: 'fresh' | 'expired' | 'unknown' | null;
+    lease_expires_at: string | null;
+    heartbeat_age_ms: number | null;
+    governing_rule: string | null;
+    reclaim_eligible: boolean | null;
+    reclaim_blockers: string[];
+  } | null;
+}
+
 export interface OperatorSiteAgentLaunchFailureWireRecord {
   phase: OperatorSiteAgentLaunchFailurePhase;
   code: string;
   message: string;
   diagnostic_ref: string | null;
+  diagnostic_summary?: OperatorSiteAgentLaunchDiagnosticSummary | null;
 }
 
 export interface OperatorSiteAgentLaunchWireResponse {

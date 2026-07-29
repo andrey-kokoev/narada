@@ -343,7 +343,9 @@ function runPowerShell(script: string, args: string[], env: NodeJS.ProcessEnv = 
     child.stdout.on('data', (chunk) => { stdout += String(chunk); });
     child.stderr.on('data', (chunk) => { stderr += String(chunk); });
     child.once('error', reject);
-    child.once('close', (code) => {
+    // A launched overlay host may inherit an output handle after the launcher exits.
+    // Completion belongs to the bounded launcher process, not its durable descendant.
+    child.once('exit', (code) => {
       if (code === 0) resolvePromise({ stdout, stderr });
       else reject(new Error('overlay_powershell_failed:' + code + ':' + (stderr.trim() || stdout.trim())));
     });

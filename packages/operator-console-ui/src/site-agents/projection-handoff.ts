@@ -178,6 +178,20 @@ export function buildFailureProjectionDocument(options: FailureProjectionDocumen
   const sessionsPath = scopedAgentSessionsPath(options.siteId, options.agentId);
   const requestId = options.requestId ?? 'not available';
   const diagnosticRef = options.failure.diagnostic_ref ?? 'not persisted';
+  const summary = options.failure.diagnostic_summary ?? null;
+  const conflict = summary?.conflicting_session ?? null;
+  const decisionRows = conflict
+    ? `
+<dt>Existing session</dt><dd><code>${escapeHtml(conflict.session_id ?? 'unknown')}</code></dd>
+<dt>Authority state</dt><dd><code>${escapeHtml(conflict.state ?? 'unknown')}</code></dd>
+<dt>Process</dt><dd><code>${escapeHtml(conflict.process_status ?? 'unknown')}${conflict.pid === null ? '' : ` (PID ${String(conflict.pid)})`}</code></dd>
+<dt>Lease</dt><dd><code>${escapeHtml(conflict.lease_status ?? 'unknown')}</code></dd>
+<dt>Heartbeat age</dt><dd><code>${escapeHtml(formatDiagnosticDuration(conflict.heartbeat_age_ms))}</code></dd>
+<dt>Reclamation</dt><dd><code>${conflict.reclaim_eligible ? 'eligible' : `blocked${conflict.reclaim_blockers.length ? `: ${escapeHtml(conflict.reclaim_blockers.join(', '))}` : ''}`}</code></dd>`
+    : '';
+  const nextStep = summary?.required_next_step
+    ? `<p><strong>Next action:</strong> ${escapeHtml(summary.required_next_step)}</p>`
+    : '';
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -200,7 +214,9 @@ a { color: #0b5bd3; }
 <main>
 <h1>Could not start ${escapeHtml(options.agentId)}</h1>
 <p>${escapeHtml(options.failure.message)}</p>
+${nextStep}
 <dl>
+${decisionRows}
 <dt>Phase</dt><dd><code>${escapeHtml(options.failure.phase)}</code></dd>
 <dt>Code</dt><dd><code>${escapeHtml(options.failure.code)}</code></dd>
 <dt>Request</dt><dd><code>${escapeHtml(requestId)}</code></dd>
@@ -210,4 +226,11 @@ a { color: #0b5bd3; }
 </main>
 </body>
 </html>`;
+}
+
+function formatDiagnosticDuration(milliseconds: number | null): string {
+  if (milliseconds === null) return 'unknown';
+  if (milliseconds < 1_000) return `${milliseconds} ms`;
+  if (milliseconds < 60_000) return `${Math.round(milliseconds / 1_000)} s`;
+  return `${Math.round(milliseconds / 60_000)} min`;
 }

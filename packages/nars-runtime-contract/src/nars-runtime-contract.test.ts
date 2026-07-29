@@ -3,9 +3,11 @@ import test from 'node:test';
 
 import {
   NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD,
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_RUNTIME_SERVER_METHOD_LIST,
   buildNarsRuntimeExecutionPolicyReconfigureFrame,
+  buildNarsRuntimeIntelligenceReconfigureCancelFrame,
   buildNarsRuntimeIntelligenceReconfigureFrame,
   isNarsRuntimeServerMethod,
 } from './nars-runtime-contract.js';
@@ -13,9 +15,11 @@ import {
 test('runtime contract owns the admitted method registry', () => {
   assert.deepEqual(NARS_RUNTIME_SERVER_METHOD_LIST, [
     'runtime.intelligence.reconfigure',
+    'runtime.intelligence.reconfigure.cancel',
     'runtime.execution_policy.reconfigure',
   ]);
   assert.equal(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD, 'runtime.intelligence.reconfigure');
+  assert.equal(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD, 'runtime.intelligence.reconfigure.cancel');
   assert.equal(NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD, 'runtime.execution_policy.reconfigure');
   assert.equal(isNarsRuntimeServerMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD), true);
   assert.equal(isNarsRuntimeServerMethod('session.submit'), false);
@@ -56,6 +60,19 @@ test('runtime contract builds admitted intelligence reconfiguration frames', () 
   assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ inferenceProvider: 'deepseek-api', model: 'next-model', thinking: 'medium' }), null);
   assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ provider: 'deepseek-api' }), null);
   assert.equal(buildNarsRuntimeIntelligenceReconfigureFrame({ provider: '   ' }), null);
+});
+
+test('runtime contract builds a separate targeted intelligence reconfiguration cancel frame', () => {
+  assert.deepEqual(buildNarsRuntimeIntelligenceReconfigureCancelFrame({ targetRequestId: 'reconfigure-7' }, { id: 'cancel-7' }), {
+    id: 'cancel-7',
+    method: 'runtime.intelligence.reconfigure.cancel',
+    params: {
+      request_id: 'cancel-7',
+      target_request_id: 'reconfigure-7',
+    },
+  });
+  assert.equal(buildNarsRuntimeIntelligenceReconfigureCancelFrame({ requestId: 'reconfigure-7' }), null);
+  assert.equal(isNarsRuntimeServerMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD), true);
 });
 
 test('runtime contract builds a typed execution policy reconfiguration frame', () => {

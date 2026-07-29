@@ -16,6 +16,11 @@ $documentPath = Get-OverlayPath 'document.json'
 $preferencesPath = Get-OverlayPath 'preferences.json'
 $refreshPath = Get-OverlayPath 'refresh.signal'
 $restartCommandPath = Get-OverlayPath 'restart.command.json'
+$hostStderrPath = Get-OverlayPath 'host.stderr.log'
+trap {
+    ($_ | Out-String) | Set-Content -Path $hostStderrPath -Encoding UTF8
+    exit 1
+}
 
 function Read-JsonFile([string]$path, [object]$fallback) {
     if (-not (Test-Path $path)) { return $fallback }

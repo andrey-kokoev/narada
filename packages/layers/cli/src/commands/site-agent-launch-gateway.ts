@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { loadIntelligenceLaunchContext } from '@narada2/agent-start/intelligence-launch-context';
 import type {
   OperatorSiteAgentLaunchFailurePhase,
+  OperatorSiteAgentLaunchDiagnosticSummary,
   OperatorSiteAgentLaunchWireResponse,
   OperatorSiteAgentLaunchHandoffWireRecord,
   OperatorSiteAgentWireRecord,
@@ -24,6 +25,8 @@ import {
   type SiteAgentLaunchFailureContext,
 } from './site-agent-launch-diagnostics.js';
 import { WorkspaceLaunchContractError } from './workspace-launch-contracts.js';
+import type { WorkspaceLaunchTerminalFailure } from './workspace-launch-types.js';
+import { normalizeWorkspaceLaunchTerminalFailure } from './workspace-launch-attachment.js';
 
 export interface SiteAgentLaunchRequest {
   siteId: string;
@@ -184,8 +187,61 @@ function launchResultFailure(value: unknown): {
       ?? messageField(result.error)
       ?? stringField(result.reason)
       ?? 'Workspace launch exited with a nonzero status.',
-    error: failure.error ?? result.error,
+    error: failure.cause ?? failure.error ?? result.error,
     workspaceResultPath: stringField(result.result_path),
+  };
+}
+
+function launchDiagnosticCause(error: unknown): WorkspaceLaunchTerminalFailure | null {
+  const candidate = error instanceof WorkspaceLaunchContractError
+    ? error.diagnosticCause
+    : isRecord(error) && error.schema === 'narada.workspace_launch.terminal_failure.v1'
+      ? error
+      : null;
+  return normalizeWorkspaceLaunchTerminalFailure(candidate);
+}
+
+function launchDiagnosticSummary(error: unknown): OperatorSiteAgentLaunchDiagnosticSummary | null {
+  const cause = launchDiagnosticCause(error);
+  if (!cause || cause.source !== 'agent_start' || typeof cause.reason_code !== 'string') return null;
+  const authority = isRecord(cause.authority_refusal) ? cause.authority_refusal : null;
+  const decision = isRecord(authority?.decision_evidence) ? authority.decision_evidence : null;
+  const owner = isRecord(decision?.existing_owner) ? decision.existing_owner : null;
+  const observations = isRecord(decision?.observations) ? decision.observations : null;
+  const process = isRecord(observations?.process) ? observations.process : null;
+  const lease = isRecord(observations?.lease) ? observations.lease : null;
+  const heartbeat = isRecord(observations?.heartbeat) ? observations.heartbeat : null;
+  const reclamation = isRecord(decision?.reclamation) ? decision.reclamation : null;
+  const processStatus = ['alive', 'absent', 'not_observed'].includes(String(process?.status))
+    ? process?.status as 'alive' | 'absent' | 'not_observed'
+    : null;
+  const leaseStatus = ['fresh', 'expired', 'unknown'].includes(String(lease?.status))
+    ? lease?.status as 'fresh' | 'expired' | 'unknown'
+    : null;
+  const blockers = Array.isArray(reclamation?.blockers)
+    ? reclamation.blockers.filter((entry): entry is string => typeof entry === 'string').slice(0, 10)
+    : [];
+  return {
+    source: 'agent_start',
+    source_schema: stringField(cause.source_schema),
+    reason_code: cause.reason_code,
+    required_next_step: stringField(cause.required_next_step),
+    source_result_ref: stringField(cause.source_result_ref),
+    conflicting_session: authority
+      ? {
+        session_id: stringField(authority.session_id),
+        state: stringField(authority.state) ?? stringField(owner?.state),
+        authority_epoch: typeof authority.authority_epoch === 'number' ? authority.authority_epoch : null,
+        pid: typeof owner?.pid === 'number' ? owner.pid : null,
+        process_status: processStatus,
+        lease_status: leaseStatus,
+        lease_expires_at: stringField(lease?.expires_at),
+        heartbeat_age_ms: typeof heartbeat?.age_ms === 'number' ? heartbeat.age_ms : null,
+        governing_rule: stringField(decision?.governing_rule),
+        reclaim_eligible: typeof reclamation?.eligible === 'boolean' ? reclamation.eligible : null,
+        reclaim_blockers: blockers,
+      }
+      : null,
   };
 }
 
@@ -267,6 +323,8 @@ export function createSiteAgentLaunchGateway(
       error,
       message,
       context,
+      diagnosticSummary: launchDiagnosticSummary(error),
+      diagnosticCause: launchDiagnosticCause(error),
     });
     return response('failed', request, sessionId, code, requestId, recorded.failure);
   }
@@ -287,6 +345,7 @@ export function createSiteAgentLaunchGateway(
           site: request.siteId,
           format: 'json',
           open: false,
+          healthTimeoutMs: 5_000,
         }, silentCommandContext({}));
         if (result.exitCode !== 0) {
           return { ok: false, ...webUiAttachFailure(result.result) };

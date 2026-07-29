@@ -45,7 +45,7 @@ $childArgs = @(
     '-VisibilityPolicy', $VisibilityPolicy,
     '-HostProcess'
 )
-$child = Start-Process -WindowStyle Hidden -FilePath $shell.Source -ArgumentList $childArgs -RedirectStandardOutput $hostStdoutPath -RedirectStandardError $hostStderrPath -PassThru
+$child = Start-Process -WindowStyle Hidden -FilePath $shell.Source -ArgumentList $childArgs -PassThru
 $deadline = [DateTime]::UtcNow.AddSeconds(5)
 $running = $null
 do {

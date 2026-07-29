@@ -8,6 +8,7 @@ import { createSiteAgentLaunchAdmission } from '../../src/commands/site-agent-la
 import { createSiteAgentLaunchDiagnostics } from '../../src/commands/site-agent-launch-diagnostics.js';
 import { createSiteAgentLaunchGateway } from '../../src/commands/site-agent-launch-gateway.js';
 import { WorkspaceLaunchContractError } from '../../src/commands/workspace-launch-contracts.js';
+import type { WorkspaceLaunchTerminalFailure } from '../../src/commands/workspace-launch-types.js';
 
 function overview(state: 'running' | 'stopped' | 'degraded', sessionId: string | null = null) {
   return {
@@ -109,6 +110,7 @@ describe('site-agent launch gateway', () => {
       site: 'sonar',
       format: 'json',
       open: false,
+      healthTimeoutMs: 5_000,
     }), expect.anything());
   });
 
@@ -374,6 +376,48 @@ describe('site-agent launch gateway', () => {
   it('preserves the workspace failure artifact path when execution throws', async () => {
     const diagnostics = testDiagnostics();
     let launchOptions: Record<string, unknown> | null = null;
+    const diagnosticCause: WorkspaceLaunchTerminalFailure = {
+      schema: 'narada.workspace_launch.terminal_failure.v1',
+      source: 'agent_start',
+      source_schema: 'narada.nars.session_authority_refusal.v1',
+      reason_code: 'session_authority_already_active',
+      message: 'An active session already owns this principal.',
+      required_next_step: 'Attach to the existing session or reconcile it explicitly.',
+      source_result_ref: 'D:/runtime/agent-start-result.json',
+      authority_refusal: {
+        principal_key: 'local:sonar:resident',
+        session_id: 'carrier-existing',
+        authority_epoch: 3,
+        state: 'active',
+        attach_command: null,
+        web_ui_command: null,
+        decision_evidence: {
+          schema: 'narada.nars.session_authority_decision_evidence.v1',
+          evaluated_at: '2026-07-29T16:23:49.000Z',
+          governing_rule: 'reclaim_when_lease_expired_and_no_live_process_is_observed',
+          existing_owner: {
+            session_id: 'carrier-existing',
+            launch_session_id: 'launch-existing',
+            authority_epoch: 3,
+            state: 'active',
+            runtime_kind: 'narada-agent-runtime-server',
+            operator_surface_kind: 'agent-web-ui',
+            pid: 39164,
+            started_at: null,
+            activated_at: null,
+            updated_at: null,
+          },
+          observations: {
+            process: { pid: 39164, status: 'alive' },
+            lease: { status: 'fresh', expires_at: '2026-07-29T16:24:18.000Z', remaining_ms: 29_000 },
+            heartbeat: { last_at: '2026-07-29T16:23:48.000Z', age_ms: 1_000 },
+            health: { status: 'not_consulted', reason: 'runtime_health_is_not_an_authority_admission_input' },
+          },
+          reclamation: { evaluated: true, eligible: false, blockers: ['lease_fresh', 'process_alive'] },
+          outcome: 'refused_existing_owner',
+        },
+      },
+    };
     const gateway = createSiteAgentLaunchGateway({
       overview: overview('stopped'),
       readLaunchRecords: async () => ({ records: [launchRecord], siteCatalog: [] }),
@@ -384,6 +428,7 @@ describe('site-agent launch gateway', () => {
           'projection failed',
           'Inspect the launch artifact and retry.',
           'D:/runtime/workspace-launch-result.json',
+          diagnosticCause,
         );
       },
       diagnostics,
@@ -395,13 +440,35 @@ describe('site-agent launch gateway', () => {
     expect(result).toMatchObject({
       status: 'failed',
       reason: 'workspace_launch_exception',
-      failure: { phase: 'workspace_launch', diagnostic_ref: expect.any(String) },
+      failure: {
+        phase: 'workspace_launch',
+        diagnostic_ref: expect.any(String),
+        diagnostic_summary: {
+          reason_code: 'session_authority_already_active',
+          conflicting_session: {
+            session_id: 'carrier-existing',
+            pid: 39164,
+            process_status: 'alive',
+            lease_status: 'fresh',
+            reclaim_blockers: ['lease_fresh', 'process_alive'],
+          },
+        },
+      },
     });
     const artifactPath = result.failure?.diagnostic_ref;
     if (!artifactPath) throw new Error('expected persisted launch failure artifact');
     const artifact = JSON.parse(await readFile(artifactPath, 'utf8')) as Record<string, unknown>;
     expect(artifact).toMatchObject({
       context: { workspace_result_path: 'D:/runtime/workspace-launch-result.json' },
+      diagnostic_summary: {
+        source_result_ref: 'D:/runtime/agent-start-result.json',
+        conflicting_session: { session_id: 'carrier-existing' },
+      },
+      cause: {
+        schema: 'narada.workspace_launch.terminal_failure.v1',
+        reason_code: 'session_authority_already_active',
+        authority_refusal: { session_id: 'carrier-existing' },
+      },
     });
   });
 });

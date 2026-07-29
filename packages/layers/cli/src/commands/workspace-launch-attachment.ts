@@ -1,6 +1,11 @@
 import { readFile } from 'node:fs/promises';
 import { discoverNarsSessions, type NarsSessionObservation } from '@narada2/nars-session-core/session-index';
-import type { WorkspaceLaunchAgentPlan, WorkspaceLaunchAttachmentEvidence } from './workspace-launch-types.js';
+import type {
+  WorkspaceLaunchAgentPlan,
+  WorkspaceLaunchAttachmentEvidence,
+  WorkspaceLaunchAuthorityDecisionEvidence,
+  WorkspaceLaunchTerminalFailure,
+} from './workspace-launch-types.js';
 
 // Runtime dependency and MCP startup is part of the attachment boundary: the
 // runtime can already be launched and serving its health/event listeners while
@@ -22,7 +27,7 @@ export class WorkspaceLaunchAttachmentError extends Error {
 }
 
 async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<{
-  reason: string;
+  failure: WorkspaceLaunchTerminalFailure;
   terminal: boolean;
 } | null> {
   const bindingPath = plan.operator_projection_launch_binding?.path;
@@ -47,14 +52,41 @@ async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<{
   }
 
   const runtimeStderr = result ? await readRuntimeStderr(result) : null;
-  if (runtimeStderr) return { reason: `runtime_start_failed:${runtimeStderr}`, terminal: true };
+  if (runtimeStderr) {
+    return {
+      failure: terminalFailure({
+        reasonCode: 'runtime_start_failed',
+        message: runtimeStderr,
+        result,
+        resultPath,
+      }),
+      terminal: true,
+    };
+  }
 
   if (binding.status === 'waiting_for_agent_start') {
-    return { reason: `agent_start_handoff_pending:${reason}`, terminal: false };
+    return {
+      failure: terminalFailure({
+        reasonCode: 'agent_start_handoff_pending',
+        message: reason,
+        result,
+        resultPath,
+      }),
+      terminal: false,
+    };
   }
   if (binding.status !== 'failed') return null;
-  if (!resultPath) return { reason: `launch_binding_failed:${reason}`, terminal: true };
-  if (!result) return { reason: `launch_binding_failed:${reason}`, terminal: true };
+  if (!resultPath || !result) {
+    return {
+      failure: terminalFailure({
+        reasonCode: 'launch_binding_failed',
+        message: reason,
+        result,
+        resultPath,
+      }),
+      terminal: true,
+    };
+  }
   const resultReason = typeof result.reason_code === 'string' && result.reason_code.trim()
     ? result.reason_code.trim()
     : typeof result.reason === 'string' && result.reason.trim()
@@ -62,7 +94,175 @@ async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<{
       : typeof result.error === 'string' && result.error.trim()
         ? result.error.trim()
         : reason;
-  return { reason: `agent_start_failed:${resultReason}`, terminal: true };
+  return {
+    failure: terminalFailure({
+      reasonCode: resultReason,
+      message: typeof result.reason === 'string' && result.reason.trim() ? result.reason.trim() : resultReason,
+      result,
+      resultPath,
+    }),
+    terminal: true,
+  };
+}
+
+function record(value: unknown): Record<string, unknown> | null {
+  return value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function boundedString(value: unknown, limit = 2_000): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, limit) : null;
+}
+
+function nullableNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function parseAuthorityDecisionEvidence(value: unknown): WorkspaceLaunchAuthorityDecisionEvidence | null {
+  const input = record(value);
+  const owner = record(input?.existing_owner);
+  const observations = record(input?.observations);
+  const process = record(observations?.process);
+  const lease = record(observations?.lease);
+  const heartbeat = record(observations?.heartbeat);
+  const health = record(observations?.health);
+  const reclamation = record(input?.reclamation);
+  if (input?.schema !== 'narada.nars.session_authority_decision_evidence.v1'
+    || !owner || !process || !lease || !heartbeat || !health || !reclamation) return null;
+  const processStatus = process.status;
+  const leaseStatus = lease.status;
+  const evaluatedAt = boundedString(input.evaluated_at, 100);
+  const governingRule = boundedString(input.governing_rule, 200);
+  const healthReason = boundedString(health.reason, 200);
+  const outcome = boundedString(input.outcome, 100);
+  if (!['alive', 'absent', 'not_observed'].includes(String(processStatus))
+    || !['fresh', 'expired', 'unknown'].includes(String(leaseStatus))
+    || health.status !== 'not_consulted'
+    || !evaluatedAt
+    || !governingRule
+    || !healthReason
+    || !outcome
+    || typeof reclamation.evaluated !== 'boolean'
+    || typeof reclamation.eligible !== 'boolean'
+    || !Array.isArray(reclamation.blockers)
+    || !reclamation.blockers.every((entry) => typeof entry === 'string')) return null;
+  return {
+    schema: 'narada.nars.session_authority_decision_evidence.v1',
+    evaluated_at: evaluatedAt,
+    governing_rule: governingRule,
+    existing_owner: {
+      session_id: boundedString(owner.session_id, 200),
+      launch_session_id: boundedString(owner.launch_session_id, 200),
+      authority_epoch: nullableNumber(owner.authority_epoch),
+      state: boundedString(owner.state, 100),
+      runtime_kind: boundedString(owner.runtime_kind, 200),
+      operator_surface_kind: boundedString(owner.operator_surface_kind, 200),
+      pid: nullableNumber(owner.pid),
+      started_at: boundedString(owner.started_at, 100),
+      activated_at: boundedString(owner.activated_at, 100),
+      updated_at: boundedString(owner.updated_at, 100),
+    },
+    observations: {
+      process: {
+        pid: nullableNumber(process.pid),
+        status: processStatus as 'alive' | 'absent' | 'not_observed',
+      },
+      lease: {
+        status: leaseStatus as 'fresh' | 'expired' | 'unknown',
+        expires_at: boundedString(lease.expires_at, 100),
+        remaining_ms: nullableNumber(lease.remaining_ms),
+      },
+      heartbeat: {
+        last_at: boundedString(heartbeat.last_at, 100),
+        age_ms: nullableNumber(heartbeat.age_ms),
+      },
+      health: {
+        status: 'not_consulted',
+        reason: healthReason,
+      },
+    },
+    reclamation: {
+      evaluated: reclamation.evaluated === true,
+      eligible: reclamation.eligible === true,
+      blockers: reclamation.blockers.slice(0, 10).map((entry) => entry.slice(0, 100)),
+    },
+    outcome,
+  };
+}
+
+function terminalFailure({
+  reasonCode,
+  message,
+  result,
+  resultPath,
+}: {
+  reasonCode: string;
+  message: string;
+  result: Record<string, unknown> | null;
+  resultPath: string | null;
+}): WorkspaceLaunchTerminalFailure {
+  const principal = record(result?.principal);
+  const attach = record(result?.attach);
+  const decisionEvidence = parseAuthorityDecisionEvidence(result?.decision_evidence);
+  const authorityRefusal = decisionEvidence || result?.schema === 'narada.nars.session_authority_refusal.v1'
+    ? {
+      principal_key: boundedString(principal?.principal_key, 300),
+      session_id: boundedString(result?.session_id, 200),
+      authority_epoch: nullableNumber(result?.authority_epoch),
+      state: boundedString(result?.state, 100),
+      decision_evidence: decisionEvidence,
+      attach_command: boundedString(attach?.command),
+      web_ui_command: boundedString(attach?.web_ui_command),
+    }
+    : null;
+  return {
+    schema: 'narada.workspace_launch.terminal_failure.v1',
+    source: 'agent_start',
+    source_schema: boundedString(result?.schema, 200),
+    reason_code: boundedString(reasonCode, 200) ?? 'agent_start_failed',
+    message: boundedString(message) ?? 'Agent Start failed.',
+    required_next_step: boundedString(result?.required_next_step),
+    source_result_ref: boundedString(resultPath, 500),
+    authority_refusal: authorityRefusal,
+  };
+}
+
+export function normalizeWorkspaceLaunchTerminalFailure(value: unknown): WorkspaceLaunchTerminalFailure | null {
+  const input = record(value);
+  if (input?.schema !== 'narada.workspace_launch.terminal_failure.v1'
+    || input.source !== 'agent_start') return null;
+  const reasonCode = boundedString(input.reason_code, 200);
+  const message = boundedString(input.message);
+  if (!reasonCode || !message) return null;
+  const authority = record(input.authority_refusal);
+  const decisionEvidence = parseAuthorityDecisionEvidence(authority?.decision_evidence);
+  return {
+    schema: 'narada.workspace_launch.terminal_failure.v1',
+    source: 'agent_start',
+    source_schema: boundedString(input.source_schema, 200),
+    reason_code: reasonCode,
+    message,
+    required_next_step: boundedString(input.required_next_step),
+    source_result_ref: boundedString(input.source_result_ref, 500),
+    authority_refusal: authority
+      ? {
+        principal_key: boundedString(authority.principal_key, 300),
+        session_id: boundedString(authority.session_id, 200),
+        authority_epoch: nullableNumber(authority.authority_epoch),
+        state: boundedString(authority.state, 100),
+        decision_evidence: decisionEvidence,
+        attach_command: boundedString(authority.attach_command),
+        web_ui_command: boundedString(authority.web_ui_command),
+      }
+      : null,
+  };
+}
+
+function terminalFailureReason(failure: WorkspaceLaunchTerminalFailure): string {
+  return ['launch_binding_failed', 'runtime_start_failed', 'agent_start_handoff_pending'].includes(failure.reason_code)
+    ? `${failure.reason_code}:${failure.message}`
+    : `agent_start_failed:${failure.reason_code}`;
 }
 
 async function readRuntimeStderr(result: Record<string, unknown>): Promise<string | null> {
@@ -201,7 +401,10 @@ export async function awaitWorkspaceLaunchSessionAttachments(
           health_endpoint: null,
           health_status: 'unavailable',
           attempts: attempt,
-          reason: launchFailure?.reason ?? discoveryError ?? 'session_not_indexed',
+          reason: launchFailure
+            ? terminalFailureReason(launchFailure.failure)
+            : discoveryError ?? 'session_not_indexed',
+          ...(launchFailure ? { terminal_failure: launchFailure.failure } : {}),
         };
         latest.set(launchSessionId, sessionEvidence);
         if (launchFailure?.terminal) {
@@ -212,7 +415,8 @@ export async function awaitWorkspaceLaunchSessionAttachments(
             launch_session_ids: plans.flatMap((candidatePlan) =>
               candidatePlan.launch_session_id ? [candidatePlan.launch_session_id] : []),
             sessions: [...latest.values()],
-            required_next_step: 'Inspect the failed agent-start artifact and correct the terminal launch refusal before retrying.',
+            required_next_step: launchFailure.failure.required_next_step
+              ?? 'Inspect the failed agent-start artifact and correct the terminal launch refusal before retrying.',
           });
         }
         continue;

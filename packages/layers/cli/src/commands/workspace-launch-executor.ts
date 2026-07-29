@@ -30,6 +30,7 @@ import type {
   WorkspaceLaunchPlanOptions,
   WorkspaceLaunchPlanResult,
   WorkspaceLaunchProcessLaunch,
+  WorkspaceLaunchTerminalFailure,
 } from './workspace-launch-types.js';
 
 type WorkspaceLaunchFailureStage = 'planning' | 'catalog_preflight' | 'runtime_spawn' | 'session_attachment' | 'projection_start' | 'terminal_handoff' | 'result_persistence';
@@ -263,8 +264,14 @@ export async function executeWorkspaceLaunchPlan(
     const rollback = workspaceLaunchRollbackOwnedProcesses([...hiddenLaunches, ...hiddenProjectionLaunches]);
     const failedTransaction = failureTransaction(transaction, rollback);
     const failureDetails = describeWorkspaceLaunchFailure(error, stage, rollback.completed);
+    const cause = error instanceof WorkspaceLaunchAttachmentError
+      ? terminalCauseFromAttachment(error.evidence)
+      : error instanceof WorkspaceLaunchContractError
+        ? error.diagnosticCause
+        : null;
     const failure = createWorkspaceLaunchFailureResult(result, failedTransaction, {
       ...failureDetails,
+      cause,
       artifact_path: options.resultPath ?? null,
       artifact_status: options.resultPath ? 'written' : 'not_requested',
       rollback,
@@ -292,8 +299,18 @@ export async function executeWorkspaceLaunchPlan(
         ? failureDetails.required_next_step
         : 'Inspect the launch artifact and terminate the remaining owned process(es) before retrying.',
       artifactStatus === 'written' ? options.resultPath ?? null : null,
+      cause,
     );
   }
+}
+
+function terminalCauseFromAttachment(
+  attachment: WorkspaceLaunchAttachmentEvidence,
+): WorkspaceLaunchTerminalFailure | null {
+  for (const session of attachment.sessions) {
+    if (session.terminal_failure) return session.terminal_failure;
+  }
+  return null;
 }
 
 function workspaceLaunchExecutionAgents(value: unknown): WorkspaceLaunchAgentPlan[] {

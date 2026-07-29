@@ -6,8 +6,10 @@ import {
   findLegacySessionConflicts,
   buildSessionAuthorityEnvironment,
   createSessionAuthorityRuntimeBinding,
+  isSessionLive,
   normalizeSessionPrincipal,
   openLocalSessionAuthority,
+  SessionAuthorityError,
   SESSION_AUTHORITY_REFUSAL_CODES,
 } from './index.js';
 
@@ -33,6 +35,169 @@ test('atomically admits one session per principal and fences the second', () => 
   first.close();
   second.close();
   rmSync(root, { recursive: true, force: true });
+});
+
+test('authority conflict reports the exact lease, process, heartbeat, and health decision inputs', () => {
+  const root = mkdtempSync(join(process.env.TEMP ?? process.cwd(), 'narada-session-authority-'));
+  const dbPath = join(root, 'authority.sqlite');
+  const authority = openLocalSessionAuthority({ dbPath });
+  const principal = normalizeSessionPrincipal({ siteId: 'sonar', localAgentId: 'resident' });
+  authority.admitSession({
+    principal,
+    sessionId: 'carrier_one',
+    launchSessionId: 'launch_one',
+    pid: 49152,
+    now: new Date('2026-01-01T00:00:00Z'),
+  });
+  assert.throws(
+    () => authority.admitSession({
+      principal,
+      sessionId: 'carrier_two',
+      now: new Date('2026-01-01T00:00:01Z'),
+      processProbe: () => true,
+    }),
+    (error: unknown) => {
+      assert.ok(error instanceof SessionAuthorityError);
+      assert.equal(error.code, SESSION_AUTHORITY_REFUSAL_CODES.STARTING);
+      assert.deepEqual(error.details.decision_evidence, {
+        schema: 'narada.nars.session_authority_decision_evidence.v1',
+        evaluated_at: '2026-01-01T00:00:01.000Z',
+        governing_rule: 'reclaim_when_lease_expired_and_no_live_process_is_observed',
+        existing_owner: {
+          session_id: 'carrier_one',
+          launch_session_id: 'launch_one',
+          authority_epoch: 1,
+          state: 'starting',
+          runtime_kind: 'narada-agent-runtime-server',
+          operator_surface_kind: 'agent-cli',
+          pid: 49152,
+          started_at: '2026-01-01T00:00:00.000Z',
+          activated_at: null,
+          updated_at: '2026-01-01T00:00:00.000Z',
+        },
+        observations: {
+          process: { pid: 49152, status: 'alive' },
+          lease: {
+            status: 'fresh',
+            expires_at: '2026-01-01T00:00:30.000Z',
+            remaining_ms: 29_000,
+          },
+          heartbeat: {
+            last_at: '2026-01-01T00:00:00.000Z',
+            age_ms: 1_000,
+          },
+          health: {
+            status: 'not_consulted',
+            reason: 'runtime_health_is_not_an_authority_admission_input',
+          },
+        },
+        reclamation: {
+          evaluated: true,
+          eligible: false,
+          blockers: ['lease_fresh', 'process_alive'],
+        },
+        outcome: 'refused_existing_owner',
+      });
+      assert.equal('owner_token' in error.details.decision_evidence.existing_owner, false);
+      return true;
+    },
+  );
+  authority.close();
+  rmSync(root, { recursive: true, force: true });
+});
+
+test('authority conflict distinguishes absent, live, and unobserved process evidence', () => {
+  const cases = [
+    {
+      name: 'fresh absent process',
+      pid: 49152,
+      now: '2026-01-01T00:00:01Z',
+      processProbe: () => false,
+      processStatus: 'absent',
+      leaseStatus: 'fresh',
+      blockers: ['lease_fresh'],
+      admitted: false,
+    },
+    {
+      name: 'expired live process',
+      pid: 49152,
+      now: '2026-01-01T00:00:31Z',
+      processProbe: () => true,
+      processStatus: 'alive',
+      leaseStatus: 'expired',
+      blockers: ['process_alive'],
+      admitted: false,
+    },
+    {
+      name: 'unknown process',
+      pid: null,
+      now: '2026-01-01T00:00:01Z',
+      processProbe: () => false,
+      processStatus: 'not_observed',
+      leaseStatus: 'fresh',
+      blockers: ['lease_fresh'],
+      admitted: false,
+    },
+    {
+      name: 'expired absent process',
+      pid: 49152,
+      now: '2026-01-01T00:00:31Z',
+      processProbe: () => false,
+      processStatus: 'absent',
+      leaseStatus: 'expired',
+      blockers: [],
+      admitted: true,
+    },
+    {
+      name: 'expired process not observed',
+      pid: null,
+      now: '2026-01-01T00:00:31Z',
+      processProbe: () => false,
+      processStatus: 'not_observed',
+      leaseStatus: 'expired',
+      blockers: [],
+      admitted: true,
+    },
+  ] as const;
+  for (const scenario of cases) {
+    const root = mkdtempSync(join(process.env.TEMP ?? process.cwd(), 'narada-session-authority-'));
+    const authority = openLocalSessionAuthority({ dbPath: join(root, 'authority.sqlite') });
+    const principal = normalizeSessionPrincipal({ siteId: 'sonar', localAgentId: 'resident' });
+    authority.admitSession({
+      principal,
+      sessionId: 'carrier_one',
+      pid: scenario.pid,
+      now: new Date('2026-01-01T00:00:00Z'),
+    });
+    if (scenario.admitted) {
+      const replacement = authority.admitSession({
+        principal,
+        sessionId: 'carrier_two',
+        now: new Date(scenario.now),
+        processProbe: scenario.processProbe,
+      });
+      assert.equal(replacement.session_id, 'carrier_two', scenario.name);
+    } else {
+      assert.throws(
+        () => authority.admitSession({
+          principal,
+          sessionId: 'carrier_two',
+          now: new Date(scenario.now),
+          processProbe: scenario.processProbe,
+        }),
+        (error: unknown) => {
+          assert.ok(error instanceof SessionAuthorityError);
+          const evidence = error.details.decision_evidence;
+          assert.equal(evidence.observations.process.status, scenario.processStatus, scenario.name);
+          assert.equal(evidence.observations.lease.status, scenario.leaseStatus, scenario.name);
+          assert.deepEqual(evidence.reclamation.blockers, scenario.blockers, scenario.name);
+          return true;
+        },
+      );
+    }
+    authority.close();
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('activates, heartbeats, closes, and rejects a fenced owner', () => {
@@ -81,7 +246,13 @@ test('explicitly replaces an abandoned authority before lease expiry only with a
       replaceAbandoned: true,
       processProbe: () => true,
     }),
-    (error: any) => error?.code === SESSION_AUTHORITY_REFUSAL_CODES.PROCESS_ALIVE,
+    (error: unknown) => {
+      assert.ok(error instanceof SessionAuthorityError);
+      assert.equal(error.code, SESSION_AUTHORITY_REFUSAL_CODES.PROCESS_ALIVE);
+      assert.equal(error.details.decision_evidence.observations.process.status, 'alive');
+      assert.equal(error.details.decision_evidence.reclamation.eligible, false);
+      return true;
+    },
   );
   const replacement = authority.admitSession({
     principal,
@@ -107,6 +278,19 @@ test('legacy live sessions are explicit conflicts', () => {
     ],
   });
   assert.deepEqual(conflicts.map((entry: any) => entry.session_id), ['carrier_old']);
+});
+
+test('explicitly unavailable health overrides heartbeat-only liveness', () => {
+  assert.equal(isSessionLive({
+    display_state: 'starting_or_degraded',
+    heartbeat_fresh: true,
+    health_status: 'unavailable',
+  }), false);
+  assert.equal(isSessionLive({
+    display_state: 'active',
+    heartbeat_fresh: true,
+    health_status: 'healthy',
+  }), true);
 });
 
 test('runtime binding activates only with launcher-issued authority environment', () => {

@@ -13,9 +13,11 @@ import { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSession
 import { NARS_SESSION_EVENT_DEFAULT_VIEW, NARS_SESSION_EVENT_VIEWS, normalizeNarsSessionEventView as normalizeSessionEventView } from '@narada2/nars-session-core/event-log';
 export * from '@narada2/nars-session-core/surface-attachment';
 import {
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_RUNTIME_SERVER_METHOD_LIST,
   NARS_RUNTIME_SERVER_METHODS,
+  buildNarsRuntimeIntelligenceReconfigureCancelFrame,
   buildNarsRuntimeIntelligenceReconfigureFrame,
   isNarsRuntimeServerMethod,
 } from '@narada2/nars-runtime-contract';
@@ -26,6 +28,7 @@ export function normalizeNarsSessionEventView(view: any = NARS_SESSION_EVENT_DEF
   return normalizeSessionEventView(view);
 }
 export {
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_RUNTIME_SERVER_METHOD_LIST,
   NARS_RUNTIME_SERVER_METHODS,
@@ -694,6 +697,10 @@ export function buildAgentWebUiSurfaceAffordancesFrame(options: AnyRecord = {}) 
 
 export function buildAgentWebUiIntelligenceReconfigureFrame(input: AnyRecord = {}, options: AnyRecord = {}): AnyRecord | null {
   return buildNarsRuntimeIntelligenceReconfigureFrame(input, options);
+}
+
+export function buildAgentWebUiIntelligenceReconfigureCancelFrame(input: AnyRecord = {}, options: AnyRecord = {}): AnyRecord | null {
+  return buildNarsRuntimeIntelligenceReconfigureCancelFrame(input, options);
 }
 
 export function buildAgentWebUiAffordanceActionRequestFrame({ surfaceId, surface_id, actionId, action_id, args = {}, clientCorrelationId, client_correlation_id } : AnyRecord = {}, options: AnyRecord = {}) {

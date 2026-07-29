@@ -116,6 +116,20 @@ test('PowerShell lifecycle scripts do not shadow the automatic PID variable', as
   assert.match(stop, /\$overlayPid/);
 });
 
+test('overlay host owns durable error logging without keeping its launcher attached', async () => {
+  const start = await readFile(new URL('./Start-WindowSurfaceOverlay.ps1', import.meta.url), 'utf8');
+  const host = await readFile(new URL('./window-surface-overlay.ps1', import.meta.url), 'utf8');
+  assert.doesNotMatch(start, /-RedirectStandard(?:Output|Error)/);
+  assert.match(host, /host\.stderr\.log/);
+  assert.match(host, /trap \{/);
+});
+
+test('overlay launcher completion follows launcher exit rather than descendant stdio closure', async () => {
+  const source = await readFile(new URL('./index.ts', import.meta.url), 'utf8');
+  assert.match(source, /child\.once\('exit'/);
+  assert.doesNotMatch(source, /child\.once\('close'/);
+});
+
 test('former Rust/AutoHotkey installation assumptions are gone', async () => {
   const source = await readFile(new URL('./Install-WindowSurfaceOverlay.ps1', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /cargo|AutoHotkey|narada-window-surface-overlay\.exe/);

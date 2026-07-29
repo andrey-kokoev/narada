@@ -399,6 +399,36 @@ async function waitForRouter(url: string, fetchFn: typeof fetch, timeoutMs: numb
   throw new Error(`operator_router_start_timeout:${lastStatus}`);
 }
 
+export async function readOperatorRouterRoutesBounded(options: {
+  url: string;
+  fetch_fn?: typeof fetch;
+  timeout_ms?: number;
+}): Promise<OperatorRouterRoutesResponse> {
+  const url = options.url;
+  const fetchFn = options.fetch_fn ?? fetch;
+  const timeoutMs = boundedClientTimeout(options.timeout_ms, 10_000);
+  const startedAt = Date.now();
+  const deadline = Date.now() + timeoutMs;
+  let lastError = 'routes_unavailable';
+  let attempts = 0;
+  while (Date.now() < deadline) {
+    attempts += 1;
+    try {
+      return await readOperatorRouterRoutes({
+        url,
+        fetch_fn: fetchFn,
+        timeout_ms: Math.max(100, Math.min(1_000, deadline - Date.now())),
+      });
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+  throw new Error(
+    `operator_router_routes_unavailable:url=${url}:attempts=${attempts}:elapsed_ms=${Date.now() - startedAt}:last_error=${lastError}`,
+  );
+}
+
 /**
  * Attach to an already-running Operator Router without creating one.
  * Lifecycle commands use this to keep inspection/stop operations read-only
@@ -415,6 +445,7 @@ export async function attachOperatorRouter(options: EnsureOperatorRouterOptions 
   const existing = await probeRouter(url, fetchFn);
   if (existing === 'matching') {
     const resolvedToken = await resolveRegistrationToken(url, routerStateRootCandidates(options, stateRoot), fetchFn);
+    await readOperatorRouterRoutesBounded({ url, fetch_fn: fetchFn, timeout_ms: options.timeout_ms ?? 10_000 });
     return {
       url,
       ownership: 'attached',
@@ -448,7 +479,9 @@ export async function ensureOperatorRouter(options: EnsureOperatorRouterOptions 
     env: { ...process.env, NARADA_OPERATOR_ROUTER_STATE_ROOT: stateRoot },
   });
   child.unref();
-  await waitForRouter(url, fetchFn, options.timeout_ms ?? 10_000);
+  const timeoutMs = options.timeout_ms ?? 10_000;
+  await waitForRouter(url, fetchFn, timeoutMs);
+  await readOperatorRouterRoutesBounded({ url, fetch_fn: fetchFn, timeout_ms: timeoutMs });
   return { url, ownership: 'started', registration_token: await readToken(stateRoot), state_root: stateRoot, child };
 }
 
@@ -471,9 +504,17 @@ async function adminRequest<T>(options: OperatorRouterAdminOptions, path: string
 }
 
 export async function readOperatorRouterRoutes(options: { url: string; fetch_fn?: typeof fetch; timeout_ms?: number }): Promise<OperatorRouterRoutesResponse> {
-  const response = await (options.fetch_fn ?? fetch)(`${options.url.replace(/\/+$/, '')}/routes`, {
-    signal: AbortSignal.timeout(boundedClientTimeout(options.timeout_ms, 3_000)),
-  });
+  let response: Response;
+  try {
+    response = await (options.fetch_fn ?? fetch)(`${options.url.replace(/\/+$/, '')}/routes`, {
+      signal: AbortSignal.timeout(boundedClientTimeout(options.timeout_ms, 3_000)),
+    });
+  } catch (error) {
+    throw new Error(
+      `operator_router_routes_fetch_failed:${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
   const payload: unknown = await response.json().catch(() => null);
   if (!response.ok || !isRecord(payload)
     || payload.schema !== 'narada.operator_router.routes.v1'

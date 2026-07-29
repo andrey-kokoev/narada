@@ -156,6 +156,31 @@ The command wrapper and operator-surface admission must preserve this shape.
 Detailed diagnostics belong in the referenced artifact or structured command
 result, not in the primary operator transcript.
 
+The referenced artifact is not optional diagnostic decoration. When a refusal
+originates in a nested authority boundary, current writers must preserve a
+bounded structured cause with:
+
+- the originating subsystem, schema, stable reason code, and source-result ref;
+- the observations actually used by the decision;
+- the governing decision rule and resulting blockers;
+- the conflicting authority/session identity needed for inspection or attach;
+- the originating required next step.
+
+For session-authority conflicts, decision evidence includes the authority
+state and epoch, process probe posture, lease posture, heartbeat age,
+reclamation eligibility, and an explicit health posture. If runtime health was
+not consulted by authority admission, the evidence must say
+`health.status=not_consulted`; downstream layers must not infer a health result.
+Owner tokens, credentials, unrestricted stderr, and raw environment values are
+never propagated.
+
+Workspace attachment, the workspace failure artifact, Operator Console
+diagnostics, and browser projection must preserve this cause structurally.
+They may derive a shorter display summary, but must not reconstruct authority
+decisions by parsing exception strings. Readers accept legacy `v1` records
+without the additive cause fields; current writers emit them whenever the
+originating refusal supplies them.
+
 ## Compatibility Boundary
 
 Legacy names and schemas remain only where persisted records or unmigrated

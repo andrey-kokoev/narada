@@ -8,7 +8,7 @@ import {
   DEFAULT_OPERATOR_ROUTER_PORT,
   ensureOperatorRouter,
   inspectOperatorRouterRouteSet,
-  readOperatorRouterRoutes,
+  readOperatorRouterRoutesBounded,
   reconstructOperatorRouteSet,
   registerOperatorRoute,
   registerOperatorRouteSet,
@@ -411,7 +411,7 @@ export async function agentWebUiAttachCommand(
     }] : []),
   ];
   if (router) {
-    const existingRoutes = await readOperatorRouterRoutes({ url: router.url });
+    const existingRoutes = await readOperatorRouterRoutesBounded({ url: router.url, timeout_ms: 10_000 });
     await projectionDebug(`router_inventory:${existingRoutes.routes.length}`);
     const routePosture = inspectOperatorRouterRouteSet(existingRoutes.routes, requiredRouteIds, expectedRouteIdentities);
     if (routePosture.posture === 'healthy') {

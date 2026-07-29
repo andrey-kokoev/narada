@@ -178,6 +178,74 @@ test('site agents adapter refuses malformed launch diagnostics', async () => {
   await assert.rejects(() => adapter.launch('sonar', 'sonar.resident'), (error: unknown) => error instanceof SiteAgentsApiError && error.code === 'invalid_launch');
 });
 
+test('site agents adapter preserves Web UI attachment diagnostics', async () => {
+  const adapter = createSiteAgentsAdapter({
+    overview: async () => overview,
+    launch: async () => ({
+      schema: 'narada.operator_console.agent_launch.v1',
+      status: 'failed',
+      site_id: 'sonar',
+      agent_id: 'sonar.resident',
+      session_id: 'session-1',
+      reason: 'agent_web_ui_attach_exception',
+      request_id: 'request-web-ui-1',
+      failure: {
+        phase: 'web_ui_attach',
+        code: 'agent_web_ui_attach_exception',
+        message: 'fetch failed',
+        diagnostic_ref: 'D:/runtime/web-ui-failure.json',
+      },
+    }),
+  });
+  const result = await adapter.launch('sonar', 'sonar.resident');
+  assert.equal(result.request_id, 'request-web-ui-1');
+  assert.equal(result.failure?.diagnostic_ref, 'D:/runtime/web-ui-failure.json');
+});
+
+test('site agents adapter preserves bounded session-authority decision diagnostics', async () => {
+  const diagnosticSummary = {
+    source: 'agent_start' as const,
+    source_schema: 'narada.nars.session_authority_refusal.v1',
+    reason_code: 'session_authority_already_active',
+    required_next_step: 'Attach to the existing session or reconcile it explicitly.',
+    source_result_ref: 'D:/runtime/agent-start-result.json',
+    conflicting_session: {
+      session_id: 'carrier-existing',
+      state: 'active',
+      authority_epoch: 3,
+      pid: 39164,
+      process_status: 'alive' as const,
+      lease_status: 'fresh' as const,
+      lease_expires_at: '2026-07-29T16:24:18.000Z',
+      heartbeat_age_ms: 1_000,
+      governing_rule: 'reclaim_when_lease_expired_and_no_live_process_is_observed',
+      reclaim_eligible: false,
+      reclaim_blockers: ['lease_fresh', 'process_alive'],
+    },
+  };
+  const adapter = createSiteAgentsAdapter({
+    overview: async () => overview,
+    launch: async () => ({
+      schema: 'narada.operator_console.agent_launch.v1',
+      status: 'failed',
+      site_id: 'sonar',
+      agent_id: 'sonar.resident',
+      session_id: null,
+      reason: 'workspace_launch_exception',
+      request_id: 'request-authority-1',
+      failure: {
+        phase: 'workspace_launch',
+        code: 'workspace_launch_attachment_not_ready',
+        message: 'An active session already owns this principal.',
+        diagnostic_ref: 'D:/runtime/failure.json',
+        diagnostic_summary: diagnosticSummary,
+      },
+    }),
+  });
+  const result = await adapter.launch('sonar', 'sonar.resident');
+  assert.deepEqual(result.failure?.diagnostic_summary, diagnosticSummary);
+});
+
 test('site agents adapter refuses semantically invalid overview payloads', async () => {
   const violating = {
     ...overview,
