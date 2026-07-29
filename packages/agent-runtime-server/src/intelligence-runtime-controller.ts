@@ -173,7 +173,7 @@ export function createNarsIntelligenceRuntimeController({
       latest_outcome: publicOutcome(latest?.outcome),
       latest_attempt_id: latest?.attempt?.id ?? null,
       latest_replayed: latest?.replayed ?? null,
-      reconfiguration: lock?.snapshot() ?? lastReconfiguration?.snapshot() ?? null,
+      reconfiguration: lock?.machine?.snapshot() ?? lastReconfiguration?.snapshot() ?? null,
       intelligence_kernel_kind: projectedKernelHealth?.kernel_kind ?? runtimeContext.intelligenceKernelKind ?? null,
       kernel: projectedKernelHealth,
       kernel_start_evidence: kernelStartEvidence,
@@ -319,10 +319,17 @@ export function createNarsIntelligenceRuntimeController({
       lastReconfiguration = machine;
       return intelligenceControllerResult(machine, { target: null });
     }
-    lock = machine;
+    const operation: any = {
+      machine,
+      abortController: new AbortController(),
+      cancelRequested: false,
+      target: null,
+    };
+    lock = operation;
     try {
       machine.transition('validating', { previous_selection: selection });
       const target: any = targetFromParams(params);
+      operation.target = target;
       if (options.isBusy?.() ?? isBusy()) {
         machine.transition('refused', { reason: 'runtime_not_at_clean_turn_boundary', target });
         return intelligenceControllerResult(machine, { target });
@@ -331,11 +338,23 @@ export function createNarsIntelligenceRuntimeController({
       // but pass it to the kernel switch so a Pi host consumes the exact NARS
       // provider/model binding that was validated rather than re-resolving
       // from a client-facing model reference.
-      const admittedPlan: any = await validateSelection(target);
+      const admittedPlan: any = await validateSelection(target, {
+        requestId,
+        abortSignal: operation.abortController.signal,
+      });
+      if (operation.cancelRequested || operation.abortController.signal.aborted || machine.state === 'cancelled') {
+        return intelligenceControllerResult(machine, { target });
+      }
       machine.transition('admitted', { target });
+      if (operation.cancelRequested || operation.abortController.signal.aborted || machine.state === 'cancelled') {
+        return intelligenceControllerResult(machine, { target });
+      }
       machine.transition('switching', { target });
       if (typeof reconfigureKernel === 'function') {
-        const kernelResult: any = await reconfigureKernel(target, admittedPlan);
+        const kernelResult: any = await reconfigureKernel(target, admittedPlan, {
+          requestId,
+          abortSignal: operation.abortController.signal,
+        });
         if (kernelResult?.accepted === false) {
           machine.transition('failed', { reason: kernelResult.reason ?? 'kernel_reconfiguration_refused', kernel: kernelResult });
           return intelligenceControllerResult(machine, { target });
@@ -346,6 +365,9 @@ export function createNarsIntelligenceRuntimeController({
       return intelligenceControllerResult(machine, { active: target });
     } catch (error) {
       const message: any = error instanceof Error ? error.message : String(error);
+      if (machine.state === 'cancelled' || operation.cancelRequested) {
+        return intelligenceControllerResult(machine, { target: operation.target });
+      }
       if (machine.state === 'validating' || machine.state === 'admitted') {
         machine.transition('refused', { reason: 'target_not_admitted', error: message });
       } else if (machine.state === 'switching') {
@@ -355,12 +377,62 @@ export function createNarsIntelligenceRuntimeController({
       }
       return intelligenceControllerResult(machine, { error: message });
     } finally {
-      lock = null;
+      if (lock === operation) lock = null;
       lastReconfiguration = machine;
     }
   }
 
-  return Object.freeze({ callIntelligence, primePreflight, snapshot, reconfigure, reconfigureExecutionPolicy, close });
+  async function cancelReconfiguration(params: any = {}) {
+    const targetRequestId: any = nonEmpty(params?.target_request_id)
+      ?? nonEmpty(params?.targetRequestId);
+    if (!targetRequestId) {
+      return {
+        accepted: false,
+        terminal_state: 'refused',
+        reason: 'target_request_id_required',
+        target_request_id: null,
+      };
+    }
+    const operation: any = lock?.machine?.requestId === targetRequestId ? lock : null;
+    if (!operation) {
+      const terminal: any = lastReconfiguration?.requestId === targetRequestId
+        ? lastReconfiguration.snapshot()
+        : null;
+      return {
+        accepted: false,
+        terminal_state: 'refused',
+        reason: terminal ? 'reconfiguration_already_terminal' : 'reconfiguration_request_not_found',
+        target_request_id: targetRequestId,
+        reconfiguration: terminal,
+      };
+    }
+    const state: any = operation.machine.state;
+    if (!['requested', 'validating', 'admitted'].includes(state)) {
+      return {
+        accepted: false,
+        terminal_state: 'refused',
+        reason: state === 'switching' ? 'reconfiguration_switch_started' : 'reconfiguration_already_terminal',
+        target_request_id: targetRequestId,
+        reconfiguration: operation.machine.snapshot(),
+      };
+    }
+    operation.cancelRequested = true;
+    operation.abortController.abort('operator_requested');
+    operation.machine.transition('cancelled', {
+      reason: 'operator_requested',
+      target: operation.target,
+    });
+    return {
+      accepted: true,
+      terminal_state: 'cancelled',
+      reason: 'reconfiguration_cancelled',
+      target_request_id: targetRequestId,
+      target: operation.target,
+      reconfiguration: operation.machine.snapshot(),
+    };
+  }
+
+  return Object.freeze({ callIntelligence, primePreflight, snapshot, reconfigure, cancelReconfiguration, reconfigureExecutionPolicy, close });
 }
 
 function intelligenceControllerResult(machine: any, extras: any = {}) {

@@ -11,22 +11,22 @@ export function useSessionActions(
   function send(frame: SessionProtocolFrame | null): boolean {
     const admittedFrame = toSessionProtocolFrame(frame);
     if (!admittedFrame) {
-      retain({ event: 'web_ui_input_not_sent', message: 'control frame was not admitted by the client contract', reason_code: 'invalid_session_control' });
+      retain({ event: 'web_ui_input_not_sent', request_id: frame?.id ?? null, method: frame?.method ?? null, message: 'control frame was not admitted by the client contract', reason_code: 'invalid_session_control' });
       return false;
     }
     const method = admittedFrame.method;
     if (supportsProtocolMethod && !supportsProtocolMethod(method)) {
-      retain({ event: 'web_ui_input_not_sent', message: 'control is not admitted by the attached runtime', reason_code: 'unsupported_session_control', method });
+      retain({ event: 'web_ui_input_not_sent', request_id: admittedFrame.id, method, message: 'control is not admitted by the attached runtime', reason_code: 'unsupported_session_control' });
       return false;
     }
     let sent = false;
     try {
       sent = transport.value?.sendFrame(admittedFrame) ?? false;
     } catch (error) {
-      retain({ event: 'web_ui_input_not_sent', message: error instanceof Error ? error.message : String(error), reason_code: 'transport_rejected_session_action', method });
+      retain({ event: 'web_ui_input_not_sent', request_id: admittedFrame.id, method, message: error instanceof Error ? error.message : String(error), reason_code: 'transport_rejected_session_action' });
       return false;
     }
-    if (!sent) retain({ event: 'web_ui_input_not_sent', message: 'event stream is not open', method });
+    if (!sent) retain({ event: 'web_ui_input_not_sent', request_id: admittedFrame.id, method, message: 'event stream is not open' });
     return sent;
   }
 

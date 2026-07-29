@@ -54,6 +54,7 @@ import type { TaskLifecycleSummary } from '../composables/useTaskLifecycleSummar
 import type { ProjectedTranscriptRow } from '../lib/eventProjection';
 import type { ProjectionViewDraft, ProjectionViewFacetOption } from '../lib/projectionViews';
 import type { IntelligenceSelectionDraft } from '../lib/intelligenceSelection';
+import type { IntelligenceReconfigurationUiState } from '../composables/useIntelligenceReconfiguration';
 
 const props = defineProps<{
   eventEndpoint: string | null;
@@ -68,6 +69,7 @@ const props = defineProps<{
   streamLive: boolean;
   healthText: string;
   intelligence: HealthIntelligenceSummary;
+  intelligenceReconfiguration: IntelligenceReconfigurationUiState;
   summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
   viewId: string;
@@ -139,6 +141,7 @@ const emit = defineEmits<{
   'request-task-lifecycle-summary': [];
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
   'request-intelligence-reconfiguration': [change: IntelligenceSelectionDraft];
+  'cancel-intelligence-reconfiguration': [];
   'confirm-affordance-action': [item: AffordanceConfirmationItem];
   'cancel-affordance-action': [item: AffordanceConfirmationItem];
   'intent-selected': [intent: string];
@@ -490,6 +493,7 @@ function resetHeaderItems() {
         :stream-text="streamText"
         :health-text="healthText"
         :intelligence="intelligence"
+        :intelligence-reconfiguration="intelligenceReconfiguration"
         :session-identity="sessionIdentity"
         :summarized-state-sample-count="summarizedStateSampleCount"
         :verbosity="verbosity"
@@ -507,6 +511,7 @@ function resetHeaderItems() {
         @delete-view="emit('delete-view', $event)"
         @publish-cloudflare="emit('publish-cloudflare', $event)"
         @request-intelligence-reconfiguration="emit('request-intelligence-reconfiguration', $event)"
+        @cancel-intelligence-reconfiguration="emit('cancel-intelligence-reconfiguration')"
         @collapse="statusRowOpen = false"
       />
     </section>

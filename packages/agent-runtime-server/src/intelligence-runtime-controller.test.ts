@@ -246,6 +246,41 @@ test('controller passes the privately admitted plan to the kernel switch', async
   assert.equal(switched.admittedPlan, PLAN);
 });
 
+test('controller cancels a pending validation without entering the switching state', async () => {
+  let releaseValidation: any;
+  let validationStarted: any;
+  const validationStartedPromise = new Promise<void>((resolve) => { validationStarted = resolve; });
+  const validationPromise = new Promise<any>((resolve) => { releaseValidation = resolve; });
+  let kernelCalls = 0;
+  const controller: any = createNarsIntelligenceRuntimeController({
+    runtimeContext: { session: 'session-cancel', intelligence: { principal: 'principal:cancel' } },
+    gateway: { async invoke() { return planResult(); } },
+    validateSelection: async () => {
+      validationStarted();
+      return validationPromise;
+    },
+    reconfigureKernel: async () => {
+      kernelCalls += 1;
+      return { accepted: true };
+    },
+  });
+  const reconfigurePromise = controller.reconfigure({
+    request_id: 'cancel-target-1',
+    requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:test' },
+    requested_model: { kind: 'model', id: 'model:next' },
+    requested_options: { thinking: 'high' },
+  });
+  await validationStartedPromise;
+  const cancelled: any = await controller.cancelReconfiguration({ target_request_id: 'cancel-target-1' });
+  assert.equal(cancelled.accepted, true);
+  assert.equal(cancelled.terminal_state, 'cancelled');
+  releaseValidation(PLAN);
+  const result: any = await reconfigurePromise;
+  assert.equal(result.terminal_state, 'cancelled');
+  assert.equal(kernelCalls, 0);
+  assert.equal(controller.snapshot().reconfiguration.reconfiguration_state, 'cancelled');
+});
+
 test('a durable replay without retained payload is not redispatched and is explicit metadata-only', async () => {
   const fixture: any = createFixture({ result: planResult({ adapterOutcome: null, replayed: true }) });
   const response: any = await fixture.controller.callIntelligence([], [], { inputEventId: 'input-replay' });

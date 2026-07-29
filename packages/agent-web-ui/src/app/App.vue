@@ -7,6 +7,7 @@ import { useCloudflareProjection, type ProjectionControlConfig } from './composa
 import { useDelegationSummary } from './composables/useDelegationSummary';
 import { useGitSummary } from './composables/useGitSummary';
 import { useInboxSummary } from './composables/useInboxSummary';
+import { useIntelligenceReconfiguration } from './composables/useIntelligenceReconfiguration';
 import { useMailboxSummary } from './composables/useMailboxSummary';
 import { useMcpInventory } from './composables/useMcpInventory';
 import { useSessionState } from './composables/useSessionState';
@@ -25,7 +26,7 @@ import { useSurfaceAffordances } from './composables/useSurfaceAffordances';
 import { useSurfaceFeedbackSummary } from './composables/useSurfaceFeedbackSummary';
 import { useTaskLifecycleSummary } from './composables/useTaskLifecycleSummary';
 import { ArtifactRenderingConfigKey } from './lib/artifactConfig';
-import { buildAffordanceActionCancelFrame, buildAffordanceActionConfirmFrame, buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildIntelligenceReconfigureFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
+import { buildAffordanceActionCancelFrame, buildAffordanceActionConfirmFrame, buildAffordanceActionRequestFrame, buildArtifactsSummaryRequestFrame, buildDelegationSummaryRequestFrame, buildGitSummaryRequestFrame, buildInboxSummaryRequestFrame, buildMailboxSummaryRequestFrame, buildSchedulerSummaryRequestFrame, buildSopSummaryRequestFrame, buildSurfaceAffordancesRequestFrame, buildSurfaceFeedbackSummaryRequestFrame, buildTaskLifecycleSummaryRequestFrame } from './lib/narsFrames';
 import type { IntelligenceSelectionDraft } from './lib/intelligenceSelection';
 
 interface AgentWebUiConfig {
@@ -45,15 +46,7 @@ interface AgentWebUiConfig {
 }
 
 function requestIntelligenceReconfiguration(change: IntelligenceSelectionDraft) {
-  const frame = buildIntelligenceReconfigureFrame({
-    inferenceProvider: change.inferenceProvider,
-    model: change.modelRef ?? change.model,
-    requestedOptions: change.thinking ? { thinking: change.thinking } : {},
-  });
-  if (frame) {
-    sessionActions.send(frame);
-    void session.health.refresh();
-  }
+  intelligenceReconfiguration.request(change);
 }
 
 const props = defineProps<{ config: AgentWebUiConfig }>();
@@ -74,6 +67,13 @@ const session = useSessionState(projection.verbosity, {
   maxReplay: props.config.maxReplay,
 }, projection.activeView);
 const sessionActions = useSessionActions(session.connection.connection, session.retain, supportsProtocolMethod);
+const intelligenceReconfiguration = useIntelligenceReconfiguration({
+  events: session.events,
+  streamLive: session.streamLive,
+  send: sessionActions.send,
+  refreshHealth: () => session.health.refresh(),
+  supportsProtocolMethod,
+});
 const affordanceConfirmations = useAffordanceConfirmations(session.events);
 const mcpInventory = useMcpInventory(session.events, session.health.body);
 const artifactsSummary = useArtifactsSummary(session.events);
@@ -351,6 +351,10 @@ function requestSurfaceFeedbackSummary() {
   sessionActions.send(buildSurfaceFeedbackSummaryRequestFrame());
 }
 
+function cancelIntelligenceReconfiguration() {
+  intelligenceReconfiguration.cancel();
+}
+
 function requestAffordanceAction(request: { surfaceId: string; actionId: string; args: Record<string, unknown> }) {
   const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
   if (frame) {
@@ -387,6 +391,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :stream-live="session.streamLive.value"
     :health-text="session.health.text.value"
     :intelligence="session.health.intelligence.value"
+    :intelligence-reconfiguration="intelligenceReconfiguration.state.value"
     :summarized-state-sample-count="session.summarizedStateSampleCount.value"
     :verbosity="projection.verbosity.value"
     :view-id="projection.viewId.value"
@@ -454,6 +459,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     @request-surface-feedback-summary="requestSurfaceFeedbackSummary"
     @request-affordance-action="requestAffordanceAction"
     @request-intelligence-reconfiguration="requestIntelligenceReconfiguration"
+    @cancel-intelligence-reconfiguration="cancelIntelligenceReconfiguration"
     @load-earlier="session.loadEarlier"
     @confirm-affordance-action="confirmAffordanceAction"
     @cancel-affordance-action="cancelAffordanceAction"

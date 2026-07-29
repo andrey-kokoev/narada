@@ -8,22 +8,25 @@ export const NARS_INTELLIGENCE_RUNTIME_RECONFIGURATION_STATES: any = Object.free
   'admitted',
   'switching',
   'active',
+  'cancelled',
   'refused',
   'failed',
 ]);
 
 export const NARS_INTELLIGENCE_RUNTIME_RECONFIGURATION_TERMINAL_STATES: any = Object.freeze([
   'active',
+  'cancelled',
   'refused',
   'failed',
 ]);
 
 export const NARS_INTELLIGENCE_RUNTIME_RECONFIGURATION_TRANSITIONS: any = Object.freeze({
-  requested: Object.freeze(['validating', 'refused', 'failed']),
-  validating: Object.freeze(['admitted', 'refused', 'failed']),
-  admitted: Object.freeze(['switching', 'refused', 'failed']),
+  requested: Object.freeze(['validating', 'cancelled', 'refused', 'failed']),
+  validating: Object.freeze(['admitted', 'cancelled', 'refused', 'failed']),
+  admitted: Object.freeze(['switching', 'cancelled', 'refused', 'failed']),
   switching: Object.freeze(['active', 'failed']),
   active: Object.freeze([]),
+  cancelled: Object.freeze([]),
   refused: Object.freeze([]),
   failed: Object.freeze([]),
 });
@@ -81,4 +84,3 @@ export function createNarsIntelligenceRuntimeReconfigurationStateMachine({
     history: machine.history,
   });
 }
-

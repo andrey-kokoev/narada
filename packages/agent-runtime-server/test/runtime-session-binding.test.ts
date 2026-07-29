@@ -409,6 +409,36 @@ test('session-core runtime classifies a supported reconfiguration failure distin
   assert.equal(events.find((event: any) => event.event === 'session_control_rejected' && event.request_id === 'reconfigure-failed')?.code, 'runtime_reconfiguration_failed');
 });
 
+test('session-core runtime routes targeted intelligence reconfiguration cancellation as a local runtime control', async () => {
+  const root: any = mkdtempSync(join(tmpdir(), 'session-core-runtime-reconfiguration-cancel-'));
+  const input: any = new PassThrough();
+  const output: any = new PassThrough();
+  let rendered: any = '';
+  output.on('data', (chunk: any) => { rendered += String(chunk); });
+  const service: any = createSessionCoreRuntimeService({
+    runtimeContext: {
+      identity: 'agent-1', session: 'session-reconfiguration-cancel', sessionPath: join(root, 'session.json'), eventsPath: join(root, 'events.jsonl'), siteRoot: root,
+    },
+    intelligenceRuntime: {
+      cancelReconfiguration: async (params: any) => ({
+        accepted: true,
+        terminal_state: 'cancelled',
+        reason: 'reconfiguration_cancelled',
+        target_request_id: params.target_request_id,
+      }),
+    },
+    invokeIntelligenceFn: async () => ({ content: 'unused' }),
+  });
+  const run: any = service.run({ input, output });
+  input.end(`${JSON.stringify({ id: 'cancel-1', method: 'runtime.intelligence.reconfigure.cancel', params: { target_request_id: 'reconfigure-1' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
+  await run;
+  const events: any = rendered.trim().split(/\r?\n/).map((line: any) => JSON.parse(line));
+  const cancelEvent: any = events.find((event: any) => event.event === 'runtime_intelligence_reconfiguration_cancel' && event.request_id === 'cancel-1');
+  assert.equal(cancelEvent?.accepted, true);
+  assert.equal(cancelEvent?.target_request_id, 'reconfigure-1');
+  assert.equal(events.some((event: any) => event.event === 'session_control_rejected' && event.request_id === 'cancel-1'), false);
+});
+
 test('JSONL runtime applies an execution policy at a clean turn boundary and journals the snapshot', async () => {
   const root: any = mkdtempSync(join(tmpdir(), 'session-core-runtime-execution-policy-'));
   const input: any = new PassThrough();

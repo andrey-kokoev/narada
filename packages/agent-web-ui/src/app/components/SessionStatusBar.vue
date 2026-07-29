@@ -11,6 +11,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@narad
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { useCloudflareProjection } from '../composables/useCloudflareProjection';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
+import type { IntelligenceReconfigurationUiState } from '../composables/useIntelligenceReconfiguration';
 import type { ProjectionVerbosity } from '../composables/useProjectionVerbosity';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
 import type { CustomProjectionView } from '../composables/useProjectionVerbosity';
@@ -31,6 +32,7 @@ const props = defineProps<{
   streamText: string;
   healthText: string;
   intelligence: HealthIntelligenceSummary;
+  intelligenceReconfiguration: IntelligenceReconfigurationUiState;
   sessionIdentity: SessionIdentitySummary;
   summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
@@ -50,6 +52,7 @@ const emit = defineEmits<{
   'delete-view': [id: string];
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   'request-intelligence-reconfiguration': [change: IntelligenceSelectionDraft];
+  'cancel-intelligence-reconfiguration': [];
   collapse: [];
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
@@ -58,7 +61,6 @@ const draftProvider = ref<string | null>(props.intelligence.provider);
 const draftModel = ref<string | null>(props.intelligence.model);
 const draftModelRef = ref<string | null>(props.intelligence.modelRef ?? null);
 const draftThinking = ref<string | null>(props.intelligence.thinking);
-const requestPending = ref(false);
 const STATUS_BOX_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.statusBoxes;
 const DEFAULT_STATUS_BOX_IDS = ['events', 'health', 'intelligence', 'authority', 'view', 'cloudflare'] as const;
 type StatusBoxId = typeof DEFAULT_STATUS_BOX_IDS[number];
@@ -143,6 +145,7 @@ const thinkingChoices = computed(() => thinkingChoicesFor(props.intelligence, dr
 const providerInputValue = computed(() => draftProvider.value ?? '');
 const modelInputValue = computed(() => draftModel.value ?? '');
 const thinkingInputValue = computed(() => draftThinking.value ?? '');
+const hasQualifiedCatalog = computed(() => props.intelligence.selectionChoices.length > 0);
 const activeSelection = computed<IntelligenceSelectionDraft>(() => ({
   inferenceProvider: props.intelligence.provider,
   model: props.intelligence.model,
@@ -155,10 +158,47 @@ const draftSelection = computed<IntelligenceSelectionDraft>(() => ({
   modelRef: draftModelRef.value,
   thinking: draftThinking.value,
 }));
+const synchronizedSelection = ref<IntelligenceSelectionDraft>({ ...activeSelection.value });
 const draftChanged = computed(() => !sameIntelligenceSelection(activeSelection.value, draftSelection.value));
+const remoteOperationPending = computed(() => ['dispatching', 'accepted', 'switching', 'cancelling', 'unconfirmed'].includes(props.intelligenceReconfiguration.phase));
+const canEditIntelligence = computed(() => props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)
+  && hasQualifiedCatalog.value);
 const canRequestChange = computed(() => props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)
   && draftChanged.value
-  && isCompleteIntelligenceSelection(props.intelligence, draftSelection.value));
+  && isCompleteIntelligenceSelection(props.intelligence, draftSelection.value)
+  && !remoteOperationPending.value);
+const canCancelRemote = computed(() => props.supportsProtocolMethod('runtime.intelligence.reconfigure.cancel')
+  && ['dispatching', 'accepted'].includes(props.intelligenceReconfiguration.phase));
+const showChangeActions = computed(() => draftChanged.value || remoteOperationPending.value);
+const cancelLabel = computed(() => canCancelRemote.value
+  ? 'Cancel request'
+  : remoteOperationPending.value
+    ? 'Cancel unavailable'
+    : 'Discard draft');
+const intelligenceCapabilityMessage = computed(() => {
+  if (!props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)) {
+    return 'Runtime intelligence reconfiguration is unavailable on this attached surface.';
+  }
+  if (!props.intelligence.selectionChoices.length) {
+    return 'Qualified intelligence capabilities are unavailable; current selection is read-only.';
+  }
+  return null;
+});
+const operationMessage = computed(() => {
+  if (props.intelligenceReconfiguration.message) return props.intelligenceReconfiguration.message;
+  switch (props.intelligenceReconfiguration.phase) {
+    case 'dispatching': return 'sending change request';
+    case 'accepted': return 'change request accepted';
+    case 'switching': return 'switching intelligence';
+    case 'cancelling': return 'cancelling change request';
+    case 'applied': return 'change applied; waiting for health convergence';
+    case 'cancelled': return 'change request cancelled';
+    case 'refused': return 'change request refused';
+    case 'failed': return 'change request failed';
+    case 'unconfirmed': return 'runtime result unconfirmed';
+    default: return null;
+  }
+});
 const modelSelectStyle = computed(() => ({
   inlineSize: selectInlineSize(modelChoices.value, modelInputValue.value),
 }));
@@ -179,10 +219,13 @@ function selectInlineSizeValue(choices: readonly string[], currentValue: string)
 }
 
 watch(
-  () => [props.intelligence.provider, props.intelligence.model, props.intelligence.modelRef, props.intelligence.thinking] as const,
+  () => [props.intelligence.provider, props.intelligence.model, props.intelligence.modelRef, props.intelligence.thinking, props.intelligenceReconfiguration.phase] as const,
   () => {
-    if (sameIntelligenceSelection(activeSelection.value, draftSelection.value)) requestPending.value = false;
-    if (!draftChanged.value || !requestPending.value) {
+    const locallyEdited = !sameIntelligenceSelection(synchronizedSelection.value, draftSelection.value);
+    synchronizedSelection.value = { ...activeSelection.value };
+    const appliedAndConverged = props.intelligenceReconfiguration.phase === 'applied'
+      && sameIntelligenceSelection(activeSelection.value, draftSelection.value);
+    if (!remoteOperationPending.value && (!locallyEdited || props.intelligenceReconfiguration.phase === 'cancelled' || appliedAndConverged)) {
       draftProvider.value = activeSelection.value.inferenceProvider;
       draftModel.value = activeSelection.value.model;
       draftModelRef.value = activeSelection.value.modelRef ?? null;
@@ -203,7 +246,6 @@ function requestProviderChange(event: Event) {
   draftModel.value = null;
   draftModelRef.value = null;
   draftThinking.value = null;
-  requestPending.value = false;
 }
 
 function requestModelChange(event: Event) {
@@ -212,28 +254,31 @@ function requestModelChange(event: Event) {
   draftModel.value = model;
   draftModelRef.value = modelChoiceRecords.value.find((choice) => choice.model === model)?.modelRef ?? null;
   draftThinking.value = null;
-  requestPending.value = false;
 }
 
 function requestThinkingChange(event: Event) {
   const thinking = (event.target as HTMLSelectElement | null)?.value.trim() ?? '';
   if (!thinking || thinking === draftThinking.value) return;
   draftThinking.value = thinking;
-  requestPending.value = false;
 }
 
 function requestDraftChange() {
   if (!canRequestChange.value) return;
-  requestPending.value = true;
   requestIntelligenceChange(draftSelection.value);
 }
 
 function cancelDraftChange() {
+  if (canCancelRemote.value) {
+    emit('cancel-intelligence-reconfiguration');
+    return;
+  }
+  if (remoteOperationPending.value) return;
+  if (!draftChanged.value) return;
   draftProvider.value = activeSelection.value.inferenceProvider;
   draftModel.value = activeSelection.value.model;
   draftModelRef.value = activeSelection.value.modelRef ?? null;
   draftThinking.value = activeSelection.value.thinking;
-  requestPending.value = false;
+  synchronizedSelection.value = { ...activeSelection.value };
 }
 
 </script>
@@ -267,25 +312,34 @@ function cancelDraftChange() {
           <div class="intelligence-status-box">
             <span class="label">Intelligence</span>
             <div class="intelligence-control-stack" :style="intelligenceControlStackStyle">
-              <select
-                class="intelligence-provider-select"
-                :value="providerInputValue"
-                :disabled="!providerChoices.length"
-                aria-label="Provider"
-                @change="requestProviderChange"
-                @click.stop
-                @keydown.stop
-              >
-                <option value="" disabled>{{ providerChoices.length ? 'Select provider' : 'Capabilities unavailable' }}</option>
-                <option v-for="choice in providerChoices" :key="choice" :value="choice">{{ choice }}</option>
-              </select>
-              <span class="status-token-line status-secondary-token-line intelligence-control-line">
+              <template v-if="canEditIntelligence">
+                <select
+                  class="intelligence-provider-select"
+                  :value="providerInputValue"
+                  :disabled="remoteOperationPending"
+                  aria-label="Provider"
+                  @change="requestProviderChange"
+                  @click.stop
+                  @keydown.stop
+                >
+                  <option value="" disabled>Select provider</option>
+                  <option v-for="choice in providerChoices" :key="choice" :value="choice">{{ choice }}</option>
+                </select>
+              </template>
+              <span v-else class="status-token-line status-secondary-token-line intelligence-control-line intelligence-readonly-controls">
+                <span>{{ draftProvider ?? 'not advertised' }}</span>
+                <span class="session-token-separator">·</span>
+                <span>{{ draftModel ?? 'model not advertised' }}</span>
+                <span class="session-token-separator">·</span>
+                <span>{{ draftThinking ?? 'thinking not configurable' }}</span>
+              </span>
+              <span v-if="canEditIntelligence" class="status-token-line status-secondary-token-line intelligence-control-line">
                 <select
                   class="intelligence-model-select"
                   :style="modelSelectStyle"
                   :value="modelInputValue"
                   aria-label="Model"
-                  :disabled="!draftProvider || !modelChoices.length"
+                  :disabled="remoteOperationPending || !draftProvider || !modelChoices.length"
                   @change="requestModelChange"
                   @click.stop
                   @keydown.stop
@@ -302,7 +356,7 @@ function cancelDraftChange() {
                   :style="thinkingSelectStyle"
                   :value="thinkingInputValue"
                   aria-label="Thinking level"
-                  :disabled="!draftModel"
+                  :disabled="remoteOperationPending || !draftModel"
                   @change="requestThinkingChange"
                   @click.stop
                   @keydown.stop
@@ -310,20 +364,21 @@ function cancelDraftChange() {
                   <option value="" disabled>Select thinking</option>
                   <option v-for="choice in thinkingChoices" :key="choice" :value="choice">{{ choice }}</option>
                 </select>
-                <template v-else-if="intelligence.thinking">
-                  <span>{{ intelligence.thinking }}</span>
+                <template v-else>
+                  <span>{{ draftModel ? (draftThinking ?? 'thinking not configurable') : 'select model first' }}</span>
                 </template>
               </span>
             </div>
-            <div class="intelligence-change-actions">
-              <button type="button" :disabled="!canRequestChange || requestPending" @click.stop="requestDraftChange">
+            <div v-if="showChangeActions" class="intelligence-change-actions">
+              <button type="button" :disabled="!canRequestChange" @click.stop="requestDraftChange">
                 Request change
               </button>
-              <button type="button" :disabled="!draftChanged && !requestPending" @click.stop="cancelDraftChange">
-                Cancel
+              <button type="button" :disabled="canCancelRemote ? false : (!draftChanged || remoteOperationPending)" @click.stop="cancelDraftChange">
+                {{ cancelLabel }}
               </button>
             </div>
-            <span v-if="requestPending" class="retention-note">change requested</span>
+            <span v-if="intelligenceCapabilityMessage" class="retention-note">{{ intelligenceCapabilityMessage }}</span>
+            <span v-if="operationMessage" class="retention-note">{{ operationMessage }}</span>
             <span v-else-if="draftChanged" class="retention-note">draft not requested</span>
           </div>
         </TooltipTrigger>

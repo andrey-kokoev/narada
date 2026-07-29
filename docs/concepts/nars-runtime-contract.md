@@ -214,6 +214,11 @@ The runtime server owns the control method `runtime.intelligence.reconfigure`.
 It is intentionally separate from session-core controls because it changes
 provider execution policy, not session authority or turn history.
 
+The runtime also owns the dedicated local control method
+`runtime.intelligence.reconfigure.cancel`. It targets the request id of one
+in-flight reconfiguration and has its own request id. It is not a generic
+runtime cancellation method and it does not cancel a provider turn.
+
 ```json
 {
   "method": "runtime.intelligence.reconfigure",
@@ -315,11 +320,21 @@ requests the change; cancel discards the local draft without changing runtime
 state. A legacy flat choice projection may remain for display compatibility,
 but it cannot authorize a reconfiguration.
 
+The UI submits a reconfiguration only after the user explicitly requests it.
+Before runtime admission, `Cancel` sends
+`runtime.intelligence.reconfigure.cancel` with a distinct cancellation request
+id and `target_request_id`. The runtime schedules this cancel control out of
+band so it can race a validation request without waiting behind ordinary turn
+work. Cancellation is accepted only while the target is `requested`,
+`validating`, or `admitted`; once `switching` begins, cancellation is refused
+and the UI reports the result as unconfirmed or refused according to the
+durable event evidence. The runtime never rolls back a switch that has begun.
+
 The reconfiguration request has its own FSM:
 
 ```text
 requested -> validating -> admitted -> switching -> active
-requested | validating | admitted -> refused
+requested | validating | admitted -> cancelled | refused
 switching -> failed
 ```
 

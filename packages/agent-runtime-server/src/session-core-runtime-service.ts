@@ -12,7 +12,9 @@ import { createRuntimeSessionBinding } from './runtime-session-binding.js';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
 import { createNarsRuntimeRequestRegistry } from './runtime-request-state.js';
 import {
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
   NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD,
+  NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   isNarsRuntimeServerMethod,
 } from './runtime-control-contract.js';
 
@@ -348,7 +350,8 @@ export function requestRejectionCode(method: any, message: any) {
     return 'invalid_intelligence_invocation_control';
   }
   if (method === 'session.submit') return 'request_dispatch_failed';
-  if (method === 'runtime.intelligence.reconfigure') return 'runtime_reconfiguration_failed';
+  if (method === NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD) return 'runtime_reconfiguration_cancel_failed';
+  if (method === NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD) return 'runtime_reconfiguration_failed';
   if (method === NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD) return 'runtime_execution_policy_reconfiguration_failed';
   if (SESSION_CONTROL_METHODS.has(method) || isNarsRuntimeServerMethod(method)) return 'session_control_failed';
   return 'unsupported_session_control';
@@ -635,6 +638,17 @@ export function createSessionCoreRuntimeService({
     requestState.transition('running');
     try {
       if (isNarsRuntimeServerMethod(method)) {
+        if (method === NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD) {
+          if (!intelligenceRuntime?.cancelReconfiguration) throw new Error('runtime_intelligence_reconfiguration_cancel_unavailable');
+          const result: any = await intelligenceRuntime.cancelReconfiguration(request?.params ?? {});
+          supervisor.core.appendEvent({
+            event: 'runtime_intelligence_reconfiguration_cancel',
+            request_id: requestId,
+            ...result,
+          });
+          requestState.transition('completed', { terminal_state: result.terminal_state });
+          return false;
+        }
         if (method === NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD) {
           const requestedPolicy: any = request?.params?.execution_policy ?? request?.params?.executionPolicy;
           if (requestedPolicy == null) throw new Error('execution_policy_required');
@@ -926,7 +940,7 @@ export function createSessionCoreRuntimeService({
         method: method ?? (requestContent(request) != null ? 'session.submit' : null),
       });
       requestState.transition('scheduled');
-      if (method === 'session.cancel') {
+      if (method === 'session.cancel' || method === NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD) {
         const operation: any = handleRequest(request, writer, requestState);
         requestLifecycle.track(requestState.runtimeRequestId, operation);
         return operation;

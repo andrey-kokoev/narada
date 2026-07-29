@@ -47,6 +47,10 @@ export function buildIntelligenceReconfigureFrame(input: Record<string, unknown>
   return frameFromContract(contract.buildAgentWebUiIntelligenceReconfigureFrame(input, options));
 }
 
+export function buildIntelligenceReconfigureCancelFrame(input: Record<string, unknown>, options: Record<string, unknown>= {}): SessionProtocolFrame | null {
+  return frameFromContract(contract.buildAgentWebUiIntelligenceReconfigureCancelFrame(input, options));
+}
+
 export function buildAffordanceActionRequestFrame(input: Record<string, unknown>, options: Record<string, unknown>= {}): SessionProtocolFrame | null {
   return frameFromContract(contract.buildAgentWebUiAffordanceActionRequestFrame(input, options));
 }
