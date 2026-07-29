@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 
 type NaradaPackageExportTarget = string | Record<string, any>;
 
@@ -55,6 +56,20 @@ export function createNaradaPackageResolver({
   }
 
   function resolvePackageExport(packageName: string, exportName: any = '.'): string {
+    const specifier = exportName === '.'
+      ? packageName
+      : `${packageName}/${String(exportName).replace(/^\.\//, '')}`;
+    try {
+      return require.resolve(specifier);
+    } catch {
+      try {
+        const resolved = import.meta.resolve(specifier);
+        if (resolved.startsWith('file:')) return fileURLToPath(resolved);
+      } catch {
+        // Fall through to the manifest-based resolver for source checkouts
+        // and older package layouts that do not expose the subpath directly.
+      }
+    }
     const packageJson: any = readPackageJson(packageName);
     const exportsMap: any = packageJson.exports ?? {};
     const rawTarget: any = typeof exportsMap === 'string' && exportName === '.'
