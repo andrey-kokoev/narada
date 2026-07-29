@@ -60,11 +60,11 @@ export function reduceTurnSummaryState(state: TurnSummaryState, message: unknown
     return;
   }
 
-  if (event.event === 'tool_call') {
+  if (event.event === 'tool_call' || event.event === 'carrier_tool_requested') {
     recordTopLevelToolCall(state, event);
     return;
   }
-  if (event.event === 'tool_result') {
+  if (event.event === 'tool_result' || event.event === 'carrier_tool_completed') {
     recordTopLevelToolResult(state, event);
   }
 }
@@ -114,10 +114,8 @@ function reduceProviderToolEvent(state: TurnSummaryState, providerEvent: Unknown
     const item = objectField(providerEvent, 'item');
     if (item?.type === 'mcp_tool_call') {
       const name = toolDetail(item);
-      if (name) {
-        state.activeTurn.toolCallCount += 1;
-        state.activeTurn.toolNames.push(name);
-      }
+      state.activeTurn.toolCallCount += 1;
+      if (name) state.activeTurn.toolNames.push(name);
     }
     return;
   }
@@ -125,11 +123,9 @@ function reduceProviderToolEvent(state: TurnSummaryState, providerEvent: Unknown
     const item = objectField(providerEvent, 'item');
     if (item?.type === 'mcp_tool_call') {
       const name = toolDetail(item);
-      if (name) {
-        state.activeTurn.toolResultCount += 1;
-        if (toolResultFailed(item)) {
-          state.activeTurn.toolFailureCount += 1;
-        }
+      state.activeTurn.toolResultCount += 1;
+      if (toolResultFailed(item)) {
+        state.activeTurn.toolFailureCount += 1;
       }
     }
   }
@@ -138,15 +134,13 @@ function reduceProviderToolEvent(state: TurnSummaryState, providerEvent: Unknown
 function recordTopLevelToolCall(state: TurnSummaryState, event: UnknownRecord): void {
   if (!state.activeTurn) return;
   const name = topLevelToolName(event);
-  if (!name) return;
   state.activeTurn.toolCallCount += 1;
-  state.activeTurn.toolNames.push(name);
+  if (name) state.activeTurn.toolNames.push(name);
 }
 
 function recordTopLevelToolResult(state: TurnSummaryState, event: UnknownRecord): void {
   if (!state.activeTurn) return;
   const name = topLevelToolName(event);
-  if (!name) return;
   state.activeTurn.toolResultCount += 1;
   if (topLevelToolFailed(event)) {
     state.activeTurn.toolFailureCount += 1;
@@ -173,8 +167,7 @@ function topLevelToolName(event: UnknownRecord): string | null {
 
 function topLevelToolFailed(event: UnknownRecord): boolean {
   if (event.error) return true;
-  const status = typeof event.status === 'string' ? event.status.toLowerCase() : '';
-  return status === 'failed' || status === 'error';
+  return isFailedToolStatus(event.status);
 }
 
 function toolDetail(item: UnknownRecord): string | null {
@@ -184,8 +177,12 @@ function toolDetail(item: UnknownRecord): string | null {
 
 function toolResultFailed(item: UnknownRecord): boolean {
   if (item.error) return true;
-  const status = typeof item.status === 'string' ? item.status.toLowerCase() : '';
-  return status === 'failed' || status === 'error';
+  return isFailedToolStatus(item.status);
+}
+
+function isFailedToolStatus(value: unknown): boolean {
+  if (typeof value !== 'string') return false;
+  return ['blocked', 'cancelled', 'denied', 'error', 'failed', 'interrupted', 'refused'].includes(value.toLowerCase());
 }
 
 function objectField(record: UnknownRecord, field: string): UnknownRecord | null {

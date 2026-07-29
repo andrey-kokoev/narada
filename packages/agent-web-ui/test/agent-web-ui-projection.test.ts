@@ -789,6 +789,27 @@ test('turn summary aggregates provider-nested tool items', () => {
   assert.deepEqual(summaryRows[0].summary.tools, ['narada-sonar-agent-context.agent_context_startup_sequence']);
 });
 
+test('turn summary aggregates canonical carrier tool lifecycle events', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test' };
+  const events = [
+    { ...base, event: 'turn_started', turn_id: 'turn_carrier_tools', timestamp: '2026-07-08T20:49:39.000Z' },
+    { ...base, event: 'carrier_tool_requested', turn_id: 'turn_carrier_tools', tool_name: 'fs_read_file', timestamp: '2026-07-08T20:49:40.000Z' },
+    { ...base, event: 'tool_execution_completed', turn_id: 'turn_carrier_tools', tool_name: 'fs_read_file', execution_state: 'completed', timestamp: '2026-07-08T20:49:40.500Z' },
+    { ...base, event: 'carrier_tool_completed', turn_id: 'turn_carrier_tools', tool_name: 'fs_read_file', status: 'completed', timestamp: '2026-07-08T20:49:41.000Z' },
+    { ...base, event: 'carrier_tool_requested', turn_id: 'turn_carrier_tools', tool_name: 'fs_write_file', timestamp: '2026-07-08T20:49:41.000Z' },
+    { ...base, event: 'carrier_tool_completed', turn_id: 'turn_carrier_tools', tool_name: 'fs_write_file', status: 'denied', timestamp: '2026-07-08T20:49:41.500Z' },
+    { ...base, event: 'turn_complete', turn_id: 'turn_carrier_tools', terminal_state: 'completed', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const summaryRows = projection.rows.filter((row: any) => row.kind === 'turn_summary');
+  assert.equal(summaryRows.length, 1);
+  assert.equal(summaryRows[0].summary.text, 'Turn · 3s · 2 tools · 1 failed');
+  assert.equal(summaryRows[0].summary.toolCallCount, 2);
+  assert.equal(summaryRows[0].summary.toolResultCount, 2);
+  assert.equal(summaryRows[0].summary.toolFailureCount, 1);
+  assert.deepEqual(summaryRows[0].summary.tools, ['fs_read_file', 'fs_write_file']);
+});
+
 test('turn summary reports zero tools for tool-less turns', () => {
   const base = { agent_id: 'resident', session_id: 'carrier_test', timestamp: '2026-07-08T20:49:39.000Z' };
   const events = [
