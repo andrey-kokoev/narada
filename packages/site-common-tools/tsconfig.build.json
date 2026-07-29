@@ -3,12 +3,13 @@
   "compilerOptions": {
     "noEmit": false,
     "outDir": "dist",
-    "rootDir": ".",
+    "rootDir": "./src",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true
   },
   "exclude": [
-    "src/**/*.test.ts"
+    "src/**/*.test.ts",
+    "compat/**/*.ts"
   ]
 }
