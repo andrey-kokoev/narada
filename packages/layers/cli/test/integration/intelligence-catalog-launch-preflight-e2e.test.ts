@@ -101,6 +101,46 @@ test('clean-install migration does not fabricate principal admission; launcher p
   }
 });
 
+test('launcher preserves an early intelligence-context refusal in the result handoff', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'narada-missing-launch-context-preflight-'));
+  const priorUserSiteRoot = process.env.NARADA_USER_SITE_ROOT;
+  try {
+    process.env.NARADA_USER_SITE_ROOT = root;
+    const management = await importSource('../../../../invokable-intelligence-management/src/bootstrap.ts');
+    const sourceRegistryPath = resolve(naradaProperRoot, 'packages', 'invokable-intelligence-management', 'assets', 'provider-registry.bootstrap.json');
+    await management.ensureIntelligenceCatalog({
+      siteRoot: root,
+      targetSiteId: 'site:missing-context-user',
+      userSiteId: 'site:missing-context-user',
+      hostSiteId: 'site:missing-context-host',
+      sourceRegistryPath,
+    });
+
+    const launcherRuntime = await importSource('../../src/lib/launcher-runtime.ts');
+    const preflight = launcherRuntime.runAgentStartCommand({
+      siteRoot: root,
+      workspaceRoot: root,
+      targetSiteId: 'site:missing-context-user',
+      agent: 'resident',
+      carrier: 'agent-web-ui',
+      runtime: 'narada-agent-runtime-server',
+      preflightOnly: true,
+      launchSource: 'missing intelligence launch context handoff e2e',
+      dependencyWorkspaceRoot: naradaProperRoot,
+    });
+
+    assert.equal(preflight.status, 'failed');
+    assert.equal(preflight.parsed_result?.schema, 'narada.agent_start.intelligence_launch_context_refusal.v1');
+    assert.equal(preflight.parsed_result?.reason_code, 'intelligence_context_not_configured');
+    assert.equal(preflight.parsed_result?.details?.context_exists, false);
+    await access(preflight.result_file);
+  } finally {
+    if (priorUserSiteRoot === undefined) delete process.env.NARADA_USER_SITE_ROOT;
+    else process.env.NARADA_USER_SITE_ROOT = priorUserSiteRoot;
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
 test('catalog source drift remains non-mutating and readiness-blocked', async () => {
   const root = await mkdtemp(join(tmpdir(), 'narada-catalog-source-drift-preflight-'));
   const sourceRoot = join(root, 'sources');

@@ -146,6 +146,11 @@ const jsonOutput: any = !!args.json;
 const jsonOutputFile: any = args.json_output_file ? resolve(String(args.json_output_file)) : null;
 const operatorSurfaceInput: any = args.operator_surface ?? null;
 const legacyCarrierInput: any = args.carrier ?? null;
+
+function writeFailureArtifact(result: unknown): void {
+  if (jsonOutputFile) writeJsonFileAtomically(jsonOutputFile, result);
+}
+
 if (operatorSurfaceInput && legacyCarrierInput && String(operatorSurfaceInput) !== String(legacyCarrierInput)) {
   const refusal: any = {
     schema: 'narada.operator_surface_runtime_selection.v1',
@@ -156,6 +161,7 @@ if (operatorSurfaceInput && legacyCarrierInput && String(operatorSurfaceInput) !
     reason: 'Canonical --operator-surface and legacy --carrier must agree when both are provided.',
     required_next_step: 'Use --operator-surface <surface> for new launches, or keep --carrier only for compatibility callers.',
   };
+  writeFailureArtifact(refusal);
   if (jsonOutput) await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
   else console.error(`[FAIL] ${refusal.reason_code}: ${refusal.reason}`);
   process.exit(1);
@@ -173,6 +179,7 @@ async function failIntelligenceLaunchContext(error: any) : Promise<any>{
     details: error instanceof IntelligenceLaunchContextError ? error.details : {},
     required_next_step: 'Create or repair the User Site .narada/intelligence-launch-context.json with user_site_id, host_site_id, and principal_id, then retry the launch.',
   };
+  writeFailureArtifact(refusal);
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
   } else {
@@ -254,6 +261,7 @@ function resolveToolFabricAdapter(carrierName: any, runtimeName: any) : any{
 }
 
 async function failRuntimeRefusal(refusal: any) : Promise<any>{
+  writeFailureArtifact(refusal);
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
   } else {
@@ -275,6 +283,7 @@ async function failToolFabricRefusal(error: any) : Promise<any>{
     details: error instanceof McpFabricError ? error.details : {},
     required_next_step: 'Materialize a valid Site-local .ai/mcp fabric that matches the Site surface registry before launching this runtime.',
   };
+  writeFailureArtifact(refusal);
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
   } else {
@@ -284,6 +293,7 @@ async function failToolFabricRefusal(error: any) : Promise<any>{
 }
 
 async function failLegacyIntelligenceSelection(refusal: any) : Promise<any>{
+  writeFailureArtifact(refusal);
   if (jsonOutput) {
     await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
   } else {
@@ -642,6 +652,7 @@ try {
     }
     : null;
   if (refusal) {
+    writeFailureArtifact(refusal);
     if (jsonOutput) await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
     else {
       console.error(`[FAIL] ${refusal.reason_code}: ${refusal.reason}`);

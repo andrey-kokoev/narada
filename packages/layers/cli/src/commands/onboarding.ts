@@ -218,6 +218,10 @@ export function userSiteRegistryPath(
     : join(root, 'config', 'launch', 'agents.psd1');
 }
 
+function isIntelligenceSetupFailure(message: string): boolean {
+  return /workspace[_-]launch[_-]catalog[_-]preflight|intelligence[_-](?:context|local[_-]readiness|catalog)/i.test(message);
+}
+
 function recordSiteRoot(record: WorkspaceLaunchRecord): string {
   return resolve(record.site_root);
 }
@@ -1521,6 +1525,7 @@ export async function onboardingStartCommand(
   options: OnboardingStartOptions,
   context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
+  let provisioned: Awaited<ReturnType<typeof ensureUserSiteProvisioned>> | null = null;
   try {
     const platform = normalizeOnboardingPlatform(options.platform);
     const scope = (options.scope ?? 'user-site').trim().toLowerCase();
@@ -1542,7 +1547,6 @@ export async function onboardingStartCommand(
       return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
     }
 
-    let provisioned: Awaited<ReturnType<typeof ensureUserSiteProvisioned>> | null = null;
     if (!options.noExec) {
       provisioned = await ensureUserSiteProvisioned(root, registryPath, context, platform);
     }
@@ -1605,19 +1609,30 @@ export async function onboardingStartCommand(
     result.launch = launch.result;
     if (launch.exitCode !== ExitCode.SUCCESS) {
       const launchMessage = typeof launch.result === 'string' ? launch.result : JSON.stringify(launch.result);
-      const catalogReadinessFailure = /intelligence[_-]?catalog|catalog[_-]?(?:not[_-]?)?ready|catalog[_-]?preflight/i.test(launchMessage);
+      const intelligenceSetupFailure = isIntelligenceSetupFailure(launchMessage);
+      if (intelligenceSetupFailure && provisioned) {
+        result.mutation_performed = provisioned.site_created
+          || provisioned.launch_registry_created
+          || provisioned.intelligence_catalog.mutation_performed;
+        result.intelligence_catalog = provisioned.intelligence_catalog;
+      }
       result.status = 'blocked';
-      result.reason_code = catalogReadinessFailure ? 'intelligence_catalog_setup_required' : 'launch_refused';
+      result.reason_code = intelligenceSetupFailure ? 'intelligence_catalog_setup_required' : 'launch_refused';
       result.readiness = {
         status: 'blocked',
         first_useful_interaction: 'pending',
         evidence: ['launch_refused'],
       };
-      result.message = catalogReadinessFailure ? 'The Site intelligence catalog is not ready.' : 'The resident launch was refused.';
-      result.next_action = catalogReadinessFailure
-        ? 'Initialize the Site intelligence catalog and materialized policy, then rerun onboarding. Use --demo for a no-credential introduction.'
+      result.message = intelligenceSetupFailure
+        ? `The resident launch is blocked by User Site intelligence setup: ${launchMessage}`
+        : 'The resident launch was refused.';
+      result.next_action = intelligenceSetupFailure
+        ? 'Complete User Site intelligence setup (principal admission, launch context, and provider readiness), then rerun onboarding. Use --demo for a no-credential introduction.'
         : 'Resolve the launch refusal, then rerun onboarding.';
-      return { exitCode: launch.exitCode, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
+      return {
+        exitCode: intelligenceSetupFailure ? ExitCode.SUCCESS : launch.exitCode,
+        result: formattedResult(result, renderHuman(result), options.format ?? 'auto'),
+      };
     }
     result.status = options.noExec ? 'planned' : 'launched';
     result.mutation_performed = !options.noExec;
@@ -1640,25 +1655,54 @@ export async function onboardingStartCommand(
     return { exitCode: launch.exitCode, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const platform = normalizeOnboardingPlatform(options.platform);
+    const root = userSiteRoot(options.siteRoot, platform);
+    const registryPath = userSiteRegistryPath(root, options.registryPath, platform);
+    let records: WorkspaceLaunchRecord[] = [];
+    let resident: WorkspaceLaunchRecord | null = null;
+    if (existsSync(registryPath)) {
+      try {
+        const loaded = await readWorkspaceLaunchRecords({ registryPath });
+        records = loaded.records;
+        resident = findResidentRecord(records, root);
+      } catch {
+        // Preserve the original launch failure when the registry itself is also malformed.
+      }
+    }
+    const intelligenceSetupRequired = isIntelligenceSetupFailure(message);
     const result: OnboardingResult = {
       ...baseResult(
-        userSiteRoot(options.siteRoot, normalizeOnboardingPlatform(options.platform)),
-        userSiteRegistryPath(
-          userSiteRoot(options.siteRoot, normalizeOnboardingPlatform(options.platform)),
-          options.registryPath,
-          normalizeOnboardingPlatform(options.platform),
-        ),
-        null,
-        [],
-        normalizeOnboardingPlatform(options.platform),
+        root,
+        registryPath,
+        resident,
+        records,
+        platform,
       ),
-      status: 'error',
-      reason_code: message.includes('codex_subscription') ? 'provider_auth_required' : 'onboarding_start_failed',
-      message,
+      mutation_performed: provisioned
+        ? provisioned.site_created || provisioned.launch_registry_created || provisioned.intelligence_catalog.mutation_performed
+        : false,
+      status: intelligenceSetupRequired ? 'blocked' : 'error',
+      reason_code: message.includes('codex_subscription')
+        ? 'provider_auth_required'
+        : intelligenceSetupRequired
+          ? 'intelligence_catalog_setup_required'
+          : 'onboarding_start_failed',
+      readiness: intelligenceSetupRequired
+        ? { status: 'blocked', first_useful_interaction: 'pending', evidence: ['launch_refused'] }
+        : { status: 'not_started', first_useful_interaction: 'pending', evidence: [] },
+      message: intelligenceSetupRequired
+        ? `The resident launch is blocked by User Site intelligence setup: ${message}`
+        : message,
+      ...(provisioned ? { intelligence_catalog: provisioned.intelligence_catalog } : {}),
       next_action: /credential|api[_-]?key|provider[_-]?auth|codex[_-]?subscription/i.test(message)
         ? 'Authenticate the selected provider, then rerun onboarding. Use --demo for a no-credential introduction.'
+        : intelligenceSetupRequired
+          ? 'Complete User Site intelligence setup (principal admission, launch context, and provider readiness), then rerun onboarding. Use --demo for a no-credential introduction.'
         : 'Run onboarding again after resolving the reported prerequisite.',
     };
-    return { exitCode: ExitCode.GENERAL_ERROR, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
+    return {
+      exitCode: intelligenceSetupRequired ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      result: formattedResult(result, renderHuman(result), options.format ?? 'auto'),
+    };
   }
 }

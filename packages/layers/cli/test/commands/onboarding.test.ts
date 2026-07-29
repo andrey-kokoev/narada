@@ -136,6 +136,59 @@ describe('User Site onboarding', () => {
     expect(launchRegistry.Agents[0]).not.toHaveProperty('Launcher');
   });
 
+  it('reports explicit intelligence setup when the provisioned resident launch is refused', async () => {
+    const { root, registry } = await tempUserSite(false);
+    workspaceLaunchMock.mockRejectedValueOnce(new Error(
+      'workspace_launch_catalog_preflight_failed: user-site.resident: intelligence_context_not_configured: Intelligence launch context is incomplete: user_site_id, host_site_id, principal_id',
+    ));
+
+    const result = await onboardingStartCommand({
+      platform: 'linux',
+      siteRoot: root,
+      registryPath: registry,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result, JSON.stringify(result.result, null, 2)).toMatchObject({
+      schema: 'narada.onboarding.start.v1',
+      status: 'blocked',
+      reason_code: 'intelligence_catalog_setup_required',
+      mutation_performed: true,
+      user_site: { root, registry_path: registry, resident_agent: 'user-site.resident' },
+      readiness: { status: 'blocked', first_useful_interaction: 'pending', evidence: ['launch_refused'] },
+      intelligence_catalog: { mutation_performed: true },
+      message: expect.stringContaining('intelligence_context_not_configured'),
+      next_action: expect.stringContaining('Complete User Site intelligence setup'),
+    });
+  });
+
+  it('normalizes a structured intelligence refusal returned by the launch command', async () => {
+    const { root, registry } = await tempUserSite(false);
+    workspaceLaunchMock.mockResolvedValueOnce({
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: {
+        status: 'failed',
+        error: 'workspace_launch_catalog_preflight_failed: user-site.resident: intelligence_context_not_configured',
+      },
+    });
+
+    const result = await onboardingStartCommand({
+      platform: 'linux',
+      siteRoot: root,
+      registryPath: registry,
+      format: 'json',
+    }, createMockContext());
+
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.result).toMatchObject({
+      status: 'blocked',
+      reason_code: 'intelligence_catalog_setup_required',
+      mutation_performed: true,
+      message: expect.stringContaining('intelligence_context_not_configured'),
+    });
+  });
+
   it('reports a missing User Site registry as an actionable block', async () => {
     const { root, registry } = await tempUserSite(false);
     const result = await onboardingStartCommand({ siteRoot: root, registryPath: registry, noExec: true, format: 'json' }, createMockContext());

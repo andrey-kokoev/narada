@@ -114,7 +114,7 @@ Observed result for the onboarding proof: the fixture walks from an absent Site 
 
 ## User-First Windows Onboarding UX
 
-Status: target UX contract with the CLI first slice and User Site browser onboarding composition implemented. The PowerShell handoff, resident-first launch, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; approved roles are materialized into the launch registry through the explicit `narada onboarding roles materialize` crossing.
+Status: target UX contract with the CLI first slice and User Site browser onboarding composition implemented. The PowerShell handoff, resident-first provisioning boundary, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; approved roles are materialized into the launch registry through the explicit `narada onboarding roles materialize` crossing. A clean User Site does not fabricate principal admission or launch context: the resident launch is reported as an explicit setup block until intelligence readiness is complete.
 
 The default path is User Site first. A first-time user should become productive without creating a Project Site, naming a PC Site, registering a remote Site, or understanding the full Site topology.
 
@@ -189,7 +189,9 @@ projection of `narada doctor --bootstrap` and `narada onboarding`; it does not
 create a second onboarding authority or handle provider secrets in the browser.
 It keeps the advanced Site/runtime launcher available, but the first-use path
 asks only for confirmation to start the personal `resident` assistant or to
-try the credential-free demo.
+try the credential-free demo. If the User Site lacks explicit intelligence
+launch context, principal binding, or provider readiness, it explains the
+setup block and does not start the runtime or operator surface.
 
 The one-time PowerShell bootstrapper may install or locate the CLI and create or locate the User Site, then hand off to this command. It must not own onboarding policy, runtime selection, MCP assembly, provider logic, or terminal orchestration.
 
@@ -240,7 +242,7 @@ The local execution host is machine-local infrastructure. It may have a durable 
 
 ### First Useful Session
 
-The first launch creates exactly one `resident` identity for the selected User Site. The UI uses the human label `General assistant`; `resident` is secondary technical detail.
+The first onboarding mutation creates exactly one `resident` identity for the selected User Site. The UI uses the human label `General assistant`; `resident` is secondary technical detail. Runtime launch remains gated by explicit intelligence setup and is not implied by creation of the launch record.
 
 The onboarding proof is complete only when the user sees:
 
@@ -292,7 +294,8 @@ The progression, in the vocabulary the onboarding state machine actually persist
 
 ```text
 not_started
-  -> launch_requested             (onboarding start launches the resident; demo_available marks the demo path)
+  -> blocked                      (resident launch awaits explicit intelligence setup)
+  -> launch_requested             (onboarding start launches the resident after setup; demo_available marks the demo path)
   -> first_use_verified           (first useful interaction verified; blocked if verification fails)
   -> role_expansion: available    (contextual architect/builder recommendation)
   -> role_expansion: approved     (roles approve --confirm; recorded, nothing launched)

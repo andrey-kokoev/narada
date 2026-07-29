@@ -182,7 +182,7 @@ function writePublicationEvidence(payload: Record<string, unknown>): void {
   );
 }
 
-test('published Linux CLI installs independently and provisions the resident launch handoff', {
+test('published Linux CLI installs independently and reports the resident intelligence setup boundary', {
   skip: !runPublicationE2e,
 }, () => {
   const tempRoot = mkdtempSync(join(tmpdir(), 'narada-linux-publication-e2e-'));
@@ -207,6 +207,21 @@ test('published Linux CLI installs independently and provisions the resident lau
     assert.notEqual(resolve(installedCliRoot), resolve(cliPackageRoot));
     assert.doesNotMatch(readFileSync(join(installedCliRoot, 'package.json'), 'utf8'), /D:\\\\code\\\\narada/i);
 
+    const demo = run(process.execPath, [
+      installedCliEntrypoint,
+      'onboarding', 'start',
+      '--platform', 'linux',
+      '--scope', 'user-site',
+      '--site-root', siteRoot,
+      '--demo',
+      '--format', 'json',
+    ], { cwd: consumerRoot, env, timeout: 180_000 });
+    assert.equal(demo.status, 0, 'published Linux demo onboarding failed\n' + outputOf(demo));
+    const demoPayload = parseJsonOutput(String(demo.stdout), 'published Linux demo onboarding');
+    assert.equal(demoPayload.schema, 'narada.onboarding.start.v1');
+    assert.equal(demoPayload.status, 'demo_available');
+    assert.equal(demoPayload.mutation_performed, false);
+
     const onboarding = run(process.execPath, [
       installedCliEntrypoint,
       'onboarding', 'start',
@@ -215,11 +230,14 @@ test('published Linux CLI installs independently and provisions the resident lau
       '--site-root', siteRoot,
       '--format', 'json',
     ], { cwd: consumerRoot, env, timeout: 180_000 });
-    assert.equal(onboarding.status, 0, 'published Linux resident launch handoff failed\n' + outputOf(onboarding));
+    assert.equal(onboarding.status, 0, 'published Linux resident first-use boundary failed\n' + outputOf(onboarding));
     const onboardingPayload = parseJsonOutput(String(onboarding.stdout), 'published Linux onboarding');
     assert.equal(onboardingPayload.schema, 'narada.onboarding.start.v1');
-    assert.equal(onboardingPayload.status, 'launched');
+    assert.equal(onboardingPayload.status, 'blocked');
+    assert.equal(onboardingPayload.reason_code, 'intelligence_catalog_setup_required');
     assert.equal(onboardingPayload.mutation_performed, true);
+    assert.equal(onboardingPayload.user_site.resident_agent, 'user-site.resident');
+    assert.match(JSON.stringify(onboardingPayload), /intelligence_context_not_configured/);
     assert.equal(existsSync(join(siteRoot, 'config.json')), true);
     const registryPath = join(siteRoot, 'config', 'launch', 'agents.json');
     const registry = JSON.parse(readFileSync(registryPath, 'utf8')) as {
@@ -239,8 +257,16 @@ test('published Linux CLI installs independently and provisions the resident lau
       McpScope: 'none',
       EnableNativeShell: false,
     }]);
-    assert.equal(existsSync(env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG!), true);
-    assert.match(readFileSync(env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG!, 'utf8'), /operator-surface.*runtime.*start/);
+    assert.equal(
+      existsSync(env.NARADA_WORKSPACE_LAUNCH_HIDDEN_RUNTIME_LOG!),
+      false,
+      'resident runtime must not start before explicit intelligence setup',
+    );
+    assert.equal(
+      existsSync(env.NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG!),
+      false,
+      'resident operator surface must not start before explicit intelligence setup',
+    );
 
     const doctor = run(process.execPath, [
       installedCliEntrypoint,
@@ -271,6 +297,11 @@ test('published Linux CLI installs independently and provisions the resident lau
         registry: registryPath,
         resident: 'user-site.resident',
         launcher_path: installedCliEntrypoint,
+      },
+      first_use: {
+        mode: 'demo_available',
+        resident_launch: 'blocked_until_explicit_intelligence_setup',
+        reason_code: onboardingPayload.reason_code,
       },
       diagnostics: {
         missing_artifact: 'covered',

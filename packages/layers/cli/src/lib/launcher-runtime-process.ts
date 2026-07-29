@@ -156,6 +156,18 @@ export function runProcessDetachedUntilJson(
   while (Date.now() - startedAt < timeoutMs) {
     const parsed = tryParseJsonFile(resultPath);
     if (parsed && typeof parsed === 'object') {
+      const refusal = structuredResultFailure(parsed);
+      if (refusal) {
+        const stdoutTail = readTextTail(stdoutPath, 2000);
+        const stderrTail = readTextTail(stderrPath, 2000);
+        return {
+          status: 'failed',
+          exit_code: 1,
+          stdout: `detached_stdout=${stdoutPath}\n${stdoutTail}`.trim(),
+          stderr: `agent-start produced a structured refusal: ${refusal}\ndetached_stderr=${stderrPath}\n${stderrTail}`.trim(),
+          error: refusal,
+        };
+      }
       return {
         status: 'success',
         exit_code: 0,
@@ -244,6 +256,18 @@ function tryParseJsonFile(path: string): unknown {
   } catch {
     return null;
   }
+}
+
+function structuredResultFailure(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const status = typeof record.status === 'string' ? record.status.trim().toLowerCase() : '';
+  if (!['refused', 'blocked', 'failed', 'error', 'not_available'].includes(status)) return null;
+  for (const field of ['reason_code', 'reason', 'error'] as const) {
+    const detail = record[field];
+    if (typeof detail === 'string' && detail.trim()) return detail.trim();
+  }
+  return status || 'structured_agent_start_refusal';
 }
 
 export function appendNodeOption(existing: string | undefined, option: string): string {

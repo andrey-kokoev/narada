@@ -155,10 +155,17 @@ The Linux first-use path is CLI-owned and does not require PowerShell:
 narada onboarding start --platform linux --scope user-site --interactive
 ```
 
-It creates or discovers one User Site, starts one `resident` agent, and opens
-the admitted operator surface. Site intelligence catalog policy owns provider,
-model, endpoint, credential, and thinking-level resolution; the installer and
-launcher do not select those values independently.
+It creates or discovers one User Site and one `resident` launch record. The
+runtime and admitted operator surface start only after the User Site has an
+explicit intelligence launch context, principal binding, and provider
+readiness. On a clean installation, the command can therefore return a
+successful `blocked` onboarding result with
+`intelligence_catalog_setup_required`; it does not fabricate authority or
+start a runtime without that setup. Use `--demo` for the no-credential
+introduction path, or complete the User Site intelligence setup and rerun the
+command. Site intelligence catalog policy owns provider, model, endpoint,
+credential, and thinking-level resolution; the installer and launcher do not
+select those values independently.
 
 The default path is single Site, single resident role, and one operator
 surface. Multi-Site or multi-role launch requires explicit opt-in.
