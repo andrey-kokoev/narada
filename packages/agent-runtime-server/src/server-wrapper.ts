@@ -727,6 +727,7 @@ async function main() {
     throw error;
   }
   let shutdownSignal: any = null;
+  let projectionClosureGuard: { arm(): void; disarm(): void } | null = null;
   const requestGracefulShutdown: any = (signal: any) => {
     if (shutdownSignal) return;
     shutdownSignal = signal;
@@ -747,6 +748,13 @@ async function main() {
   const onSigterm: any = () => requestGracefulShutdown('SIGTERM');
   process.once('SIGINT', onSigint);
   process.once('SIGTERM', onSigterm);
+  projectionClosureGuard = bindRuntimeProjectionClosure({
+    healthProjection,
+    eventStreamProjection,
+    runtimeHost,
+    requestShutdown: requestGracefulShutdown,
+  });
+  projectionClosureGuard.arm();
 
   const state: any = {
     startupSummaryPrinted: false,
@@ -863,6 +871,7 @@ async function main() {
     healthProjection?.rejectAll(error);
     console.error(`[agent-runtime-server] carrier runtime failed: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
+    projectionClosureGuard?.disarm();
     await lifecycleDispatchTail;
     await lifecycleDispatcher?.taskExecutabilityDispatch?.close?.({ reason: 'runtime_shutdown' });
     process.off('SIGINT', onSigint);
@@ -889,6 +898,36 @@ async function main() {
 function closeServer(server: any) {
   if (!server?.listening) return Promise.resolve();
   return new Promise((resolve: any) => server.close(resolve));
+}
+
+function bindRuntimeProjectionClosure({
+  healthProjection,
+  eventStreamProjection,
+  runtimeHost,
+  requestShutdown,
+}: any): { arm(): void; disarm(): void } {
+  let armed = false;
+  const bindings = [
+    ['health', healthProjection?.server],
+    ['events', eventStreamProjection?.server],
+  ].flatMap(([kind, server]: any[]) => {
+    if (!server || typeof server.on !== 'function' || typeof server.off !== 'function') return [];
+    const onClose = () => {
+      if (!armed || !['projections_ready', 'serving'].includes(runtimeHost?.state)) return;
+      requestShutdown(`PROJECTION_${String(kind).toUpperCase()}_CLOSED`);
+    };
+    server.on('close', onClose);
+    return [{ server, onClose }];
+  });
+  return {
+    arm() {
+      armed = true;
+    },
+    disarm() {
+      armed = false;
+      for (const binding of bindings) binding.server.off('close', binding.onClose);
+    },
+  };
 }
 
 async function closeProjections({ healthProjection, eventStreamProjection }: any = {}) {
@@ -918,6 +957,7 @@ export {
   formatRuntimeProjectionFailureSummary,
   formatSessionOperationsEvent,
   formatSessionOperationsSummary,
+  bindRuntimeProjectionClosure,
   formatSessionWorkflowEvent,
   formatSessionWorkflowSummary,
   formatStartupMcpEvent,

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { once } from 'node:events';
+import { EventEmitter, once } from 'node:events';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { connect as netConnect } from 'node:net';
 import { createServer, request as httpRequest } from 'node:http';
@@ -19,6 +19,7 @@ import {
   createDelegatedAuthorityHandoff,
   createEventHub,
   createNarsLifecycleHookDispatcher,
+  bindRuntimeProjectionClosure,
   dispatchNarsLifecycleHook,
   dispatchNarsLifecycleHooksForEvent,
   formatHostStatusEvent,
@@ -33,6 +34,28 @@ import {
 } from '../src/server-wrapper.js';
 
 const packageJson: any = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+
+test('unexpected runtime projection closure requests governed shutdown only while serving', () => {
+  const healthServer = new EventEmitter();
+  const eventServer = new EventEmitter();
+  const requests: string[] = [];
+  const runtimeHost = { state: 'projections_ready' };
+  const guard = bindRuntimeProjectionClosure({
+    healthProjection: { server: healthServer },
+    eventStreamProjection: { server: eventServer },
+    runtimeHost,
+    requestShutdown: (reason: string) => requests.push(reason),
+  });
+
+  healthServer.emit('close');
+  assert.deepEqual(requests, []);
+  guard.arm();
+  eventServer.emit('close');
+  assert.deepEqual(requests, ['PROJECTION_EVENTS_CLOSED']);
+  guard.disarm();
+  healthServer.emit('close');
+  assert.deepEqual(requests, ['PROJECTION_EVENTS_CLOSED']);
+});
 
 function waitForOutput(child: any, predicate: any, timeoutMs: any = 5000) {
   return new Promise((resolve: any, reject: any) => {
