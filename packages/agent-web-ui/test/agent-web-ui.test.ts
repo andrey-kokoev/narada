@@ -904,6 +904,8 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.match(composer, /AGENT_WEB_UI_PREFERENCE_KEYS\.operatorFooterItems/);
   assert.match(composer, /label: 'Target'/);
   assert.match(composer, /label: 'Operator Input'/);
+  assert.match(composer, /label: 'Status line'/);
+  assert.match(composer, /footerVisibility\.isVisible\('status'\)/);
   assert.match(composer, /useBoxVisibilityPreference\(\{[\s\S]*allowEmpty: true/);
   assert.match(status, /useBoxVisibilityPreference\(\{/);
   assert.match(shell, /useBoxVisibilityPreference\(\{/);

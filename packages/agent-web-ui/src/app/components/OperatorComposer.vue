@@ -28,12 +28,13 @@ watch(draft, () => {
 }, { flush: 'sync' });
 
 const FOOTER_ITEM_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.operatorFooterItems;
-const FOOTER_ITEM_IDS = ['target', 'input'] as const;
+const FOOTER_ITEM_IDS = ['target', 'input', 'status'] as const;
 type FooterItemId = typeof FOOTER_ITEM_IDS[number];
-const DEFAULT_VISIBLE_FOOTER_ITEM_IDS: readonly FooterItemId[] = ['target', 'input'];
+const DEFAULT_VISIBLE_FOOTER_ITEM_IDS: readonly FooterItemId[] = ['target', 'input', 'status'];
 const footerItemDefinitions: Record<FooterItemId, Omit<BoxVisibilitySelectorItem, 'visible'>> = {
   target: { id: 'target', label: 'Target', description: 'Current NARS session target receiving operator input.' },
   input: { id: 'input', label: 'Operator Input', description: 'Composer textarea and send controls.' },
+  status: { id: 'status', label: 'Status line', description: 'Input delivery and disabled-state status below the operator input row.' },
 };
 
 const disabled = computed(() => Boolean(props.disabled));
@@ -206,7 +207,7 @@ function handleKeydown(event: KeyboardEvent) {
       </div>
     </BoxRowShell>
     <p
-      v-if="props.operatorDelivery.phase !== 'draft'"
+      v-if="footerVisibility.isVisible('status') && props.operatorDelivery.phase !== 'draft'"
       class="composer-delivery-status"
       :data-state="props.operatorDelivery.phase"
       aria-live="polite"
@@ -232,7 +233,7 @@ function handleKeydown(event: KeyboardEvent) {
         Discard
       </button>
     </p>
-    <p v-if="disabled" class="composer-status">{{ disabledReason }}</p>
+    <p v-if="footerVisibility.isVisible('status') && disabled" class="composer-status">{{ disabledReason }}</p>
   </form>
   <Teleport to="body">
     <div v-if="interruptModalVisible" class="interrupt-confirm-layer" role="presentation">

@@ -748,6 +748,40 @@
   gap: 5px;
 }
 
+.intelligence-readonly-controls {
+  max-width: 100%;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.intelligence-readonly-controls > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.intelligence-change-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.intelligence-change-actions button {
+  min-height: 24px;
+  border: 1px solid var(--line-strong);
+  border-radius: 5px;
+  padding: 2px 7px;
+  background: var(--control-bg);
+  color: var(--text);
+  font: 11px/1.25 var(--mono);
+  cursor: pointer;
+}
+
+.intelligence-change-actions button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .intelligence-model-input,
 .intelligence-model-select,
 .intelligence-provider-input,

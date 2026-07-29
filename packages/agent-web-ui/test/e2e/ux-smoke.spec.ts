@@ -610,7 +610,7 @@ test('agent-web-ui operator footer selector hides and restores target and input 
     assert.equal(await page.locator('.composer-target').count(), 1, 'expected target box to restore');
     assert.equal(await page.locator('#operator-input').count(), 1, 'expected input box to restore');
     const stored = await page.evaluate(() => window.localStorage.getItem('narada:agent-web-ui:operator-footer-items.v1'));
-    assert.equal(stored, JSON.stringify(['target', 'input']), `expected footer selector state to persist in canonical order: ${stored}`);
+    assert.equal(stored, JSON.stringify(['target', 'input', 'status']), `expected footer selector state to persist in canonical order: ${stored}`);
     await setFooterSelectorItem('Operator Input', false);
     await setFooterSelectorItem('Target', false);
     await page.waitForTimeout(150);
