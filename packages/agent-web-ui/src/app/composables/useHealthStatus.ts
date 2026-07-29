@@ -11,7 +11,19 @@ export interface HealthIdentitySummary {
 
 export interface IntelligenceModelChoice {
   model: string;
+  modelRef?: string | null;
+  modelProvider?: string | null;
+  offeringRefs?: readonly string[];
+  invocationModelKey?: string | null;
+  capabilities?: readonly IntelligenceCapabilityChoice[];
   thinkingChoices: readonly string[];
+}
+
+export interface IntelligenceCapabilityChoice {
+  family: string;
+  name: string;
+  supported: boolean;
+  allowedValues?: readonly string[];
 }
 
 export interface IntelligenceProviderChoice {
@@ -22,6 +34,7 @@ export interface IntelligenceProviderChoice {
 export interface HealthIntelligenceSummary {
   provider: string | null;
   model: string | null;
+  modelRef?: string | null;
   thinking: string | null;
   providerChoices: readonly string[];
   modelChoices: readonly string[];
@@ -136,6 +149,7 @@ export function healthIntelligence(record: Record<string, unknown>): HealthIntel
       ?? stringField(kernel, 'model')
       ?? stringField(record, 'model')
       ?? resourceIdField(latestPlan, 'model', 'model:'),
+    modelRef: resourceIdField(latestPlan, 'model', 'model:'),
     thinking: stringField(intelligence, 'thinking')
       ?? stringField(kernel, 'thinking')
       ?? stringField(record, 'thinking')
@@ -180,7 +194,8 @@ function selectionChoicesField(value: unknown): readonly IntelligenceProviderCho
   return providers.flatMap((provider): IntelligenceProviderChoice[] => {
     if (!provider || typeof provider !== 'object' || Array.isArray(provider)) return [];
     const providerRecord = provider as Record<string, unknown>;
-    const providerId = resourceStringField(providerRecord, 'provider', 'inference-provider:');
+    const providerId = resourceStringField(providerRecord, 'provider', 'inference-provider:')
+      ?? resourceStringField(providerRecord, 'inference_provider', 'inference-provider:');
     const models = providerRecord.models;
     if (!providerId || !Array.isArray(models)) return [];
     return [{
@@ -188,9 +203,48 @@ function selectionChoicesField(value: unknown): readonly IntelligenceProviderCho
       models: models.flatMap((model): IntelligenceModelChoice[] => {
         if (!model || typeof model !== 'object' || Array.isArray(model)) return [];
         const modelRecord = model as Record<string, unknown>;
-        const modelId = resourceStringField(modelRecord, 'model', 'model:');
+        const modelId = resourceStringField(modelRecord, 'model', 'model:')
+          ?? resourceStringField(modelRecord, 'invocation_model_key', '');
         if (!modelId) return [];
-        return [{ model: modelId, thinkingChoices: stringArrayField(modelRecord, 'thinking_choices') }];
+        const modelRef = resourceStringField(modelRecord, 'model_ref', 'model:');
+        const modelProvider = resourceStringField(modelRecord, 'model_provider', 'model-provider:');
+        const offeringRefs = Array.isArray(modelRecord.offering_refs)
+          ? modelRecord.offering_refs.flatMap((ref) => {
+            const id = resourceStringField({ ref }, 'ref', 'model-offering:');
+            return id ? [`model-offering:${id}`] : [];
+          })
+          : [];
+        const capabilities = Array.isArray(modelRecord.capabilities)
+          ? modelRecord.capabilities.flatMap((capability): IntelligenceCapabilityChoice[] => {
+            if (!capability || typeof capability !== 'object' || Array.isArray(capability)) return [];
+            const capabilityRecord = capability as Record<string, unknown>;
+            const key = objectField(capabilityRecord, 'capability');
+            const family = stringField(key, 'family');
+            const name = stringField(key, 'name');
+            if (!family || !name || typeof capabilityRecord.supported !== 'boolean') return [];
+            return [{
+              family,
+              name,
+              supported: capabilityRecord.supported,
+              ...(Array.isArray(capabilityRecord.allowed_values)
+                ? { allowedValues: capabilityRecord.allowed_values.filter((value): value is string => typeof value === 'string') }
+                : {}),
+            }];
+          })
+          : [];
+        const explicitThinkingChoices = stringArrayField(modelRecord, 'thinking_choices');
+        const capabilityThinkingChoices = capabilities.find((capability) => (
+          capability.family === 'thinking' && capability.name === 'levels'
+        ))?.allowedValues ?? [];
+        return [{
+          model: stringField(modelRecord, 'invocation_model_key') ?? modelId,
+          ...(modelRef ? { modelRef } : {}),
+          ...(modelProvider ? { modelProvider } : {}),
+          ...(offeringRefs.length ? { offeringRefs } : {}),
+          ...(stringField(modelRecord, 'invocation_model_key') ? { invocationModelKey: stringField(modelRecord, 'invocation_model_key') } : {}),
+          ...(capabilities.length ? { capabilities } : {}),
+          thinkingChoices: explicitThinkingChoices.length ? explicitThinkingChoices : capabilityThinkingChoices,
+        }];
       }),
     }];
   });

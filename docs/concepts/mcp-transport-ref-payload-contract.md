@@ -37,7 +37,7 @@ This order prevents a wrong field from being misreported as a payload-size probl
 
 ## Package Boundary
 
-The implementation lives in `packages/mcp-transport/src/mcp-payload-file.mjs`.
+The implementation lives in the companion `mcp-surfaces` workspace at `packages/shared/mcp-transport/src/mcp-payload-file.ts` (package `@narada2/mcp-transport`). The former `packages/mcp-transport/src/mcp-payload-file.mjs` path is historical and no longer exists.
 
 Consuming sites may keep a local compatibility shim, but must not keep editable transport logic. Site shims re-export the Narada proper package implementation.
 

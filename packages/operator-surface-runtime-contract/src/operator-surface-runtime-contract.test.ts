@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   loadLaunchSliceContract,
+  loadOperatorJourneyMatrixContract,
   loadOperatorSurfaceLaunchMatrixContract,
   loadMcpRuntimeContract,
   loadRuntimeBooleanValuesContract,
@@ -28,6 +29,73 @@ test('launch slice contract identifies the admitted carrier runtime', () => {
   assert.equal(contract.admitted_runtime_slice, 'nars_attach_projection');
   assert.equal(contract.carrier_flag, '--attach');
   assert.equal(contract.terminal_mode, true);
+});
+
+test('operator journey matrix covers every required disruption and claimed projection', () => {
+  const journey = loadOperatorJourneyMatrixContract();
+  const launch = loadOperatorSurfaceLaunchMatrixContract();
+  assert.equal(journey.schema, 'narada.operator_journey_matrix.v1');
+  assert.deepEqual(journey.journey_steps, [
+    'discover',
+    'attach',
+    'observe',
+    'choose_valid_intelligence',
+    'request_change',
+    'submit_input',
+    'inspect_projections_and_effects',
+    'recover_replay_reconcile',
+    'detach_reattach',
+  ]);
+  assert.deepEqual(journey.truth_fields, [
+    'identity',
+    'host',
+    'epoch',
+    'health',
+    'capability',
+    'admission',
+    'turn',
+    'projection',
+    'failure',
+    'recovery',
+    'detach',
+  ]);
+  assert.deepEqual(
+    journey.disruptions.map((scenario: any) => scenario.id),
+    [
+      'reconnect',
+      'degraded_health',
+      'turn_limit_exhaustion',
+      'mcp_child_failure',
+      'provider_model_change',
+      'authority_transition',
+      'replay_restart',
+      'unknown_outcome_recovery',
+    ],
+  );
+  const launchKinds = new Set(launch.rows.map((row: any) => row.launch_selection_kind));
+  const surfaceIds = new Set(journey.surfaces.map((surface: any) => surface.id));
+  const embodimentIds = new Set(journey.embodiments.map((embodiment: any) => embodiment.id));
+  assert.deepEqual([...embodimentIds].sort(), ['local-nars', 'remote-cloudflare-projection']);
+  assert.equal(journey.surfaces.length >= 4, true);
+  for (const surface of journey.surfaces) {
+    assert.equal(surface.proof_refs.length > 0, true);
+    if (surface.launch_matrix_ref !== null) assert.equal(launchKinds.has(surface.launch_matrix_ref), true);
+    for (const embodimentId of surface.claimed_embodiments) assert.equal(embodimentIds.has(embodimentId), true);
+  }
+  for (const scenario of journey.disruptions) {
+    assert.deepEqual(scenario.required_truth_fields, journey.truth_fields);
+    assert.equal(scenario.recovery_result.length > 0, true);
+    assert.equal(scenario.proofs.length, journey.embodiments.length);
+    for (const proof of scenario.proofs) {
+      assert.equal(embodimentIds.has(proof.embodiment_id), true);
+      assert.equal(proof.result.length > 0, true);
+      assert.equal(proof.proof_level === 'live' || proof.proof_level === 'boundary', true);
+      assert.equal(proof.evidence_refs.length > 0, true);
+      for (const surfaceId of proof.surface_ids) assert.equal(surfaceIds.has(surfaceId), true);
+      const claimedSurfaces = journey.embodiments.find((embodiment: any) => embodiment.id === proof.embodiment_id).claimed_surfaces;
+      for (const surfaceId of proof.surface_ids) assert.equal(claimedSurfaces.includes(surfaceId), true);
+    }
+  }
 });
 
 test('carrier conformance report derives every row from the launch matrix', () => {

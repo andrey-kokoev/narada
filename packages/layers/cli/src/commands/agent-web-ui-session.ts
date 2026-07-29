@@ -327,6 +327,27 @@ function normalizePathToken(value: string): string {
   return value.replaceAll('\\', '/').replace(/\/+$/, '').toLowerCase();
 }
 
+function sessionMatchesAttachSiteScope(
+  session: JsonRecord,
+  options: AgentWebUiAttachOptions,
+): boolean {
+  const requestedSiteRoot = options.siteRoot?.trim();
+  if (requestedSiteRoot) {
+    const sessionSiteRoot = stringField(session, 'site_root')?.trim();
+    if (!sessionSiteRoot || normalizePathToken(sessionSiteRoot) !== normalizePathToken(requestedSiteRoot)) {
+      return false;
+    }
+  }
+  const requestedSite = options.site?.trim();
+  if (requestedSite) {
+    const sessionSite = stringField(session, 'site_id')?.trim();
+    if (!sessionSite || sessionSite.toLowerCase() !== requestedSite.toLowerCase()) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export async function resolveAttachSessionId(
   options: AgentWebUiAttachOptions,
   context: CommandContext,
@@ -558,16 +579,17 @@ async function discoverAttachSessionIdOnce(
   }
   const body = sessionsResult.result as { sessions?: JsonRecord[] };
   const candidates = body.sessions ?? [];
+  const scopedCandidates = candidates.filter((session) => sessionMatchesAttachSiteScope(session, options));
   const requireActive = options.dryRun !== true && !(Number(options.waitForSessionMs ?? 0) > 0);
   if (isLatestSessionSelector(options.session)) {
-    const selection = selectLatestNarsSession(candidates, agentId, { requireActive });
+    const selection = selectLatestNarsSession(scopedCandidates, agentId, { requireActive });
     const selected = selection.selected;
     const sessionId = selected ? (stringField(selected, 'session_id') ?? stringField(selected, 'carrier_session_id')) : null;
     if (!sessionId) {
       throw new AttachSessionDiscoveryError(
         `nars_session_not_found_for_agent: ${agentId}`,
         'nars_session_not_found_for_agent',
-        candidates.map(toAttachSessionCandidate),
+        scopedCandidates.map(toAttachSessionCandidate),
       );
     }
     return {
@@ -583,7 +605,7 @@ async function discoverAttachSessionIdOnce(
       },
     };
   }
-  const matches = candidates.filter((session) => {
+  const matches = scopedCandidates.filter((session) => {
     const sessionId = stringField(session, 'session_id') ?? stringField(session, 'carrier_session_id');
     return agentIdMatchesSession(agentId, session)
       && Boolean(sessionId)
@@ -593,7 +615,7 @@ async function discoverAttachSessionIdOnce(
     throw new AttachSessionDiscoveryError(
       `nars_session_not_found_for_agent: ${agentId}`,
       'nars_session_not_found_for_agent',
-      candidates.map(toAttachSessionCandidate),
+      scopedCandidates.map(toAttachSessionCandidate),
     );
   }
   if (matches.length > 1) {
@@ -612,7 +634,7 @@ async function discoverAttachSessionIdOnce(
     throw new AttachSessionDiscoveryError(
       `nars_session_not_found_for_agent: ${agentId}`,
       'nars_session_not_found_for_agent',
-      candidates.map(toAttachSessionCandidate),
+      scopedCandidates.map(toAttachSessionCandidate),
     );
   }
   return {

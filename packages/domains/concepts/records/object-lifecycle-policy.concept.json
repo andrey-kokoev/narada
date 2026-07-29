@@ -1,0 +1,37 @@
+{
+  "concept_id": "object_lifecycle_policy",
+  "canonical_name": "ObjectLifecyclePolicy",
+  "short_definition": "The shared lifecycle governance contract that validates ownership, state transition, stale, replay, retention, revocation, archival, cleanup, and audit decisions for Narada objects.",
+  "description": "ObjectLifecyclePolicy supplies a common safety algebra while retaining object-family state names and hooks. It prevents a generic lifecycle vocabulary from erasing task, session, artifact, attachment, grant, loop, projection, or health-record semantics.",
+  "kind": "policy",
+  "status": "active",
+  "aliases": ["object lifecycle policy", "lifecycle governance policy"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["universal object FSM", "database row status", "transport health"],
+  "boundaries": [
+    "Not a replacement for a task or NARS state machine.",
+    "Not a retention job or cleanup executor.",
+    "Not permission inference from a projection."
+  ],
+  "relations": [
+    { "kind": "depends_on", "concept_id": "task_lifecycle" },
+    { "kind": "depends_on", "concept_id": "nars_session_management" },
+    { "kind": "coordinates_with", "concept_id": "admission_policy" }
+  ],
+  "owner_surface": "Narada cross-domain policy contract",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "packages/narada-policy-contract/src/admission-lifecycle-policy.ts",
+    "notes": "Object-specific hooks and local transition maps remain authoritative during additive migration."
+  },
+  "schemas": ["narada.object_lifecycle_policy.v1", "narada.object_lifecycle_decision.v1"],
+  "docs": ["docs/concepts/admission-lifecycle-policy.md"],
+  "tasks": ["2377", "first-class-system-objects"],
+  "code_refs": ["packages/narada-policy-contract/src/admission-lifecycle-policy.ts"],
+  "tests": ["packages/narada-policy-contract/src/admission-lifecycle-policy.test.ts"],
+  "examples": ["verified reconciliation of a stale projection", "explicit artifact revocation followed by archival"],
+  "counterexamples": ["silently reopening a confirmed task through a generic transition"],
+  "open_questions": ["Which adapters should be adopted first by task governance and NARS session core?"],
+  "confidence": { "cl": 0.985, "basis": "Eight family-specific policies, refusal gates, migration hooks, and transition tests are implemented." },
+  "reviewed_at": "2026-07-28T04:45:00.000Z"
+}

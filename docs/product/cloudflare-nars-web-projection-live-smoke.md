@@ -57,7 +57,7 @@ The deploy command publishes the Worker and static UI assets. The command output
 Without `--live`, the smoke must not mutate deployed Cloudflare or local NARS. It reports the missing live opt-in and required arguments.
 
 ```text
-node packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.mjs --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id>
+node packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.ts --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id>
 ```
 
 ## Live Smoke
@@ -65,13 +65,13 @@ node packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-
 Run the live proof with an explicit projection id so the evidence can be correlated with Cloudflare, bridge, and local NARS logs:
 
 ```text
-node packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.mjs --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --expected-assets-manifest packages/cloudflare-nars-projection/public/narada-cloudflare-assets.json --projection-id <projection-id>
+node packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.ts --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --expected-assets-manifest packages/cloudflare-nars-projection/public/narada-cloudflare-assets.json --projection-id <projection-id>
 ```
 
 Example shape:
 
 ```text
-node packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.mjs --live --cloudflare-api-base-url https://narada-nars-projection.andrei-kokoev.workers.dev --site-root D:\code\narada.sonar --site-id sonar --session carrier_... --expected-assets-manifest packages/cloudflare-nars-projection/public/narada-cloudflare-assets.json --projection-id proj_strict_live_nars_...
+node packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.ts --live --cloudflare-api-base-url https://narada-nars-projection.andrei-kokoev.workers.dev --site-root D:\code\narada.sonar --site-id sonar --session carrier_... --expected-assets-manifest packages/cloudflare-nars-projection/public/narada-cloudflare-assets.json --projection-id proj_strict_live_nars_...
 ```
 
 ## Required Evidence
@@ -118,7 +118,7 @@ The package tests should cover Durable Object WebSocket broadcast from bridge-pu
 When adding behavior to the projection path, update both:
 
 - `packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts`
-- `packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.mjs`
+- `packages/cloudflare-nars-projection/scripts/cloudflare-nars-web-projection-live-smoke.ts`
 
 ## Completion Standard
 

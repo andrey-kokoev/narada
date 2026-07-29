@@ -81,6 +81,7 @@ Each Site stores NARS session evidence under:
   events.jsonl
   heartbeat.json
   session-index-record.json
+  surface-attachments.json
   artifacts/index.json
 ```
 
@@ -216,6 +217,26 @@ The preferred operator-visible presentation path is NARS-owned: after an artifac
 `attached_projections` is `null` while `attached_projections_status=not_tracked`. This means unknown, not an authoritative empty set. It must not be guessed from generated attach commands.
 
 `status_hint` is not liveness authority. Readers must verify active candidates through `/health` or `session.health` before presenting a session as attachable.
+
+## SurfaceAttachment
+
+`SurfaceAttachment` is the NARS-owned durable relationship between one operator-surface instance and one NARS session. It is not the
+session itself, the surface process, a browser tab, or an operator input event. The registry is stored beside the session record at
+`surface-attachments.json` and is rebuildable from the registry file plus the durable event journal.
+
+The shared contract is `narada.nars.surface_attachment.v1`. Its identity fields are `attachment_id`, `session_id`,
+`surface_kind`, `surface_instance_id`, and `authority_runtime_id`. It also carries projection mode, view policy, permissions,
+event cursor, endpoint references, attach source, lifecycle timestamps, and the latest health state.
+
+Attachment lifecycle and transport health are separate dimensions. The lifecycle states are `requested`, `discovering`,
+`probing_health`, `attached`, `reconnecting`, `stale`, `detaching`, `detached`, and `failed`. A healthy or degraded health sample
+must not be represented as a new owner or a new session. A disconnected transport can move an existing attachment to
+`reconnecting` or `stale` while preserving the same session and authority identity.
+
+CLI, TUI, and Web UI projections consume the same record and transition vocabulary. They must not infer ownership from a `carrier_`
+session-id prefix, terminal window, process list, browser route, or local connection label. If discovery finds no session, more than
+one candidate, a stale heartbeat, an unavailable endpoint, or a mismatched authority, the caller returns a structured
+`narada.nars.surface_attachment_refusal.v1` record with a stable refusal code and bounded candidate summaries.
 
 `site_id_source` records whether `site_id` came from launch/runtime context or a compatibility fallback. New runtime paths should prefer explicit launch-provided Site identity over path or agent-id inference.
 
@@ -361,7 +382,7 @@ Agent Web UI keeps the active view as a browser projection choice, requests that
 5. Add tests for missing/corrupt aggregate rebuild and stale heartbeat classification.
 6. Add Narada CLI discovery commands for NARS sessions by Site root and registered Site id.
 7. Add no-argument global discovery through known Site roots only; do not scan arbitrary filesystem roots.
-8. Add attached projection registration only when a real attach/detach event surface exists.
+8. Register attached projections through the durable `SurfaceAttachment` registry when a real attach/detach event surface exists.
 
 ## Out Of Scope For First Slice
 

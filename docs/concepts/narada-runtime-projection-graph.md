@@ -120,9 +120,9 @@ Cloudflare hosted NARS authority_runtime
 
 The initial Cloudflare-origin authority runtime target is a Cloudflare-hosted session/event authority with execution delegated elsewhere. It must satisfy the abstract authority-runtime contract before local projections can treat it as an origin.
 
-## Graph Record Schema Target
+## Graph Record Schema
 
-The initial target schema is documentation-first. It does not require immediate runtime behavior or storage changes.
+The graph record is now implemented at the domain-contract level. Runtime-specific persistence and live graph publication remain later slices; callers can already validate a versioned record, enforce cross-zone references, and query the topology without treating a projection as authority.
 
 ```text
 narada.runtime_projection_graph.v1
@@ -141,6 +141,8 @@ Minimum graph record:
       "kind": "nars",
       "location": { "kind": "local", "site_root": "D:/code/narada.sonar" },
       "authority_role": "canonical_session_runtime",
+      "owner": { "kind": "nars_session_authority", "id": "auth_local_nars_..." },
+      "non_owner_boundary": "Projection stores and surfaces cannot mint session events or admit input.",
       "session_id": "carrier_...",
       "agent_id": "resident",
       "endpoint_refs": { "events": "ws://127.0.0.1:12345/events", "health": "http://127.0.0.1:12346/health" },
@@ -199,7 +201,9 @@ Minimum graph record:
 }
 ```
 
-Records should carry identity, location, implementation kind, authority role, endpoint refs, credential refs, policy refs, health/freshness refs, provenance, and lifecycle state. Schema consumers must not infer canonical authority from durability, public reachability, or cache freshness.
+Records should carry identity, location, implementation kind, authority role, owner/non-owner boundary, endpoint refs, credential refs, policy refs, health/freshness refs, provenance, and lifecycle state. The TypeScript contract and focused tests are linked from the [`ProjectionTopology` registry record](../../packages/domains/concepts/records/narada-runtime-projection-graph.concept.json). Schema consumers must not infer canonical authority from durability, public reachability, or cache freshness.
+
+Authority decisions carried through this graph use the separate [`AuthorityGrant` contract](authority-grant.md). A projection edge may copy, filter, summarize, redact, or attest a grant, but it cannot mint, admit, enforce, revoke, or become the owner of one.
 
 ## Operational Sequence
 
@@ -207,7 +211,7 @@ The operational sequence is documented in [`narada-runtime-projection-graph-oper
 
 1. Canonicalize this graph concept.
 2. Link slice docs to this concept.
-3. Define the graph record schema target.
+3. Define and validate the graph record schema.
 4. Map the current Cloudflare projection instance into graph terms.
 5. Make the local-origin Cloudflare path operational.
 6. Add operator CLI and runbook UX.

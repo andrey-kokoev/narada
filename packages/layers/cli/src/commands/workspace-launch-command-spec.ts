@@ -23,6 +23,18 @@ export interface WorkspaceLaunchRuntimeCommandOptions {
 
 export type WorkspaceLaunchRuntimeCommandMode = 'execute' | 'dry-run';
 
+export function workspaceLaunchCliCommandSpec(naradaProper: string): WorkspaceLaunchCommandSpec {
+  if (process.platform !== 'win32') {
+    const entrypoint = process.env.NARADA_CLI_ENTRYPOINT?.trim() || process.argv[1]?.trim();
+    if (entrypoint) return { executable: process.execPath, args: [entrypoint] };
+    return { executable: 'narada', args: [] };
+  }
+  return {
+    executable: 'pnpm',
+    args: ['--dir', naradaProper, 'exec', 'narada'],
+  };
+}
+
 export function workspaceLaunchRuntimeCommandSpec(
   options: WorkspaceLaunchRuntimeCommandOptions,
   mode: WorkspaceLaunchRuntimeCommandMode,
@@ -60,6 +72,14 @@ export function workspaceLaunchNodeNaradaCommandSpec(
   naradaProper: string,
   runtimeCommand: WorkspaceLaunchCommandSpec,
 ): WorkspaceLaunchCommandSpec {
+  const cli = workspaceLaunchCliCommandSpec(naradaProper);
+  if (cli.executable !== 'pnpm') {
+    return {
+      executable: cli.executable,
+      args: [...cli.args, ...runtimeCommand.args],
+      cwd: runtimeCommand.cwd,
+    };
+  }
   return {
     executable: process.execPath,
     args: [join(naradaProper, 'packages', 'layers', 'cli', 'dist', 'main.js'), ...runtimeCommand.args],

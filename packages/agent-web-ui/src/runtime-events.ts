@@ -34,7 +34,7 @@ export const unwrapRuntimeEvent = (message: unknown): UnknownRecord | null => {
 };
 
 export function projectRuntimeEvent(message: unknown): RuntimeProjection {
-  return withRenderIdentity(projectNarsClientEvent(message) as RuntimeProjection);
+  return projectNarsClientEvent(message) as RuntimeProjection;
 }
 
 export function summarizeRuntimeEvent(message: unknown): unknown {
@@ -80,25 +80,17 @@ function isActiveTurnTerminalEvent(event: UnknownRecord): boolean {
     || event.event === 'input_completed';
 }
 
-function withRenderIdentity(projected: RuntimeProjection): RuntimeProjection {
-  if (!projected || typeof projected !== 'object') return projected;
-  const event = isRecord(projected.event) ? projected.event : {};
-  if (projected.kind=== 'assistant_message' || projected.kind === 'assistant_message_stream') {
-    const turnId = event?.turn_id ?? event?.turnId ?? null;
-    if (turnId) return { ...projected, label: 'Agent', tone: 'assistant', renderKey: `assistant:${turnId}` };
-  }
-  if (projected.kind=== 'user_message' || projected.kind === 'operator_input_submitted') {
-    const requestId = event?.request_id ?? null;
-    if (requestId) return { ...projected, label: 'Operator', tone: 'operator', renderKey: `operator:${requestId}` };
-  }
-  return projected;
-}
+export type RuntimeProjectionPolicyOptions = {
+  verbosity?: string;
+  facets?: readonly string[];
+  includeStateSamples?: boolean;
+};
 
-export function shouldRenderRuntimeEvent(message: unknown, options: { verbosity?: string } = {}): boolean {
+export function shouldRenderRuntimeEvent(message: unknown, options: RuntimeProjectionPolicyOptions = {}): boolean {
   return shouldRenderRuntimeProjection(projectRuntimeEvent(message), options);
 }
 
-export function shouldRenderRuntimeProjection(projection: RuntimeProjection, options: { verbosity?: string } = {}): boolean {
+export function shouldRenderRuntimeProjection(projection: RuntimeProjection, options: RuntimeProjectionPolicyOptions = {}): boolean {
   const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY);
   return shouldProjectNarsClientProjection(projection as Parameters<typeof shouldProjectNarsClientProjection>[0], { ...options, verbosity });
 }

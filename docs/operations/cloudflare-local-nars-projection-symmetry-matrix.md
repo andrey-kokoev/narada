@@ -5,16 +5,16 @@
 This matrix records the intended symmetry between local NARS sessions, Cloudflare-hosted projection surfaces, and Cloudflare-origin authority/runtime slices. It is a documentation boundary, not a runtime authority claim.
 
 The canonical runtime/surface/authority contract is
-[`@narada2/nars-runtime-contract` `runtime-surface-contract`](../../packages/nars-runtime-contract/src/runtime-surface-contract.mjs)
+[`@narada2/nars-runtime-contract` `runtime-surface-contract`](../../packages/nars-runtime-contract/src/runtime-surface-contract.ts)
 (schema `narada.nars.runtime_surface_contract.v1`). Every supported quadrant reports `runtime_origin`, `surface_origin`, `authority_runtime_host`, `authority_epoch`, `authority_runtime_id`, projection identity/route, and `capability_profile` from declared contract fields — never inferred from transport or UI state.
 
 ## Quadrants
 
 | Runtime origin | Surface origin | Evidence class | Truthful behavior label | Evidence |
 | --- | --- | --- | --- | --- |
-| Local NARS runtime | Local browser surface | `genuine` | Real local NARS authority; real local surface. | `packages/agent-runtime-server/test/server-wrapper.test.mjs` (spawned runtime emits `runtime_origin`/`authority_runtime_host` in `session_started`), `packages/agent-web-ui/test/agent-web-ui-projection.test.mjs` |
+| Local NARS runtime | Local browser surface | `genuine` | Real local NARS authority; real local surface. | `packages/agent-runtime-server/test/server-wrapper.test.ts` (spawned runtime emits `runtime_origin`/`authority_runtime_host` in `session_started`), `packages/agent-web-ui/test/agent-web-ui-projection.test.ts` |
 | Local NARS runtime | Cloudflare-hosted browser surface | `projected` | Real local authority; Cloudflare state is a non-canonical projection. Projected input is admitted only by local NARS (`semantic_success_point: nars_admission`). | `packages/cloudflare-nars-projection/test/runtime-surface-quadrants.test.ts`, `test/cloudflare-nars-projection.test.ts`, `test/cloudflare-nars-projection-node.test.ts` |
-| Cloudflare-origin synthetic runtime | Local browser surface | `synthetic` | Synthetic authority: ordered synthetic events, replay, health, input admission, revocation are real at the synthetic boundary. Provider execution may graduate `absent → declared → present` per the Task 2112 decision when a provider adapter is configured and a turn completes; local tool/MCP/filesystem/local-artifact authority remain **absent** by hard rule. | `packages/cloudflare-nars-projection/test/runtime-surface-quadrants.test.ts`, `test/provider-executor.test.ts`, `packages/agent-web-ui/test/agent-web-ui-projection.test.mjs` |
+| Cloudflare-origin synthetic runtime | Local browser surface | `synthetic` | Synthetic authority: ordered synthetic events, replay, health, input admission, revocation are real at the synthetic boundary. Provider execution may graduate `absent → declared → present` per the Task 2112 decision when a provider adapter is configured and a turn completes; local tool/MCP/filesystem/local-artifact authority remain **absent** by hard rule. | `packages/cloudflare-nars-projection/test/runtime-surface-quadrants.test.ts`, `test/provider-executor.test.ts`, `packages/agent-web-ui/test/agent-web-ui-projection.test.ts` |
 | Cloudflare-origin synthetic runtime | Cloudflare-hosted browser surface | `synthetic` | Same synthetic slice, consumed from the Cloudflare-hosted shell. Deployed live smoke evidence exists separately and is operator-run only. | `packages/cloudflare-nars-projection/test/runtime-surface-quadrants.test.ts`, `test/cloudflare-nars-projection.test.ts` |
 
 ## Coverage Notes
@@ -23,7 +23,7 @@ The canonical runtime/surface/authority contract is
 - Cloudflare-origin runtime to local and Cloudflare-hosted surfaces covers session creation, ordered synthetic events, duplicate/replay cursors, input admission/refusal, health, revocation, and close via `createCloudflareNarsAuthorityService` tests.
 - Negative authority cases are tested explicitly: browser tokens cannot publish (`credential_kind_not_authorized_for_action`); input relay acknowledgement confirms only the crossing (`acknowledgement: requires_nars_admission`), never NARS admission; ambiguous dual-host authority creation is durably refused (`dual_host_authority_conflict`) without wiping the existing authority event log.
 - Refused behaviors are labeled refusals, not failures: projection stores never mint canonical local events; the Cloudflare synthetic slice never claims local provider/tool/MCP/filesystem authority.
-- `packages/cloudflare-carrier` remains a separate carrier implementation. A boundary guard test (`packages/cloudflare-carrier/src/cloudflare-carrier.test.mjs`) asserts it does not depend on NARS session authority/projection packages; it is not a NARS runtime quadrant.
+- `packages/cloudflare-carrier` remains a separate carrier implementation. A boundary guard test (`packages/cloudflare-carrier/src/contracts/boundary-contracts.test.ts`) asserts it does not depend on NARS session authority/projection packages; it is not a NARS runtime quadrant.
 
 ## Principled Asymmetry
 

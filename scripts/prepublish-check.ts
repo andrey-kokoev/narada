@@ -149,6 +149,46 @@ function runPackSmokeCheck(): CheckResult {
             error: `CLI tarball installed but did not complete the published User Site boundary: ${bootstrap.output.slice(-2000)}`,
           };
         }
+
+        const linuxSiteRoot = mkdtempSync(join(tmp, 'cli-linux-site-'));
+        const linuxSitePlan = runCommand(
+          `${JSON.stringify(process.execPath)} ${JSON.stringify(installedCliEntrypoint)} sites init linux-pack-smoke --substrate linux-user --root ${JSON.stringify(linuxSiteRoot)} --dry-run --format json`,
+          consumer,
+        );
+        if (!linuxSitePlan.success || !/linux-user|linux/i.test(linuxSitePlan.output)) {
+          return {
+            name: 'Pack smoke check',
+            passed: false,
+            error: `CLI tarball did not expose the Linux Site materialization adapter: ${linuxSitePlan.output.slice(-2000)}`,
+          };
+        }
+
+        const linuxOnboardingRoot = mkdtempSync(join(tmp, 'cli-linux-onboarding-'));
+        const linuxOnboarding = runCommand(
+          `${JSON.stringify(process.execPath)} ${JSON.stringify(installedCliEntrypoint)} onboarding start --platform linux --scope user-site --site-root ${JSON.stringify(linuxOnboardingRoot)} --no-exec --format json`,
+          consumer,
+        );
+        let linuxOnboardingPayload: Record<string, unknown> | null = null;
+        try {
+          linuxOnboardingPayload = JSON.parse(linuxOnboarding.output) as Record<string, unknown>;
+        } catch {
+          // The failure below includes the bounded command output.
+        }
+        const linuxUserSite = linuxOnboardingPayload?.user_site;
+        const linuxRegistryPath = linuxUserSite && typeof linuxUserSite === 'object'
+          ? (linuxUserSite as Record<string, unknown>).registry_path
+          : null;
+        if (!linuxOnboarding.success
+          || linuxOnboardingPayload?.schema !== 'narada.onboarding.start.v1'
+          || linuxOnboardingPayload.platform !== 'linux'
+          || typeof linuxRegistryPath !== 'string'
+          || !linuxRegistryPath.endsWith('agents.json')) {
+          return {
+            name: 'Pack smoke check',
+            passed: false,
+            error: `CLI tarball did not expose the Linux user-site onboarding contract: ${linuxOnboarding.output.slice(-2000)}`,
+          };
+        }
       }
     }
 

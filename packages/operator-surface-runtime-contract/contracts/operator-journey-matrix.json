@@ -1,0 +1,299 @@
+{
+  "schema": "narada.operator_journey_matrix.v1",
+  "authority": {
+    "journey_semantics_owner": "@narada2/nars-session-core",
+    "evidence_semantics_owner": "@narada2/evidence-confirmation-contract",
+    "launch_selection_authority": "packages/operator-surface-runtime-contract/contracts/operator-surface-launch-matrix.json",
+    "projection_rule": "Operator surfaces project canonical runtime events, evidence, and read models; they do not mint authority, completion, failure, or recovery outcomes."
+  },
+  "journey_steps": [
+    "discover",
+    "attach",
+    "observe",
+    "choose_valid_intelligence",
+    "request_change",
+    "submit_input",
+    "inspect_projections_and_effects",
+    "recover_replay_reconcile",
+    "detach_reattach"
+  ],
+  "truth_fields": [
+    "identity",
+    "host",
+    "epoch",
+    "health",
+    "capability",
+    "admission",
+    "turn",
+    "projection",
+    "failure",
+    "recovery",
+    "detach"
+  ],
+  "embodiments": [
+    {
+      "id": "local-nars",
+      "kind": "local_authoritative_nars",
+      "authority_owner": "@narada2/nars-session-core",
+      "proof_posture": "live_and_boundary",
+      "claimed_surfaces": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+      "live_commands": [
+        "pnpm --filter @narada2/cli run test:launcher-acceptance",
+        "pnpm --filter @narada2/cli run test:operator-journey-acceptance",
+        "pnpm --filter @narada2/agent-pi-tui run test:live:local"
+      ],
+      "evidence_refs": [
+        "docs/architecture/operator-journey-acceptance.md",
+        "packages/layers/cli/test/integration/operator-launch-journey.test.ts",
+        "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.ts",
+        "packages/agent-pi-tui/test/live-four-surface-acceptance-e2e.ts"
+      ],
+      "recovery_result": "The local NARS authority remains the source of identity, epoch, lifecycle, event, and evidence truth while projections reconnect, replay, or detach."
+    },
+    {
+      "id": "remote-cloudflare-projection",
+      "kind": "cloudflare_remote_projection",
+      "authority_owner": "local-nars-or-explicit-cloudflare-synthetic-authority",
+      "proof_posture": "boundary_with_explicit_live_smoke_path",
+      "claimed_surfaces": ["agent-web-ui", "operator-console"],
+      "live_commands": [
+        "pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live",
+        "pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live"
+      ],
+      "evidence_refs": [
+        "docs/concepts/cloudflare-nars-web-projection.md",
+        "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts",
+        "packages/cloudflare-nars-projection/test/authority-host-transition.test.ts"
+      ],
+      "authority_boundary": "Cloudflare projection may relay and project remote session evidence, but it must not be treated as local NARS authority unless the explicit synthetic Cloudflare authority contract is selected."
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "agent-cli",
+      "kind": "operator_surface_projection",
+      "launch_matrix_ref": "agent-cli",
+      "claimed_embodiments": ["local-nars"],
+      "proof_refs": [
+        "packages/layers/cli/test/integration/operator-launch-journey.test.ts",
+        "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.ts"
+      ]
+    },
+    {
+      "id": "agent-tui",
+      "kind": "operator_surface_projection",
+      "launch_matrix_ref": "agent-tui",
+      "claimed_embodiments": ["local-nars"],
+      "proof_refs": [
+        "packages/agent-pi-tui/test/live-four-surface-acceptance-e2e.ts",
+        "packages/agent-pi-tui/test/reconnect.test.ts"
+      ]
+    },
+    {
+      "id": "agent-web-ui",
+      "kind": "operator_surface_projection",
+      "launch_matrix_ref": "agent-web-ui",
+      "claimed_embodiments": ["local-nars", "remote-cloudflare-projection"],
+      "proof_refs": [
+        "packages/agent-web-ui/test/full-live-router-nars-provider-e2e.ts",
+        "packages/agent-web-ui/test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.ts",
+        "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts"
+      ]
+    },
+    {
+      "id": "operator-console",
+      "kind": "operator_router_projection",
+      "launch_matrix_ref": null,
+      "projection_authority_ref": "docs/architecture/operator-journey-acceptance.md",
+      "claimed_embodiments": ["local-nars", "remote-cloudflare-projection"],
+      "proof_refs": [
+        "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.ts",
+        "docs/concepts/cloudflare-nars-web-projection.md"
+      ]
+    }
+  ],
+  "disruptions": [
+    {
+      "id": "reconnect",
+      "trigger": "The event transport or projection socket disconnects while canonical authority remains available.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Mark transport reconnecting, retain authority and turn truth, resume from a cursor or replay boundary, then reconcile the projection without duplicating input or events.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "live",
+          "result": "passed",
+          "evidence_refs": ["packages/agent-pi-tui/test/live-p1-transport-idempotency-e2e.ts", "packages/agent-pi-tui/test/reconnect.test.ts", "docs/architecture/operator-journey-acceptance.md"]
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["docs/concepts/cloudflare-nars-web-projection.md", "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts"],
+          "live_gap": "The remote projection smoke proves live transport/replay for its supported slice; disruption-specific cross-surface live coverage remains a follow-up."
+        }
+      ]
+    },
+    {
+      "id": "degraded_health",
+      "trigger": "A dependency, stream, or MCP child becomes unhealthy while the authority and current evidence remain identifiable.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Project degraded with an explicit cause and operator hint; do not collapse degraded into disconnected, failed, or completed; recover only after a fresh health observation.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["packages/agent-pi-tui/test/live-p1-mcp-faults-e2e.ts", "packages/agent-web-ui/test/health-status.unit.test.ts", "packages/agent-web-ui/test/web-ui-boundaries.unit.test.ts"]
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["packages/cloudflare-nars-projection/test/workspace-directory.test.ts", "docs/architecture/cloudflare-carrier/target.md"],
+          "live_gap": "No claim is made here that every remote dependency degradation has been exercised through every hosted surface."
+        }
+      ]
+    },
+    {
+      "id": "turn_limit_exhaustion",
+      "trigger": "The active agent turn reaches the configured tool-loop or turn limit.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Record a terminal turn-limit failure, preserve the last admitted input and evidence cursor, and allow a new turn or explicit reconciliation without implying provider success.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["packages/agent-runtime-server/src/intelligence-runtime-controller.test.ts", "packages/agent-runtime-server/src/session-core-runtime-service.test.ts", "docs/architecture/narada-target-architecture.md"],
+          "live_gap": "The runtime limit is contract-tested; a full provider-backed live exhaustion run remains environment-dependent."
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["docs/architecture/cloudflare-carrier/target.md", "docs/concepts/cloudflare-nars-web-projection.md"],
+          "live_gap": "Cloudflare remote projection does not claim provider-backed turn-limit execution in this matrix."
+        }
+      ]
+    },
+    {
+      "id": "mcp_child_failure",
+      "trigger": "An attached MCP child fails during discovery, an input turn, or a capability request.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Preserve the child failure as a correlated runtime/evidence failure, keep unrelated authority truth intact, and expose retry or detach/reattach recovery without replaying an admitted effect.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "live",
+          "result": "passed",
+          "evidence_refs": ["packages/agent-pi-tui/test/live-p1-mcp-faults-e2e.ts", "packages/agent-pi-tui/test/live-p1-ambient-isolation-e2e.ts", "packages/agent-web-ui/test/web-ui-boundaries.unit.test.ts"]
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["packages/cloudflare-nars-projection/test/worker-intelligence-boundary.test.ts", "docs/architecture/cloudflare-carrier/target.md"]
+        }
+      ]
+    },
+    {
+      "id": "provider_model_change",
+      "trigger": "The operator requests an admitted provider/model or intelligence-plan change while a session is attached.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Validate the dependent model and thinking options together, clear invalid dependent values before submission, and expose request, admission, application, and resulting plan evidence.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "live",
+          "result": "passed",
+          "evidence_refs": ["packages/agent-pi-tui/test/live-p1-controls-launch-binding-e2e.ts", "packages/agent-web-ui/test/intelligence-selection.unit.test.ts", "packages/agent-runtime-server/src/intelligence-runtime-controller.test.ts"]
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["packages/cloudflare-nars-projection/test/worker-intelligence-boundary.test.ts", "docs/concepts/cloudflare-nars-web-projection.md"]
+        }
+      ]
+    },
+    {
+      "id": "authority_transition",
+      "trigger": "Session authority moves between hosts or a transition is proposed while the old authority remains observable.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Require a strictly newer epoch, preserve the handoff dispositions, fence the old authority, and reconcile active work before accepting the new authority as canonical.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "live",
+          "result": "passed",
+          "evidence_refs": ["packages/agent-pi-tui/test/live-p1-authority-negative-e2e.ts", "packages/nars-session-core/src/authority-transition-state.test.ts", "packages/nars-session-core/src/authority-transition-fsm.test.ts"]
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["packages/cloudflare-nars-projection/test/authority-host-transition.test.ts", "docs/concepts/nars-authority-runtime-host-transition.md"]
+        }
+      ]
+    },
+    {
+      "id": "replay_restart",
+      "trigger": "The runtime or surface restarts and must reconstruct the session from durable evidence and a cursor.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Replay only durable canonical evidence, resume after the recorded cursor, and preserve event identity and authority epoch across surface replacement.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "live",
+          "result": "passed",
+          "evidence_refs": ["packages/agent-pi-tui/test/live-p1-compaction-reconstruction-e2e.ts", "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.ts", "docs/architecture/operator-journey-acceptance.md"]
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["docs/concepts/cloudflare-nars-web-projection.md", "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts"],
+          "verification_commands": ["pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live", "pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live"],
+          "live_gap": "The no-argument smoke invocation returned status planned because --live and explicit site/session/assets inputs are required; no external mutation was attempted in this run."
+        }
+      ]
+    },
+    {
+      "id": "unknown_outcome_recovery",
+      "trigger": "Transport or process interruption occurs after admission but before terminal effect confirmation.",
+      "required_truth_fields": ["identity", "host", "epoch", "health", "capability", "admission", "turn", "projection", "failure", "recovery", "detach"],
+      "recovery_result": "Fence the effect as interrupted_unknown, retain correlation, and resolve it only through replay, artifact observation, or explicit reconciliation; never infer success from silence or closure.",
+      "proofs": [
+        {
+          "embodiment_id": "local-nars",
+          "surface_ids": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
+          "proof_level": "live",
+          "result": "passed",
+          "evidence_refs": ["packages/agent-pi-tui/test/live-p1-uncertain-admission-retry-e2e.ts", "packages/agent-pi-tui/test/live-p0-durability-cancellation-e2e.ts", "packages/nars-session-core/src/recovery-attempt-state.test.ts"]
+        },
+        {
+          "embodiment_id": "remote-cloudflare-projection",
+          "surface_ids": ["agent-web-ui", "operator-console"],
+          "proof_level": "boundary",
+          "result": "passed_at_boundary",
+          "evidence_refs": ["packages/cloudflare-nars-projection/test/authority-host-transition.test.ts", "docs/concepts/nars-authority-runtime-host-transition.md", "docs/concepts/cloudflare-nars-web-projection.md"]
+        }
+      ]
+    }
+  ]
+}

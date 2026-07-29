@@ -43,7 +43,7 @@ Run from `D:\code\narada`:
 ```powershell
 pnpm --filter @narada2/operator-console-contract test
 pnpm --filter @narada2/operator-console-ui test
-node --test --test-name-pattern "Sites and Agents" packages/layers/cli/test/integration/operator-console-ui-e2e.test.mjs
+node --test --test-name-pattern "Sites and Agents" packages/layers/cli/test/integration/operator-console-ui-e2e.test.ts
 pnpm --filter @narada2/cloudflare-nars-projection test
 pnpm --filter @narada2/cloudflare-nars-projection typecheck
 pnpm --filter @narada2/cli exec vitest run --silent=true test/commands/console-server.test.ts

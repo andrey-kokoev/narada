@@ -2,6 +2,7 @@ type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
 
 import {
+  applyWorkerMcpProjection,
   aggregateToolBindings,
   discoverAndStartMcpServers,
   findToolBinding,
@@ -64,6 +65,7 @@ export function createNarsCapabilityGateway(options: AnyRecord = {}): AnyRecord 
 
   const runtime = {
     discoverAndStartMcpServers: dependencies.discoverAndStartMcpServers ?? discoverAndStartMcpServers,
+    applyWorkerMcpProjection: dependencies.applyWorkerMcpProjection ?? applyWorkerMcpProjection,
     aggregateToolBindings: dependencies.aggregateToolBindings ?? aggregateToolBindings,
     findToolBinding: dependencies.findToolBinding ?? findToolBinding,
     sendMcpRequest: dependencies.sendMcpRequest ?? sendMcpRequest,
@@ -106,7 +108,8 @@ export function createNarsCapabilityGateway(options: AnyRecord = {}): AnyRecord 
     const running = (async () => {
       try {
         await transitionGateway('starting', { reason: 'start_requested' });
-        mcpServers = await runtime.discoverAndStartMcpServers(siteRoot, ownershipContext);
+        const discoveredMcpServers = await runtime.discoverAndStartMcpServers(siteRoot, ownershipContext);
+        mcpServers = runtime.applyWorkerMcpProjection(discoveredMcpServers);
         const startupFailures = getMcpStartupFailures(mcpServers);
         await transitionGateway(startupFailures.length > 0 ? 'degraded' : 'healthy', {
           reason: 'start_completed',

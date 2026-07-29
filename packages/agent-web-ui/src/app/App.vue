@@ -47,7 +47,7 @@ interface AgentWebUiConfig {
 function requestIntelligenceReconfiguration(change: IntelligenceSelectionDraft) {
   const frame = buildIntelligenceReconfigureFrame({
     inferenceProvider: change.inferenceProvider,
-    model: change.model,
+    model: change.modelRef ?? change.model,
     requestedOptions: change.thinking ? { thinking: change.thinking } : {},
   });
   if (frame) {

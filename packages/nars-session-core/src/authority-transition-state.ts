@@ -26,6 +26,10 @@ export interface NaradaAuthorityTransitionSourceState {
   updated_at: unknown;
   authority_transition_state: NaradaAuthorityRuntimeHostTransitionState | null;
   source_write_admission: NaradaAuthorityRuntimeSourceWriteAdmission;
+  source_authority_runtime_host: NaradaAuthorityRuntimeHostKind | null;
+  source_authority_epoch: number | null;
+  source_authority_runtime_id: string | null;
+  transition_id: string | null;
   target_write_admission: NaradaAuthorityRuntimeTargetWriteAdmission;
   drain_started_at: unknown;
   drain_reason: unknown;
@@ -44,6 +48,8 @@ export interface NaradaAuthorityTransitionSourceState {
   authority_locator_ref: string | null;
   target_transition_plan: Record<string, unknown> | null;
   authority_handoff_lifecycle: NaradaAuthorityHandoffLifecycle | null;
+  handoff_evidence: Record<string, unknown> | null;
+  reconciliation_evidence: Record<string, unknown> | null;
   target_activation_reason: unknown;
   target_activation_requested_by: unknown;
   seal_reason: unknown;
@@ -95,7 +101,7 @@ export function writeAuthorityTransitionSourceState(path: string | null | undefi
   return next;
 }
 
-export function planTargetAuthorityTransition({ sourceAuthorityRuntimeHost = 'local', currentSiteRoot = null, currentSessionId = null, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null }: { sourceAuthorityRuntimeHost?: unknown; currentSiteRoot?: unknown; currentSessionId?: unknown; targetAuthorityLocator?: unknown; supersededBySessionId?: unknown; authorityLocatorRef?: unknown } = {}): Record<string, unknown> {
+export function planTargetAuthorityTransition({ sourceAuthorityRuntimeHost = 'local', sourceAuthorityEpoch = 1, sourceAuthorityRuntimeId = null, transitionId = null, currentSiteRoot = null, currentSessionId = null, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null }: { sourceAuthorityRuntimeHost?: unknown; sourceAuthorityEpoch?: unknown; sourceAuthorityRuntimeId?: unknown; transitionId?: unknown; currentSiteRoot?: unknown; currentSessionId?: unknown; targetAuthorityLocator?: unknown; supersededBySessionId?: unknown; authorityLocatorRef?: unknown } = {}): Record<string, unknown> {
   const sourceHostKind = normalizeAuthorityRuntimeHostKind(sourceAuthorityRuntimeHost, 'local');
   const rawLocator = normalizeOptionalObject(targetAuthorityLocator);
   const targetHostKind = normalizeAuthorityRuntimeHostKind(rawLocator?.kind ?? rawLocator?.host_kind, null);
@@ -134,6 +140,9 @@ export function planTargetAuthorityTransition({ sourceAuthorityRuntimeHost = 'lo
     status: refusals.length > 0 ? 'refused' : 'ready',
     direction: targetHostKind ? `${sourceHostKind}_to_${targetHostKind}` : 'unknown',
     source_authority_runtime_host: sourceHostKind,
+    source_authority_epoch: Number.isInteger(Number(sourceAuthorityEpoch)) && Number(sourceAuthorityEpoch) >= 1 ? Number(sourceAuthorityEpoch) : 1,
+    source_authority_runtime_id: normalizeOptionalString(sourceAuthorityRuntimeId) ?? (normalizeOptionalString(currentSessionId) ? `local-nars:${String(currentSessionId).trim()}` : null),
+    transition_id: normalizeOptionalString(transitionId),
     target_authority_runtime_host: targetHostKind,
     target_authority_locator: normalizedLocator,
     superseded_by_session_id: normalizeOptionalString(supersededBySessionId),
@@ -154,6 +163,7 @@ export function prepareTargetAuthority({ path = null, sessionPath = null, state,
     assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'preparing_target');
   }
   const occurredAt = now.toISOString();
+  const plan = normalizeOptionalObject(transitionPlan);
   const next = writeAuthorityTransitionSourceState(path, {
     ...current,
     authority_transition_state: 'preparing_target',
@@ -163,6 +173,10 @@ export function prepareTargetAuthority({ path = null, sessionPath = null, state,
     superseded_by_session_id: normalizeOptionalString(supersededBySessionId) ?? current.superseded_by_session_id ?? null,
     authority_locator_ref: normalizeOptionalString(authorityLocatorRef) ?? current.authority_locator_ref ?? null,
     target_transition_plan: normalizeOptionalObject(transitionPlan) ?? current.target_transition_plan ?? null,
+    source_authority_runtime_host: normalizeAuthorityRuntimeHostKind(plan?.source_authority_runtime_host, current.source_authority_runtime_host ?? 'local'),
+    source_authority_epoch: Number.isInteger(Number(plan?.source_authority_epoch)) && Number(plan?.source_authority_epoch) >= 1 ? Number(plan?.source_authority_epoch) : current.source_authority_epoch ?? 1,
+    source_authority_runtime_id: normalizeOptionalString(plan?.source_authority_runtime_id) ?? current.source_authority_runtime_id ?? null,
+    transition_id: normalizeOptionalString(plan?.transition_id) ?? current.transition_id ?? `arht_${randomUUID()}`,
     target_prepare_reason: reason ?? current.target_prepare_reason ?? null,
     target_prepare_requested_by: requestedBy ?? current.target_prepare_requested_by ?? null,
     last_transition: { transition: 'preparing_target', occurred_at: occurredAt, reason, requested_by: requestedBy },
@@ -174,12 +188,18 @@ export function prepareTargetAuthority({ path = null, sessionPath = null, state,
     sourceWriteAdmission: next.source_write_admission,
     supersededBySessionId: next.superseded_by_session_id,
     authorityLocatorRef: next.authority_locator_ref,
+    authorityRuntimeHost: next.source_authority_runtime_host,
+    authorityEpoch: next.source_authority_epoch,
+    authorityRuntimeId: next.source_authority_runtime_id,
+    authorityTransitionId: next.transition_id,
+    authorityHandoffEvidence: next.handoff_evidence,
+    authorityReconciliationEvidence: next.reconciliation_evidence,
     updatedAt: occurredAt,
   });
   return next;
 }
 
-export function activateTargetAuthority({ path = null, sessionPath = null, state, activationId = null, targetFirstSequence = null, authorityEpochToken = null, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null, reason = null, requestedBy = null, now = new Date() }: NaradaAuthorityTransitionOperationOptions & { activationId?: unknown; targetFirstSequence?: unknown; authorityEpochToken?: unknown; targetAuthorityLocator?: unknown; supersededBySessionId?: unknown; authorityLocatorRef?: unknown } = {}): NaradaAuthorityTransitionSourceState {
+export function activateTargetAuthority({ path = null, sessionPath = null, state, activationId = null, targetFirstSequence = null, authorityEpochToken = null, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null, handoffEvidence = null, reconciliationEvidence = null, reason = null, requestedBy = null, now = new Date() }: NaradaAuthorityTransitionOperationOptions & { activationId?: unknown; targetFirstSequence?: unknown; authorityEpochToken?: unknown; targetAuthorityLocator?: unknown; supersededBySessionId?: unknown; authorityLocatorRef?: unknown; handoffEvidence?: unknown; reconciliationEvidence?: unknown } = {}): NaradaAuthorityTransitionSourceState {
   const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
   assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'target_activating');
   assertNarsAuthorityRuntimeHostTransition('target_activating', 'target_active');
@@ -192,6 +212,8 @@ export function activateTargetAuthority({ path = null, sessionPath = null, state
     target_activated_at: current.target_activated_at ?? occurredAt,
     target_first_sequence: typeof targetFirstSequence === 'number' && Number.isInteger(targetFirstSequence) && targetFirstSequence > 0 ? targetFirstSequence : current.target_first_sequence ?? null,
     authority_epoch_token: normalizeOptionalObject(authorityEpochToken) ?? current.authority_epoch_token ?? null,
+    handoff_evidence: normalizeOptionalObject(handoffEvidence) ?? current.handoff_evidence ?? null,
+    reconciliation_evidence: normalizeOptionalObject(reconciliationEvidence) ?? current.reconciliation_evidence ?? null,
     activation_id: activationId ?? current.activation_id ?? null,
     target_authority_locator: normalizeOptionalObject(targetAuthorityLocator) ?? current.target_authority_locator ?? null,
     superseded_by_session_id: normalizeOptionalString(supersededBySessionId) ?? current.superseded_by_session_id ?? null,
@@ -207,6 +229,12 @@ export function activateTargetAuthority({ path = null, sessionPath = null, state
     sourceWriteAdmission: next.source_write_admission,
     supersededBySessionId: next.superseded_by_session_id,
     authorityLocatorRef: next.authority_locator_ref,
+    authorityRuntimeHost: next.source_authority_runtime_host,
+    authorityEpoch: next.source_authority_epoch,
+    authorityRuntimeId: next.source_authority_runtime_id,
+    authorityTransitionId: next.transition_id,
+    authorityHandoffEvidence: next.handoff_evidence,
+    authorityReconciliationEvidence: next.reconciliation_evidence,
     updatedAt: occurredAt,
   });
   return next;
@@ -231,6 +259,10 @@ export function beginSourceDrain({ path = null, sessionPath = null, state, reaso
     authorityTransitionState: next.authority_transition_state,
     authorityHandoffLifecycle: next.authority_handoff_lifecycle,
     sourceWriteAdmission: next.source_write_admission,
+    authorityRuntimeHost: next.source_authority_runtime_host,
+    authorityEpoch: next.source_authority_epoch,
+    authorityRuntimeId: next.source_authority_runtime_id,
+    authorityTransitionId: next.transition_id,
     updatedAt: occurredAt,
   });
   return next;
@@ -255,6 +287,10 @@ export function sealSourceAuthority({ path = null, sessionPath = null, state, so
     authorityTransitionState: next.authority_transition_state,
     authorityHandoffLifecycle: next.authority_handoff_lifecycle,
     sourceWriteAdmission: next.source_write_admission,
+    authorityRuntimeHost: next.source_authority_runtime_host,
+    authorityEpoch: next.source_authority_epoch,
+    authorityRuntimeId: next.source_authority_runtime_id,
+    authorityTransitionId: next.transition_id,
     updatedAt: occurredAt,
   });
   return next;
@@ -267,6 +303,10 @@ export function authorityTransitionSourceStateSnapshot(state: NaradaAuthorityTra
     path: normalized.path ?? null,
     authority_transition_state: normalized.authority_transition_state,
     source_write_admission: normalized.source_write_admission,
+    source_authority_runtime_host: normalized.source_authority_runtime_host,
+    source_authority_epoch: normalized.source_authority_epoch,
+    source_authority_runtime_id: normalized.source_authority_runtime_id,
+    transition_id: normalized.transition_id,
     drain_started_at: normalized.drain_started_at,
     sealed_at: normalized.sealed_at,
     source_last_sequence: normalized.source_last_sequence,
@@ -281,6 +321,8 @@ export function authorityTransitionSourceStateSnapshot(state: NaradaAuthorityTra
     authority_locator_ref: normalized.authority_locator_ref,
     target_transition_plan: normalized.target_transition_plan,
     authority_handoff_lifecycle: normalized.authority_handoff_lifecycle,
+    handoff_evidence: normalized.handoff_evidence,
+    reconciliation_evidence: normalized.reconciliation_evidence,
     last_transition: normalized.last_transition,
   };
 }
@@ -345,6 +387,10 @@ export function emptyAuthorityTransitionSourceState({ path = null, corrupt = fal
     corrupt,
     authority_transition_state: null,
     source_write_admission: 'active',
+    source_authority_runtime_host: 'local',
+    source_authority_epoch: 1,
+    source_authority_runtime_id: null,
+    transition_id: null,
     target_write_admission: 'not_before_source_seal',
     drain_started_at: null,
     sealed_at: null,
@@ -359,6 +405,8 @@ export function emptyAuthorityTransitionSourceState({ path = null, corrupt = fal
     authority_locator_ref: null,
     target_transition_plan: null,
     authority_handoff_lifecycle: null,
+    handoff_evidence: null,
+    reconciliation_evidence: null,
     last_transition: null,
   });
 }
@@ -367,7 +415,7 @@ function normalizeAuthorityTransitionSourceState(state: NaradaAuthorityTransitio
   const authorityTransitionState = typeof state.authority_transition_state === 'string' && NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES.includes(state.authority_transition_state)
     ? state.authority_transition_state as NaradaAuthorityRuntimeHostTransitionState
     : null;
-  const sourceWriteAdmission = typeof state.source_write_admission === 'string' && NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(state.source_write_admission)
+  const sourceWriteAdmission = state.corrupt === true ? 'sealed' : typeof state.source_write_admission === 'string' && NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(state.source_write_admission)
     ? state.source_write_admission as NaradaAuthorityRuntimeSourceWriteAdmission
     : 'active';
   const targetWriteAdmission = typeof state.target_write_admission === 'string' && NARS_AUTHORITY_RUNTIME_TARGET_WRITE_ADMISSIONS.includes(state.target_write_admission)
@@ -380,6 +428,10 @@ function normalizeAuthorityTransitionSourceState(state: NaradaAuthorityTransitio
     updated_at: state.updated_at ?? null,
     authority_transition_state: authorityTransitionState,
     source_write_admission: sourceWriteAdmission,
+    source_authority_runtime_host: normalizeAuthorityRuntimeHostKind(state.source_authority_runtime_host, 'local'),
+    source_authority_epoch: Number.isInteger(Number(state.source_authority_epoch)) && Number(state.source_authority_epoch) >= 1 ? Number(state.source_authority_epoch) : 1,
+    source_authority_runtime_id: normalizeOptionalString(state.source_authority_runtime_id),
+    transition_id: normalizeOptionalString(state.transition_id),
     target_write_admission: targetWriteAdmission,
     drain_started_at: state.drain_started_at ?? null,
     drain_reason: state.drain_reason ?? null,
@@ -401,6 +453,8 @@ function normalizeAuthorityTransitionSourceState(state: NaradaAuthorityTransitio
       state.authority_handoff_lifecycle,
       authorityTransitionState,
     ),
+    handoff_evidence: normalizeOptionalObject(state.handoff_evidence),
+    reconciliation_evidence: normalizeOptionalObject(state.reconciliation_evidence),
     target_activation_reason: state.target_activation_reason ?? null,
     target_activation_requested_by: state.target_activation_requested_by ?? null,
     seal_reason: state.seal_reason ?? null,

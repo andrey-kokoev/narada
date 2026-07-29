@@ -193,4 +193,4 @@ provider directly, or redefine carrier authority.
 - `docs/concepts/directive-as-first-class-object.md`
 - `docs/concepts/nars-session-management.md`
 - `docs/architecture/carrier-runtime-contract.md`
-- `packages/carrier-protocol/src/carrier-protocol.mjs`
+- `packages/carrier-protocol/src/carrier-protocol.ts`

@@ -1,6 +1,9 @@
+import type { OperatorViewLane } from '@narada2/nars-client-projection-contract';
+
 export type JsonObject = Record<string, unknown>;
 
 export type ProjectionClass = 'conversation' | 'operations' | 'diagnostics' | 'raw';
+export type ProjectionView = OperatorViewLane;
 
 export type PiRenderableContent =
   | { type: 'text'; text: string }
@@ -143,7 +146,7 @@ export interface PiClientLocalState {
   composerDraft: string;
   composerHistory: string[];
   focus: 'composer' | 'transcript' | 'overlay';
-  currentView: ProjectionClass;
+  currentView: ProjectionView;
   theme: PiTheme;
   expandedRows: ReadonlySet<string>;
   selectedRow: string | null;

@@ -1,6 +1,13 @@
-export const PROJECTION_VIEW_FACETS = ['conversation', 'operations', 'diagnostics', 'protocol', 'raw'] as const;
+import {
+  OPERATOR_VIEW_LANES,
+  operatorViewTransportVerbosity,
+  operatorViewLaneForDisposition,
+  type OperatorViewLane,
+} from '@narada2/nars-client-projection-contract';
 
-export type ProjectionViewFacet = typeof PROJECTION_VIEW_FACETS[number];
+export const PROJECTION_VIEW_FACETS = OPERATOR_VIEW_LANES;
+
+export type ProjectionViewFacet = OperatorViewLane;
 export type CanonicalProjectionVerbosity = 'conversation' | 'operations' | 'diagnostics' | 'raw';
 
 export interface ProjectionViewFacetOption {
@@ -87,21 +94,12 @@ export function customProjectionViewOption(view: CustomProjectionView): Projecti
 }
 
 export function transportVerbosityForFacets(facets: readonly ProjectionViewFacet[]): CanonicalProjectionVerbosity {
-  const selected = new Set(facets);
-  if (selected.has('raw') || selected.has('protocol')) return 'raw';
-  if (selected.has('diagnostics') && (selected.has('conversation') || selected.has('operations'))) return 'raw';
-  if (selected.has('diagnostics')) return 'diagnostics';
-  if (selected.has('operations')) return 'operations';
-  return 'conversation';
+  const verbosity = operatorViewTransportVerbosity({ facets });
+  return isCanonicalProjectionVerbosity(verbosity) ? verbosity : 'raw';
 }
 
 export function facetForProjectionDisposition(disposition: string): ProjectionViewFacet | null {
-  if (disposition === 'conversation_fact') return 'conversation';
-  if (disposition === 'operation_fact') return 'operations';
-  if (disposition === 'diagnostic_signal') return 'diagnostics';
-  if (disposition === 'protocol_evidence') return 'protocol';
-  if (disposition === 'raw_record') return 'raw';
-  return null;
+  return operatorViewLaneForDisposition(disposition);
 }
 
 export function normalizeCustomProjectionView(value: unknown): CustomProjectionView | null {

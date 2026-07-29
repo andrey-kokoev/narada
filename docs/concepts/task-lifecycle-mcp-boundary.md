@@ -22,7 +22,7 @@ The canonical task lifecycle MCP tool contract belongs in `@narada2/task-governa
 
 The contract is not a task store, transport store, or Site policy surface. It owns the domain-facing MCP shape that must be identical across Sites, so an agent does not have to learn different argument aliases or report fields per Site. It may advertise `payload_ref` fields where domain tools accept long-argument recovery, but payload bytes and output-ref storage remain transport-owned.
 
-`@narada2/mcp-transport` owns byte transport and output-ref helpers such as `mcp_payload_create` and `mcp_output_show`.
+`@narada2/mcp-transport` owns the current byte transport and output-ref helpers such as `mcp_payload_create` and `mcp_output_show`; its canonical source lives in the companion `mcp-surfaces` workspace under `packages/shared/mcp-transport`.
 
 `@narada2/task-lifecycle-kernel` is retained only for older boundary helpers during migration. New shared task lifecycle domain contract work goes into `@narada2/task-governance`.
 

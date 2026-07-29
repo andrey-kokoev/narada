@@ -55,6 +55,19 @@ declare module '@narada2/nars-client-projection-contract' {
   export const NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY: string;
   export const NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS: readonly string[];
   export type NarsClientProjectionVerbosity = string;
+  export type NarsClientProjectionDisposition = 'conversation_fact' | 'operation_fact' | 'diagnostic_signal' | 'protocol_evidence' | 'raw_record' | 'state_sample';
+  export const OPERATOR_VIEW_LANES: readonly ['conversation', 'operations', 'diagnostics', 'protocol', 'raw'];
+  export type OperatorViewLane = typeof OPERATOR_VIEW_LANES[number];
+  export interface OperatorViewPolicyOptions {
+    lane?: unknown;
+    verbosity?: unknown;
+    facets?: readonly unknown[];
+    surface?: string;
+    includeStateSamples?: boolean;
+  }
+  export function operatorViewLaneForDisposition(disposition: string): OperatorViewLane | null;
+  export function operatorViewTransportVerbosity(options?: OperatorViewPolicyOptions): string;
+  export function operatorViewIncludesDisposition(disposition: NarsClientProjectionDisposition, options?: OperatorViewPolicyOptions): boolean;
   export function normalizeNarsClientProjectionVerbosity(value: unknown): string;
   export interface NarsClientProjection {
     kind: string;
@@ -78,6 +91,7 @@ declare module '@narada2/nars-client-projection-contract' {
     [key: string]: unknown;
   }
   export function projectNarsClientEvent(message: unknown): NarsClientProjection;
+  export function classifyNarsClientEventDisposition(message: unknown): NarsClientProjectionDisposition;
   export function shouldProjectNarsClientProjection(projection: unknown, options?: object): boolean;
   export function unwrapNarsClientEvent(message: unknown): unknown;
   export function buildAgentWebUiEventsReadFrame(options?: object): AgentWebUiProtocolFrame;

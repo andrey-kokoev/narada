@@ -11,6 +11,8 @@ import {
   NARS_CLIENT_CONFORMANCE_FIXTURES,
   NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
+  NARS_SURFACE_ATTACHMENT_SCHEMA,
+  NARS_SURFACE_ATTACHMENT_STATES,
   NARS_AFFORDANCE_ACTION_EVENTS,
   NARS_AFFORDANCE_ACTION_POSTURES,
   NARS_AFFORDANCE_ACTION_REFUSAL_CODES,
@@ -18,6 +20,9 @@ import {
   NARS_AFFORDANCE_ACTION_CONFIRM_METHOD,
   NARS_AFFORDANCE_ACTION_REQUEST_METHOD,
   NARS_COMMAND_METHOD,
+  OPERATOR_VIEW_LANES,
+  OPERATOR_VIEW_LANE_DISPOSITIONS,
+  OPERATOR_VIEW_POLICY,
   buildAgentWebUiAffordanceActionCancelFrame,
   buildAgentWebUiAffordanceActionConfirmFrame,
   buildAgentWebUiAffordanceActionRequestFrame,
@@ -48,6 +53,7 @@ import {
   buildNarsAffordanceActionRefusalEvent,
   buildNarsAffordanceActionRequestedEvent,
   buildNarsAffordanceActionResultEvent,
+  classifyNarsClientEventDisposition,
   classifyNarsClientEventProjection,
   filterAgentWebUiCommands,
   filterAgentWebUiSnippetActions,
@@ -62,10 +68,42 @@ import {
   isAgentWebUiSnippetManagementAction,
   isAgentWebUiSnippetSelectionAction,
   parseAgentWebUiSnippetCommand,
+  operatorViewAllowsProjection,
+  operatorViewIncludesDisposition,
+  operatorViewPolicyFor,
   projectNarsClientEvent,
   shouldProjectNarsClientEvent,
   shouldProjectNarsClientProjection,
 } from './nars-client-projection-contract.js';
+
+test('OperatorViewPolicy defines explicit lanes and prevents projection leakage', () => {
+  assert.deepEqual(OPERATOR_VIEW_LANES, ['conversation', 'operations', 'diagnostics', 'protocol', 'raw']);
+  assert.deepEqual(OPERATOR_VIEW_LANE_DISPOSITIONS.conversation, ['conversation_fact']);
+  assert.deepEqual(OPERATOR_VIEW_LANE_DISPOSITIONS.diagnostics, ['conversation_fact', 'operation_fact', 'diagnostic_signal', 'protocol_evidence']);
+  assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.operator_view_policy, OPERATOR_VIEW_POLICY);
+  assert.equal(operatorViewIncludesDisposition('protocol_evidence', { verbosity: 'conversation' }), false);
+  assert.equal(operatorViewIncludesDisposition('protocol_evidence', { lane: 'protocol' }), true);
+  assert.equal(operatorViewIncludesDisposition('raw_record', { verbosity: 'raw' }), true);
+
+  const routineHealth = projectNarsClientEvent({
+    event: 'session_health',
+    status: 'healthy',
+    mcp_operational_state: 'healthy',
+    mcp_startup_failure_count: 0,
+    mcp_runtime_fault_count: 0,
+  });
+  assert.equal(operatorViewAllowsProjection(routineHealth, { verbosity: 'conversation' }), false);
+  assert.equal(operatorViewAllowsProjection(routineHealth, { verbosity: 'raw' }), false);
+  assert.equal(operatorViewAllowsProjection(routineHealth, { verbosity: 'raw', includeStateSamples: true }), true);
+  assert.equal(operatorViewPolicyFor({ facets: ['conversation', 'protocol'] }).transportVerbosity, 'raw');
+  const cliPolicy = operatorViewPolicyFor({ surface: 'agent-cli' });
+  assert.deepEqual(cliPolicy.explicitFacets, ['operations', 'diagnostics']);
+  assert.equal(cliPolicy.includedDispositions.includes('diagnostic_signal'), true);
+  assert.equal(operatorViewPolicyFor({ surface: 'agent-cli', verbosity: 'conversation' }).explicitFacets, null);
+  assert.equal(OPERATOR_VIEW_POLICY.surface_overrides['agent-web-ui'].raw_access, 'explicit');
+  assert.equal(OPERATOR_VIEW_POLICY.status.not_an_event_lane, true);
+  assert.deepEqual(OPERATOR_VIEW_POLICY.status.source, ['health', 'activity', 'authority', 'intelligence']);
+});
 
 test('NARS client projection contract owns attach commands and web UI capabilities', () => {
   assert.equal(NARS_COMMAND_METHOD, 'session.command.execute');
@@ -108,6 +146,64 @@ test('NARS client projection contract owns attach commands and web UI capabiliti
   assert.equal(NARS_CLIENT_PROJECTION_REGISTRY.default_verbosity, 'conversation');
   assert.equal(NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY, 'conversation');
   assert.deepEqual(NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS, ['conversation', 'operations', 'diagnostics', 'raw']);
+  assert.equal(NARS_SURFACE_ATTACHMENT_SCHEMA, 'narada.nars.surface_attachment.v1');
+  assert.deepEqual(NARS_SURFACE_ATTACHMENT_STATES, ['requested', 'discovering', 'probing_health', 'attached', 'reconnecting', 'stale', 'detaching', 'detached', 'failed']);
+  const attachmentProjection = projectNarsClientEvent({
+    event: 'session_surface_attachment_state_transition',
+    event_sequence: 9,
+    attachment_state: 'stale',
+    surface_attachment: { surface_kind: 'agent-web-ui' },
+  });
+  assert.equal(classifyNarsClientEventProjection(attachmentProjection!), 'operations');
+  assert.equal(attachmentProjection?.summary, 'agent-web-ui stale');
+});
+
+test('NARS client contract owns shared event classes, dispositions, and safe artifact references', () => {
+  const providerAgent = {
+    event_sequence: 40,
+    session_id: 'fixture-session',
+    event: { type: 'item.completed', item: { id: 'provider-agent-1', type: 'agent_message', text: 'provider telemetry' } },
+  };
+  const providerTool = {
+    event_sequence: 41,
+    session_id: 'fixture-session',
+    event: { type: 'item.completed', item: { id: 'provider-tool-1', type: 'mcp_tool_call', server: 'fixture', tool: 'read' } },
+  };
+  const cases = [
+    [{ event: 'session_started' }, 'operations', 'operation_fact'],
+    [{ event: 'user_message', content: 'hello' }, 'conversation', 'conversation_fact'],
+    [{ event: 'turn_complete', turn_id: 'fixture-turn' }, 'operations', 'operation_fact'],
+    [{ event: 'session_artifact_registered', artifact_id: 'artifact-1', artifact_kind: 'html', title: 'Safe artifact' }, 'operations', 'operation_fact'],
+    [{ event: 'session_health', status: 'degraded' }, 'diagnostics', 'diagnostic_signal'],
+    [{ event: 'error', code: 'fixture_error' }, 'conversation', 'diagnostic_signal'],
+    [{ event: 'session_events_subscription_started', replay_count: 1 }, 'diagnostics', 'protocol_evidence'],
+    [providerAgent, 'diagnostics', 'diagnostic_signal'],
+    [providerTool, 'operations', 'operation_fact'],
+    [{ event: 'unknown_fixture_event' }, 'raw', 'raw_record'],
+  ] as const;
+
+  for (const [event, expectedClass, expectedDisposition] of cases) {
+    const projection = projectNarsClientEvent(event);
+    assert.equal(classifyNarsClientEventProjection(projection!), expectedClass, String(event.event ?? 'provider'));
+    assert.equal(classifyNarsClientEventDisposition(event), expectedDisposition, String(event.event ?? 'provider'));
+  }
+
+  const artifact = projectNarsClientEvent({
+    event: 'session_artifact_registered',
+    artifact_id: 'artifact-1',
+    artifact_kind: 'html',
+    title: 'Safe artifact',
+  });
+  assert.deepEqual(artifact?.summary, [
+    { type: 'text', text: 'Safe artifact' },
+    { type: 'artifact_ref', artifact_id: 'artifact-1', kind: 'html', title: 'Safe artifact' },
+  ]);
+
+  const toolResult = projectNarsClientEvent({ event: 'tool_result', tool_name: 'fixture.read', status: 'completed', artifact_id: 'artifact-1' });
+  assert.deepEqual(toolResult?.summary, [
+    { type: 'text', text: 'fixture.read completed' },
+    { type: 'artifact_ref', artifact_id: 'artifact-1' },
+  ]);
 });
 
 test('NARS client conformance fixtures remain representation-neutral and complete', () => {
@@ -571,7 +667,7 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     tone: 'assistant',
     summary: 'partial',
     event: { event: 'assistant_message_stream', request_id: 'input_1', turn_id: 'turn_1', content: 'partial' },
-    renderKey: 'assistant:input_1',
+    renderKey: 'assistant:turn_1',
   });
   assert.deepEqual(projectNarsClientEvent({ event: 'assistant_message', request_id: 'input_1', turn_id: 'turn_1', content: 'final' }), {
     kind: 'assistant_message',
@@ -579,12 +675,12 @@ test('NARS client projection contract owns shared event rendering vocabulary', (
     tone: 'assistant',
     summary: 'final',
     event: { event: 'assistant_message', request_id: 'input_1', turn_id: 'turn_1', content: 'final' },
-    renderKey: 'assistant:input_1',
+    renderKey: 'assistant:turn_1',
   });
   assert.deepEqual(projectNarsClientEvent({ event: 'operator_input_submitted', request_id: 'input_1', content: 'run startup sequence' }), {
     kind: 'operator_input_submitted',
     label: 'Operator input',
-    tone: 'local',
+    tone: 'operator',
     summary: 'run startup sequence',
     event: { event: 'operator_input_submitted', request_id: 'input_1', content: 'run startup sequence' },
     renderKey: 'operator:input_1',
@@ -775,9 +871,9 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(projectNarsClientEvent(requestTransition)!.summary, 'completed');
   assert.equal(shouldProjectNarsClientEvent(inputAccepted, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(inputAccepted, { verbosity: 'operations' }), true);
-  assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'diagnostics' }), false);
-  assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'diagnostics' }), false);
-  assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'diagnostics' }), false);
+  assert.equal(shouldProjectNarsClientEvent(assistant, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldProjectNarsClientEvent(toolCall, { verbosity: 'diagnostics' }), true);
+  assert.equal(shouldProjectNarsClientEvent(toolResult, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'conversation' }), false);
   assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(mcpRuntimeFault, { verbosity: 'diagnostics' }), true);
@@ -789,7 +885,7 @@ test('NARS client projection verbosity filters shared event classes', () => {
   assert.equal(shouldProjectNarsClientEvent(intelligenceReconfiguration, { verbosity: 'operations' }), false);
   assert.equal(shouldProjectNarsClientEvent(intelligenceReconfiguration, { verbosity: 'diagnostics' }), true);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'conversation' }), false);
-  assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), false);
+  assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'operations' }), true);
   assert.equal(shouldProjectNarsClientEvent(turnComplete, { verbosity: 'diagnostics' }), true);
   assert.equal(classifyNarsClientEventProjection(projectNarsClientEvent(replayCompleted)!), 'diagnostics');
   assert.equal(shouldProjectNarsClientEvent(replayCompleted, { verbosity: 'conversation' }), false);

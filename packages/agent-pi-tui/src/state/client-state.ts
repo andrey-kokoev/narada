@@ -1,4 +1,4 @@
-import type { AttachPhase, PiClientLocalState, PiTheme, ProjectionClass } from '../types.js';
+import type { AttachPhase, PiClientLocalState, PiTheme, ProjectionView } from '../types.js';
 import { darkPiTheme } from '../theme/theme.js';
 import { ScrollAuthority } from './scroll-authority.js';
 
@@ -28,7 +28,7 @@ export class ClientState {
     this.local.transportError = error;
   }
 
-  setView(view: ProjectionClass): void {
+  setView(view: ProjectionView): void {
     this.local.currentView = view;
   }
 

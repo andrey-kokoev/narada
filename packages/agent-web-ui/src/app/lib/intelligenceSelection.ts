@@ -7,6 +7,7 @@ import type {
 export interface IntelligenceSelectionDraft {
   inferenceProvider: string | null;
   model: string | null;
+  modelRef?: string | null;
   thinking: string | null;
 }
 
@@ -60,6 +61,7 @@ export function isCompleteIntelligenceSelection(
   const provider = intelligence.selectionChoices.find((choice) => choice.provider === draft.inferenceProvider);
   const model = provider?.models.find((choice) => choice.model === draft.model);
   if (!provider || !model) return false;
+  if (model.modelRef && model.modelRef !== draft.modelRef) return false;
   return model.thinkingChoices.length === 0 || Boolean(draft.thinking && model.thinkingChoices.includes(draft.thinking));
 }
 
@@ -69,5 +71,6 @@ export function sameIntelligenceSelection(
 ): boolean {
   return left.inferenceProvider === right.inferenceProvider
     && left.model === right.model
+    && (left.modelRef ?? null) === (right.modelRef ?? null)
     && left.thinking === right.thinking;
 }

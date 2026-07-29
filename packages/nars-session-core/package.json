@@ -35,6 +35,8 @@
     "./event-log": { "types": "./dist/event-log.d.ts", "import": "./dist/event-log.js", "default": "./dist/event-log.js" },
     "./event-hub": { "types": "./dist/event-hub.d.ts", "import": "./dist/event-hub.js", "default": "./dist/event-hub.js" },
     "./event-attachment-state": { "types": "./dist/event-attachment-state.d.ts", "import": "./dist/event-attachment-state.js", "default": "./dist/event-attachment-state.js" },
+    "./surface-attachment": { "types": "./dist/surface-attachment.d.ts", "import": "./dist/surface-attachment.js", "default": "./dist/surface-attachment.js" },
+    "./surface-attachment-registry": { "types": "./dist/surface-attachment-registry.d.ts", "import": "./dist/surface-attachment-registry.js", "default": "./dist/surface-attachment-registry.js" },
     "./session-lifecycle-state": { "types": "./dist/session-lifecycle-state.d.ts", "import": "./dist/session-lifecycle-state.js", "default": "./dist/session-lifecycle-state.js" },
     "./session-shutdown-state": { "types": "./dist/session-shutdown-state.d.ts", "import": "./dist/session-shutdown-state.js", "default": "./dist/session-shutdown-state.js" },
     "./artifact-lifecycle-state": { "types": "./dist/artifact-lifecycle-state.d.ts", "import": "./dist/artifact-lifecycle-state.js", "default": "./dist/artifact-lifecycle-state.js" },

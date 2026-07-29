@@ -1,4 +1,4 @@
-import { isRoutineHealthyNarsSessionHealth, normalizeNarsClientProjectionVerbosity, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
+import { operatorViewPolicyFor, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
 import { agentIdentityDisplay, agentIdentityRefMatchesRequest, renderOperatorValue } from '@narada2/agent-identity';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.js';
 import type { TerminalStyle } from './terminal-style.js';
@@ -16,8 +16,6 @@ import {
   wrapIndentedLines,
   wrapTerminalLine,
 } from './terminal-text.js';
-
-const TERMINAL_PROJECTION_DEFAULT_VERBOSITY = 'operations';
 
 type JsonRecord = Record<string, unknown>;
 type TerminalStyleFunction = (value: string) => string;
@@ -75,7 +73,7 @@ export interface TerminalProjectionEvent extends JsonRecord {
 
 interface ProjectedNarsEvent extends JsonRecord {
   event: TerminalProjectionEvent;
-  summary?: string;
+  summary?: unknown;
   label?: string;
   kind?: string;
   tone?: string;
@@ -411,11 +409,12 @@ export function renderOperatorEvent(input: unknown, state: TerminalProjectionSta
     return withStreamBoundary(state, formatHostCommandBlock(event, state, style));
   }
   applyTurnLifecycleState(event, state);
-  const projectionVerbosity = normalizeNarsClientProjectionVerbosity(state.projectionVerbosity ?? state.verbosity ?? TERMINAL_PROJECTION_DEFAULT_VERBOSITY);
-  const forceProjectTerminalEvent = event.event === 'carrier_tool_requested'
-    || event.event === 'carrier_tool_completed'
-    || (event.event === 'session_health' && !isRoutineHealthyNarsSessionHealth(event));
-  if (!forceProjectTerminalEvent && !shouldProjectNarsClientProjection(projectedEvent, { verbosity: projectionVerbosity })) return [];
+  const requestedVerbosity = state.projectionVerbosity ?? state.verbosity;
+  const projectionPolicy = operatorViewPolicyFor({
+    surface: 'agent-cli',
+    ...(requestedVerbosity === undefined ? {} : { verbosity: requestedVerbosity }),
+  });
+  if (!shouldProjectNarsClientProjection(projectedEvent, projectionPolicy)) return [];
   switch (event.event) {
     case 'session_started':
       state.agentId = event.agent_id ?? state.agentId;
@@ -537,9 +536,12 @@ export function renderOperatorEvent(input: unknown, state: TerminalProjectionSta
       return withStreamBoundary(state, [routeLine({ label: 'agent-cli', body: 'session closed', labelStyle: style.label, state, style })]);
     default:
       if (projectedEvent.summary || projectedEvent.label !== projectedEvent.kind) {
+        const summary = Array.isArray(projectedEvent.summary)
+          ? terminalAssistantContent(projectedEvent.summary)
+          : projectedEvent.summary || projectedEvent.kind;
         return withStreamBoundary(state, [routeLine({
           label: projectedEvent.label,
-          body: projectedEvent.summary || projectedEvent.kind,
+          body: summary,
           labelStyle: labelStyleForProjectionTone(projectedEvent.tone, style),
           bodyStyle: bodyStyleForProjectionTone(projectedEvent.tone, style),
           state,

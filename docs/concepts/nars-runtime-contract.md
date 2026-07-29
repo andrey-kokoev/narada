@@ -235,11 +235,12 @@ provider execution policy, not session authority or turn history.
 ```
 
 The target is one qualified intelligence selection: an inference provider,
-model, and complete options object. The model is not interpreted as a global
-name independent of its inference provider. `requested_options` may be empty
-when the selected model exposes no configurable options. The request never
-carries an API key. The controller resolves credentials and base URL from the
-provider-specific configuration already admitted by `agent-start`.
+model publisher, canonical model, selected offering/route, and complete
+options object. These are distinct identities. An invocation model key is a
+service-specific display/execution key; it is never the canonical model
+identity and it is never used to infer the inference provider. The request
+never carries an API key. The controller resolves credentials and base URL
+from the provider-specific configuration already admitted by `agent-start`.
 
 Provider-only, model-only, or options-only requests are invalid. A rejected
 request leaves the active selection unchanged; the runtime does not apply a
@@ -261,13 +262,34 @@ choices that are valid for it:
     "thinking": "high"
   },
   "selection_choices": {
+    "schema": "narada.invokable-intelligence.selection-choices.v1",
     "providers": [
       {
-        "provider": "inference-provider:kimi-code-api",
+        "inference_provider": {
+          "kind": "inference-provider",
+          "id": "inference-provider:kimi-code-api"
+        },
         "models": [
           {
-            "model": "model:k3",
-            "thinking_choices": ["low", "medium", "high"]
+            "model_ref": { "kind": "model", "id": "model:k3" },
+            "model_provider": { "kind": "model-provider", "id": "model-provider:moonshot" },
+            "inference_provider": {
+              "kind": "inference-provider",
+              "id": "inference-provider:kimi-code-api"
+            },
+            "offering_refs": [
+              { "kind": "model-offering", "id": "model-offering:k3" }
+            ],
+            "invocation_model_key": "k3",
+            "capabilities": [
+              {
+                "capability": { "family": "thinking", "name": "levels" },
+                "supported": true,
+                "allowed_values": ["thinking"],
+                "assertion_ids": ["assertion:k3-thinking"],
+                "reasons": ["support-intersection-satisfied"]
+              }
+            ]
           }
         ]
       }
@@ -276,10 +298,22 @@ choices that are valid for it:
 }
 ```
 
-The web UI treats `selection_choices` as a capability projection. Changing
-provider clears model and options; changing model clears options. The UI
-submits a complete target only after the user requests the change, and cancel
-discards the local draft without changing runtime state.
+`selection_choices` is a qualified projection, not a union of globally
+available strings. Each model choice carries the canonical model reference,
+its publishing model provider, the inference provider, every admissible
+offering reference, the service-specific invocation key, and capabilities
+resolved for the applicable model/offering/route assertions. Capability
+values are intersected across applicable routes; an empty intersection is
+unsupported and is not exposed as a valid option. Local SQLite and remote D1
+or equivalent configuration substrates produce this same contract.
+
+The web UI treats `selection_choices` as the only admission-capable choice
+source. Changing provider clears model, canonical model reference, and
+options. Changing model clears canonical model reference and options before a
+new model choice is selected. A complete target is sent only after the user
+requests the change; cancel discards the local draft without changing runtime
+state. A legacy flat choice projection may remain for display compatibility,
+but it cannot authorize a reconfiguration.
 
 The reconfiguration request has its own FSM:
 
@@ -1028,8 +1062,8 @@ records. Each launch dry-run is bounded by `--launch-timeout-ms`, defaulting to
 8500 ms.
 
 ```powershell
-node packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --record-offset 0 --record-limit 1
-node packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy agent-tui-only --record-offset 0 --record-limit 1
+node packages/agent-start/bin/verify-registered-site-launchers.ts --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --record-offset 0 --record-limit 1
+node packages/agent-start/bin/verify-registered-site-launchers.ts --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy agent-tui-only --record-offset 0 --record-limit 1
 ```
 
 Expected coverage:

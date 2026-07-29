@@ -3,7 +3,6 @@ import {
   IDLE_ACTIVITY,
   createTurnActivityState,
   createInitialHealthState,
-  isRoutineHealthySessionHealth,
   materializeTurnActivity,
   reconcileTurnActivityWithHealth,
   reduceTurnActivity,
@@ -26,6 +25,10 @@ import {
 } from './session-projection-turn-summary.ts';
 import { agentIdentityGroupKey } from '@narada2/agent-identity';
 import {
+  classifyNarsClientEventDisposition,
+  operatorViewIncludesDisposition,
+} from '@narada2/nars-client-projection-contract';
+import {
   createOperatorInputDeliveryState,
   materializeOperatorInputDelivery,
   reduceOperatorInputDelivery,
@@ -36,6 +39,7 @@ import type { RuntimeProjection } from './runtime-events.ts';
 export type SessionProjectionOptions = {
   verbosity?: string;
   customView?: unknown;
+  includeStateSamples?: boolean;
   nowMs?: number;
   healthSnapshot?: unknown;
 };
@@ -73,10 +77,6 @@ export type SessionProjectionRow = ProjectionRow | TurnGroupProjectionRow;
 type RowProjectionState = {
   renderedByKey: Map<string, ProjectionRow>;
   order: string[];
-};
-
-type CustomProjectionView = {
-  facets?: readonly string[];
 };
 
 export type SessionProjection = {
@@ -139,28 +139,16 @@ export function createSessionProjection(
   return projection;
 }
 
-function customViewIncludesDisposition(view: CustomProjectionView, disposition: string): boolean {
-  const facet = facetForProjectionDisposition(disposition);
-  return Boolean(facet && Array.isArray(view.facets) && view.facets.includes(facet));
+function customViewFacets(options: SessionProjectionOptions): readonly string[] | undefined {
+  if (!isRecord(options.customView) || !Array.isArray(options.customView.facets)) return undefined;
+  return options.customView.facets.filter((facet): facet is string => typeof facet === 'string');
 }
 
 function shouldRenderTurnSummary(options: SessionProjectionOptions): boolean {
-  if (options.verbosity?.toLowerCase() === 'diagnostics') return false;
-  if (isRecord(options.customView)) return customViewIncludesDisposition(options.customView as CustomProjectionView, 'conversation_fact');
-  return true;
-}
-
-function includesProjectionDisposition(verbosity: string | undefined, disposition: string): boolean {
-  return verbosity?.toLowerCase() !== 'diagnostics' || disposition === 'diagnostic_signal';
-}
-
-function facetForProjectionDisposition(disposition: string): string | null {
-  if (disposition === 'conversation_fact') return 'conversation';
-  if (disposition === 'operation_fact') return 'operations';
-  if (disposition === 'diagnostic_signal') return 'diagnostics';
-  if (disposition === 'protocol_evidence') return 'protocol';
-  if (disposition === 'raw_record') return 'raw';
-  return null;
+  return operatorViewIncludesDisposition('conversation_fact', {
+    verbosity: options.verbosity,
+    facets: customViewFacets(options),
+  });
 }
 
 function supersededLifecycleAssistantAggregate(row: ProjectionRow, state: RowProjectionState): boolean {
@@ -188,34 +176,7 @@ function isProviderAssistantMessage(event: unknown): boolean {
 }
 
 export function classifyRuntimeMessage(message: unknown): string {
-  const event = unwrapRuntimeEvent(message);
-  if (!event || typeof event !== 'object') return 'raw_record';
-  if (isRoutineHealthySessionHealth(event) || event.event === 'websocket_connected') return 'state_sample';
-  if (event.event === 'session_health') return 'diagnostic_signal';
-  if (event.event === 'runtime_intelligence_reconfiguration' || event.event === 'intelligence_runtime_reconfiguration_state_transition') return 'diagnostic_signal';
-  if (event.event === 'web_ui_session_correlation_mismatch' || event.event === 'web_ui_input_ack_ignored' || event.event === 'web_ui_input_correlation_ambiguous' || event.event === 'operator_input_pending_restored' || event.event === 'operator_input_pending_expired' || event.event === 'operator_input_discarded' || event.event === 'operator_input_reviewed' || event.event === 'operator_input_retried' || event.event === 'operator_input_late_acknowledged') return 'diagnostic_signal';
-  if (event.event === 'assistant_message' || event.event === 'assistant_message_stream' || event.event === 'user_message' || event.event === 'operator_input_submitted' || event.event === 'agent_web_ui_message' || event.event === 'agent_web_ui_help' || event.event === 'session_artifact_registered' || event.event === 'session_artifact_read') return 'conversation_fact';
-  if (event.event === 'error' || event.event === 'websocket_error' || event.event === 'web_ui_decode_error' || event.event === 'web_ui_input_not_sent' || event.event === 'web_ui_input_ack_timeout' || event.event === 'web_ui_input_transport_failed' || event.event === 'operator_input_pending_restored' || event.event === 'operator_input_pending_expired' || event.event === 'operator_input_discarded' || event.event === 'turn_failed' || event.event === 'carrier_turn_failed' || event.event === 'carrier_turn_interrupted' || event.event === 'authority_session_revoked' || event.event === 'projection_revoked' || event.event === 'runtime_projection_failure' || event.event === 'runtime_control_input_bridge_error' || event.event === 'projection_input_failed') return 'diagnostic_signal';
-  if (event.event === 'tool_call' || event.event === 'tool_result' || event.event === 'carrier_tool_requested' || event.event === 'carrier_tool_completed'
-    || event.event === 'tool_execution_state_transition' || event.event === 'tool_execution_completed' || event.event === 'tool_execution_refused'
-    || event.event === 'tool_admitted' || event.event === 'tool_refused' || event.event === 'turn_lifecycle_transition'
-    || event.event === 'turn_started' || event.event === 'carrier_turn_started' || event.event === 'carrier_turn_completed' || event.event === 'turn_complete'
-    || event.event === 'session_control_accepted' || event.event === 'session_control_response' || event.event === 'session_control_rejected' || event.event === 'runtime_request_state_transition'
-    || event.event === 'conversation_enqueue_requested' || event.event === 'input_event_queued' || event.event === 'input_event_started' || event.event === 'input_event_completed'
-    || event.event === 'input_queued_for_turn_boundary' || event.event === 'input_admitted_to_turn'
-    || event.event === 'input_dropped_by_operator' || event.event === 'input_abandoned_on_session_end' || event.event === 'input_completed'
-    || event.event === 'session_started' || event.event === 'session_closed' || event.event === 'session_status'
-    || event.event === 'session_recovery' || event.event === 'session_operations' || event.event === 'session_sync'
-    || event.event === 'observer_status' || event.event === 'observers_status' || event.event === 'carrier_command_result'
-    || (typeof event.event === 'string' && (event.event.startsWith('authority_source_') || event.event.startsWith('authority_target_')))) return 'operation_fact';
-  if (event.event === 'session_events_replay_completed') return 'diagnostic_signal';
-  if (event.event === 'directive_received' || event.event === 'directive_receipt_recorded' || event.event === 'directive_carrier_accepted_recorded' || event.event === 'directive_complete' || event.event === 'session_events_subscription_started') return 'protocol_evidence';
-  const providerEvent = event.event;
-  if (isRecord(providerEvent)) {
-    if (providerEvent.type === 'item.started' || providerEvent.type === 'item.completed' || providerEvent.type === 'turn.started' || providerEvent.type === 'turn.completed') return 'operation_fact';
-    return 'protocol_evidence';
-  }
-  return 'raw_record';
+  return classifyNarsClientEventDisposition(message);
 }
 
 
@@ -226,9 +187,11 @@ function createRowProjectionState(): RowProjectionState {
 function projectMessageRow(message: unknown, options: SessionProjectionOptions, state: RowProjectionState): ProjectionRow | null {
   let projection = projectRuntimeEvent(message);
   const disposition = classifyRuntimeMessage(message);
-  if (!includesProjectionDisposition(options.verbosity, disposition)) return null;
-  if (!shouldRenderRuntimeProjection(projection, options)) return null;
-  if (isRecord(options.customView) && !customViewIncludesDisposition(options.customView as CustomProjectionView, disposition)) return null;
+  if (!shouldRenderRuntimeProjection(projection, {
+    verbosity: options.verbosity,
+    facets: customViewFacets(options),
+    includeStateSamples: options.includeStateSamples,
+  })) return null;
   // Primary path: contract-provided render keys carry the identity contract.
   const key = projection.renderKey ?? projectionIdentityKey(message, projection) ?? `event:${state.renderedByKey.size}`;
   if (projection.kind=== 'assistant_message_stream') {

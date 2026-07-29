@@ -2,7 +2,7 @@
 
 Status: historical Task 2112 decision, superseded by the canonical invokable-intelligence cutover (Tasks 2214–2219). Current Cloudflare authority resolves every invocation from the D1 catalog and policy; historical provider-binding evidence remains evidence of the earlier slice, not current selection authority.
 
-This document is the binding authority-design decision for growing the Cloudflare-origin NARS slice from synthetic/no-provider into a provider/tool-capable authority runtime. It preserves the principled asymmetry and the authority invariants established by the canonical runtime surface contract (`narada.nars.runtime_surface_contract.v1`, `packages/nars-runtime-contract/src/runtime-surface-contract.mjs`) and by [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md).
+This document is the binding authority-design decision for growing the Cloudflare-origin NARS slice from synthetic/no-provider into a provider/tool-capable authority runtime. It preserves the principled asymmetry and the authority invariants established by the canonical runtime surface contract (`narada.nars.runtime_surface_contract.v1`, `packages/nars-runtime-contract/src/runtime-surface-contract.ts`) and by [`cloudflare-nars-web-projection.md`](cloudflare-nars-web-projection.md).
 
 ## Decision 1 — Provider Dispatch Model
 
@@ -33,7 +33,7 @@ Each capability dimension gains a graduation state machine: `absent → declared
 - `declared`: dimension configured (e.g., provider binding present) but unproven.
 - `present`: dimension proven by executed evidence at the authority boundary (for `provider_execution`: a completed provider turn in the ordered event log).
 
-Contract changes (`packages/nars-runtime-contract/src/runtime-surface-contract.mjs`):
+Contract changes (`packages/nars-runtime-contract/src/runtime-surface-contract.ts`):
 
 - `NARS_CAPABILITY_STATES` becomes `['absent', 'declared', 'present']`.
 - Contracts may carry an optional `capability_evidence` map: dimension → `{ state, evidence_ref, graduated_at }`. A `present` state without an evidence ref is invalid; a `declared` state without a configuration ref is invalid.

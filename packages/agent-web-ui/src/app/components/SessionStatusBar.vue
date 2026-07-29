@@ -56,6 +56,7 @@ const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.va
 const copyLabel = ref('Copy');
 const draftProvider = ref<string | null>(props.intelligence.provider);
 const draftModel = ref<string | null>(props.intelligence.model);
+const draftModelRef = ref<string | null>(props.intelligence.modelRef ?? null);
 const draftThinking = ref<string | null>(props.intelligence.thinking);
 const requestPending = ref(false);
 const STATUS_BOX_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.statusBoxes;
@@ -145,11 +146,13 @@ const thinkingInputValue = computed(() => draftThinking.value ?? '');
 const activeSelection = computed<IntelligenceSelectionDraft>(() => ({
   inferenceProvider: props.intelligence.provider,
   model: props.intelligence.model,
+  modelRef: props.intelligence.modelRef ?? null,
   thinking: props.intelligence.thinking,
 }));
 const draftSelection = computed<IntelligenceSelectionDraft>(() => ({
   inferenceProvider: draftProvider.value,
   model: draftModel.value,
+  modelRef: draftModelRef.value,
   thinking: draftThinking.value,
 }));
 const draftChanged = computed(() => !sameIntelligenceSelection(activeSelection.value, draftSelection.value));
@@ -176,12 +179,13 @@ function selectInlineSizeValue(choices: readonly string[], currentValue: string)
 }
 
 watch(
-  () => [props.intelligence.provider, props.intelligence.model, props.intelligence.thinking] as const,
+  () => [props.intelligence.provider, props.intelligence.model, props.intelligence.modelRef, props.intelligence.thinking] as const,
   () => {
     if (sameIntelligenceSelection(activeSelection.value, draftSelection.value)) requestPending.value = false;
     if (!draftChanged.value || !requestPending.value) {
       draftProvider.value = activeSelection.value.inferenceProvider;
       draftModel.value = activeSelection.value.model;
+      draftModelRef.value = activeSelection.value.modelRef ?? null;
       draftThinking.value = activeSelection.value.thinking;
     }
   },
@@ -197,6 +201,7 @@ function requestProviderChange(event: Event) {
   if (!provider || provider === draftProvider.value) return;
   draftProvider.value = provider;
   draftModel.value = null;
+  draftModelRef.value = null;
   draftThinking.value = null;
   requestPending.value = false;
 }
@@ -205,6 +210,7 @@ function requestModelChange(event: Event) {
   const model = (event.target as HTMLInputElement | HTMLSelectElement | null)?.value.trim() ?? '';
   if (!model || model === draftModel.value) return;
   draftModel.value = model;
+  draftModelRef.value = modelChoiceRecords.value.find((choice) => choice.model === model)?.modelRef ?? null;
   draftThinking.value = null;
   requestPending.value = false;
 }
@@ -225,6 +231,7 @@ function requestDraftChange() {
 function cancelDraftChange() {
   draftProvider.value = activeSelection.value.inferenceProvider;
   draftModel.value = activeSelection.value.model;
+  draftModelRef.value = activeSelection.value.modelRef ?? null;
   draftThinking.value = activeSelection.value.thinking;
   requestPending.value = false;
 }

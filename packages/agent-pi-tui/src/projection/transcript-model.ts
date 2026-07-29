@@ -1,4 +1,5 @@
-import type { PiRowViewModel, ProjectionClass } from '../types.js';
+import { shouldProjectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+import type { PiRowViewModel, ProjectionView } from '../types.js';
 import { durableEventIdentity, durableEventSequence } from '../nars-client/event-stream.js';
 
 export class TranscriptModel {
@@ -35,9 +36,9 @@ export class TranscriptModel {
     return this.cursor;
   }
 
-  rows(view: ProjectionClass = 'conversation'): PiRowViewModel[] {
+  rows(view: ProjectionView = 'conversation'): PiRowViewModel[] {
     return [...this.rowsByKey.values()]
-      .filter((row) => view === 'raw' || row.projectionClass === view)
+      .filter((row) => shouldProjectNarsClientEvent(row.event, { verbosity: view }))
       .sort((left, right) => (left.sequence ?? Number.MAX_SAFE_INTEGER) - (right.sequence ?? Number.MAX_SAFE_INTEGER)
         || (this.firstSeen.get(left.renderKey) ?? 0) - (this.firstSeen.get(right.renderKey) ?? 0));
   }

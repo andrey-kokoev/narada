@@ -2,12 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   aggregateToolBindings,
+  applyWorkerMcpProjection,
   findToolBinding,
   normalizeMcpOutputReader,
   normalizeRuntimeMcpTools,
   providerToolNameForOriginal,
   sendMcpRequest,
 } from './mcp-runtime.js';
+
+type AnyRecord = Record<string, any>;
 
 test('runtime canonicalizes the agent-context output reader alias', () => {
   const tools = normalizeRuntimeMcpTools([
@@ -23,6 +26,25 @@ test('runtime canonicalizes the agent-context output reader alias', () => {
     },
     { name: 'agent_context_startup_sequence' },
   ]);
+});
+
+test('runtime worker MCP projection keeps only explicitly allowlisted tools', () => {
+  const projected = applyWorkerMcpProjection({
+    task_lifecycle: {
+      tools: [{ name: 'task_lifecycle_show' }, { name: 'task_lifecycle_claim' }],
+    },
+    filesystem: {
+      tools: [{ name: 'fs_read_file' }],
+    },
+  }, {
+    native_mcp_mode: 'scoped',
+    mcp_tool_allowlist: ['task_lifecycle_show'],
+    include_startup_tools: false,
+    include_output_readback_tools: false,
+  });
+
+  assert.deepEqual(projected.task_lifecycle.tools.map((tool: AnyRecord) => tool.name), ['task_lifecycle_show']);
+  assert.deepEqual(projected.filesystem.tools, []);
 });
 
 test('runtime normalizes reader metadata in structured and serialized MCP output', async () => {

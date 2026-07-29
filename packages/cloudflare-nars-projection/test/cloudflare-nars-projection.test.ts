@@ -28,6 +28,7 @@ import {
 } from '../src/index.js';
 import { createCloudflareNarsProjectionWorker, NarsProjectionState } from '../src/worker.js';
 import { validateNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
+import { classifyNarsClientEventProjection, projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
 
 const now = '2026-06-30T21:00:00.000Z';
 
@@ -1310,6 +1311,30 @@ describe('event projection and cache', () => {
 
     expect(diagnostic).not.toBeNull();
     expect(diagnostic?.event_class).toBe('diagnostics');
+  });
+
+  test('Cloudflare event classes match the shared projection contract', () => {
+    const events = [
+      { event: 'user_message', event_sequence: 1, content: 'hello' },
+      { event: 'turn_complete', event_sequence: 2, turn_id: 'turn-1' },
+      { event: 'session_artifact_registered', event_sequence: 3, artifact_id: 'artifact-1', artifact_kind: 'text', title: 'artifact' },
+      { event: 'session_health', event_sequence: 4, status: 'degraded' },
+      { event: 'unknown_fixture_event', event_sequence: 5 },
+      { event_sequence: 6, event: { type: 'item.completed', item: { id: 'provider-agent-1', type: 'agent_message', text: 'provider telemetry' } } },
+      { event_sequence: 7, event: { type: 'item.completed', item: { id: 'provider-tool-1', type: 'mcp_tool_call', server: 'fixture', tool: 'read' } } },
+    ];
+
+    for (const event of events) {
+      const sharedClass = classifyNarsClientEventProjection(projectNarsClientEvent(event)!);
+      const projected = projectNarsEventForCloudflare({
+        projection_id: 'proj_parity',
+        site_id: 'narada.sonar',
+        nars_session_id: 'carrier_parity',
+        policy: 'raw',
+        event,
+      });
+      expect(projected?.event_class).toBe(sharedClass);
+    }
   });
 
   test('suppresses diagnostic health noise in conversation policy', () => {

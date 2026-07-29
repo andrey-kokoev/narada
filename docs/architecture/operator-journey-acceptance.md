@@ -85,6 +85,38 @@ The matrix is a launch-contract boundary, not a claim of feature parity. A
 carrier row with a native or ambient adapter still needs its own substrate
 integration evidence before it can be promoted to live journey acceptance.
 
+## Operator journey disruption matrix
+
+The cross-surface journey and its disruption coverage are defined by the
+machine-readable contract at
+`packages/operator-surface-runtime-contract/contracts/operator-journey-matrix.json`.
+The launch matrix remains authoritative for launch selection; this contract is
+authoritative for the journey boundary, claimed embodiments, claimed
+projections, required truth fields, disruption scenarios, recovery results,
+and evidence posture.
+
+The matrix covers `discover -> attach -> observe -> choose valid intelligence
+-> request change -> submit input -> inspect projections/effects ->
+recover/replay/reconcile -> detach/reattach`. Its required truth fields are
+identity, host, epoch, health, capability, admission, turn, projection,
+failure, recovery, and detach. Every disruption has a proof entry for every
+claimed embodiment and lists the surfaces that proof actually covers.
+
+`local-nars` is the live authoritative embodiment. The Cloudflare entry is a
+remote projection embodiment with an explicit live-smoke path and boundary
+proof for disruption semantics that are not yet exercised end to end across
+every hosted surface. The smoke command requires explicit `--live` and
+site/session/assets inputs; an invocation without those inputs is only a
+planned run. That distinction is intentional: a Cloudflare projection must
+not be promoted to local authority by a surface label, and boundary evidence
+must not be reported as live proof.
+
+The matrix therefore closes the semantic gap between CLI, TUI, Web UI, and
+Operator Console claims and the event, replay, and evidence references that
+support them. It does not claim live coverage for an external carrier process
+or a provider-backed failure mode when the repository only has a contract or
+boundary test for that mode.
+
 ## Evidence
 
 The test records these acceptance properties as assertions:
@@ -145,4 +177,8 @@ the agent-tui terminal loop, and a separately selected agent-web-ui carrier
 remain outside this milestone. Destructive Registry mutation classes also
 remain outside the acceptance journey. The contract matrix is the evidence
 boundary for those rows until their native processes can be exercised in a
-controlled environment.
+controlled environment. The operator-journey disruption matrix is the
+corresponding evidence boundary for reconnect, degraded health, turn-limit,
+MCP-child, provider/model, authority-transition, replay/restart, and
+unknown-outcome recovery claims; it records the remaining live gaps instead of
+silently upgrading boundary proof.

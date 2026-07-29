@@ -21,7 +21,10 @@ export class WorkspaceLaunchAttachmentError extends Error {
   }
 }
 
-async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<string | null> {
+async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<{
+  reason: string;
+  terminal: boolean;
+} | null> {
   const bindingPath = plan.operator_projection_launch_binding?.path;
   if (!bindingPath) return null;
   let binding: Record<string, unknown>;
@@ -44,14 +47,14 @@ async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<str
   }
 
   const runtimeStderr = result ? await readRuntimeStderr(result) : null;
-  if (runtimeStderr) return `runtime_start_failed:${runtimeStderr}`;
+  if (runtimeStderr) return { reason: `runtime_start_failed:${runtimeStderr}`, terminal: true };
 
   if (binding.status === 'waiting_for_agent_start') {
-    return `agent_start_handoff_pending:${reason}`;
+    return { reason: `agent_start_handoff_pending:${reason}`, terminal: false };
   }
   if (binding.status !== 'failed') return null;
-  if (!resultPath) return `launch_binding_failed:${reason}`;
-  if (!result) return `launch_binding_failed:${reason}`;
+  if (!resultPath) return { reason: `launch_binding_failed:${reason}`, terminal: true };
+  if (!result) return { reason: `launch_binding_failed:${reason}`, terminal: true };
   const resultReason = typeof result.reason_code === 'string' && result.reason_code.trim()
     ? result.reason_code.trim()
     : typeof result.reason === 'string' && result.reason.trim()
@@ -59,7 +62,7 @@ async function inspectLaunchFailure(plan: WorkspaceLaunchAgentPlan): Promise<str
       : typeof result.error === 'string' && result.error.trim()
         ? result.error.trim()
         : reason;
-  return `agent_start_failed:${resultReason}`;
+  return { reason: `agent_start_failed:${resultReason}`, terminal: true };
 }
 
 async function readRuntimeStderr(result: Record<string, unknown>): Promise<string | null> {
@@ -188,7 +191,7 @@ export async function awaitWorkspaceLaunchSessionAttachments(
 
       if (!candidate) {
         const launchFailure = await inspectLaunchFailure(plan);
-        latest.set(launchSessionId, {
+        const sessionEvidence: WorkspaceLaunchAttachmentEvidence['sessions'][number] = {
           launch_session_id: launchSessionId,
           session_id: null,
           health_session_id: null,
@@ -198,8 +201,20 @@ export async function awaitWorkspaceLaunchSessionAttachments(
           health_endpoint: null,
           health_status: 'unavailable',
           attempts: attempt,
-          reason: launchFailure ?? discoveryError ?? 'session_not_indexed',
-        });
+          reason: launchFailure?.reason ?? discoveryError ?? 'session_not_indexed',
+        };
+        latest.set(launchSessionId, sessionEvidence);
+        if (launchFailure?.terminal) {
+          throw new WorkspaceLaunchAttachmentError({
+            schema: 'narada.workspace_launch.attachment.v1',
+            status: 'handoff_pending',
+            exact_session: false,
+            launch_session_ids: plans.flatMap((candidatePlan) =>
+              candidatePlan.launch_session_id ? [candidatePlan.launch_session_id] : []),
+            sessions: [...latest.values()],
+            required_next_step: 'Inspect the failed agent-start artifact and correct the terminal launch refusal before retrying.',
+          });
+        }
         continue;
       }
 

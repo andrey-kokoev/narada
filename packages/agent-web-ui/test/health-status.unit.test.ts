@@ -56,4 +56,42 @@ describe('healthIntelligence', () => {
       models: [{ model: 'k3', thinkingChoices: ['thinking'] }],
     }]);
   });
+
+  it('retains qualified model identity and capability intersections', () => {
+    expect(healthIntelligence({
+      intelligence: {
+        selection_choices: {
+          schema: 'narada.invokable-intelligence.selection-choices.v1',
+          providers: [{
+            inference_provider: { kind: 'inference-provider', id: 'inference-provider:codex-subscription' },
+            models: [{
+              model_ref: { kind: 'model', id: 'model:gpt-5.6-luna' },
+              model_provider: { kind: 'model-provider', id: 'model-provider:openai' },
+              inference_provider: { kind: 'inference-provider', id: 'inference-provider:codex-subscription' },
+              offering_refs: [{ kind: 'model-offering', id: 'model-offering:luna' }],
+              invocation_model_key: 'gpt-5.6-luna',
+              capabilities: [{
+                capability: { family: 'thinking', name: 'levels' },
+                supported: true,
+                allowed_values: ['xhigh'],
+                assertion_ids: ['assert:luna'],
+                reasons: ['support-intersection-satisfied'],
+              }],
+            }],
+          }],
+        },
+      },
+    }).selectionChoices).toEqual([{
+      provider: 'codex-subscription',
+      models: [{
+        model: 'gpt-5.6-luna',
+        modelRef: 'gpt-5.6-luna',
+        modelProvider: 'openai',
+        offeringRefs: ['model-offering:luna'],
+        invocationModelKey: 'gpt-5.6-luna',
+        capabilities: [{ family: 'thinking', name: 'levels', supported: true, allowedValues: ['xhigh'] }],
+        thinkingChoices: ['xhigh'],
+      }],
+    }]);
+  });
 });

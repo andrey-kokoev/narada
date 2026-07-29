@@ -27,13 +27,19 @@
   "schemas": ["docs/concepts/nars-authority-runtime-host-transition.md"],
   "docs": ["docs/concepts/nars-authority-runtime-host-transition.md", "docs/concepts/narada-runtime-projection-graph.md"],
   "tasks": ["nars-authority-runtime-host-transition", "first-class-system-objects"],
-  "code_refs": ["packages/nars-session-core/src/authority-transition-state.mjs"],
-  "tests": [],
+  "code_refs": [
+    "packages/nars-session-core/src/authority-transition-state.ts",
+    "packages/cloudflare-nars-projection/src/index.ts"
+  ],
+  "tests": [
+    "packages/nars-session-core/src/authority-transition-state.test.ts",
+    "packages/cloudflare-nars-projection/test/authority-host-transition.test.ts"
+  ],
   "examples": ["local -> cloudflare-host authority rehome with fenced source writes"],
   "counterexamples": ["opening a second browser surface"],
   "open_questions": [
     "How much of the transition record belongs in the authority runtime versus the projection store?"
   ],
   "confidence": { "cl": 0.98, "basis": "The transition concept is documented as a first-class governed operation with a target record shape." },
-  "reviewed_at": "2026-07-02T19:00:00.000Z"
+  "reviewed_at": "2026-07-28T04:30:00.000Z"
 }

@@ -203,6 +203,39 @@ describe('workspace launch execution boundaries', () => {
     });
   });
 
+  it('fails immediately when the launch binding reaches a terminal failure', async () => {
+    const tempDir = await mkdtemp('/tmp/workspace-launch-terminal-binding-');
+    const bindingPath = join(tempDir, 'binding.json');
+    const failedPlan = {
+      ...plan,
+      operator_projection_launch_binding: {
+        path: bindingPath,
+        exact_attach_required: true,
+      },
+    } as unknown as WorkspaceLaunchAgentPlan;
+    await import('node:fs/promises').then(({ writeFile }) => writeFile(bindingPath, JSON.stringify({
+      status: 'failed',
+      reason: 'session_authority_conflict',
+    })));
+    let sleeps = 0;
+    try {
+      await expect(awaitWorkspaceLaunchSessionAttachments([failedPlan], {
+        discover: (() => ({ sessions: [] })) as unknown as WorkspaceLaunchAttachmentDependencies['discover'],
+        timeoutMs: 120_000,
+        pollMs: 100,
+        now: () => 0,
+        sleep: async () => { sleeps += 1; },
+      })).rejects.toMatchObject({
+        evidence: {
+          sessions: [{ reason: 'launch_binding_failed:session_authority_conflict', attempts: 1 }],
+        },
+      });
+      expect(sleeps).toBe(0);
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
+  });
+
   it('redacts secret argv values while preserving option names', () => {
     expect(redactWorkspaceLaunchArgv([
       'node',

@@ -56,4 +56,4 @@ For v1 there is no hidden sync transport. The full operator readiness path is `p
 - `packages/site-authority-map` decides who may execute each durable mutation class.
 - `packages/site-continuity` decides what may cross between embodiments without smearing authority.
 - `packages/sites/windows/src/site-observation.ts` exposes `createWindowsSiteContinuityReadModel` so the local Windows embodiment can publish the same binding and decisions as a read-only observation surface.
-- `packages/cloudflare-carrier/src/cloudflare-worker.mjs` exposes `site_continuity` from `site.read` so the Cloudflare embodiment presents the same relation from its side.
+- `packages/cloudflare-carrier/src/cloudflare-worker.ts` exposes `site_continuity` from `site.read` so the Cloudflare embodiment presents the same relation from its side.

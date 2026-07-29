@@ -12,6 +12,7 @@ import type {
 import type { WorkspaceLaunchRegistryContext } from './workspace-launch-registry.js';
 import {
   workspaceLaunchCommandArgv,
+  workspaceLaunchCliCommandSpec,
   workspaceLaunchNodeNaradaCommandSpec,
   workspaceLaunchPnpmNaradaCommandSpec,
   workspaceLaunchRuntimeCommandSpec,
@@ -331,11 +332,10 @@ function agentWebUiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper
 function agentWebUiAttachCommand(record: WorkspaceLaunchRecord, naradaProper: string, cloudflareApiBaseUrl: string | null, launchBindingPath: string | null, onboarding: boolean): string[] {
   const agentDisplay = workspaceLaunchQualifiedAgentId(record);
   if (!launchBindingPath) throw new Error(`workspace_launch_web_ui_launch_binding_required: ${agentDisplay}`);
+  const cli = workspaceLaunchCliCommandSpec(naradaProper);
   const attachCommand = [
-    'pnpm',
-    '--dir', naradaProper,
-    'exec',
-    'narada',
+    cli.executable,
+    ...cli.args,
     'agent-web-ui',
     'attach',
     '--site-root', record.site_root,

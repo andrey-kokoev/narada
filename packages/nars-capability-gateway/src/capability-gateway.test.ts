@@ -13,6 +13,7 @@ function createGateway(options: AnyRecord = {}) {
     servers = createServers(),
     admit = async () => ({ admitted: true }),
     discoverAndStartMcpServers,
+    applyWorkerMcpProjection,
     aggregateToolBindings,
     findToolBinding,
     sendMcpRequest,
@@ -32,6 +33,7 @@ function createGateway(options: AnyRecord = {}) {
     ...(now ? { now } : {}),
     dependencies: {
       discoverAndStartMcpServers: discoverAndStartMcpServers ?? (async () => servers),
+      ...(applyWorkerMcpProjection ? { applyWorkerMcpProjection } : {}),
       aggregateToolBindings: aggregateToolBindings ?? ((items: AnyRecord) => items.filesystem ? [{
         serverName: 'filesystem',
         server: { ...items.filesystem, name: 'filesystem' },
@@ -95,6 +97,43 @@ test('capability gateway serializes startup and closes only after startup', asyn
   assert.equal(gateway.state().active_execution_count, 0);
   await gateway.close();
   await assert.rejects(() => gateway.start(), /nars_capability_gateway_not_startable:closed/);
+});
+
+test('capability gateway applies worker MCP projection before cataloging tools', async () => {
+  const servers = {
+    task_lifecycle: {
+      tools: [{ name: 'task_lifecycle_show' }, { name: 'task_lifecycle_claim' }],
+    },
+    filesystem: {
+      tools: [{ name: 'fs_read_file' }],
+    },
+  };
+  let projectionCalls = 0;
+  const { gateway } = createGateway({
+    servers,
+    discoverAndStartMcpServers: async () => servers,
+    applyWorkerMcpProjection: (items: AnyRecord) => {
+      projectionCalls += 1;
+      return {
+        ...items,
+        task_lifecycle: {
+          ...items.task_lifecycle,
+          tools: [items.task_lifecycle.tools[0]],
+        },
+        filesystem: {
+          ...items.filesystem,
+          tools: [],
+        },
+      };
+    },
+    aggregateToolBindings: (items: AnyRecord) => Object.entries(items).flatMap(([serverName, server]: [string, any]) =>
+      (server.tools ?? []).map((tool: AnyRecord) => ({ serverName, server, tool, providerToolName: tool.name }))),
+  });
+
+  const catalog = await gateway.start();
+
+  assert.equal(projectionCalls, 1);
+  assert.deepEqual(catalog.map((item: AnyRecord) => item.tool_name), ['task_lifecycle_show']);
 });
 
 test('capability gateway marks startup failure and permits explicit retry', async () => {

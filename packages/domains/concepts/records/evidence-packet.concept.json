@@ -1,0 +1,39 @@
+{
+  "concept_id": "evidence_packet",
+  "canonical_name": "EvidencePacket",
+  "short_definition": "The structured, correlated proof envelope for a consequential Narada claim and its observed effect.",
+  "description": "EvidencePacket records claim, evidence type, producer, verifier, artifacts, command and test references, timestamps, trust, scope, invalidation, and cross-surface correlation. EffectConfirmation consumes admissible packets but does not grant permission or replace an observing authority.",
+  "kind": "protocol",
+  "status": "active",
+  "aliases": ["evidence packet", "effect evidence"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["provider success", "transport closure", "projection freshness", "permission grant"],
+  "boundaries": [
+    "Not an admission or permission decision.",
+    "Not a provider or transport outcome.",
+    "Not a replacement for task lifecycle or runtime authority.",
+    "Not a reason to erase interrupted or unknown state."
+  ],
+  "relations": [
+    { "kind": "supports", "concept_id": "task_lifecycle" },
+    { "kind": "supports", "concept_id": "nars_session_management" },
+    { "kind": "coordinates_with", "concept_id": "admission_policy" },
+    { "kind": "coordinates_with", "concept_id": "object_lifecycle_policy" }
+  ],
+  "owner_surface": "Narada cross-domain evidence and confirmation contract",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "packages/evidence-confirmation-contract/src/evidence-confirmation.ts",
+    "notes": "Task lifecycle, NARS runtime, provider, transport, and projection authorities produce or consume packets without delegating their authority to evidence."
+  },
+  "schemas": ["narada.evidence_packet.v1", "narada.effect_confirmation.v1", "narada.evidence_correlation_audit.v1"],
+  "docs": ["docs/concepts/evidence-confirmation-contract.md"],
+  "tasks": ["2378", "first-class-system-objects"],
+  "code_refs": ["packages/evidence-confirmation-contract/src/evidence-confirmation.ts"],
+  "tests": ["packages/evidence-confirmation-contract/src/evidence-confirmation.test.ts"],
+  "examples": ["verified replay confirms an interrupted effect", "task retains legacy evidence refs plus packet ids"],
+  "counterexamples": ["treating provider success or a fresh projection as mutation confirmation"],
+  "open_questions": ["Which task and NARS adapters should first persist packet fields natively rather than project them additively?"],
+  "confidence": { "cl": 0.985, "basis": "The packet schema, admission gate, correlation audit, confirmation rule, interruption reconciliation, and task/runtime reference builders are implemented and tested." },
+  "reviewed_at": "2026-07-28T04:50:00.000Z"
+}

@@ -1,0 +1,356 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "schema": "narada.narada_target_architecture_acceptance_matrix.v1",
+  "matrix_id": "narada-target-architecture-acceptance",
+  "destination": {
+    "name": "Narada target architecture",
+    "source": "docs/architecture/narada-target-architecture.md",
+    "completion_status": "incomplete",
+    "completion_rule": "Every applicable cell in every slice and cross-cutting row must be proven by current durable evidence; any unresolved cell keeps the destination incomplete."
+  },
+  "audit": {
+    "task_number": 2381,
+    "task_ref": "task #2381",
+    "method": [
+      "Read the target architecture conformance rule.",
+      "Inspect chapter lifecycle status and submitted evidence posture.",
+      "Compare the required cells with the operator journey and local/remote symmetry references.",
+      "Record missing, partial, stale, and unverified evidence without promoting rows to complete."
+    ],
+    "limitations": [
+      "This matrix run is not a substitute for live E2E execution where a boundary is crossed.",
+      "A task in review is not treated as closed or proven.",
+      "The current task records do not provide a complete independent audit for every chapter.",
+      "Repository-wide runtime and live-boundary evidence must be attached as separate durable artifacts."
+    ]
+  },
+  "cell_definitions": {
+    "owner": "Named concept, authority owner, and explicit non-owner boundary.",
+    "contract": "Stable schema or contract and authoritative source.",
+    "implementation": "Implementation respects the ownership boundary.",
+    "projection": "Claimed surfaces consume the shared contract consistently.",
+    "refusal_failure": "Invalid input, refusal, and known-failure behavior is explicit and tested.",
+    "focused_coverage": "Focused unit or contract coverage exists for the slice.",
+    "boundary_live": "Real process, transport, host, or operator-surface proof when the slice crosses one.",
+    "interruption": "Reconciliation after cancellation, restart, replay, or transport loss.",
+    "durable_evidence": "Current task, ledger, registry, and artifact references remain reviewable."
+  },
+  "allowed_cell_states": [
+    "proven",
+    "partial",
+    "missing",
+    "stale_or_unverified",
+    "not_applicable"
+  ],
+  "required_surfaces": [
+    "local-nars",
+    "remote-cloudflare-projection",
+    "agent-cli",
+    "agent-tui",
+    "agent-web-ui",
+    "operator-console",
+    "replay",
+    "failure-recovery",
+    "authority-host-transition"
+  ],
+  "slice_rows": [
+    {
+      "id": "A",
+      "title": "authority separation and projection topology",
+      "task_number": 2371,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2382,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "missing",
+        "projection": "missing",
+        "refusal_failure": "missing",
+        "focused_coverage": "missing",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "stale_or_unverified"
+      },
+      "evidence_refs": ["task #2371", "task #2382"],
+      "unresolved": ["complete authority/non-owner boundary", "independent review", "boundary/live proof", "interruption reconciliation"]
+    },
+    {
+      "id": "B",
+      "title": "NARS session/runtime authority",
+      "task_number": 2372,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2383,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "partial",
+        "projection": "partial",
+        "refusal_failure": "partial",
+        "focused_coverage": "partial",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "partial"
+      },
+      "evidence_refs": ["task #2372", "task #2383"],
+      "unresolved": ["cross-surface parity", "live boundary proof", "interruption reconciliation", "independent review"]
+    },
+    {
+      "id": "C",
+      "title": "intelligence invocation",
+      "task_number": 2373,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2384,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "partial",
+        "projection": "partial",
+        "refusal_failure": "partial",
+        "focused_coverage": "partial",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "partial"
+      },
+      "evidence_refs": ["task #2373", "task #2384"],
+      "unresolved": ["end-to-end authority proof", "replay/recovery proof", "cross-surface proof", "independent review"]
+    },
+    {
+      "id": "D",
+      "title": "strict TypeScript and stale references",
+      "task_number": 2374,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2394,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "partial",
+        "projection": "partial",
+        "refusal_failure": "partial",
+        "focused_coverage": "partial",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "partial"
+      },
+      "evidence_refs": ["task #2374", "task #2394"],
+      "unresolved": ["runtime boundary proof", "interruption reconciliation", "destination-level proof", "independent review"]
+    },
+    {
+      "id": "E",
+      "title": "shared projections and cross-client parity",
+      "task_number": 2375,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2395,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "partial",
+        "projection": "partial",
+        "refusal_failure": "partial",
+        "focused_coverage": "partial",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "partial"
+      },
+      "evidence_refs": ["task #2375", "task #2395"],
+      "unresolved": ["all claimed embodiment parity", "live/recovery parity", "independent review"]
+    },
+    {
+      "id": "F",
+      "title": "authority-host transitions",
+      "task_number": 2376,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2397,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "missing",
+        "projection": "missing",
+        "refusal_failure": "missing",
+        "focused_coverage": "missing",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "stale_or_unverified"
+      },
+      "evidence_refs": ["task #2376", "task #2397"],
+      "unresolved": ["transition-boundary execution", "stale-writer refusal", "durable reconciliation", "independent review"]
+    },
+    {
+      "id": "G",
+      "title": "admission and lifecycle governance",
+      "task_number": 2377,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2398,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "missing",
+        "projection": "missing",
+        "refusal_failure": "missing",
+        "focused_coverage": "missing",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "stale_or_unverified"
+      },
+      "evidence_refs": ["task #2377", "task #2398"],
+      "unresolved": ["admission proof", "refusal-before-side-effect proof", "lifecycle reconciliation", "independent review"]
+    },
+    {
+      "id": "H",
+      "title": "evidence and confirmation",
+      "task_number": 2378,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2399,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "missing",
+        "projection": "missing",
+        "refusal_failure": "missing",
+        "focused_coverage": "missing",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "stale_or_unverified"
+      },
+      "evidence_refs": ["task #2378", "task #2399"],
+      "unresolved": ["evidence provenance", "confirmation independence", "durable artifact proof", "independent review"]
+    },
+    {
+      "id": "I",
+      "title": "operator journey and recovery",
+      "task_number": 2379,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "review_task_number": 2402,
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "missing",
+        "projection": "missing",
+        "refusal_failure": "missing",
+        "focused_coverage": "missing",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "stale_or_unverified"
+      },
+      "evidence_refs": ["task #2379", "task #2402", "packages/operator-surface-runtime-contract/contracts/operator-journey-matrix.json"],
+      "unresolved": ["independent journey execution", "recovery across claimed surfaces", "replay/reconnect proof", "independent review"]
+    },
+    {
+      "id": "J",
+      "title": "operator-view policy",
+      "task_number": 2380,
+      "lifecycle_status": "in_review",
+      "completion_status": "not_proven",
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "partial",
+        "projection": "partial",
+        "refusal_failure": "partial",
+        "focused_coverage": "partial",
+        "boundary_live": "missing",
+        "interruption": "missing",
+        "durable_evidence": "partial"
+      },
+      "evidence_refs": ["task #2380", "mcp_payload:chapter-j-operator-view-policy-v2@v1"],
+      "unresolved": ["live/replay/interruption proof", "review closure", "destination-level parity"]
+    },
+    {
+      "id": "K",
+      "title": "completion proof and destination matrix",
+      "task_number": 2381,
+      "lifecycle_status": "claimed",
+      "completion_status": "not_proven",
+      "cells": {
+        "owner": "partial",
+        "contract": "partial",
+        "implementation": "partial",
+        "projection": "partial",
+        "refusal_failure": "partial",
+        "focused_coverage": "missing",
+        "boundary_live": "missing",
+        "interruption": "partial",
+        "durable_evidence": "partial"
+      },
+      "evidence_refs": ["task #2381", "docs/architecture/narada-target-architecture.md", "docs/operations/coherence-closure-ledger.md"],
+      "unresolved": ["matrix-wide test evidence", "boundary/live evidence", "independent review", "reconciliation after every material evidence change"]
+    }
+  ],
+  "cross_cutting_rows": [
+    {"id": "local-nars", "status": "partial", "unresolved": ["matrix-wide authority/replay/failure/restart reconciliation"]},
+    {"id": "remote-cloudflare-projection", "status": "partial", "unresolved": ["live proof for each claimed capability and recovery path"]},
+    {"id": "agent-cli", "status": "partial", "unresolved": ["full parity and interruption proof"]},
+    {"id": "agent-tui", "status": "partial", "unresolved": ["full journey, failure, replay, and host-boundary proof"]},
+    {"id": "agent-web-ui", "status": "partial", "unresolved": ["live browser journey and reconnect/recovery evidence"]},
+    {"id": "operator-console", "status": "missing", "unresolved": ["current implementation and acceptance evidence"]},
+    {"id": "replay", "status": "partial", "unresolved": ["executed semantic-equivalence proof after restart/surface replacement"]},
+    {"id": "failure-recovery", "status": "partial", "unresolved": ["executed refusal/interruption/reconnect/reconciliation evidence"]},
+    {"id": "authority-host-transition", "status": "missing", "unresolved": ["live transition, stale-writer refusal, durable reconciliation"]},
+    {"id": "registry-ledger-task-reconciliation", "status": "partial", "unresolved": ["one current reconciliation pass with no silent closure"]}
+  ],
+  "blocked_test_evidence": {
+    "task_lifecycle_all": {
+      "historical_failed_runs": 2,
+      "latest_status": "passed",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "artifact_id": "d5f2d6f4-ef96-4f77-abc1-117a368cea5d",
+      "superseded_failed_artifacts": [
+        "ab1ea27c-ff05-4ba0-8fb0-6d655e00dc40",
+        "d8c4eee8-b0de-4591-9c14-fecda041ceae"
+      ],
+      "consequence": "The current lifecycle test gate is passing; earlier failures remain historical runtime-freshness evidence."
+    },
+    "narrow_selectors": [
+      {"selector": "task-lifecycle", "status": "passed", "total": 2, "passed": 2, "failed": 0, "artifact_id": "d35d81fb-be9c-4bb8-b68d-42289189941e"},
+      {"selector": "typed-mcp", "status": "passed", "total": 1, "passed": 1, "failed": 0, "artifact_id": "eaac7f72-e88a-424d-b91b-c0f504694a25"},
+      {"selector": "operator-surface", "status": "passed", "total": 4, "passed": 4, "failed": 0, "artifact_id": "934284a5-2817-46de-be0b-5595ea99cf4f", "superseded_failed_artifact": "96348b32-fe08-448f-849a-b8ae796bd2a9"}
+    ],
+    "failures": [
+      {
+        "check": "Test-AcceptanceCriteriaBodyEnforcement.test.mjs",
+        "status": "historical_invalidated",
+        "observed": "Expected one frontmatter_only_acceptance_criteria issue but observed zero.",
+        "matrix_consequence": "Fresh post-restart run passed; retain as runtime-freshness evidence.",
+        "invalidated_by": "934284a5-2817-46de-be0b-5595ea99cf4f"
+      },
+      {
+        "check": "agent-desktop-shortcuts-authority.test.mjs",
+        "status": "historical_invalidated",
+        "observed": "Install-AgentDesktopShortcuts.ps1 has a parser error at line 180: missing closing parenthesis.",
+        "matrix_consequence": "Fresh post-restart run passed; retain as runtime-freshness evidence.",
+        "invalidated_by": "934284a5-2817-46de-be0b-5595ea99cf4f"
+      },
+      {
+        "check": "osm-send-permission-policy.test.mjs",
+        "status": "historical_invalidated",
+        "observed": "The operator-surface server imports missing D:\\code\\narada\\packages\\site-common-tools\\compat\\mcp-payload-file.legacy-site.mjs.",
+        "matrix_consequence": "Fresh post-restart run passed; retain as runtime-freshness evidence.",
+        "invalidated_by": "934284a5-2817-46de-be0b-5595ea99cf4f"
+      },
+      {
+        "check": "operator-surface-shutdown-paths.test.mjs",
+        "status": "passed",
+        "observed": "Focused source check passed.",
+        "matrix_consequence": "Does not establish the other operator-surface cells."
+      }
+    ],
+    "scope_decision": "Record the earlier failures as invalidated runtime-freshness evidence; use the fresh passing artifacts for current test-gate status."
+  },
+  "matrix_result": {
+    "destination_complete": false,
+    "unresolved_slice_count": 11,
+    "unresolved_cross_cutting_count": 10,
+    "false_completion_prevented": true,
+    "next_required_action": "Attach current boundary/live, interruption, and review evidence to each affected row, then rerun this matrix and reconcile task, ledger, and registry status."
+  }
+}

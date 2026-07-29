@@ -82,6 +82,9 @@ export interface NarsSessionIndexRecord {
   authority_epoch?: number | null;
   runtime_origin?: string | null;
   authority_runtime_id?: string | null;
+  authority_transition_id?: string | null;
+  authority_handoff_evidence?: Record<string, unknown> | null;
+  authority_reconciliation_evidence?: Record<string, unknown> | null;
   runtime_surface_contract?: Record<string, unknown> | null;
   launch_operator_surface_kind?: string | null;
   attach_commands?: NarsSessionAttachCommands | null;
@@ -272,7 +275,7 @@ export function markNarsSessionIndexClosed({ sessionPath, terminalState = 'close
   });
 }
 
-export function updateNarsSessionAuthorityTransitionState({ sessionPath, authorityTransitionState = null, authorityHandoffLifecycle = null, sourceWriteAdmission = null, supersededBySessionId = undefined, authorityLocatorRef = undefined, updatedAt = new Date().toISOString(), siteRoot }: { sessionPath?: string | null; authorityTransitionState?: unknown; authorityHandoffLifecycle?: unknown; sourceWriteAdmission?: unknown; supersededBySessionId?: unknown; authorityLocatorRef?: unknown; updatedAt?: string; siteRoot?: string | null } = {}): Record<string, unknown> | null {
+export function updateNarsSessionAuthorityTransitionState({ sessionPath, authorityTransitionState = null, authorityHandoffLifecycle = null, sourceWriteAdmission = null, supersededBySessionId = undefined, authorityLocatorRef = undefined, authorityRuntimeHost = undefined, authorityEpoch = undefined, authorityRuntimeId = undefined, authorityTransitionId = undefined, authorityHandoffEvidence = undefined, authorityReconciliationEvidence = undefined, updatedAt = new Date().toISOString(), siteRoot }: { sessionPath?: string | null; authorityTransitionState?: unknown; authorityHandoffLifecycle?: unknown; sourceWriteAdmission?: unknown; supersededBySessionId?: unknown; authorityLocatorRef?: unknown; authorityRuntimeHost?: unknown; authorityEpoch?: unknown; authorityRuntimeId?: unknown; authorityTransitionId?: unknown; authorityHandoffEvidence?: unknown; authorityReconciliationEvidence?: unknown; updatedAt?: string; siteRoot?: string | null } = {}): Record<string, unknown> | null {
   const paths = narsSessionIndexPathsFromSessionPath(sessionPath);
   if (!paths || !existsSync(paths.record_path)) return null;
   const current = readJson(paths.record_path) as NarsSessionIndexRecord | null;
@@ -285,6 +288,12 @@ export function updateNarsSessionAuthorityTransitionState({ sessionPath, authori
       authorityTransitionState ?? current.authority_transition_state,
     ),
     source_write_admission: typeof sourceWriteAdmission === 'string' && NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS.includes(sourceWriteAdmission) ? sourceWriteAdmission : current.source_write_admission ?? null,
+    ...(authorityRuntimeHost !== undefined ? { authority_runtime_host: typeof authorityRuntimeHost === 'string' ? authorityRuntimeHost : null } : {}),
+    ...(authorityEpoch !== undefined ? { authority_epoch: Number.isInteger(authorityEpoch) && Number(authorityEpoch) >= 1 ? Number(authorityEpoch) : null } : {}),
+    ...(authorityRuntimeId !== undefined ? { authority_runtime_id: normalizeOptionalString(authorityRuntimeId) } : {}),
+    ...(authorityTransitionId !== undefined ? { authority_transition_id: normalizeOptionalString(authorityTransitionId) } : {}),
+    ...(authorityHandoffEvidence !== undefined ? { authority_handoff_evidence: isRecord(authorityHandoffEvidence) ? authorityHandoffEvidence : null } : {}),
+    ...(authorityReconciliationEvidence !== undefined ? { authority_reconciliation_evidence: isRecord(authorityReconciliationEvidence) ? authorityReconciliationEvidence : null } : {}),
     ...(supersededBySessionId !== undefined ? { superseded_by_session_id: normalizeOptionalString(supersededBySessionId) } : {}),
     ...(authorityLocatorRef !== undefined ? { authority_locator_ref: normalizeOptionalString(authorityLocatorRef) } : {}),
     last_seen_at: updatedAt,

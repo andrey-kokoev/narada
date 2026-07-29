@@ -17,8 +17,9 @@ Client surfaces render that projection in their own medium. They do not own even
 - unwrapping NARS event envelopes such as `session_event.payload`;
 - recognizing nested provider events;
 - assigning event class: `conversation`, `operations`, `diagnostics`, or `raw`;
+- assigning the finer-grained OperatorViewPolicy disposition: conversation fact, operation fact, diagnostic signal, protocol evidence, raw record, or state sample;
 - assigning stable projection shape: `kind`, `label`, `tone`, `summary`, `event`, and semantic `renderKey` when available;
-- deciding default view eligibility for conversation, operations, diagnostics, and raw projections;
+- deciding default view eligibility for the five OperatorViewPolicy event lanes;
 - distinguishing canonical conversation facts from provider/runtime telemetry.
 
 Client packages own only medium-specific rendering:
@@ -206,12 +207,14 @@ Provider `thread.started`, `turn.started`, and `turn.completed` are `diagnostics
 
 ## View Policies
 
-Views are cumulative by operator usefulness, not by source transport.
+OperatorViewPolicy lanes are cumulative where that helps an operator keep context, except for explicit protocol and raw lanes.
 
 - `conversation`: only canonical conversation facts. No provider telemetry, tool rows, health, protocol evidence, or stream fragments.
 - `operations`: conversation plus operator-relevant runtime mechanics.
 - `diagnostics`: operations plus provider/protocol/runtime observability.
+- `protocol`: explicit protocol evidence only; selecting it is an intentional inspection mode.
 - `raw`: all projected records, with state-sample inclusion controlled by an explicit option.
+- `status`: a derived health/activity/authority/intelligence summary, not an event-transcript lane. Its source events remain subject to the other lane rules.
 
 Routine healthy state samples should not pollute normal views. Degraded health and errors must remain visible in operations or diagnostics according to severity.
 

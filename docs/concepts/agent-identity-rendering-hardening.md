@@ -59,8 +59,8 @@ The SOP is complete only when the live authority and every active projection agr
 
 | Place | Responsibility | Hardening posture |
 | --- | --- | --- |
-| `packages/agent-identity/src/index.mjs` | Derive, normalize, match, group, display, and resolve identity refs. | Authoritative helper package for maintained runtime/projection code. Owns the v1 projection helper and the v2 structured resolver contract. |
-| `packages/agent-identity/src/index.test.mjs` | Prove prefixed and Site-local derivation. | Must include Site-local `resident` plus explicit `sonar` fixture. |
+| `packages/agent-identity/src/index.ts` | Derive, normalize, match, group, display, and resolve identity refs. | Authoritative helper package for maintained runtime/projection code. Owns the v1 projection helper and the v2 structured resolver contract. |
+| `packages/agent-identity/src/index.test.ts` | Prove prefixed and Site-local derivation. | Must include Site-local `resident` plus explicit `sonar` fixture. |
 
 `AgentIdentityRefV2` is the target authority-bearing shape for new writes: `identity_scope`, `local_agent_id`, `role`, `canonical_agent_id`, optional `legacy_agent_id`, and resolver provenance. Historical scalar `agent_id` values should be lifted with `resolveAgentIdentityRef(input, context)` instead of rewritten in place.
 
@@ -71,24 +71,24 @@ The SOP is complete only when the live authority and every active projection agr
 | `packages/layers/cli/src/commands/launcher.ts` | Workspace registry selection and launch planning. | Build `agent_identity_ref` from registry `Agent`, `Role`, and `Site`; do not infer display in Windows title or argv alone. |
 | `packages/agent-start/src/narada-agent-start.ts` | Start-event and launch-result materialization. | Emit `AgentIdentityRefV2` in launch results, and pass it to carrier process launch/wait prompt. |
 | `packages/agent-start/src/carrier-process-launch.ts` | Wait-before-exec prompt handoff. | Forward `agentIdentityRef` to renderer; raw `agentId` remains fallback only. |
-| `packages/agent-start-renderer/src/agent-start-renderer.mjs` | Human launch preamble and wait prompt. | Render `identity:` and wait prompt from identity ref; show `local_agent_id` separately when different. |
-| `packages/agent-start/bin/verify-registered-site-launchers.mjs` | Registered launcher fleet verifier. | Compare expected and actual `agent_identity_ref` for every registered launch record. |
+| `packages/agent-start-renderer/src/agent-start-renderer.ts` | Human launch preamble and wait prompt. | Render `identity:` and wait prompt from identity ref; show `local_agent_id` separately when different. |
+| `packages/agent-start/bin/verify-registered-site-launchers.ts` | Registered launcher fleet verifier. | Compare expected and actual `agent_identity_ref` for every registered launch record. |
 
 ## Runtime Emission And Session Index
 
 | Place | Responsibility | Hardening posture |
 | --- | --- | --- |
-| `packages/agent-runtime-server/src/runtime-context.mjs` | Runtime context creation. | Build identity ref from launch identity, role, and resolved Site id. |
-| `packages/agent-runtime-server/src/runtime-server-events.mjs` | NARS session events and heartbeats. | Emit `agent_identity_ref` on session and wrapper events while preserving raw `agent_id`. |
-| `packages/nars-session-core/src/session-index.mjs` | Session-index record/read model. | Persist structured identity refs; derive them from session_started when absent. |
-| `packages/agent-runtime-server/src/runtime-server-events.mjs` | Runtime wrapper event projection. | Preserve identity ref and use it for host-status display labels. |
+| `packages/agent-runtime-server/src/runtime-context.ts` | Runtime context creation. | Build identity ref from launch identity, role, and resolved Site id. |
+| `packages/agent-runtime-server/src/runtime-server-events.ts` | NARS session events and heartbeats. | Emit `agent_identity_ref` on session and wrapper events while preserving raw `agent_id`. |
+| `packages/nars-session-core/src/session-index.ts` | Session-index record/read model. | Persist structured identity refs; derive them from session_started when absent. |
+| `packages/agent-runtime-server/src/runtime-server-events.ts` | Runtime wrapper event projection. | Preserve identity ref and use it for host-status display labels. |
 
 ## Operator Projections
 
 | Place | Responsibility | Hardening posture |
 | --- | --- | --- |
-| `packages/carrier-terminal-projection/src/terminal-event-rendering.mjs` | `agent-cli` terminal projection. | Display and filter with identity ref; raw `agent_id` fallback only. |
-| `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs` | Shared client projection contract. | Session summaries and render keys use identity ref before raw `agent_id`. |
+| `packages/carrier-terminal-projection/src/terminal-event-rendering.ts` | `agent-cli` terminal projection. | Display and filter with identity ref; raw `agent_id` fallback only. |
+| `packages/nars-client-projection-contract/src/nars-client-projection-contract.ts` | Shared client projection contract. | Session summaries and render keys use identity ref before raw `agent_id`. |
 | `packages/agent-web-ui/src/domain/events.ts` | Browser event identity normalization. | Extract Site, agent, role, and session identity from canonical event and health fields before scalar fallbacks. |
 | `packages/agent-web-ui/src/domain/session-store.ts` | Browser session identity retention. | Keep one normalized identity projection across replay, live events, and paged history. |
 | `packages/agent-web-ui/src/session/activity.ts` | Browser activity labels. | Display normalized agent identity where health/activity events carry it. |
@@ -99,7 +99,7 @@ The SOP is complete only when the live authority and every active projection agr
 | Place | Responsibility | Hardening posture |
 | --- | --- | --- |
 | `packages/layers/cli/src/commands/task-review-request.ts` | Review-request obligation creation. | Persist `source_agent_identity_ref` in the durable payload alongside `source_agent_id`; keep the scalar for compatibility only. |
-| `packages/task-lifecycle-tools/src/task-obligations.mjs` | Manual obligation create/route maintenance. | Persist and surface `source_agent_identity_ref` so future task-lifecycle writes do not depend on raw scalar identity alone. |
+| `packages/task-lifecycle-tools/src/task-obligations.ts` | Manual obligation create/route maintenance. | Persist and surface `source_agent_identity_ref` so future task-lifecycle writes do not depend on raw scalar identity alone. |
 
 ## Task Lifecycle Read Models
 
@@ -121,7 +121,7 @@ The SOP is complete only when the live authority and every active projection agr
 
 | Place | Responsibility | Hardening posture |
 | --- | --- | --- |
-| `packages/agent-context-tools/src/agent-context-mcp-server.mjs` | Startup/whoami/checkpoint context. | Include identity ref in context responses so clients can render canonical identity even when env `NARADA_AGENT_ID` is local. |
+| `packages/agent-context-tools/src/agent-context-mcp-server.ts` | Startup/whoami/checkpoint context. | Include identity ref in context responses so clients can render canonical identity even when env `NARADA_AGENT_ID` is local. |
 | `C:/Users/Andrey/Narada/config/launch/agents.psd1` | User Site launch registry. | Records may use prefixed ids or Site-local role ids, but Site-local ids must carry `Site` and `Role` so the launcher derives canonical refs. |
 
 ## Verification Gates
@@ -138,7 +138,7 @@ The SOP is complete only when the live authority and every active projection agr
 | Runtime wrapper tests | `pnpm --filter @narada2/agent-runtime-server test` |
 | Context startup/whoami MCP tests | `pnpm --filter @narada2/agent-context-tools test`; proves default startup summary and whoami both expose canonical `agent_identity_ref`. |
 | CLI attach/session tests | `node scripts/run-vitest-quiet.mjs run --silent=true test/commands/nars.test.ts` from `packages/layers/cli` |
-| Registered fleet dry-run | `node D:/code/narada/packages/agent-start/bin/verify-registered-site-launchers.mjs --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --jobs 4 --progress` |
+| Registered fleet dry-run | `node D:/code/narada/packages/agent-start/bin/verify-registered-site-launchers.ts --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --jobs 4 --progress` |
 
 ## Anti-Regression Search
 

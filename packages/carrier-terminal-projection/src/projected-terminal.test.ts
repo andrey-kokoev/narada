@@ -212,6 +212,13 @@ test('operator event rendering keeps unhealthy session health visible', () => {
   }, { timestamps: false });
   assert.equal(rendered.length, 1);
   assert.equal(renderedText(rendered[0]).includes('health degraded; mcp faulted; endpoint /api/health'), true);
+  assert.deepEqual(renderOperatorEvent({
+    event: 'session_health',
+    status: 'degraded',
+    mcp: { operational_state: 'faulted' },
+    health_endpoint: '/api/health',
+    mcp_runtime_fault_count: 1,
+  }, { timestamps: false, projectionVerbosity: 'conversation' }), []);
 });
 
 test('operator event rendering shows shared user messages from other attached surfaces', () => {

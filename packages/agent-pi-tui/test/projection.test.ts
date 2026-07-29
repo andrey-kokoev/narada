@@ -12,7 +12,7 @@ describe('agent-pi-tui projection', () => {
       'conversation',
       'conversation',
       'conversation',
-      'diagnostics',
+      'operations',
     ]);
     expect(rows[2]?.renderKey).toBe('assistant:fixture-turn-1');
     expect(rows[3]?.renderKey).toBe('assistant:fixture-turn-1');

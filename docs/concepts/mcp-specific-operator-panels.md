@@ -32,7 +32,7 @@ projections, not MCP clients and not runtime authorities.
 | Cloudflare projection | Narrow controls plus the explicitly named Cloudflare adapter vocabulary | Narrow input is translated at the adapter boundary to the Cloudflare projection's legacy verbs. Cloudflare-only panel methods remain remote adapter methods. |
 
 The distinction is executable in
-`packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs`:
+`packages/nars-client-projection-contract/src/nars-client-projection-contract.ts`:
 
 - `NARS_SESSION_CORE_METHOD_LIST` is the local contract.
 - `AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST` is the remote adapter inventory.
@@ -96,10 +96,10 @@ an MCP call from the browser.
 
 Keep these surfaces aligned when changing panel or transport behavior:
 
-- `packages/nars-client-projection-contract/src/nars-client-projection-contract.mjs`
-- `packages/agent-web-ui/src/server.js`
-- `packages/agent-web-ui/src/agent-web-ui.js`
-- `packages/agent-web-ui/src/session-projection.js`
+- `packages/nars-client-projection-contract/src/nars-client-projection-contract.ts`
+- `packages/agent-web-ui/src/server.ts`
+- `packages/agent-web-ui/src/agent-web-ui.ts`
+- `packages/agent-web-ui/src/session-projection.ts`
 - `packages/agent-web-ui/src/app/components/`
 - `packages/agent-web-ui/test/`
 

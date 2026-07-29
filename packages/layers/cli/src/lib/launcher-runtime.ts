@@ -63,6 +63,17 @@ export function classifyAgentStartLaunchBindingResult(
   return { status: 'failed' as const, reason: parseErrorReason ?? 'agent_start_failed' };
 }
 
+function agentStartFailureReason(value: unknown): string | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (!['failed', 'refused', 'not_available'].includes(String(record.status))) return null;
+  for (const field of ['reason_code', 'reason', 'error'] as const) {
+    const candidate = record[field];
+    if (typeof candidate === 'string' && candidate.trim()) return candidate.trim();
+  }
+  return null;
+}
+
 function failAgentStartBeforeExecution(args: {
   options: AgentStartOptions;
   siteRoot: string;
@@ -274,7 +285,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   const launchBindingStatus = classifyAgentStartLaunchBindingResult(
     execution.status,
     parsedRecord,
-    parsedAttempt.error?.reason_code ?? null,
+    agentStartFailureReason(parsed) ?? parsedAttempt.error?.reason_code ?? null,
   );
   writeOperatorProjectionLaunchBinding(options.launchBindingPath, {
     status: launchBindingStatus.status,

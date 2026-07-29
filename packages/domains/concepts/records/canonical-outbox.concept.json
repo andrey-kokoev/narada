@@ -1,0 +1,36 @@
+{
+  "concept_id": "canonical_outbox",
+  "canonical_name": "CanonicalOutbox",
+  "short_definition": "The durable handoff record for admitted work that must cross an authority boundary before downstream execution.",
+  "description": "CanonicalOutbox preserves an admitted intent or task dispatch until the owning downstream authority acknowledges, rejects, or reconciles it. It is a durable crossing record, not a provider queue or a projection cache.",
+  "kind": "artifact",
+  "status": "draft",
+  "aliases": ["canonical outbox", "admission outbox"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["provider queue", "projection cache", "in-memory pending list"],
+  "boundaries": [
+    "Not the downstream worker's execution state.",
+    "Not a projection store that can mint admission.",
+    "Not an acknowledgement of external success."
+  ],
+  "relations": [
+    { "kind": "supports", "concept_id": "task_lifecycle" },
+    { "kind": "crosses", "concept_id": "authority_grant" }
+  ],
+  "owner_surface": "Narada durable admission doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "narada-core/packages/task-governance-core",
+    "notes": "The outbox is the durable crossing evidence; downstream surfaces own execution and observation separately."
+  },
+  "schemas": ["narada-core/packages/task-governance-core/src/task-lifecycle-store.ts"],
+  "docs": ["docs/architecture/narada-target-architecture.md"],
+  "tasks": ["2225", "2371"],
+  "code_refs": ["narada-core/packages/task-governance-core/src/task-lifecycle-store.ts"],
+  "tests": ["narada-core/packages/task-governance-core/test/lib/task-lifecycle-store.test.ts"],
+  "examples": ["admitted task dispatch retained until worker authority acknowledgement"],
+  "counterexamples": ["a projection refresh being treated as durable admission"],
+  "open_questions": ["Which host owns outbox reconciliation during a future authority handoff?"],
+  "confidence": { "cl": 0.96, "basis": "The target architecture requires durable intent and confirmation crossings; this record names the durable handoff role." },
+  "reviewed_at": "2026-07-28T01:20:00.000Z"
+}

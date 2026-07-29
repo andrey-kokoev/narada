@@ -83,4 +83,25 @@ describe('intelligence selection', () => {
     expect(modelsForProvider(legacyIntelligence, 'kimi-code-api')).toEqual([]);
     expect(thinkingChoicesFor(legacyIntelligence, 'kimi-code-api', 'k3')).toEqual([]);
   });
+
+  it('requires the canonical model reference when a qualified choice provides one', () => {
+    const qualified: HealthIntelligenceSummary = {
+      ...intelligence,
+      selectionChoices: [{
+        provider: 'codex-subscription',
+        models: [{ model: 'luna', modelRef: 'gpt-5.6-luna', thinkingChoices: ['xhigh'] }],
+      }],
+    };
+    expect(isCompleteIntelligenceSelection(qualified, {
+      inferenceProvider: 'codex-subscription',
+      model: 'luna',
+      thinking: 'xhigh',
+    })).toBe(false);
+    expect(isCompleteIntelligenceSelection(qualified, {
+      inferenceProvider: 'codex-subscription',
+      model: 'luna',
+      modelRef: 'gpt-5.6-luna',
+      thinking: 'xhigh',
+    })).toBe(true);
+  });
 });

@@ -9,6 +9,7 @@
       "client_projection_capability_sets",
       "client_attach_command_registry",
       "client_projection_verbosity_policy",
+      "operator_view_policy",
       "projection_command_method_aliases",
       "web_operator_command_projection"
     ],

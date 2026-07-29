@@ -1,0 +1,36 @@
+{
+  "concept_id": "task_lifecycle",
+  "canonical_name": "TaskLifecycle",
+  "short_definition": "The durable authority for task identity, lifecycle state, assessment admission, and terminal task evidence.",
+  "description": "TaskLifecycle owns the canonical task record and its governed state transitions. Delegation, NARS, and worker surfaces may dispatch, project, or reconcile task activity, but they do not replace Task Lifecycle as the source of task lifecycle truth.",
+  "kind": "lifecycle",
+  "status": "active",
+  "aliases": ["task lifecycle"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["worker run status", "DAG execution state", "task prompt"],
+  "boundaries": [
+    "Not a provider execution surface.",
+    "Not a delegated-task DAG or worker outcome projection.",
+    "Not a replacement for explicit assessment evidence."
+  ],
+  "relations": [
+    { "kind": "governs", "concept_id": "task_executability_assessment" },
+    { "kind": "projects_to", "concept_id": "delegation_dag_template" }
+  ],
+  "owner_surface": "@narada2/task-governance-core task lifecycle authority",
+  "authority": {
+    "kind": "package",
+    "ref": "narada-core/packages/task-governance-core",
+    "notes": "Task Lifecycle owns durable task state and assessment admission; other surfaces consume its contracts."
+  },
+  "schemas": ["narada-core/packages/task-governance-core/src/task-lifecycle-store.ts"],
+  "docs": ["docs/concepts/task-executability-assessment.md"],
+  "tasks": ["2223", "2224", "2371"],
+  "code_refs": ["narada-core/packages/task-governance-core/src/task-lifecycle-store.ts"],
+  "tests": ["narada-core/packages/task-governance-core/test/lib/task-lifecycle-store.test.ts"],
+  "examples": ["created -> assessed -> claimed -> completed with durable evidence"],
+  "counterexamples": ["a UI badge being treated as task lifecycle truth"],
+  "open_questions": [],
+  "confidence": { "cl": 0.98, "basis": "Existing task-governance-core ownership doctrine and the registry relation repair are linked." },
+  "reviewed_at": "2026-07-28T01:20:00.000Z"
+}

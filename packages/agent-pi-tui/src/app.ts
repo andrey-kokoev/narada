@@ -7,7 +7,7 @@ import { classifyOperatorInput, type LocalInputAction } from './input/operator-i
 import { ClientState } from './state/client-state.js';
 import { ComposerHistory } from './input/composer-history.js';
 import { resolveTheme } from './theme/theme.js';
-import type { NarsProtocolFrame, PiTheme, ProjectionClass } from './types.js';
+import type { NarsProtocolFrame, PiTheme, ProjectionView } from './types.js';
 import { renderComposer } from './components/composer.js';
 import { renderFooter } from './components/footer.js';
 import { renderHelpOverlay } from './components/help-overlay.js';
@@ -19,7 +19,7 @@ export interface PiTuiAppOptions {
   client: NarsAttachClient;
   projection?: NarsProjectionAdapter;
   theme?: PiTheme;
-  view?: ProjectionClass;
+  view?: ProjectionView;
 }
 
 export class PiTuiApp {

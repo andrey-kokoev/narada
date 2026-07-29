@@ -116,6 +116,20 @@ narada onboarding status --scope user-site
 
 See [`docs/product/first-time-operator-success-path.md`](docs/product/first-time-operator-success-path.md#user-first-windows-onboarding-ux) for the complete flow, expected evidence, provider readiness, and role-expansion boundary. Use `narada demo` when you want a no-credential introduction instead.
 
+### Personal User Site on native Linux
+
+For a native Linux host, install the published CLI with npm or pnpm and use
+the CLI-owned resident-first path. PowerShell and WSL are not prerequisites:
+
+```bash
+npm install -g @narada2/cli
+narada onboarding start --platform linux --scope user-site --interactive
+```
+
+See [`docs/deployment/linux-installation.md`](docs/deployment/linux-installation.md)
+for the support matrix, canonical Site roots, supervision, provider
+readiness, maintenance boundary, and clean-environment verification ladder.
+
 ### Other first-run paths
 
 These paths are for operation shaping or explicit Site administration, not for the simplest personal first use:
@@ -151,6 +165,7 @@ If you cannot run this repo, do not treat package names or file layout as the es
 | Command | Description |
 |---------|-------------|
 | `onboarding start --platform windows --scope user-site --interactive` | Start the personal User Site resident-first onboarding path. |
+| `onboarding start --platform linux --scope user-site --interactive` | Start the native Linux User Site resident-first onboarding path. |
 | `onboarding status --scope user-site` | Verify the launched resident session and first useful interaction. |
 | `onboarding roles approve --scope user-site --confirm` | Record explicit approval for recommended roles without silently materializing them. |
 

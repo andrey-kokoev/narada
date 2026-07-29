@@ -10,6 +10,10 @@ export function loadOperatorSurfaceLaunchMatrixContract(url: URL = new URL('../c
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')) as JsonRecord);
 }
 
+export function loadOperatorJourneyMatrixContract(url: URL = new URL('../contracts/operator-journey-matrix.json', import.meta.url)): Readonly<JsonRecord> {
+  return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')) as JsonRecord);
+}
+
 export function loadMcpRuntimeContract(url: URL = new URL('../contracts/mcp-runtime.json', import.meta.url)): Readonly<JsonRecord> {
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')) as JsonRecord);
 }

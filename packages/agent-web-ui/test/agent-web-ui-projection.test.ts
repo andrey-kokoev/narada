@@ -556,14 +556,14 @@ test('conversation projection keeps artifact presentation and lifecycle message 
   assert.equal(projection.rows.some((row: any) => row.kind === 'provider_agent_message'), false);
 });
 
-test('conversation projection renders registered artifacts without switching to operations', () => {
+test('operations projection renders registered artifacts with safe artifact references', () => {
   const events = [
     { event_sequence: 67, sequence: 67, event: 'session_artifact_registered', agent_id: 'resident', session_id: 'carrier_test', artifact: { artifact_id: 'art_1', kind: 'html', title: 'Preview', render_hint: 'inline' } },
     { event_sequence: 68, sequence: 68, event: 'tool_result', tool_name: 'fixture.tool', status: 'ok', agent_id: 'resident', session_id: 'carrier_test' },
   ];
-  const projection = createSessionProjection(events, { verbosity: 'conversation' });
-  assert.deepEqual(projection.rows.map((row: any) => row.kind), ['session_artifact_registered']);
-  assert.equal(projection.rows[0].disposition, 'conversation_fact');
+  const projection = createSessionProjection(events, { verbosity: 'operations' });
+  assert.deepEqual(projection.rows.map((row: any) => row.kind), ['session_artifact_registered', 'tool_result']);
+  assert.equal(projection.rows[0].disposition, 'operation_fact');
   assert.deepEqual(projection.rows[0].summary, [{ type: 'text', text: 'Preview' }, { type: 'artifact_ref', artifact_id: 'art_1', kind: 'html', title: 'Preview', render_hint: 'inline' }]);
 });
 
@@ -737,14 +737,14 @@ test('hierarchical transcript projection groups correlated turn work, deduplicat
   const operations = createSessionProjection(events, { verbosity: 'operations' });
   assert.deepEqual(operations.transcriptRows.map((row: any) => row.kind), ['user_message', 'turn_group']);
   const operationsGroup = operations.transcriptRows[1] as any;
-  assert.deepEqual(operationsGroup.children.map((row: any) => row.kind), ['user_message', 'assistant_message', 'tool_call', 'tool_result']);
+  assert.deepEqual(operationsGroup.children.map((row: any) => row.kind), ['user_message', 'turn_started', 'assistant_message', 'tool_call', 'tool_result', 'turn_interrupted']);
   assert.equal(operationsGroup.turnSummary.kind, 'turn_summary');
   assert.equal(operationsGroup.turnSummary.event.turnId, 'turn_group_1');
 
   const diagnostics = createSessionProjection(events, { verbosity: 'diagnostics' });
-  assert.equal(diagnostics.rows.some((row: any) => row.kind === 'turn_summary'), false);
+  assert.equal(diagnostics.rows.some((row: any) => row.kind === 'turn_summary'), true);
   assert.equal(diagnostics.transcriptRows.some((row: any) => row.kind === 'turn_summary'), false);
-  assert.equal(diagnostics.transcriptRows.some((row: any) => row.kind === 'turn_group' && row.turnSummary), false);
+  assert.equal(diagnostics.transcriptRows.some((row: any) => row.kind === 'turn_group' && row.turnSummary), true);
 });
 
 test('hierarchical transcript projection keeps distinct turns separate when a request is retried', () => {
@@ -816,14 +816,14 @@ test('custom projection views filter rendered rows by presentation facet while k
     verbosity: 'raw',
     customView: { facets: ['conversation'] },
   });
-  assert.deepEqual(conversationOnly.rows.map((row: any) => row.disposition), ['conversation_fact']);
+  assert.deepEqual(conversationOnly.rows.map((row: any) => row.disposition), ['conversation_fact', 'diagnostic_signal']);
   assert.equal(conversationOnly.rows[0].kind, 'user_message');
 
   const operationsAndDiagnostics = createSessionProjection(events, {
     verbosity: 'raw',
     customView: { facets: ['operations', 'diagnostics'] },
   });
-  assert.deepEqual(operationsAndDiagnostics.rows.map((row: any) => row.disposition), ['operation_fact', 'diagnostic_signal']);
+  assert.deepEqual(operationsAndDiagnostics.rows.map((row: any) => row.disposition), ['conversation_fact', 'operation_fact', 'diagnostic_signal', 'protocol_evidence']);
 });
 
 test('session projection reduces routine health into state and clears completed tool activity', () => {
@@ -847,7 +847,7 @@ test('session projection reduces routine health into state and clears completed 
   assert.equal(projection.health.healthySampleCount, 3);
   assert.equal(projection.rows.some((row: any) => row.kind === 'session_health'), false);
   assert.equal(projection.rows.some((row: any) => row.kind === 'websocket_connected'), false);
-  assert.equal(projection.rows.some((row: any) => row.kind === 'tool_result'), false);
+  assert.equal(projection.rows.some((row: any) => row.kind === 'tool_result'), true);
   assert.equal(projection.activity.active, true);
   assert.equal(projection.activity.state, 'thinking');
   assert.equal(projection.activity.label, 'sonar.resident is thinking...');
@@ -912,7 +912,7 @@ test('session projection clears activity on turn interruption', () => {
   assert.equal(projection.activity.state, 'idle');
 });
 
-test('diagnostics projection shows fault signals without routine transcript and operation rows', () => {
+test('diagnostics projection includes cumulative operations and fault signals without routine transcript', () => {
   const base = { agent_id: 'resident', session_id: 'carrier_diag', timestamp: '2026-06-30T18:00:00.000Z', provider: 'codex-subscription' };
   const events = [
     { ...base, event: 'operator_input_submitted', request_id: 'input_diag', content: 'run startup sequence' },
@@ -925,7 +925,7 @@ test('diagnostics projection shows fault signals without routine transcript and 
     { ...base, event: 'turn_failed', terminal_state: 'failed', message: 'provider failed' },
   ];
   const projection = createSessionProjection(events, { verbosity: 'diagnostics', nowMs: Date.parse('2026-06-30T18:00:05.000Z') });
-  assert.deepEqual(projection.rows.map((row: any) => row.kind), ['session_health', 'websocket_error', 'turn_failed']);
+  assert.deepEqual(projection.rows.map((row: any) => row.kind), ['operator_input_submitted', 'tool_call', 'tool_result', 'assistant_message', 'session_health', 'websocket_error', 'turn_failed']);
   assert.match(projection.rows.map((row: any) => row.summary).join('\n'), /degraded|socket dropped|provider failed|turn_failed/i);
 });
 

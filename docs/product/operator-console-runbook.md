@@ -148,6 +148,6 @@ pnpm --filter @narada2/cli build
 
 The route-directory behavior is covered by the UI route-state tests and the
 Cloudflare projection tests. The built-browser Sites and Agents journey is in
-`packages/layers/cli/test/integration/operator-console-ui-e2e.test.mjs`. The
+`packages/layers/cli/test/integration/operator-console-ui-e2e.test.ts`. The
 CLI build is required because the Console UI is a launch artifact consumed by
 the CLI and Cloudflare asset pipeline.

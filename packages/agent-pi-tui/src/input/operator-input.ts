@@ -1,9 +1,10 @@
 import {
+  OPERATOR_VIEW_LANES,
   buildAgentWebUiOperatorInputAction,
   findAgentWebUiCommand,
   isNarsRuntimeServerMethod,
 } from '@narada2/nars-client-projection-contract';
-import type { NarsProtocolFrame, ProjectionClass } from '../types.js';
+import type { NarsProtocolFrame, ProjectionView } from '../types.js';
 import { buildControlFrame, buildRuntimeReconfigureFrame } from '../nars-client/protocol.js';
 import { buildInputDeliveryFrame } from './delivery-mode.js';
 
@@ -12,7 +13,7 @@ export type OperatorInputKind = 'empty' | 'conversation' | 'known_slash' | 'unkn
 export type LocalInputAction =
   | { kind: 'help' }
   | { kind: 'clear' }
-  | { kind: 'view'; view: ProjectionClass }
+  | { kind: 'view'; view: ProjectionView }
   | { kind: 'latest' }
   | { kind: 'theme'; name?: string }
   | { kind: 'validation'; message: string };
@@ -48,10 +49,11 @@ function localAction(command: string, value: string): LocalInputAction | null {
     case '/latest': return { kind: 'latest' };
     case '/theme': return { kind: 'theme', ...(value ? { name: value } : {}) };
     case '/view': {
-      if (!['conversation', 'operations', 'diagnostics', 'raw'].includes(value)) {
-        return { kind: 'validation', message: 'Usage: /view conversation|operations|diagnostics|raw' };
+      const view = OPERATOR_VIEW_LANES.find((candidate) => candidate === value);
+      if (!view) {
+        return { kind: 'validation', message: 'Usage: /view conversation|operations|diagnostics|protocol|raw' };
       }
-      return { kind: 'view', view: value as ProjectionClass };
+      return { kind: 'view', view };
     }
     default: return null;
   }

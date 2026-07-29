@@ -453,9 +453,9 @@ Authority contracts:
 
 Current implementation posture:
 
-- Narada currently spreads accept/queue/reject/delay/review decisions across surfaces, NARS, task lifecycle, and site-specific flows.
-- The policy needs source, target authority, accepted payload kinds, queueing semantics, turn-state behavior, review gates, rejection reasons, retry posture, and audit evidence.
-- NARS should own canonical operator-message admission semantics while site-level governance still controls target-specific admission.
+- `@narada2/narada-policy-contract` now owns the versioned AdmissionPolicy and AdmissionDecision schemas.
+- The contract carries source, target authority, ingress and payload kinds, queueing semantics, turn-state behavior, review gates, rejection reasons, retry posture, and audit evidence.
+- NARS owns canonical operator-message admission semantics while site-level hooks control target-specific restrictions.
 
 Mapped ingress cases:
 
@@ -464,18 +464,20 @@ Mapped ingress cases:
 - inbox task creation from a governed incoming message.
 - Cloudflare remote operator input entering a local or remote projection boundary.
 
-Remaining implementation work:
+Implementation status:
 
-- Define the decision outcomes explicitly: accepted, queued, rejected, delayed, and review-required.
-- Preserve site-level governance instead of flattening all ingress into one universal allow/deny switch.
-- Record retry and audit posture so admission can be explained after the fact.
+- Implemented all five decision outcomes: accepted, queued, rejected, delayed, and review-required.
+- Implemented explicit Site-hook restriction semantics; a Site hook cannot relax an unauthorized or stale refusal.
+- Implemented retry, backpressure, payload-kind, policy-revision, and audit evidence fields.
+- Covered operator message, email intake, inbox task creation, remote operator input, and projection ingress mappings.
 
 Acceptance coverage:
 
-- AdmissionPolicy is documented as a schema and decision model.
-- Queueing, acceptance, rejection, delay, and review-required outcomes are represented.
-- Canonical operator-message admission semantics are assigned to NARS.
-- At least four ingress paths are mapped.
+- AdmissionPolicy is implemented and documented as a schema and decision model.
+- Queueing, acceptance, rejection, delay, and review-required outcomes are represented and tested.
+- Canonical operator-message admission semantics are assigned to NARS with Site-specific hooks.
+- Five ingress paths are mapped; the four required paths are covered explicitly.
+- Evidence: [`admission-lifecycle-policy.md`](admission-lifecycle-policy.md), `packages/narada-policy-contract/src/admission-lifecycle-policy.test.ts`.
 
 ## 1563 - ObjectLifecyclePolicy
 
@@ -491,9 +493,9 @@ Authority contracts:
 
 Current implementation posture:
 
-- Tasks, sessions, projections, artifacts, attachments, grants, loops, and health records each need creation, mutation, closure, archival, retention, revocation, replay, cleanup, and stale-state rules.
-- A shared policy should define allowed states, transitions, ownership, mutation authority, retention, archival, revocation, replay, cleanup, stale detection, and audit requirements.
-- Object-specific lifecycle policies remain necessary where an object family has a distinct domain meaning or safety boundary.
+- `@narada2/narada-policy-contract` now owns the versioned ObjectLifecyclePolicy and ObjectLifecycleDecision schemas.
+- The contract defines shared ownership, mutation authority, revision, stale, replay, retention, archival, revocation, cleanup, and audit gates.
+- Object-specific lifecycle policies and hooks remain authoritative where a family has a distinct domain meaning or safety boundary.
 
 Mapped object families:
 
@@ -504,18 +506,21 @@ Mapped object families:
 - attachments
 - grants
 
-Remaining implementation work:
+Implementation status:
 
-- Identify the shared lifecycle algebra that can be reused across those families.
-- Keep object-specific policy hooks for the families that need them.
-- Preserve existing task lifecycle semantics while adopting a more generic lifecycle vocabulary.
+- Implemented a catalog for task, session, projection, artifact, attachment, grant, loop, and health-record families.
+- Preserved local states such as task `in_review`, NARS session `ready`, artifact `expired`, and attachment `replaying`.
+- Implemented explicit refusal for unauthorized actors, wrong mutation authority, stale revision/object state, invalid transitions, implicit revoke/archive, unverified replay, and premature cleanup.
+- Implemented explicit task reopen and verified stale reconciliation as object-specific operations.
+- Defined additive adapters/evidence hooks so adoption does not replace existing task or NARS state machines.
 
 Acceptance coverage:
 
-- Lifecycle policy schema is documented.
-- At least six object families are mapped to shared and object-specific rules.
-- Retention, revocation, stale, and archival semantics are explicit.
-- Gradual adoption without breaking task lifecycle semantics is stated as a requirement.
+- Lifecycle policy schema is implemented and documented.
+- Eight object families are mapped to shared and object-specific rules.
+- Retention, revocation, stale, archival, replay, cleanup, and audit semantics are explicit and tested.
+- Gradual adoption without breaking task lifecycle semantics is implemented as an explicit hook/evidence boundary.
+- Evidence: [`admission-lifecycle-policy.md`](admission-lifecycle-policy.md), `packages/narada-policy-contract/src/admission-lifecycle-policy.test.ts`.
 
 ## 1564 - OperatorViewPolicy
 
@@ -531,30 +536,32 @@ Authority contracts:
 
 Current implementation posture:
 
-- `agent-cli` and `agent-web-ui` have renderer-local policy drift around health spam, duplicate messages, raw objects, tool events, and progress indicators.
-- The policy needs lanes/views, verbosity, event class visibility, deduplication, markdown/artifact rendering, health suppression, progress indicators, raw diagnostics access, and per-surface overrides.
-- Surfaces may render differently while still sharing the same classification rules.
+- `OPERATOR_VIEW_POLICY` in `@narada2/nars-client-projection-contract` is the semantic authority for lane inclusion, health/progress suppression, deduplication, raw access, and surface defaults.
+- `agent-web-ui`, `agent-pi-tui`, and the carrier terminal projection delegate event eligibility to the shared contract; they retain only layout, formatting, and local interaction choices.
+- Surfaces may render differently while still sharing the same classification and inclusion rules.
 
-Mapped view cases:
+Canonical event lanes:
 
-- conversation view: canonical operator conversation only.
-- activity view: progress, operations, and task movement.
-- diagnostics view: degraded state, failures, and bounded troubleshooting details.
-- raw view: explicit raw access without accidental leakage into conversation.
-- status view: concise operator-facing health and progress summary.
+- `conversation`: canonical conversation facts only.
+- `operations`: conversation plus operator-relevant runtime mechanics; this is the canonical event-lane name for activity.
+- `diagnostics`: operations plus actionable provider, runtime, and protocol observability.
+- `protocol`: explicit protocol evidence only.
+- `raw`: all classified event dispositions, with state samples admitted only by explicit option.
+- `status`: a derived health/activity/authority/intelligence summary, not a sixth event lane.
 
-Remaining implementation work:
+Policy guarantees:
 
-- Move classifier rules out of renderers and into shared policy.
-- Preserve raw diagnostics access without making raw the default presentation.
-- Treat duplication, health spam, and raw object leakage as policy failures.
+- raw objects, routine health, and progress do not enter canonical conversation by coincidence;
+- deduplication uses shared projection identity and durable event identity before rendering;
+- markdown and artifact presentation remain renderer-owned, while artifact visibility is policy-controlled;
+- degraded/error evidence remains visible in diagnostics or as a user-visible error rather than being hidden.
 
 Acceptance coverage:
 
 - OperatorViewPolicy is documented as a schema and policy surface.
-- Conversation, activity, diagnostics, raw, and status semantics are explicit.
-- `agent-cli` and `agent-web-ui` share classification rules while rendering differently.
-- Duplication, health spam, and raw object leakage are named failure modes.
+- The five event lanes and derived status semantics are explicit.
+- Web UI, Pi TUI, and carrier terminal eligibility delegate to shared classification rules while rendering differently.
+- Contract, Web UI, and Pi TUI parity tests cover duplication/leakage boundaries; broader live and remote acceptance remains a separate validation slice.
 
 ## 1565 - EvidencePacket
 
@@ -570,9 +577,10 @@ Authority contracts:
 
 Current implementation posture:
 
-- Evidence currently appears as task lifecycle notes, SOP receipts, git diffs, test output, projection artifacts, and ad hoc summaries.
-- The packet should carry claim, evidence type, producer, verifier, artifact refs, command/test refs, timestamps, trust level, scope, and invalidation conditions.
-- Evidence must remain referenceable by task lifecycle and review flows without discarding existing evidence fields.
+- `@narada2/evidence-confirmation-contract` implements `EvidencePacket`, `EffectConfirmation`, and correlation audits.
+- The packet carries claim, evidence type, producer, verifier, artifact refs, command/test refs, timestamps, trust, scope, invalidation, and request/input/turn/session/epoch/capability/intent/effect/observation identities.
+- Task and runtime reference builders add packet identities without replacing existing opaque evidence refs or provider outcome fields.
+- Provider success, transport closure, silence, and projection freshness are explicitly non-confirming signals.
 
 Mapped evidence sources:
 
@@ -581,12 +589,14 @@ Mapped evidence sources:
 - git commit evidence
 - E2E proof artifacts
 - projection health evidence
+- provider and transport outcome signals, retained as non-confirming evidence
 
-Remaining implementation work:
+Implementation status:
 
-- Make verifier and trust semantics explicit instead of implicit in prose.
-- Define invalidation conditions so stale or superseded evidence can be recognized.
-- Keep lightweight notes possible for trivial cases while retaining structure for meaningful claims.
+- Verifier, trust, and invalidation semantics are explicit in `narada.evidence_packet.v1`.
+- `EffectConfirmation` preserves `accepted`, `completed`, `failed`, `cancelled`, `interrupted_unknown`, `stale`, `reconnecting`, and `degraded` outcomes rather than collapsing them.
+- Replay/restart reconciliation requires an admissible correlated observation and does not convert unknown state into success.
+- Lightweight existing references remain valid through additive task/runtime projections.
 
 Acceptance coverage:
 
@@ -594,6 +604,7 @@ Acceptance coverage:
 - At least five existing evidence sources are mapped.
 - Verifier, trust, and invalidation semantics are explicit.
 - Task lifecycle and review flows can reference the packet without losing existing evidence fields.
+- No consequential completion claim is confirmed without a correlated observation or reconciliation evidence chain.
 
 ## 1708 - LoopDefinition And WatchDefinition
 

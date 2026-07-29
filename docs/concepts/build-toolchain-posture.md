@@ -11,6 +11,17 @@ Launchable generated output has a separate integrity contract. See
 source-closure resolution, generated manifests, launch admission, and the
 ownership boundary between build targets, Narada CLI, and User Site launchers.
 
+## Strict Source Shape
+
+Production source is TypeScript. The authoritative package inventory must contain no editable `.js` or `.mjs` source, and TypeScript
+packages must not opt into JavaScript compilation (`allowJs` remains `false`, explicitly or by the compiler default).
+
+The only JavaScript inventory that is intentionally outside that source boundary is generated or fixture output under
+`packages/**/scripts-dist/**`, `packages/**/public/**`, `packages/**/dist-fixture/**`, and `packages/**/dist/**`. Inventory checks
+must exclude those directories explicitly and report the exclusion patterns as evidence; an empty result without those boundaries is
+not sufficient. Compatibility adapters remain named and typed as compatibility surfaces, while documentation may mention removed
+paths only when it labels them historical and names the current owner.
+
 ## Oxbuild
 
 `oxbuild` is currently allowed only as an experimental emit probe.

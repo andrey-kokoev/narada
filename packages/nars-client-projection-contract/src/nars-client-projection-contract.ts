@@ -1,8 +1,17 @@
 type AnyRecord = Record<string, any>;
 
+export type NarsClientProjectionDisposition =
+  | 'conversation_fact'
+  | 'operation_fact'
+  | 'diagnostic_signal'
+  | 'protocol_evidence'
+  | 'raw_record'
+  | 'state_sample';
+
 import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-identity';
 import { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
 import { NARS_SESSION_EVENT_DEFAULT_VIEW, NARS_SESSION_EVENT_VIEWS, normalizeNarsSessionEventView as normalizeSessionEventView } from '@narada2/nars-session-core/event-log';
+export * from '@narada2/nars-session-core/surface-attachment';
 import {
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
   NARS_RUNTIME_SERVER_METHOD_LIST,
@@ -74,6 +83,226 @@ export const NARS_CLIENT_PROJECTION_VERBOSITY_RANK: Record<string, number> = Obj
   diagnostics: 2,
   raw: 3,
 });
+
+/**
+ * Operator-view policy is semantic projection authority. Renderers may choose
+ * layout, styling, and local affordances, but they must not invent their own
+ * event inclusion rules.
+ */
+export const OPERATOR_VIEW_LANES = Object.freeze([
+  'conversation',
+  'operations',
+  'diagnostics',
+  'protocol',
+  'raw',
+] as const);
+
+export type OperatorViewLane = typeof OPERATOR_VIEW_LANES[number];
+
+export const OPERATOR_VIEW_POLICY_SCHEMA = 'narada.nars.operator_view_policy.v1';
+
+export const OPERATOR_VIEW_LANE_DISPOSITIONS: Readonly<Record<OperatorViewLane, readonly NarsClientProjectionDisposition[]>> = Object.freeze({
+  conversation: Object.freeze(['conversation_fact'] as const),
+  operations: Object.freeze(['conversation_fact', 'operation_fact'] as const),
+  diagnostics: Object.freeze(['conversation_fact', 'operation_fact', 'diagnostic_signal', 'protocol_evidence'] as const),
+  protocol: Object.freeze(['protocol_evidence'] as const),
+  raw: Object.freeze(['conversation_fact', 'operation_fact', 'diagnostic_signal', 'protocol_evidence', 'raw_record'] as const),
+});
+
+const OPERATOR_VIEW_SURFACE_OVERRIDES: Readonly<Record<string, {
+  readonly default_lane: OperatorViewLane;
+  readonly default_facets: readonly OperatorViewLane[];
+  readonly raw_access: 'explicit';
+}>> = Object.freeze({
+  'agent-cli': Object.freeze({ default_lane: 'operations', default_facets: Object.freeze(['operations', 'diagnostics'] as const), raw_access: 'explicit' }),
+  'agent-pi-tui': Object.freeze({ default_lane: 'conversation', default_facets: Object.freeze(['conversation'] as const), raw_access: 'explicit' }),
+  'agent-web-ui': Object.freeze({ default_lane: 'conversation', default_facets: Object.freeze(['conversation'] as const), raw_access: 'explicit' }),
+  'operator-console': Object.freeze({ default_lane: 'conversation', default_facets: Object.freeze(['conversation'] as const), raw_access: 'explicit' }),
+});
+
+export const OPERATOR_VIEW_CONVERSATION_DIAGNOSTIC_KINDS = Object.freeze([
+  'error',
+  'websocket_error',
+  'web_ui_decode_error',
+  'web_ui_input_not_sent',
+  'web_ui_input_ack_timeout',
+  'web_ui_input_transport_failed',
+  'web_ui_input_ack_ignored',
+  'web_ui_input_correlation_ambiguous',
+  'web_ui_session_correlation_mismatch',
+  'runtime_error',
+  'projection_input_failed',
+]);
+
+export const OPERATOR_VIEW_POLICY = Object.freeze({
+  schema: OPERATOR_VIEW_POLICY_SCHEMA,
+  default_lane: 'conversation' as OperatorViewLane,
+  lanes: OPERATOR_VIEW_LANES,
+  lane_dispositions: OPERATOR_VIEW_LANE_DISPOSITIONS,
+  inclusion_rules: Object.freeze({
+    canonical_conversation: Object.freeze(['conversation_fact', 'user_visible_error']),
+    operations: Object.freeze(['conversation_fact', 'operation_fact', 'user_visible_error']),
+    diagnostics: Object.freeze(['conversation_fact', 'operation_fact', 'diagnostic_signal', 'protocol_evidence']),
+    protocol: Object.freeze(['protocol_evidence']),
+    raw: Object.freeze(['conversation_fact', 'operation_fact', 'diagnostic_signal', 'protocol_evidence', 'raw_record']),
+  }),
+  exclusion_rules: Object.freeze({
+    canonical_conversation: Object.freeze(['routine_health', 'progress', 'protocol_evidence', 'raw_record', 'state_sample']),
+    raw_access: 'explicit_lane_or_custom_facet',
+    routine_health: 'suppressed_unless_include_state_samples',
+    progress: 'excluded_from_canonical_conversation',
+  }),
+  deduplication: Object.freeze({
+    primary_identity: 'projection_render_key',
+    fallback_identity: 'durable_event_identity',
+    assistant_boundary: 'merge_stream_and_lifecycle_boundaries',
+    operator_echo: 'merge_same_request_identity',
+  }),
+  rendering: Object.freeze({
+    markdown: 'renderer_owned',
+    artifacts: 'explicit_reference_only',
+    raw_payload: 'explicit_raw_lane_or_custom_facet',
+  }),
+  health: Object.freeze({
+    routine: 'suppressed',
+    degraded: 'diagnostics',
+    failed: 'diagnostics_or_user_visible_error',
+  }),
+  progress: Object.freeze({
+    canonical_conversation: 'suppressed',
+    operations: 'operation_fact',
+    diagnostics: 'diagnostic_signal_when_actionable',
+  }),
+  status: Object.freeze({
+    kind: 'derived_state_projection',
+    source: Object.freeze(['health', 'activity', 'authority', 'intelligence']),
+    not_an_event_lane: true,
+    canonical_conversation: 'suppressed',
+    raw_access: 'source_events_require_explicit_lane_or_custom_facet',
+  }),
+  surface_overrides: OPERATOR_VIEW_SURFACE_OVERRIDES,
+});
+
+export interface OperatorViewPolicyOptions {
+  lane?: unknown;
+  verbosity?: unknown;
+  facets?: readonly unknown[];
+  surface?: string;
+  includeStateSamples?: boolean;
+}
+
+export interface ResolvedOperatorViewPolicy {
+  schema: 'narada.nars.operator_view_policy_resolution.v1';
+  lane: OperatorViewLane;
+  transportVerbosity: string;
+  surface: string | null;
+  includeStateSamples: boolean;
+  explicitFacets: readonly OperatorViewLane[] | null;
+  includedDispositions: readonly NarsClientProjectionDisposition[];
+  rawAccess: 'explicit' | 'not_selected';
+}
+
+function isOperatorViewLane(value: unknown): value is OperatorViewLane {
+  return typeof value === 'string' && OPERATOR_VIEW_LANES.includes(value as OperatorViewLane);
+}
+
+export function normalizeOperatorViewLane(value: unknown): OperatorViewLane {
+  return isOperatorViewLane(value) ? value : OPERATOR_VIEW_POLICY.default_lane;
+}
+
+export function operatorViewLaneForDisposition(disposition: string): OperatorViewLane | null {
+  if (disposition === 'conversation_fact') return 'conversation';
+  if (disposition === 'operation_fact') return 'operations';
+  if (disposition === 'diagnostic_signal') return 'diagnostics';
+  if (disposition === 'protocol_evidence') return 'protocol';
+  if (disposition === 'raw_record') return 'raw';
+  return null;
+}
+
+function normalizeOperatorViewFacets(value: readonly unknown[] | undefined): OperatorViewLane[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter(isOperatorViewLane))];
+}
+
+function operatorViewSurfaceOverride(surface: unknown) {
+  return typeof surface === 'string' ? OPERATOR_VIEW_SURFACE_OVERRIDES[surface] : undefined;
+}
+
+function effectiveOperatorViewFacets(options: OperatorViewPolicyOptions): OperatorViewLane[] {
+  if (Array.isArray(options.facets)) return normalizeOperatorViewFacets(options.facets);
+  if (isOperatorViewLane(options.lane) || isOperatorViewLane(options.verbosity)) return [];
+  return [...(operatorViewSurfaceOverride(options.surface)?.default_facets ?? [])];
+}
+
+export function operatorViewTransportVerbosity(options: OperatorViewPolicyOptions = {}): string {
+  const facets = effectiveOperatorViewFacets(options);
+  if (facets.length > 0) {
+    if (facets.includes('raw') || facets.includes('protocol')) return 'raw';
+    if (facets.includes('diagnostics') && (facets.includes('conversation') || facets.includes('operations'))) return 'raw';
+    if (facets.includes('diagnostics')) return 'diagnostics';
+    if (facets.includes('operations')) return 'operations';
+    return 'conversation';
+  }
+  if (isOperatorViewLane(options.lane)) {
+    return options.lane === 'protocol' ? 'raw' : options.lane;
+  }
+  const requested = String(options.verbosity ?? NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY).trim().toLowerCase();
+  return requested === 'protocol' ? 'raw' : normalizeNarsClientProjectionVerbosity(requested);
+}
+
+export function operatorViewPolicyFor(options: OperatorViewPolicyOptions = {}): ResolvedOperatorViewPolicy {
+  const facets = effectiveOperatorViewFacets(options);
+  const surfaceOverride = operatorViewSurfaceOverride(options.surface);
+  const lane = facets.length === 1
+    ? facets[0]
+    : isOperatorViewLane(options.lane)
+      ? options.lane
+      : isOperatorViewLane(options.verbosity)
+        ? options.verbosity
+        : surfaceOverride?.default_lane ?? OPERATOR_VIEW_POLICY.default_lane;
+  const includedDispositions = facets.length > 0
+    ? [...new Set(facets.flatMap((facet) => OPERATOR_VIEW_LANE_DISPOSITIONS[facet]))]
+    : OPERATOR_VIEW_LANE_DISPOSITIONS[lane];
+  return {
+    schema: 'narada.nars.operator_view_policy_resolution.v1',
+    lane,
+    transportVerbosity: operatorViewTransportVerbosity(options),
+    surface: typeof options.surface === 'string' && options.surface.trim() ? options.surface.trim() : null,
+    includeStateSamples: options.includeStateSamples === true,
+    explicitFacets: facets.length > 0 ? facets : null,
+    includedDispositions,
+    rawAccess: (lane === 'raw' || facets.includes('raw')) ? 'explicit' : 'not_selected',
+  };
+}
+
+function projectionKind(projection: AnyRecord): string {
+  return String(projection?.kind ?? projection?.event?.event ?? 'unknown');
+}
+
+function isUserVisibleOperatorDiagnostic(projection: AnyRecord, policy: ResolvedOperatorViewPolicy): boolean {
+  if (!policy.includedDispositions.includes('conversation_fact')) return false;
+  return OPERATOR_VIEW_CONVERSATION_DIAGNOSTIC_KINDS.includes(projectionKind(projection) as typeof OPERATOR_VIEW_CONVERSATION_DIAGNOSTIC_KINDS[number]);
+}
+
+export function operatorViewIncludesDisposition(
+  disposition: NarsClientProjectionDisposition,
+  options: OperatorViewPolicyOptions | ResolvedOperatorViewPolicy = {},
+): boolean {
+  const policy = 'includedDispositions' in options ? options : operatorViewPolicyFor(options);
+  if (disposition === 'state_sample') return policy.includeStateSamples;
+  return policy.includedDispositions.includes(disposition);
+}
+
+export function operatorViewAllowsProjection(
+  projection: AnyRecord | null | undefined,
+  options: OperatorViewPolicyOptions | ResolvedOperatorViewPolicy = {},
+): boolean {
+  if (!projection || typeof projection !== 'object') return false;
+  const policy = 'includedDispositions' in options ? options : operatorViewPolicyFor(options);
+  const disposition = classifyNarsClientProjectionDisposition(projection);
+  if (disposition === 'state_sample') return policy.includeStateSamples;
+  return policy.includedDispositions.includes(disposition) || isUserVisibleOperatorDiagnostic(projection, policy);
+}
 
 // These are the controls admitted by the local NARS runtime transport.
 // Event subscription/read are transport controls handled by the event stream;
@@ -167,6 +396,7 @@ export const NARS_CLIENT_EVENT_LABELS: Record<string, string> = Object.freeze({
   session_artifact_registered: 'Artifact registered',
   session_artifact_read: 'Artifact',
   session_health: 'Health',
+  session_surface_attachment_state_transition: 'Surface attachment',
   runtime_projection_failure: 'Runtime projection failure',
   runtime_control_input_bridge_error: 'Control-input bridge error',
   runtime_intelligence_reconfiguration: 'Intelligence reconfiguration',
@@ -1030,32 +1260,82 @@ export function classifyNarsClientEventProjection(projection: AnyRecord): string
   if (kind === 'operator_input_pending_restored' || kind === 'operator_input_pending_expired' || kind === 'operator_input_discarded' || kind === 'operator_input_reviewed' || kind === 'operator_input_retried' || kind === 'operator_input_late_acknowledged') return 'diagnostics';
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'turn_failed'
     || kind === 'carrier_tool_requested' || kind === 'carrier_tool_completed'
-    || kind === 'tool_execution_state_transition' || kind === 'tool_execution_completed'
+    || kind === 'tool_execution' || kind === 'tool_execution_state_transition' || kind === 'tool_execution_completed'
     || kind === 'tool_execution_refused' || kind === 'tool_admitted' || kind === 'tool_refused'
     || kind === 'turn_lifecycle_transition' || kind === 'carrier_turn_started'
-    || kind === 'carrier_turn_completed' || kind === 'carrier_turn_failed' || kind === 'carrier_turn_interrupted') return 'operations';
-  if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'conversation';
+    || kind === 'carrier_turn_completed' || kind === 'carrier_turn_failed' || kind === 'carrier_turn_interrupted'
+    || kind === 'turn_interrupted' || kind === 'session_cancelled') return 'operations';
+  if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return 'operations';
+  if (kind === 'session_surface_attachment_state_transition') return 'operations';
   if (kind === 'session_control_accepted' || kind === 'session_control_response' || kind === 'session_control_rejected' || kind === 'runtime_request_state_transition' || kind === 'conversation_enqueue_requested' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_event_completed' || kind === 'input_queued_for_turn_boundary' || kind === 'input_admitted_to_turn' || kind === 'input_dropped_by_operator' || kind === 'input_abandoned_on_session_end' || kind === 'input_completed') return 'operations';
   if (kind === 'session_health') return 'diagnostics';
   if (kind?.startsWith?.('authority_source_') || kind?.startsWith?.('authority_target_')) return 'operations';
   if (kind === 'session_started' || kind === 'session_closed' || kind === 'session_status' || kind === 'session_recovery' || kind === 'session_operations' || kind === 'session_sync' || kind === 'observer_status' || kind === 'observers_status' || kind === 'carrier_command_result') return 'operations';
-  if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'session_events_replay_completed' || kind === 'websocket_connected') return 'diagnostics';
+  if (kind === 'turn_started' || kind === 'turn_complete' || kind === 'turn_interrupted') return 'operations';
+  if (kind === 'directive_received' || kind === 'directive_receipt_recorded' || kind === 'directive_carrier_accepted_recorded' || kind === 'directive_complete' || kind === 'session_events_subscription_started' || kind === 'session_events_replay_completed' || kind === 'websocket_connected') return 'diagnostics';
   if (kind?.startsWith?.('provider_')) return 'diagnostics';
   return 'raw';
 }
 
+const NARS_CLIENT_DIAGNOSTIC_DISPOSITION_KINDS = new Set([
+  'error',
+  'websocket_error',
+  'web_ui_decode_error',
+  'web_ui_input_not_sent',
+  'web_ui_input_ack_timeout',
+  'web_ui_input_transport_failed',
+  'web_ui_input_ack_ignored',
+  'web_ui_input_correlation_ambiguous',
+  'web_ui_session_correlation_mismatch',
+  'runtime_error',
+  'projection_input_failed',
+  'turn_failed',
+  'carrier_turn_failed',
+  'carrier_turn_interrupted',
+  'authority_session_revoked',
+  'projection_revoked',
+  'runtime_projection_failure',
+  'runtime_control_input_bridge_error',
+  'runtime_intelligence_reconfiguration',
+  'intelligence_runtime_reconfiguration_state_transition',
+]);
+
+const NARS_CLIENT_PROTOCOL_DISPOSITION_KINDS = new Set([
+  'directive_received',
+  'directive_receipt_recorded',
+  'directive_carrier_accepted_recorded',
+  'directive_complete',
+  'session_events_subscription_started',
+]);
+
+export function classifyNarsClientProjectionDisposition(projection: AnyRecord | null | undefined): NarsClientProjectionDisposition {
+  if (!projection || typeof projection !== 'object') return 'raw_record';
+  if (isRoutineStateSampleProjection(projection)) return 'state_sample';
+  const kind = projection.kind ?? projection.event?.event ?? 'unknown';
+  if (NARS_CLIENT_PROTOCOL_DISPOSITION_KINDS.has(String(kind))) return 'protocol_evidence';
+  if (NARS_CLIENT_DIAGNOSTIC_DISPOSITION_KINDS.has(String(kind)) || kind === 'session_health') return 'diagnostic_signal';
+  switch (classifyNarsClientEventProjection(projection)) {
+    case 'conversation': return 'conversation_fact';
+    case 'operations': return 'operation_fact';
+    case 'diagnostics': return 'diagnostic_signal';
+    default: return 'raw_record';
+  }
+}
+
+export function classifyNarsClientEventDisposition(message: any): NarsClientProjectionDisposition {
+  return classifyNarsClientProjectionDisposition(projectNarsClientEvent(message));
+}
+
 export function shouldProjectNarsClientProjection(projection: any, options: AnyRecord = {}): boolean {
-  if (isRoutineStateSampleProjection(projection) && options.includeStateSamples !== true) return false;
-  const verbosity = normalizeNarsClientProjectionVerbosity(options.verbosity);
-  if (verbosity === 'raw') return true;
-  const eventLevel = classifyNarsClientEventProjection(projection);
-  if (verbosity === 'diagnostics') return isDiagnosticSignalProjection(projection, eventLevel);
-  return NARS_CLIENT_PROJECTION_VERBOSITY_RANK[eventLevel] <= NARS_CLIENT_PROJECTION_VERBOSITY_RANK[verbosity];
+  return operatorViewAllowsProjection(projection, options);
 }
 
 function isDiagnosticSignalProjection(projection: any, eventLevel = classifyNarsClientEventProjection(projection)) {
   const kind = projection?.kind ?? projection?.event?.event ?? 'unknown';
-  return eventLevel === 'diagnostics' || projection?.tone === NARS_CLIENT_EVENT_TONES.error || (kind === 'session_health' && !isRoutineStateSampleProjection(projection));
+  return eventLevel === 'operations'
+    || eventLevel === 'diagnostics'
+    || projection?.tone === NARS_CLIENT_EVENT_TONES.error
+    || (kind === 'session_health' && !isRoutineStateSampleProjection(projection));
 }
 
 export function isRoutineStateSampleProjection(projection: AnyRecord): boolean {
@@ -1070,7 +1350,7 @@ export function shouldProjectNarsClientEvent(message: any, options: AnyRecord = 
 
 function eventTone(kind: any, event: AnyRecord | null = null): string {
   if (kind === 'assistant_message' || kind === 'assistant_message_stream' || kind === 'provider_agent_message') return NARS_CLIENT_EVENT_TONES.assistant;
-  if (kind === 'user_message') return NARS_CLIENT_EVENT_TONES.operator;
+  if (kind === 'user_message' || kind === 'operator_input_submitted') return NARS_CLIENT_EVENT_TONES.operator;
   if (kind === 'tool_call' || kind === 'tool_result' || kind === 'carrier_tool_requested'
     || kind === 'carrier_tool_completed' || kind === 'tool_execution_state_transition'
     || kind === 'tool_execution_completed' || kind === 'tool_execution_refused'
@@ -1079,7 +1359,7 @@ function eventTone(kind: any, event: AnyRecord | null = null): string {
       ? NARS_CLIENT_EVENT_TONES.error
       : NARS_CLIENT_EVENT_TONES.tool;
   }
-  if (kind === 'session_artifact_registered' || kind === 'session_artifact_read') return NARS_CLIENT_EVENT_TONES.status;
+  if (kind === 'session_artifact_registered' || kind === 'session_artifact_read' || kind === 'session_surface_attachment_state_transition') return NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'session_control_rejected') return NARS_CLIENT_EVENT_TONES.error;
   if (kind === 'session_control_accepted' || kind === 'session_control_response') return NARS_CLIENT_EVENT_TONES.status;
   if (kind === 'runtime_request_state_transition') return ['failed', 'rejected', 'interrupted'].includes(String(event?.request_state ?? '').trim().toLowerCase()) ? NARS_CLIENT_EVENT_TONES.error : NARS_CLIENT_EVENT_TONES.status;
@@ -1097,12 +1377,21 @@ function eventTone(kind: any, event: AnyRecord | null = null): string {
   return NARS_CLIENT_EVENT_TONES.unknown;
 }
 
-function eventSummary(event: AnyRecord, kind: any): string {
+function eventSummary(event: AnyRecord, kind: any): unknown {
   if (kind === 'assistant_message') return event.content ?? event.message ?? 'assistant message';
   if (kind === 'provider_agent_message') return event.provider_event?.item?.text ?? event.event?.item?.text ?? 'provider agent message';
   if (kind === 'user_message') return event.content ?? event.message ?? 'operator message';
   if (kind === 'tool_call' || kind === 'carrier_tool_requested') return toolName(event, 'tool call');
-  if (kind === 'tool_result' || kind === 'carrier_tool_completed') return `${toolName(event, 'tool result')}${event.status ? ` ${event.status}` : ''}`;
+  if (kind === 'tool_result' || kind === 'carrier_tool_completed') {
+    const summary = `${toolName(event, 'tool result')}${event.status ? ` ${event.status}` : ''}`;
+    const artifactRef = buildNarsArtifactRefPart({
+      artifact_id: event.artifact_id ?? event.artifactId,
+      kind: event.artifact_kind ?? event.kind,
+      title: event.artifact_title ?? event.title,
+      render_hint: event.artifact_render_hint ?? event.render_hint,
+    });
+    return artifactRef ? [{ type: 'text', text: summary }, artifactRef] : summary;
+  }
   if (kind === 'tool_execution_state_transition') return `${toolName(event, 'tool execution')} ${event.execution_state ?? event.state ?? 'unknown'}`;
   if (kind === 'tool_execution_completed') return `${toolName(event, 'tool execution')} ${event.execution_state ?? event.status ?? 'completed'}`;
   if (kind === 'tool_execution_refused') return `${toolName(event, 'tool execution')} refused${event.reason ? ` · ${event.reason}` : ''}`;
@@ -1116,6 +1405,9 @@ function eventSummary(event: AnyRecord, kind: any): string {
   if (kind === 'session_events_replay_completed') return `${event.replay_count ?? 0} replayed event(s); replay complete`;
   if (kind === 'session_artifact_registered') return artifactSummary(event, 'artifact registered');
   if (kind === 'session_artifact_read') return artifactSummary(event, 'artifact');
+  if (kind === 'session_surface_attachment_state_transition') {
+    return `${event.surface_attachment?.surface_kind ?? event.surface_kind ?? 'surface'} ${event.attachment_state ?? 'state'}`;
+  }
   if (kind === 'session_health') return `${event.status ?? 'health'} · ${eventAgentDisplay(event)} · ${event.session_id ?? 'session'}`;
   if (kind === 'runtime_projection_failure') return runtimeProjectionFailureSummary(event);
   if (kind === 'runtime_control_input_bridge_error') return runtimeControlInputBridgeErrorSummary(event);
@@ -1213,9 +1505,14 @@ function intelligenceRuntimeReconfigurationStateSummary(event: AnyRecord): strin
 }
 
 function artifactSummary(event: AnyRecord, fallbackText: any): any {
-  const artifact = event?.artifact && typeof event.artifact === 'object' ? event.artifact : null;
-  const artifactRef = buildNarsArtifactRefPart(artifact ?? {});
-  const title = artifact?.title ?? artifact?.artifact_id ?? fallbackText;
+  const artifact = event?.artifact && typeof event.artifact === 'object' ? event.artifact : event;
+  const artifactRef = buildNarsArtifactRefPart({
+    artifact_id: artifact?.artifact_id ?? artifact?.artifactId,
+    kind: artifact?.kind ?? artifact?.artifact_kind,
+    title: artifact?.title,
+    render_hint: artifact?.render_hint ?? artifact?.artifact_render_hint,
+  });
+  const title = artifact?.title ?? artifact?.artifact_id ?? artifact?.artifactId ?? fallbackText;
   return artifactRef ? [{ type: 'text', text: String(title) }, artifactRef] : String(title);
 }
 
@@ -1242,8 +1539,8 @@ function eventRenderKey(event: AnyRecord, kind: any): string | null {
   if (kind === 'assistant_message' || kind === 'assistant_message_stream') {
     const requestId = event.request_id ?? event.requestId ?? null;
     const turnId = event.turn_id ?? event.turnId ?? null;
+    if (turnId) return `assistant:${turnId}`;
     if (requestId) return `assistant:${requestId}`;
-    if (turnId) return `assistant-turn:${turnId}`;
     return sequenceRenderKey(event);
   }
   if (kind === 'user_message' || kind === 'operator_input_submitted') {
@@ -1377,6 +1674,7 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
   schema: 'narada.nars.client_projection_registry.v1',
   default_verbosity: NARS_CLIENT_PROJECTION_DEFAULT_VERBOSITY,
   verbosity_levels: NARS_CLIENT_PROJECTION_VERBOSITY_LEVELS,
+  operator_view_policy: OPERATOR_VIEW_POLICY,
   clients: Object.freeze({
     agent_cli: Object.freeze({
       id: 'agent_cli',

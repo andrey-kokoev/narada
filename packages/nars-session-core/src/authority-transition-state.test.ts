@@ -38,6 +38,8 @@ test('authority transition persists preparation, sealing, and target activation 
       now: new Date('2026-07-10T00:00:00.000Z'),
     });
     assert.equal(state.authority_transition_state, 'preparing_target');
+    assert.equal(state.source_authority_epoch, 1);
+    assert.equal(state.source_authority_runtime_id, 'local-nars:session-source');
 
     state = beginSourceDrain({
       path: statePath,
@@ -63,10 +65,15 @@ test('authority transition persists preparation, sealing, and target activation 
       activationId: 'activation-1',
       targetFirstSequence: 8,
       authorityEpochToken: { epoch: 2 },
+      handoffEvidence: { event_log: { source_last_sequence: 7, target_first_sequence: 8 }, queue: { disposition: 'drained' } },
+      reconciliationEvidence: { status: 'reconciled', replay_status: 'verified' },
       now: new Date('2026-07-10T00:03:00.000Z'),
     });
     assert.equal(classifyTargetWriteAdmission(state, { nextEventSequence: 8 }).admitted, true);
-    assert.equal(readAuthorityTransitionSourceState(statePath).activation_id, 'activation-1');
+    const persisted = readAuthorityTransitionSourceState(statePath);
+    assert.equal(persisted.activation_id, 'activation-1');
+    assert.equal((persisted.handoff_evidence?.queue as { disposition?: unknown } | undefined)?.disposition, 'drained');
+    assert.equal(persisted.reconciliation_evidence?.status, 'reconciled');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -79,7 +86,7 @@ test('corrupt authority transition state fails closed to a marked empty snapshot
     writeFileSync(statePath, '{', 'utf8');
     const state = readAuthorityTransitionSourceState(statePath);
     assert.equal(state.corrupt, true);
-    assert.equal(state.source_write_admission, 'active');
+    assert.equal(state.source_write_admission, 'sealed');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

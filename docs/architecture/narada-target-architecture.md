@@ -184,6 +184,20 @@ Agent Web UI, agent TUI, agent CLI, Operator Console, and Cloudflare projection 
 
 The client projection contract owns shared semantics. Each surface owns only its medium-specific rendering, input ergonomics, and local preferences.
 
+### OperatorViewPolicy
+
+`OperatorViewPolicy` is the shared semantic authority for operator visibility. It defines five event lanes:
+
+| Lane | Includes | Excludes by default |
+|---|---|---|
+| `conversation` | canonical conversation facts | operations, diagnostics, protocol evidence, raw records, routine state samples |
+| `operations` (activity) | conversation facts and operator-relevant operation facts | diagnostic telemetry, protocol evidence, raw records, routine state samples |
+| `diagnostics` | conversation, operations, diagnostic signals, and protocol evidence | raw records and routine state samples |
+| `protocol` | explicit protocol evidence | conversation, operations, diagnostics, and raw records |
+| `raw` | every classified event disposition | routine state samples unless explicitly requested |
+
+The `status` view is not a sixth event lane. It is a derived state summary assembled from shared health, activity, authority, and intelligence state. Its layout may differ by surface, but it must not leak its source samples into canonical conversation by accident. Raw access and state-sample inclusion are explicit policy choices. Deduplication uses projection identity and durable event identity before renderer-specific formatting.
+
 ## Evidence and lifecycle requirements
 
 Every accepted request and consequential transition must have bounded, correlated evidence. Correlation must be possible across the relevant request, input event, turn, session, authority epoch, capability operation, intent, effect, and observation identifiers.
@@ -222,6 +236,16 @@ discover Site/session
 
 The journey must remain truthful when a transport reconnects, an agent turn reaches a limit, an MCP child fails, a model/provider changes, or authority moves between hosts.
 
+The machine-readable operator-journey disruption matrix at
+`packages/operator-surface-runtime-contract/contracts/operator-journey-matrix.json`
+defines the claimed local and remote embodiments, projection surfaces,
+required truth fields, eight disruption scenarios, recovery results, and proof
+posture. A `live` entry means the named live route or suite is exercised; a
+`boundary` entry means contract or boundary evidence only. The latter must not
+be presented as live parity. Remote projection retains its explicit authority
+boundary and cannot mint local NARS identity, completion, failure, or recovery
+outcomes.
+
 ## Destination invariants
 
 The architecture is coherent only when all of these hold:
@@ -255,6 +279,8 @@ This destination is considered implemented for a slice only when the slice has:
 Cross-cutting completion requires parity across local NARS, the relevant remote embodiment, agent CLI/TUI/Web UI, and operator-console surfaces where those surfaces claim the capability.
 
 The implementation ledger, task graph, and current-readiness documents remain the source of progress status. This document remains stable unless the target architecture itself changes.
+
+The current evidence matrix is [`docs/operations/narada-target-architecture-acceptance-matrix.md`](../operations/narada-target-architecture-acceptance-matrix.md), with a machine-readable companion at [`docs/operations/narada-target-architecture-acceptance-matrix.json`](../operations/narada-target-architecture-acceptance-matrix.json). The matrix is an auditable completion gate, not evidence that the destination is complete.
 
 ## Change rule
 

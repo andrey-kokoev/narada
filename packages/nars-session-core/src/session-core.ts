@@ -20,6 +20,25 @@ import {
 } from './operator-input-queue-state.js';
 import { createOperationalPostureSnapshot, createSessionActivitySnapshot } from './session-status-snapshots.js';
 import {
+  createNarsSurfaceAttachment,
+  summarizeNarsSurfaceAttachments,
+} from './surface-attachment.js';
+import type {
+  NarsSurfaceAttachment,
+  NarsSurfaceAttachmentCreateOptions,
+  NarsSurfaceAttachmentState,
+  NarsSurfaceAttachmentSummary,
+  NarsSurfaceAttachmentTransitionEvidence,
+  NarsSurfaceAttachmentTransitionResult,
+} from './surface-attachment.js';
+import {
+  listNarsSurfaceAttachments,
+  readNarsSurfaceAttachmentRegistry,
+  registerNarsSurfaceAttachment as registerNarsSurfaceAttachmentInRegistry,
+  transitionNarsSurfaceAttachmentInRegistry,
+} from './surface-attachment-registry.js';
+import type { NarsSurfaceAttachmentRegistry } from './surface-attachment-registry.js';
+import {
   assertNarsTurnTransition,
   canTransitionNarsTurn,
   isNarsTurnTerminalState,
@@ -65,6 +84,7 @@ export interface NarsSessionCoreHealthSnapshot extends JsonRecord {
   last_turn_id: string | null;
   last_turn_state: NarsTurnState | null;
   operational_posture: string;
+  surface_attachment_summary: NarsSurfaceAttachmentSummary;
 }
 
 export interface NarsSessionCoreRecoverySnapshot extends JsonRecord {
@@ -79,6 +99,7 @@ export interface NarsSessionCoreRecoverySnapshot extends JsonRecord {
   active_turn: NarsTurnRecord | null;
   turns: NarsTurnRecord[];
   recovery_attempts: NarsRecoveryAttemptRecord[];
+  surface_attachments: NarsSurfaceAttachmentRegistry;
 }
 
 export interface NarsTurnPreparation {
@@ -552,6 +573,73 @@ export function createNarsSessionCore({
     return transitionArtifact(artifactId, 'archived', evidence);
   }
 
+  function surfaceAttachments(): NarsSurfaceAttachment[] {
+    if (!sessionPath) return [];
+    return listNarsSurfaceAttachments({ sessionPath, sessionId: requiredSessionId, now: now() });
+  }
+
+  function registerSurfaceAttachment(
+    options: NarsSurfaceAttachment | NarsSurfaceAttachmentCreateOptions,
+  ): NarsSurfaceAttachment {
+    if (state.lifecycle === 'closed') throw new Error('nars_session_closed');
+    if (!sessionPath) throw new Error('surface_attachment_session_path_required');
+    const attachment = 'schema' in options
+      ? options
+      : createNarsSurfaceAttachment({ ...options, session_id: requiredSessionId, now: options.now ?? now() });
+    const registered = registerNarsSurfaceAttachmentInRegistry({
+      sessionPath,
+      sessionId: requiredSessionId,
+      attachment,
+      now: now(),
+    });
+    appendEvent({
+      event: 'session_surface_attachment_state_transition',
+      attachment_id: registered.attachment_id,
+      previous_attachment_state: null,
+      attachment_state: registered.attachment_state,
+      surface_attachment: registered,
+      reason: 'surface_attachment_requested',
+    });
+    return registered;
+  }
+
+  function transitionSurfaceAttachment(
+    attachmentId: string,
+    nextState: NarsSurfaceAttachmentState,
+    evidence: NarsSurfaceAttachmentTransitionEvidence = {},
+  ): NarsSurfaceAttachmentTransitionResult {
+    if (state.lifecycle === 'closed') throw new Error('nars_session_closed');
+    if (!sessionPath) throw new Error('surface_attachment_session_path_required');
+    const result = transitionNarsSurfaceAttachmentInRegistry({
+      sessionPath,
+      sessionId: requiredSessionId,
+      attachmentId,
+      nextState,
+      evidence: { ...evidence, now: evidence.now ?? now() },
+    });
+    if (result.changed) {
+      appendEvent({
+        event: 'session_surface_attachment_state_transition',
+        attachment_id: result.record.attachment_id,
+        previous_attachment_state: result.previous_record.attachment_state,
+        attachment_state: result.record.attachment_state,
+        surface_attachment: result.record,
+        ...(typeof evidence.reason === 'string' ? { reason: evidence.reason } : {}),
+      });
+    }
+    return result;
+  }
+
+  function detachSurfaceAttachment(attachmentId: string, evidence: NarsSurfaceAttachmentTransitionEvidence = {}) {
+    const detaching = transitionSurfaceAttachment(attachmentId, 'detaching', evidence);
+    if (!detaching.changed || detaching.record.attachment_state !== 'detaching') return detaching;
+    return transitionSurfaceAttachment(attachmentId, 'detached', evidence);
+  }
+
+  function surfaceAttachmentSummary(): NarsSurfaceAttachmentSummary {
+    return summarizeNarsSurfaceAttachments(surfaceAttachments());
+  }
+
   function healthSnapshot({ mcpOperationalState = 'unknown' }: { mcpOperationalState?: string } = {}): NarsSessionCoreHealthSnapshot {
     const postureState = { ...state, closed: state.lifecycle === 'closed' };
     return {
@@ -561,6 +649,7 @@ export function createNarsSessionCore({
       mcp_operational_state: mcpOperationalState,
       ...createSessionActivitySnapshot(state),
       ...createOperationalPostureSnapshot({ state: postureState, mcpOperationalState }),
+      surface_attachment_summary: surfaceAttachmentSummary(),
       cursor: eventHub.cursor(),
     } as unknown as NarsSessionCoreHealthSnapshot;
   }
@@ -580,6 +669,14 @@ export function createNarsSessionCore({
       active_turn: state.activeTurnId ? turns.get(state.activeTurnId) ?? null : null,
       turns: [...turns.values()],
       recovery_attempts: [...recoveryAttempts.values()],
+      surface_attachments: sessionPath
+        ? readNarsSurfaceAttachmentRegistry({ sessionPath, sessionId: requiredSessionId, now: now() })
+        : {
+          schema: 'narada.nars.surface_attachment_registry.v1',
+          session_id: requiredSessionId,
+          generated_at: now(),
+          attachments: [],
+        },
     };
   }
 
@@ -606,6 +703,11 @@ export function createNarsSessionCore({
     revokeArtifact,
     expireArtifact,
     archiveArtifact,
+    surfaceAttachments,
+    registerSurfaceAttachment,
+    transitionSurfaceAttachment,
+    detachSurfaceAttachment,
+    surfaceAttachmentSummary,
     healthSnapshot,
     recoverySnapshot,
     eventHub,

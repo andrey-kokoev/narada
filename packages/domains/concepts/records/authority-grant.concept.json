@@ -1,0 +1,37 @@
+{
+  "concept_id": "authority_grant",
+  "canonical_name": "AuthorityGrant",
+  "short_definition": "A versioned, auditable declaration of capability authority whose admission and enforcement remain owned by a canonical authority runtime.",
+  "description": "AuthorityGrant is the explicit contract for delegated authority in Narada. It separates declaration from authority-owner admission and effect enforcement, records scope and basis, and makes expiry, revocation, evidence, and audit state durable. Projection edges, stores, and surfaces may carry or display a grant but can never mint, admit, enforce, or become the owner of canonical authority.",
+  "kind": "capability",
+  "status": "draft",
+  "aliases": ["authority grant", "capability grant"],
+  "deprecated_aliases": [],
+  "anti_aliases": ["permission flag", "projection attachment", "provider success"],
+  "boundaries": [
+    "Not a permission flag without grantor, grantee, scope, basis, evidence, and audit state.",
+    "Not an admission result; declaration, admission, and enforcement are distinct lifecycle phases.",
+    "Not authority minted by a projection store, projection surface, or transport adapter."
+  ],
+  "relations": [
+    { "kind": "governs", "concept_id": "projection_topology" },
+    { "kind": "crosses", "concept_id": "nars_runtime_contract" },
+    { "kind": "depends_on", "concept_id": "runtime_capability_profile" }
+  ],
+  "owner_surface": "Narada authority admission doctrine",
+  "authority": {
+    "kind": "documentation_and_implementation",
+    "ref": "packages/domains/concepts/src/authority.ts",
+    "notes": "The versioned TypeScript contract is the implementation boundary; the authority-grant concept document records the refusal and lifecycle semantics."
+  },
+  "schemas": ["packages/domains/concepts/src/authority.ts#AuthorityGrant", "narada.authority_grant.v1"],
+  "docs": ["docs/concepts/authority-grant.md", "docs/architecture/narada-target-architecture.md"],
+  "tasks": ["2371", "first-class-system-objects"],
+  "code_refs": ["packages/domains/concepts/src/authority.ts"],
+  "tests": ["packages/domains/concepts/test/authority.test.ts"],
+  "examples": ["declared -> admitted -> enforced session.input grant owned by local NARS authority"],
+  "counterexamples": ["a Cloudflare projection store treating a fresh cached grant as permission to submit input"],
+  "open_questions": ["Which authority runtime persists grants for multi-host handoff after Chapter D?"],
+  "confidence": { "cl": 0.99, "basis": "Versioned record validation, lifecycle transition tests, projection refusal tests, and the target architecture boundary are linked." },
+  "reviewed_at": "2026-07-28T01:20:00.000Z"
+}
