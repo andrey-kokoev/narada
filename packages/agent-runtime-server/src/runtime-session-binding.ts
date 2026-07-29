@@ -1,7 +1,7 @@
 import { NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS } from '@narada2/nars-intelligence-kernel-contract';
 import { createCarrierTurnAdapter } from '@narada2/carrier-runtime/carrier-turn-adapter';
 import { createNarsSessionSupervisor } from '@narada2/nars-session-core/session-supervisor';
-import { NarsIntelligenceInvocationError } from './intelligence-runtime-controller.ts';
+import { NarsIntelligenceInvocationError } from './intelligence-runtime-controller.js';
 
 function isProviderFollowUpRoundLimitError(error: any) {
   const message: any = error instanceof Error ? error.message : String(error);
@@ -12,7 +12,7 @@ function isProviderFollowUpRoundLimitError(error: any) {
  * Transport-facing binding. The caller owns transport and process lifetime;
  * session lifecycle is delegated to nars-session-core and turns to the carrier.
  */
-export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelligenceFn, toolGateway = {}, buildTurnContext, handleControlRequest, executionPolicyProvider = null }: any = {}) {
+export function createRuntimeSessionBinding({ runtimeContext = {}, invokeIntelligenceFn, toolGateway = {}, buildTurnContext, handleControlRequest, executionPolicyProvider = null }: any = {}): any {
   if (typeof invokeIntelligenceFn !== 'function') throw new Error('runtime_session_binding_invoke_intelligence_required');
   const sessionId: any = runtimeContext.session;
   if (!sessionId || !runtimeContext.sessionPath || !runtimeContext.eventsPath) {

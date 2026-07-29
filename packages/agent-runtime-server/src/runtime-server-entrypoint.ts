@@ -1,3 +1,3 @@
-import { main } from './server-wrapper.ts';
+import { main } from './server-wrapper.js';
 
 await main();

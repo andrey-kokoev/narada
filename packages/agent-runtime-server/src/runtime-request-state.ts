@@ -1,4 +1,4 @@
-import { createNarsStateMachine } from './runtime-state-machine.ts';
+import { createNarsStateMachine } from './runtime-state-machine.js';
 
 export const NARS_RUNTIME_REQUEST_STATE_SCHEMA: any = 'narada.nars.runtime_request_state.v1';
 export const NARS_RUNTIME_REQUEST_RETENTION_LIMIT: any = 100;

@@ -1,5 +1,5 @@
 import { canonicalInvocationInput, sha256Digest } from '@narada2/invokable-intelligence-resolver';
-import { createNarsIntelligenceRuntimeReconfigurationStateMachine } from './intelligence-runtime-reconfiguration-state.ts';
+import { createNarsIntelligenceRuntimeReconfigurationStateMachine } from './intelligence-runtime-reconfiguration-state.js';
 
 function nonEmpty(value: any) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;

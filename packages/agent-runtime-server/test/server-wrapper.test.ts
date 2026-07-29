@@ -377,15 +377,16 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.narada.owns.includes('runtime_intelligence_reconfiguration'), true);
   assert.equal(packageJson.narada.carrier_substrate, '@narada2/carrier-runtime in-process');
   assert.equal(packageJson.narada.runtime_dependency_owner.includes('nars-session-core owns session control'), true);
-  assert.equal(packageJson.bin['narada-agent-runtime-server'], './bin/narada-agent-runtime-server.js');
+  assert.equal(packageJson.bin['narada-agent-runtime-server'], './dist/bin/narada-agent-runtime-server.js');
   assert.equal(packageJson.bin['agent-runtime-server'], undefined);
-  assert.equal(packageJson.exports['.'], './src/server-wrapper.js');
-  assert.equal(packageJson.exports['./runtime-server-events'], './src/runtime-server-events.js');
-  assert.equal(packageJson.exports['./runtime-request-state'], './src/runtime-request-state.js');
-  assert.equal(packageJson.exports['./health-projection-request-state'], './src/health-projection-request-state.js');
-  assert.equal(packageJson.exports['./runtime-control-contract'], './src/runtime-control-contract.js');
-  assert.equal(packageJson.exports['./intelligence-runtime-reconfiguration-state'], './src/intelligence-runtime-reconfiguration-state.js');
-  assert.equal(packageJson.exports['./intelligence-runtime-controller'], './src/intelligence-runtime-controller.js');
+  assert.equal(packageJson.exports['.'].import, './dist/src/server-wrapper.js');
+  assert.equal(packageJson.exports['./runtime-server-events'].import, './dist/src/runtime-server-events.js');
+  assert.equal(packageJson.exports['./runtime-request-state'].import, './dist/src/runtime-request-state.js');
+  assert.equal(packageJson.exports['./health-projection-request-state'].import, './dist/src/health-projection-request-state.js');
+  assert.equal(packageJson.exports['./runtime-control-contract'].import, './dist/src/runtime-control-contract.js');
+  assert.equal(packageJson.exports['./intelligence-runtime-reconfiguration-state'].import, './dist/src/intelligence-runtime-reconfiguration-state.js');
+  assert.equal(packageJson.exports['./intelligence-runtime-controller'].import, './dist/src/intelligence-runtime-controller.js');
+  assert.equal(packageJson.exports['./local-intelligence-runtime'].import, './dist/src/local-intelligence-runtime.js');
   assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
   assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
 });
@@ -4081,4 +4082,3 @@ test('spawned runtime exposes bounded terminal request retention and preserves a
     rmSync(siteRoot, { recursive: true, force: true });
   }
 });
-

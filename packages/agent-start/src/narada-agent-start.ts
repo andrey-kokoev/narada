@@ -84,7 +84,13 @@ const packageRootDir: any = join(__dirname, '..');
 const naradaProperRoot: any = join(packageRootDir, '..', '..');
 const agentStartRequire: any = createRequire(import.meta.url);
 
-function resolvePackagedModule(specifier: string): string | null {
+async function resolvePackagedModule(specifier: string): Promise<string | null> {
+  try {
+    const resolved = await import.meta.resolve(specifier);
+    return resolved.startsWith('file:') ? fileURLToPath(resolved) : resolved;
+  } catch {
+    // Keep the CommonJS resolver as a fallback for older package exports.
+  }
   try {
     return agentStartRequire.resolve(specifier);
   } catch {
@@ -109,10 +115,10 @@ const packagedCommonToolsRoot: any = join(NARADA_PROPER_ROOT, 'packages', 'site-
 // workspace to ../mcp-surfaces, in published installs to the bundled package.
 // The narada source copy (agent-context-tools/src/session-start.ts) is only a
 // re-export shim kept for existing narada importers.
-const packagedAgentContextSessionStartPath: any = resolvePackagedModule('@narada2/agent-context-mcp/session-start');
-const packagedWriteFileModulePath: any = resolvePackagedModule('@narada2/site-common-tools/incubation/write-file-utf8.ts')
+const packagedAgentContextSessionStartPath: any = await resolvePackagedModule('@narada2/agent-context-mcp/session-start');
+const packagedWriteFileModulePath: any = await resolvePackagedModule('@narada2/site-common-tools/incubation/write-file-utf8.ts')
   ?? join(packagedCommonToolsRoot, 'incubation', 'write-file-utf8.ts');
-const packagedMcpFabricModulePath: any = resolvePackagedModule('@narada2/mcp-fabric')
+const packagedMcpFabricModulePath: any = await resolvePackagedModule('@narada2/mcp-fabric')
   ?? join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.ts');
 const commonToolsRoot: any = existsSync(join(candidateSiteToolsRoot, 'incubation', 'write-file-utf8.ts'))
   ? candidateSiteToolsRoot

@@ -2,4 +2,4 @@ export {
   createEventHub,
   startEventStreamProjection,
   startHealthProjection,
-} from './server-wrapper.ts';
+} from './server-wrapper.js';

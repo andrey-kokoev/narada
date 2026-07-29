@@ -3,6 +3,7 @@ import type {
   AuthoritativeDecisionClock,
   InvocationPlan,
   ResourceRef,
+  IntelligenceSelectionChoices,
 } from '@narada2/invokable-intelligence-contract';
 import type { NarsKernelCapabilityGateway } from '@narada2/nars-intelligence-kernel-contract';
 import type {
@@ -103,15 +104,7 @@ export interface LocalIntelligenceRuntime {
   selectionChoices: {
     provider_choices: readonly string[];
     model_choices: readonly string[];
-    selection_choices: {
-      providers: readonly {
-        provider: string;
-        models: readonly {
-          model: string;
-          thinking_choices: readonly string[];
-        }[];
-      }[];
-    };
+    selection_choices: IntelligenceSelectionChoices;
   };
   kernelHealth: () => Record<string, unknown> | null;
   preflightSelection(input?: {
@@ -131,15 +124,7 @@ export declare function readLocalIntelligenceSelectionChoices(
 ): Promise<{
   provider_choices: readonly string[];
   model_choices: readonly string[];
-  selection_choices: {
-    providers: readonly {
-      provider: string;
-      models: readonly {
-        model: string;
-        thinking_choices: readonly string[];
-      }[];
-    }[];
-  };
+  selection_choices: IntelligenceSelectionChoices;
 }>;
 
 export declare function executionSiteDecisionClock(

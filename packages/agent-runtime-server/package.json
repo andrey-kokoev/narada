@@ -24,32 +24,94 @@
     "runtime_dependency_owner": "nars-session-core owns session control and durability; this package owns the scoped capability-gateway binding; nars-provider-runtime supplies provider execution"
   },
   "bin": {
-    "narada-agent-runtime-server": "./bin/narada-agent-runtime-server.ts"
+    "narada-agent-runtime-server": "./dist/bin/narada-agent-runtime-server.js"
   },
   "exports": {
-    ".": "./src/server-wrapper.ts",
-    "./runtime-session-binding": "./src/runtime-session-binding.ts",
-    "./session-core-runtime-service": "./src/session-core-runtime-service.ts",
-    "./runtime-context": "./src/runtime-context.ts",
-    "./control-input-bridge": "./src/control-input-bridge.ts",
-    "./runtime-host-state": "./src/runtime-host-state.ts",
-    "./runtime-request-state": "./src/runtime-request-state.ts",
-    "./health-projection-request-state": "./src/health-projection-request-state.ts",
-    "./runtime-control-contract": "./src/runtime-control-contract.ts",
-    "./intelligence-runtime-reconfiguration-state": "./src/intelligence-runtime-reconfiguration-state.ts",
-    "./intelligence-runtime-controller": "./src/intelligence-runtime-controller.ts",
-    "./local-intelligence-runtime": {
-      "types": "./src/local-intelligence-runtime.d.ts",
-      "import": "./src/local-intelligence-runtime.ts"
+    ".": {
+      "types": "./dist/src/server-wrapper.d.ts",
+      "import": "./dist/src/server-wrapper.js",
+      "default": "./dist/src/server-wrapper.js"
     },
-    "./local-topology-observer": "./src/local-topology-observer.ts",
-    "./runtime-server-events": "./src/runtime-server-events.ts",
-    "./task-executability-dispatch": "./src/task-executability-dispatch.ts",
-    "./test-fixtures": "./src/test-fixtures.ts",
+    "./runtime-session-binding": {
+      "types": "./dist/src/runtime-session-binding.d.ts",
+      "import": "./dist/src/runtime-session-binding.js",
+      "default": "./dist/src/runtime-session-binding.js"
+    },
+    "./session-core-runtime-service": {
+      "types": "./dist/src/session-core-runtime-service.d.ts",
+      "import": "./dist/src/session-core-runtime-service.js",
+      "default": "./dist/src/session-core-runtime-service.js"
+    },
+    "./runtime-context": {
+      "types": "./dist/src/runtime-context.d.ts",
+      "import": "./dist/src/runtime-context.js",
+      "default": "./dist/src/runtime-context.js"
+    },
+    "./control-input-bridge": {
+      "types": "./dist/src/control-input-bridge.d.ts",
+      "import": "./dist/src/control-input-bridge.js",
+      "default": "./dist/src/control-input-bridge.js"
+    },
+    "./runtime-host-state": {
+      "types": "./dist/src/runtime-host-state.d.ts",
+      "import": "./dist/src/runtime-host-state.js",
+      "default": "./dist/src/runtime-host-state.js"
+    },
+    "./runtime-request-state": {
+      "types": "./dist/src/runtime-request-state.d.ts",
+      "import": "./dist/src/runtime-request-state.js",
+      "default": "./dist/src/runtime-request-state.js"
+    },
+    "./health-projection-request-state": {
+      "types": "./dist/src/health-projection-request-state.d.ts",
+      "import": "./dist/src/health-projection-request-state.js",
+      "default": "./dist/src/health-projection-request-state.js"
+    },
+    "./runtime-control-contract": {
+      "types": "./dist/src/runtime-control-contract.d.ts",
+      "import": "./dist/src/runtime-control-contract.js",
+      "default": "./dist/src/runtime-control-contract.js"
+    },
+    "./intelligence-runtime-reconfiguration-state": {
+      "types": "./dist/src/intelligence-runtime-reconfiguration-state.d.ts",
+      "import": "./dist/src/intelligence-runtime-reconfiguration-state.js",
+      "default": "./dist/src/intelligence-runtime-reconfiguration-state.js"
+    },
+    "./intelligence-runtime-controller": {
+      "types": "./dist/src/intelligence-runtime-controller.d.ts",
+      "import": "./dist/src/intelligence-runtime-controller.js",
+      "default": "./dist/src/intelligence-runtime-controller.js"
+    },
+    "./local-intelligence-runtime": {
+      "types": "./dist/src/local-intelligence-runtime.d.ts",
+      "import": "./dist/src/local-intelligence-runtime.js",
+      "default": "./dist/src/local-intelligence-runtime.js"
+    },
+    "./local-topology-observer": {
+      "types": "./dist/src/local-topology-observer.d.ts",
+      "import": "./dist/src/local-topology-observer.js",
+      "default": "./dist/src/local-topology-observer.js"
+    },
+    "./runtime-server-events": {
+      "types": "./dist/src/runtime-server-events.d.ts",
+      "import": "./dist/src/runtime-server-events.js",
+      "default": "./dist/src/runtime-server-events.js"
+    },
+    "./task-executability-dispatch": {
+      "types": "./dist/src/task-executability-dispatch.d.ts",
+      "import": "./dist/src/task-executability-dispatch.js",
+      "default": "./dist/src/task-executability-dispatch.js"
+    },
+    "./test-fixtures": {
+      "types": "./dist/src/test-fixtures.d.ts",
+      "import": "./dist/src/test-fixtures.js",
+      "default": "./dist/src/test-fixtures.js"
+    },
     "./agent-cli-windows-wrapper-template": "./templates/Start-AgentCliSession.ps1",
     "./package.json": "./package.json"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test test/*.test.ts src/*.test.ts",
     "test:e2e:pty": "node --import tsx test/pty-e2e.ts",
     "test:live:pi-client-kernel": "node --import tsx test/live-pi-client-kernel-substitutability-fixture-e2e.ts --enable-live-e2e",

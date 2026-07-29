@@ -6,9 +6,9 @@ import {
   readNarsEventLogPage,
 } from '@narada2/nars-session-core/event-log';
 import { isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
-import { decodeWebSocketFrames, encodeWebSocketPongFrame, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.ts';
-import { isNarsRuntimeServerMethod } from './runtime-control-contract.ts';
-import { parseEndpointOptions } from './runtime-server-options.ts';
+import { decodeWebSocketFrames, encodeWebSocketPongFrame, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.js';
+import { isNarsRuntimeServerMethod } from './runtime-control-contract.js';
+import { parseEndpointOptions } from './runtime-server-options.js';
 
 let eventStreamConnectionSequence: any = 0;
 

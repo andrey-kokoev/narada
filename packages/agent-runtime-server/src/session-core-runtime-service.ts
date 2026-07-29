@@ -8,13 +8,13 @@ import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/
 import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
 import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
 import { normalizeNarsExecutionPolicy } from '@narada2/nars-intelligence-kernel-contract';
-import { createRuntimeSessionBinding } from './runtime-session-binding.ts';
+import { createRuntimeSessionBinding } from './runtime-session-binding.js';
 import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
-import { createNarsRuntimeRequestRegistry } from './runtime-request-state.ts';
+import { createNarsRuntimeRequestRegistry } from './runtime-request-state.js';
 import {
   NARS_RUNTIME_EXECUTION_POLICY_RECONFIGURE_METHOD,
   isNarsRuntimeServerMethod,
-} from './runtime-control-contract.ts';
+} from './runtime-control-contract.js';
 
 const DEFAULT_HEARTBEAT_INTERVAL_MS: any = 10_000;
 const HEARTBEAT_FRESH_MS: any = 30_000;

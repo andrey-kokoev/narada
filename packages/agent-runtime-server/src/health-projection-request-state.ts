@@ -1,4 +1,4 @@
-import { createNarsStateMachine } from './runtime-state-machine.ts';
+import { createNarsStateMachine } from './runtime-state-machine.js';
 
 export const NARS_HEALTH_PROJECTION_REQUEST_STATE_SCHEMA: any = 'narada.nars.health_projection_request_state.v1';
 

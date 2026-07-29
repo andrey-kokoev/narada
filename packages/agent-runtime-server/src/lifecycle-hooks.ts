@@ -7,7 +7,7 @@ import {
 import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { valueAfterFlag } from './runtime-server-options.ts';
+import { valueAfterFlag } from './runtime-server-options.js';
 
 const SECRET_PATTERN: any = /(api[_-]?key|token|secret|password|authorization)\s*[:=]\s*[^\s,;]+/giu;
 

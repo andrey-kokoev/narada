@@ -21,8 +21,8 @@ import {
   normalizeIntelligenceKernelKind,
 } from '@narada2/nars-intelligence-kernel-contract';
 import { createIntelligenceKernel } from '@narada2/nars-pi-kernel';
-import { createLocalTopologyObserver } from './local-topology-observer.ts';
-import { LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA } from './local-topology-observer.ts';
+import { createLocalTopologyObserver } from './local-topology-observer.js';
+import { LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA } from './local-topology-observer.js';
 
 const TOPOLOGY_OBSERVATION_ADMISSION_SCHEMA: any = 'narada.invokable-intelligence.topology-observation-admission.v1';
 const TOPOLOGY_OBSERVATION_SCHEMA: any = 'narada.invokable-intelligence.topology-feasibility.v1';
@@ -98,33 +98,68 @@ async function selectionChoicesFromCatalog(store: any) {
         - (preferredOfferingWeights.get(left.offeringId) ?? 0);
       return preferenceDelta !== 0 ? preferenceDelta : left.value.localeCompare(right.value);
     });
-  const providerModels = new Map<string, Map<string, Set<string>>>();
+  const providerModels = new Map<string, Map<string, any>>();
   for (const candidate of candidates) {
     const provider = publicResourceId(candidate.inferenceProvider, 'inference-provider:');
-    const model = nonEmpty(candidate.offering.invocation_model_key);
-    if (!provider || !model) continue;
-    const models = providerModels.get(provider) ?? new Map<string, Set<string>>();
-    const thinking = models.get(model) ?? new Set<string>();
+    const model = publicResourceId(candidate.model, 'model:');
+    const invocationModelKey = nonEmpty(candidate.offering.invocation_model_key);
+    if (!provider || !model || !invocationModelKey) continue;
+    const models = providerModels.get(provider) ?? new Map<string, any>();
+    const modelChoice = models.get(model) ?? {
+      model_ref: { kind: 'model', id: candidate.model.id },
+      model_provider: { kind: 'model-provider', id: candidate.modelProvider.id },
+      inference_provider: { kind: 'inference-provider', id: candidate.inferenceProvider.id },
+      offering_refs: new Map<string, any>(),
+      invocation_model_keys: new Set<string>(),
+      display_name: nonEmpty(candidate.model.display_name),
+      capabilities: new Map<string, any>(),
+    };
+    modelChoice.offering_refs.set(candidate.offering.id, {
+      kind: 'model-offering',
+      id: candidate.offering.id,
+    });
+    modelChoice.invocation_model_keys.add(invocationModelKey);
     const capabilities = resolveRouteCapabilities(candidate.route, candidate.offering, routeAssertions).capabilities;
-    const thinkingCapability = capabilities.find((capability: any) => (
-      capability.capability?.family === 'thinking' && capability.capability?.name === 'levels'
-    ));
-    for (const level of Array.isArray(thinkingCapability?.allowed_values) ? thinkingCapability.allowed_values : []) {
-      if (typeof level === 'string' && level.trim()) thinking.add(level.trim());
+    for (const capability of capabilities) {
+      const key = `${capability.capability.family}/${capability.capability.name}`;
+      const previous = modelChoice.capabilities.get(key);
+      modelChoice.capabilities.set(key, previous ? intersectSelectionCapabilities(previous, capability) : {
+        ...capability,
+        ...(Array.isArray(capability.allowed_values) ? { allowed_values: [...capability.allowed_values] } : {}),
+        ...(Array.isArray(capability.assertion_ids) ? { assertion_ids: [...capability.assertion_ids] } : {}),
+        ...(Array.isArray(capability.reasons) ? { reasons: [...capability.reasons] } : {}),
+      });
     }
-    models.set(model, thinking);
+    models.set(model, modelChoice);
     providerModels.set(provider, models);
   }
   const selectionProviders = [...providerModels.entries()]
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([provider, models]) => ({
       provider,
+      inference_provider: models.values().next().value?.inference_provider ?? { kind: 'inference-provider', id: `inference-provider:${provider}` },
       models: [...models.entries()]
         .sort(([left], [right]) => left.localeCompare(right))
-        .map(([model, thinking]) => ({
-          model,
-          thinking_choices: Object.freeze([...thinking].sort()),
-        })),
+        .map(([, modelChoice]) => {
+          const capabilities = [...modelChoice.capabilities.values()].sort((left: any, right: any) => (
+            `${left.capability.family}/${left.capability.name}`.localeCompare(`${right.capability.family}/${right.capability.name}`)
+          ));
+          const thinking = capabilities.find((capability: any) => (
+            capability.capability?.family === 'thinking' && capability.capability?.name === 'levels'
+          ));
+          const invocationModelKey = [...modelChoice.invocation_model_keys].sort()[0];
+          return {
+            model: invocationModelKey,
+            model_ref: modelChoice.model_ref,
+            model_provider: modelChoice.model_provider,
+            inference_provider: modelChoice.inference_provider,
+            offering_refs: Object.freeze([...modelChoice.offering_refs.values()]),
+            invocation_model_key: invocationModelKey,
+            ...(modelChoice.display_name ? { display_name: modelChoice.display_name } : {}),
+            capabilities: Object.freeze(capabilities),
+            thinking_choices: Object.freeze(Array.isArray(thinking?.allowed_values) ? [...thinking.allowed_values].sort() : []),
+          };
+        }),
     }));
   return Object.freeze({
     provider_choices: Object.freeze([...new Set(candidates
@@ -132,12 +167,38 @@ async function selectionChoicesFromCatalog(store: any) {
       .filter(Boolean))].sort()),
     model_choices: Object.freeze([...new Set(modelChoices.map(({ value }: any) => value))]),
     selection_choices: Object.freeze({
+      schema: 'narada.invokable-intelligence.selection-choices.v1',
       providers: Object.freeze(selectionProviders.map((provider) => Object.freeze({
         ...provider,
         models: Object.freeze(provider.models.map((model) => Object.freeze(model))),
       }))),
     }),
   });
+}
+
+function intersectSelectionCapabilities(previous: any, current: any) {
+  const previousAllowed = Array.isArray(previous.allowed_values) ? previous.allowed_values : null;
+  const currentAllowed = Array.isArray(current.allowed_values) ? current.allowed_values : null;
+  const allowedValues = previousAllowed && currentAllowed
+    ? previousAllowed.filter((value: any) => currentAllowed.includes(value))
+    : previousAllowed ?? currentAllowed;
+  const maximum = previous.maximum && current.maximum
+    ? previous.maximum.unit === current.maximum.unit
+      ? (previous.maximum.value <= current.maximum.value ? previous.maximum : current.maximum)
+      : undefined
+    : previous.maximum ?? current.maximum;
+  const availability = previous.availability?.status === 'unavailable' || current.availability?.status === 'unavailable'
+    ? { ...(current.availability ?? previous.availability), status: 'unavailable' }
+    : current.availability ?? previous.availability;
+  return {
+    ...previous,
+    supported: Boolean(previous.supported && current.supported && (allowedValues === undefined || allowedValues.length > 0) && (!previous.maximum || !current.maximum || maximum !== undefined)),
+    ...(allowedValues !== undefined ? { allowed_values: [...allowedValues] } : {}),
+    ...(maximum !== undefined ? { maximum } : {}),
+    ...(availability ? { availability } : {}),
+    assertion_ids: [...new Set([...(previous.assertion_ids ?? []), ...(current.assertion_ids ?? [])])],
+    reasons: [...new Set([...(previous.reasons ?? []), ...(current.reasons ?? []), ...(allowedValues?.length === 0 ? ['allowed-value-intersection-empty'] : []), ...(previous.maximum && current.maximum && maximum === undefined ? ['maximum-unit-conflict'] : [])])],
+  };
 }
 
 /** Read the catalog-backed representation used by operator admission UIs.
