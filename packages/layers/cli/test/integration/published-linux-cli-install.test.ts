@@ -87,6 +87,12 @@ function parseJsonOutput(stdout: string, label: string): Record<string, any> {
 
 function packCli(packRoot: string): string {
   mkdirSync(packRoot, { recursive: true });
+  const build = run(packageManager, packageManagerArgs([
+    '--filter', '@narada2/cli...',
+    '--filter', '!@narada2/cli',
+    'build',
+  ]), { cwd: naradaProperRoot, timeout: 300_000 });
+  assert.equal(build.status, 0, 'published Linux CLI dependency build failed\n' + outputOf(build));
   const pack = run(packageManager, packageManagerArgs([
     '--config.node-linker=hoisted',
     'pack',
