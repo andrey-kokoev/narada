@@ -14,7 +14,7 @@
  * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
  *
  * Usage:
- *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -203,6 +203,7 @@ const pcSiteRoot: any = args.pc_site_root ?? process.env.NARADA_PC_SITE_ROOT ?? 
 const launchSource: any = args.launch_source ?? 'agent-start';
 const admitSessionFlag: any = !!args.admit_session;
 const resumeSessionId: any = args.resume_session ? String(args.resume_session).trim() : null;
+const requestedCarrierSessionId: any = args.carrier_session_id ? String(args.carrier_session_id).trim() : null;
 const showAdmission: any = args.show_admission ?? null;
 const targetSiteId: any = args.target_site_id ?? process.env.NARADA_TARGET_SITE_ID ?? null;
 const targetSiteRoot: any = args.target_site_root ?? process.env.NARADA_TARGET_SITE_ROOT ?? null;
@@ -388,11 +389,21 @@ if (Object.hasOwn(args, 'intelligence_provider')) {
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.ts <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--resume-session <session-id>] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
+  console.error('Usage: node start-agent.ts <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--resume-session <session-id>] [--carrier-session-id <session-id>] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
   process.exit(1);
 }
 
-const plannedCarrierSessionId: any = resumeSessionId || newCarrierSessionId();
+if (resumeSessionId && requestedCarrierSessionId) {
+  console.error(JSON.stringify({
+    schema: 'narada.pc_runtime.carrier_session.registration.v0',
+    status: 'refused',
+    reason_code: 'carrier_session_id_selection_conflict',
+    reason: 'Use either --resume-session or --carrier-session-id, not both.',
+  }));
+  process.exit(1);
+}
+
+const plannedCarrierSessionId: any = requestedCarrierSessionId || resumeSessionId || newCarrierSessionId();
 const defaultIntelligenceRegistryDbPath: any = join(sessionSiteRoot, '.ai', 'intelligence-registry.db');
 const requiresIntelligenceLaunchContext: any = carrier === 'agent-cli'
   || carrier === 'agent-web-ui'

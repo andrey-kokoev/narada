@@ -14,6 +14,10 @@ import {
   buildMcpRuntimeRegistryStatus,
   coordinateMcpRuntimeRestartRequest,
 } from './mcp-runtime-instance-registry.js';
+import {
+  requestCarrierRestart,
+  showCarrierRestartOutcome,
+} from './carrier-restart-supervisor.js';
 import { assertCanonicalSiteLocus, NARADA_USER_SITE_LOCUS } from '../site-locus-shim.js';
 import { buildOutputRefToolContent, enforceInlinePayloadLimit, resolveToolPayloadArgs } from '../mcp-payload-file.js';
 
@@ -327,6 +331,12 @@ async function callTool(params: any) : Promise<any>{
 
     case 'operator_surface_mcp_restart_request':
       return operatorMcpRestartRequest(args);
+
+    case 'carrier_restart_request':
+      return await operatorCarrierRestartRequest(args);
+
+    case 'carrier_restart_outcome_show':
+      return operatorCarrierRestartOutcomeShow(args);
 
     case 'operator_surface_komorebi_health':
       return await operatorKomorebiHealth();
@@ -2740,6 +2750,16 @@ function operatorMcpRestartRequest(args: any) : any{
   }));
 }
 
+async function operatorCarrierRestartRequest(args: any) : Promise<any>{
+  return jsonToolResult(await requestCarrierRestart(args, { siteRoot, pcSiteRoot }));
+}
+
+function operatorCarrierRestartOutcomeShow(args: any) : any{
+  const operationId: any = stringField(args, 'operation_id');
+  if (!operationId) throw new Error('carrier_restart_outcome_show_requires_operation_id');
+  return jsonToolResult(showCarrierRestartOutcome(pcSiteRoot, operationId));
+}
+
 async function operatorKomorebiHealth() : Promise<any>{
   const psArgs: any = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', join(carriersDir, 'Get-KomorebiShortcutAndRoleBorderHealth.ps1'), '-PassThru'];
   const stdout: any = await spawnPwsh(psArgs);
@@ -3170,6 +3190,8 @@ function tools() : any{
     { name: 'operator_surface_build_deploy_osl', description: 'Build, install, restart, and inspect the repaired window surface overlay through the sanctioned operator-surface MCP path.', inputSchema: objectSchema({ expected_commit: stringSchema('Expected git commit prefix for the repaired source.'), run_tests: boolSchema('Run cargo test before build. Default true.'), dry_run: boolSchema('Plan only.') }) },
     { name: 'operator_surface_mcp_runtime_registry_status', description: 'Read PC-locus MCP runtime instance registry state for declared MCP surfaces without process mutation.', inputSchema: objectSchema({ target: stringSchema('Declared surface_id or generated server name.'), surface_id: stringSchema('Declared MCP surface id.'), server_name: stringSchema('Generated MCP server name.') }) },
     { name: 'operator_surface_mcp_restart_request', description: 'Coordinate a host-level MCP restart request from PC runtime registry evidence; returns restarted, skipped, failed, and external-carrier-required terminal evidence without arbitrary process killing.', inputSchema: objectSchema({ target: stringSchema('Declared surface_id or generated server name.'), surface_id: stringSchema('Declared MCP surface id.'), server_name: stringSchema('Generated MCP server name.'), stale_epoch: numberSchema('Optional source epoch threshold for affected instances.'), requested_by: stringSchema('Principal requesting coordination.'), mutating_authorized: stringSchema('Required token for admitted restartable stub path.'), dry_run: boolSchema('Plan only. Default true.') }) },
+    { name: 'carrier_restart_request', description: 'Request a PC-owned restart of one local NARS carrier. Starts a successor through the canonical launcher, waits for healthy runtime and MCP readiness, drains the source through session.close, and persists a carrier restart outcome.', inputSchema: objectSchema({ operation_id: stringSchema('Idempotent durable restart operation identifier.'), requested_at: stringSchema('RFC3339 request timestamp. The supervisor supplies one when omitted.'), requested_by: stringSchema('Principal requesting the restart.'), site_id: stringSchema('Owning Site identifier.'), carrier_session_id: stringSchema('Currently active source carrier session identifier.'), expected_state: anyObjectSchema('Expected observation digests and state evidence used for stale-request detection.'), reason: stringSchema('Human-readable reason for the controlled restart.'), timeout_ms: numberSchema('Bounded successor/readiness/drain timeout in milliseconds; 1000..300000.'), dry_run: boolSchema('Plan only; defaults to false for this mutation tool.'), mutating_authorized: stringSchema('Authority evidence for carrier.restart mutation.') }, ['operation_id', 'requested_by', 'site_id', 'carrier_session_id', 'expected_state', 'reason']) },
+    { name: 'carrier_restart_outcome_show', description: 'Read one durable PC-owned carrier restart outcome by operation identifier.', inputSchema: objectSchema({ operation_id: stringSchema('Durable restart operation identifier.') }, ['operation_id']) },
     { name: 'operator_surface_komorebi_health', description: 'Inspect Komorebi, WHKD, YASB, and foreground window health.', inputSchema: objectSchema({}) },
     { name: 'operator_surface_komorebi_debug', description: 'Read-only Komorebi debug bundle: health script output plus optional komorebic state.', inputSchema: objectSchema({ include_raw_state: boolSchema('Invoke komorebic state and include the captured runtime state. Default true.') }) },
     { name: 'operator_surface_repair_phantom_tiled_windows', description: 'Governed dry-run/live repair path for Komorebi phantom tiled offscreen windows. Dry-run is default; live path uses admitted retile_current_workspace and never closes windows.', inputSchema: objectSchema({ dry_run: boolSchema('Plan only. Default true.'), force: boolSchema('Run repair plan even if current health does not classify a phantom tiled window.'), mutating_authorized: stringSchema('Required authority token for live mutation.') }) },

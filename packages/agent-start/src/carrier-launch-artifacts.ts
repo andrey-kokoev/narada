@@ -143,10 +143,13 @@ export function materializeCarrierSessionRecord({
     },
     operator_surface_window_evidence: null,
     restart_handle: {
-      class: 'operator_manual_only_with_handle',
+      schema: 'narada.pc_runtime.carrier_restart_handle.v1',
+      class: 'carrier_supervisor_with_operation',
       handle: carrierSessionId,
       authority_owner: 'pc_site_runtime',
-      semantics: 'Restart this launcher-bound runtime session through the operator-visible launch surface or explicit operator action.',
+      request_tool: 'carrier_restart_request',
+      outcome_tool: 'carrier_restart_outcome_show',
+      semantics: 'Restart this launcher-bound runtime session through the PC-owned carrier supervisor using a durable operation id and outcome record.',
     },
     authority_basis: {
       kind: 'agent_launch_path',

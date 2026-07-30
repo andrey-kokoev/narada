@@ -18,6 +18,12 @@ export const NARS_AUTHORITY_TRANSITION_SOURCE_STATE_SCHEMA = 'narada.nars.author
 export type NaradaAuthorityRuntimeHostKind = 'local' | 'cloudflare-host';
 export type NaradaAuthorityRuntimeSourceWriteAdmission = 'active' | 'draining' | 'sealed' | 'retired';
 export type NaradaAuthorityRuntimeTargetWriteAdmission = 'not_before_source_seal' | 'active_after_epoch_token' | 'refused';
+export type NaradaAuthorityRuntimeHostTransitionFailureState =
+  | 'preparation_failed'
+  | 'drain_failed'
+  | 'seal_failed'
+  | 'target_activation_failed'
+  | 'transition_aborted';
 
 export interface NaradaAuthorityTransitionSourceState {
   schema: typeof NARS_AUTHORITY_TRANSITION_SOURCE_STATE_SCHEMA;
@@ -39,6 +45,7 @@ export interface NaradaAuthorityTransitionSourceState {
   target_prepared_at: unknown;
   target_prepare_reason: unknown;
   target_prepare_requested_by: unknown;
+  target_activation_started_at: unknown;
   target_activated_at: unknown;
   target_first_sequence: number | null;
   authority_epoch_token: Record<string, unknown> | null;
@@ -240,6 +247,39 @@ export function activateTargetAuthority({ path = null, sessionPath = null, state
   return next;
 }
 
+export function beginTargetActivation({ path = null, sessionPath = null, state, targetAuthorityLocator = null, supersededBySessionId = null, authorityLocatorRef = null, reason = null, requestedBy = null, now = new Date() }: NaradaAuthorityTransitionOperationOptions & { targetAuthorityLocator?: unknown; supersededBySessionId?: unknown; authorityLocatorRef?: unknown } = {}): NaradaAuthorityTransitionSourceState {
+  const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
+  assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'target_activating');
+  const occurredAt = now.toISOString();
+  const next = writeAuthorityTransitionSourceState(path, {
+    ...current,
+    authority_transition_state: 'target_activating',
+    source_write_admission: 'sealed',
+    target_write_admission: 'not_before_source_seal',
+    target_activation_started_at: current.target_activation_started_at ?? occurredAt,
+    target_authority_locator: normalizeOptionalObject(targetAuthorityLocator) ?? current.target_authority_locator ?? null,
+    superseded_by_session_id: normalizeOptionalString(supersededBySessionId) ?? current.superseded_by_session_id ?? null,
+    authority_locator_ref: normalizeOptionalString(authorityLocatorRef) ?? current.authority_locator_ref ?? null,
+    target_activation_reason: reason ?? current.target_activation_reason ?? null,
+    target_activation_requested_by: requestedBy ?? current.target_activation_requested_by ?? null,
+    last_transition: { transition: 'target_activating', occurred_at: occurredAt, reason, requested_by: requestedBy },
+  });
+  updateNarsSessionAuthorityTransitionState({
+    sessionPath,
+    authorityTransitionState: next.authority_transition_state,
+    authorityHandoffLifecycle: next.authority_handoff_lifecycle,
+    sourceWriteAdmission: next.source_write_admission,
+    supersededBySessionId: next.superseded_by_session_id,
+    authorityLocatorRef: next.authority_locator_ref,
+    authorityRuntimeHost: next.source_authority_runtime_host,
+    authorityEpoch: next.source_authority_epoch,
+    authorityRuntimeId: next.source_authority_runtime_id,
+    authorityTransitionId: next.transition_id,
+    updatedAt: occurredAt,
+  });
+  return next;
+}
+
 export function beginSourceDrain({ path = null, sessionPath = null, state, reason = null, requestedBy = null, now = new Date() }: NaradaAuthorityTransitionOperationOptions = {}): NaradaAuthorityTransitionSourceState {
   const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
   if (current.source_write_admission === 'sealed') return current;
@@ -296,6 +336,59 @@ export function sealSourceAuthority({ path = null, sessionPath = null, state, so
   return next;
 }
 
+export function retireSourceAuthority({ path = null, sessionPath = null, state, reason = null, requestedBy = null, now = new Date() }: NaradaAuthorityTransitionOperationOptions = {}): NaradaAuthorityTransitionSourceState {
+  const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
+  assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, 'source_retired');
+  const occurredAt = now.toISOString();
+  const next = writeAuthorityTransitionSourceState(path, {
+    ...current,
+    authority_transition_state: 'source_retired',
+    source_write_admission: 'retired',
+    last_transition: { transition: 'source_retired', occurred_at: occurredAt, reason, requested_by: requestedBy },
+  });
+  updateNarsSessionAuthorityTransitionState({
+    sessionPath,
+    authorityTransitionState: next.authority_transition_state,
+    authorityHandoffLifecycle: next.authority_handoff_lifecycle,
+    sourceWriteAdmission: next.source_write_admission,
+    supersededBySessionId: next.superseded_by_session_id,
+    authorityLocatorRef: next.authority_locator_ref,
+    authorityRuntimeHost: next.source_authority_runtime_host,
+    authorityEpoch: next.source_authority_epoch,
+    authorityRuntimeId: next.source_authority_runtime_id,
+    authorityTransitionId: next.transition_id,
+    updatedAt: occurredAt,
+  });
+  return next;
+}
+
+export function recordAuthorityTransitionFailure({ path = null, sessionPath = null, state, failureState = 'transition_aborted', reason = null, requestedBy = null, now = new Date() }: NaradaAuthorityTransitionOperationOptions & { failureState?: NaradaAuthorityRuntimeHostTransitionFailureState } = {}): NaradaAuthorityTransitionSourceState {
+  const current = normalizeAuthorityTransitionSourceState(state ?? readAuthorityTransitionSourceState(path));
+  assertNarsAuthorityRuntimeHostTransition(current.authority_transition_state, failureState);
+  const occurredAt = now.toISOString();
+  const next = writeAuthorityTransitionSourceState(path, {
+    ...current,
+    authority_transition_state: failureState,
+    last_transition: { transition: failureState, occurred_at: occurredAt, reason, requested_by: requestedBy },
+    failure_reason: reason ?? null,
+    failure_requested_by: requestedBy ?? null,
+  });
+  updateNarsSessionAuthorityTransitionState({
+    sessionPath,
+    authorityTransitionState: next.authority_transition_state,
+    authorityHandoffLifecycle: next.authority_handoff_lifecycle,
+    sourceWriteAdmission: next.source_write_admission,
+    supersededBySessionId: next.superseded_by_session_id,
+    authorityLocatorRef: next.authority_locator_ref,
+    authorityRuntimeHost: next.source_authority_runtime_host,
+    authorityEpoch: next.source_authority_epoch,
+    authorityRuntimeId: next.source_authority_runtime_id,
+    authorityTransitionId: next.transition_id,
+    updatedAt: occurredAt,
+  });
+  return next;
+}
+
 export function authorityTransitionSourceStateSnapshot(state: NaradaAuthorityTransitionSourceStateInput = {}): Record<string, unknown> {
   const normalized = normalizeAuthorityTransitionSourceState(state);
   return {
@@ -312,6 +405,7 @@ export function authorityTransitionSourceStateSnapshot(state: NaradaAuthorityTra
     source_last_sequence: normalized.source_last_sequence,
     target_write_admission: normalized.target_write_admission,
     target_prepared_at: normalized.target_prepared_at,
+    target_activation_started_at: normalized.target_activation_started_at,
     target_activated_at: normalized.target_activated_at,
     target_first_sequence: normalized.target_first_sequence,
     authority_epoch_token: normalized.authority_epoch_token,
@@ -396,6 +490,7 @@ export function emptyAuthorityTransitionSourceState({ path = null, corrupt = fal
     sealed_at: null,
     source_last_sequence: null,
     target_prepared_at: null,
+    target_activation_started_at: null,
     target_activated_at: null,
     target_first_sequence: null,
     authority_epoch_token: null,
@@ -441,6 +536,7 @@ function normalizeAuthorityTransitionSourceState(state: NaradaAuthorityTransitio
     target_prepared_at: state.target_prepared_at ?? null,
     target_prepare_reason: state.target_prepare_reason ?? null,
     target_prepare_requested_by: state.target_prepare_requested_by ?? null,
+    target_activation_started_at: state.target_activation_started_at ?? null,
     target_activated_at: state.target_activated_at ?? null,
     target_first_sequence: typeof state.target_first_sequence === 'number' && Number.isInteger(state.target_first_sequence) && state.target_first_sequence > 0 ? state.target_first_sequence : null,
     authority_epoch_token: normalizeOptionalObject(state.authority_epoch_token),

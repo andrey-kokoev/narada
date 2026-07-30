@@ -7,6 +7,7 @@ import test from 'node:test';
 import {
   activateTargetAuthority,
   authorityTransitionStatePathFromSessionPath,
+  beginTargetActivation,
   beginSourceDrain,
   classifySourceWriteAdmission,
   classifyTargetWriteAdmission,
@@ -14,6 +15,7 @@ import {
   planTargetAuthorityTransition,
   prepareTargetAuthority,
   readAuthorityTransitionSourceState,
+  retireSourceAuthority,
   sealSourceAuthority,
 } from './authority-transition-state.js';
 
@@ -59,6 +61,15 @@ test('authority transition persists preparation, sealing, and target activation 
       'target_first_sequence',
     ]);
 
+    state = beginTargetActivation({
+      path: statePath,
+      state,
+      targetAuthorityLocator: { kind: 'local', session_id: 'session-target' },
+      now: new Date('2026-07-10T00:02:30.000Z'),
+    });
+    assert.equal(state.authority_transition_state, 'target_activating');
+    assert.equal(state.source_write_admission, 'sealed');
+
     state = activateTargetAuthority({
       path: statePath,
       state,
@@ -74,6 +85,16 @@ test('authority transition persists preparation, sealing, and target activation 
     assert.equal(persisted.activation_id, 'activation-1');
     assert.equal((persisted.handoff_evidence?.queue as { disposition?: unknown } | undefined)?.disposition, 'drained');
     assert.equal(persisted.reconciliation_evidence?.status, 'reconciled');
+
+    state = retireSourceAuthority({
+      path: statePath,
+      state,
+      reason: 'successor_active',
+      now: new Date('2026-07-10T00:04:00.000Z'),
+    });
+    assert.equal(state.authority_transition_state, 'source_retired');
+    assert.equal(state.source_write_admission, 'retired');
+    assert.equal(readAuthorityTransitionSourceState(statePath).source_write_admission, 'retired');
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
