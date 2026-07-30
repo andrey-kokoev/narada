@@ -135,6 +135,8 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /window_surface_overlay_restart_already_running/);
   assert.match(source, /The prior restart runner is no longer active/);
   assert.match(source, /Console restarted/);
+  assert.match(source, /DateTimeOffset\]::TryParse/);
+  assert.match(source, /PositiveInfinity/);
   assert.doesNotMatch(source, /quota|provider|usage|remaining/);
 });
 

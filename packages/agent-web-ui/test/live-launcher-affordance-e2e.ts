@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { mkdtemp, mkdir, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
@@ -30,8 +30,9 @@ const AGENT_CLI_ENTRYPOINT = resolve(
   REPO_ROOT,
   '..',
   'agent-cli',
+  'dist',
   'bin',
-  'narada-agent-cli.mjs',
+  'narada-agent-cli.js',
 );
 
 const options = parseArgs(process.argv.slice(2));
@@ -39,7 +40,7 @@ const requestedSiteRoot = options.siteRoot ? resolve(options.siteRoot) : null;
 const siteRoot = requestedSiteRoot ?? await createEphemeralSiteRoot();
 const ownsSiteRoot = requestedSiteRoot === null;
 const siteId = options.siteId ?? inferSiteId(siteRoot);
-const agentId = options.agent ?? `${siteId}.live_e2e_${Date.now()}.resident`;
+const agentId = options.agent ?? `${siteId}.resident`;
 const timeoutMs = Number(options.timeoutMs ?? 60_000);
 const scenario = options.scenario ?? 'launcher_affordance';
 
@@ -269,9 +270,11 @@ let projectionWorkerBaseUrl = null;
 let projectionWorkerResponses = null;
 let projectionAssetServer = null;
 let projectionBridgePid = null;
+let workspaceLaunchProcess = null;
+const workspaceLaunchOwnedPids = [];
 
 try {
-  if (!['launcher_affordance', 'external_input', 'intelligence_registry', 'replay_reconnect'].includes(scenario)) {
+  if (!['launcher_affordance', 'external_input', 'intelligence_registry', 'replay_reconnect', 'workspace_launch_projection', 'site_env_projection'].includes(scenario)) {
     throw new Error(`unknown_live_e2e_scenario: ${scenario}`);
   }
   if (requestedSiteRoot) {
@@ -288,7 +291,7 @@ try {
       ? (request: any) => JSON.stringify(request).includes('Cloudflare direct interrupt') ? 15_000 : 3_000
       : null,
   });
-  if (scenario=== 'external_input') {
+  if (scenario === 'external_input' || scenario === 'workspace_launch_projection' || scenario === 'site_env_projection') {
     projectionWorkerEnvRef = { current: {} };
     projectionWorkerResponses = [];
     projectionWorkerServer = createWorkerHttpServer(
@@ -297,11 +300,34 @@ try {
       projectionWorkerResponses,
     );
     projectionWorkerBaseUrl = await listenHttpServer(projectionWorkerServer);
+    if (scenario === 'site_env_projection') {
+      await writeFile(
+        join(siteRoot, '.env'),
+        `NARADA_CLOUDFLARE_NARS_PROJECTION_URL=${projectionWorkerBaseUrl}\n`,
+        'utf8',
+      );
+    }
   }
   intelligenceFixture = await seedLiveIntelligenceRegistry(siteRoot, {
     siteId,
     endpointBaseUrl: provider.baseUrl,
   });
+  let record;
+  let sessionAgentId;
+  if (scenario === 'workspace_launch_projection') {
+    const launchProjection = await runOrdinaryWorkspaceLaunchProjectionScenario({
+      siteRoot,
+      siteId,
+      agentId,
+      intelligenceFixture,
+      projectionWorkerBaseUrl,
+      timeoutMs,
+    });
+    record = launchProjection.record;
+    page = launchProjection.page;
+    sessionAgentId = launchProjection.sessionAgentId;
+    workspaceLaunchOwnedPids.push(...launchProjection.ownedPids);
+  } else {
   console.log(`live-e2e: starting real operator-surface runtime for ${agentId}`);
   runtimeProcess = spawnTestChild(process.execPath, [
     join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js'),
@@ -338,7 +364,7 @@ try {
   });
   const runtimeOutput = collectProcessOutput(runtimeProcess);
 
-  const record = await waitForSessionRecord({ siteRoot, agentId, timeoutMs, runtimeProcess, runtimeOutput });
+  record = await waitForSessionRecord({ siteRoot, agentId, timeoutMs, runtimeProcess, runtimeOutput });
   assert.equal(record.agent_id, agentId);
   assert.equal(record.runtime_kind, 'narada-agent-runtime-server');
   assert.equal(record.launch_operator_surface_kind, 'agent-web-ui');
@@ -352,7 +378,7 @@ try {
   // The durable startup event exposes the provider identity; the resolved model is asserted from NARS health below.
   assert.equal(startupEvent.mcp_scope, 'none');
   assert.equal(startupEvent.mcp_operational_state, 'disabled');
-  const sessionAgentId = agentIdentityDisplay(startupEvent.agent_identity_ref, startupEvent.agent_id ?? agentId)
+  sessionAgentId = agentIdentityDisplay(startupEvent.agent_identity_ref, startupEvent.agent_id ?? agentId)
     ?? startupEvent.agent_id
     ?? agentId;
 
@@ -380,7 +406,9 @@ try {
     '--onboarding',
     '--format', 'human',
   ];
-  if (projectionWorkerBaseUrl) webUiAttachArgs.push('--cloudflare-api-base-url', projectionWorkerBaseUrl);
+  if (projectionWorkerBaseUrl && scenario !== 'site_env_projection') {
+    webUiAttachArgs.push('--cloudflare-api-base-url', projectionWorkerBaseUrl);
+  }
   webUiProcess = spawnTestChild(process.execPath, webUiAttachArgs, {
     cwd: REPO_ROOT,
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -399,6 +427,14 @@ try {
   await page.waitForExpression("document.querySelector('.onboarding-panel[data-phase=\\\"ready\\\"]') !== null", timeoutMs);
   const onboardingText = await page.evaluate("document.querySelector('.onboarding-panel')?.textContent ?? ''");
   assert.match(onboardingText, /Welcome to your General assistant/);
+  if (scenario === 'site_env_projection') {
+    await showCloudflareProjectionBox({ page, timeoutMs });
+    await page.waitForExpression("document.querySelector('#cloudflare-api-base-url') !== null", timeoutMs);
+    const projectedCloudflareUrl = await page.evaluate("document.querySelector('#cloudflare-api-base-url')?.value ?? null");
+    assert.equal(projectedCloudflareUrl, projectionWorkerBaseUrl);
+    console.log(`live-e2e: direct attach projected Site-env Cloudflare URL ${projectedCloudflareUrl}`);
+  }
+  }
 
   if (scenario=== 'external_input') {
     agentCliProcess = spawnTestChild(process.execPath, [
@@ -429,19 +465,20 @@ try {
     }
   }
 
-  await page.fill('#operator-input', 'What can you help me with?');
-  await page.click('.composer-submit');
-  await waitFor(() => readJsonlFile(record.events_path).some((event: any) => event.event === 'carrier_turn_completed'), { timeoutMs, label: 'first_assistant_turn' });
-  await page.waitForExpression("document.body.textContent.includes('Live launcher fixture response')", timeoutMs);
-  assert.equal(provider.requests.length, 1);
-  const events = readJsonlFile(record.events_path);
-  const unsupported = events.filter((event: any) => event.event === 'error' && (
-    event.code === 'unsupported_method'
-    || String(event.message ?? '').includes('Unsupported method')
-  ));
-  assert.deepEqual(unsupported, []);
+  if (scenario !== 'workspace_launch_projection' && scenario !== 'site_env_projection') {
+    await page.fill('#operator-input', 'What can you help me with?');
+    await page.click('.composer-submit');
+    await waitFor(() => readJsonlFile(record.events_path).some((event: any) => event.event === 'carrier_turn_completed'), { timeoutMs, label: 'first_assistant_turn' });
+    await page.waitForExpression("document.body.textContent.includes('Live launcher fixture response')", timeoutMs);
+    assert.equal(provider.requests.length, 1);
+    const events = readJsonlFile(record.events_path);
+    const unsupported = events.filter((event: any) => event.event === 'error' && (
+      event.code === 'unsupported_method'
+      || String(event.message ?? '').includes('Unsupported method')
+    ));
+    assert.deepEqual(unsupported, []);
 
-  if (scenario=== 'external_input') {
+    if (scenario=== 'external_input') {
     await runExternalInputProjectionScenario({
       record,
       page,
@@ -463,12 +500,13 @@ try {
       agentCliProcess,
       agentCliOutput,
     });
-  }
-  if (scenario=== 'intelligence_registry') {
-    await runIntelligenceRegistryScenario({ record, page, provider, timeoutMs, intelligenceFixture });
-  }
-  if (scenario=== 'replay_reconnect') {
-    await runReplayReconnectScenario({ record, page, narsSessionMcp, provider, timeoutMs });
+    }
+    if (scenario=== 'intelligence_registry') {
+      await runIntelligenceRegistryScenario({ record, page, provider, timeoutMs, intelligenceFixture });
+    }
+    if (scenario=== 'replay_reconnect') {
+      await runReplayReconnectScenario({ record, page, narsSessionMcp, provider, timeoutMs });
+    }
   }
 
   console.log(JSON.stringify({
@@ -491,6 +529,7 @@ try {
   if (narsSessionMcp) await narsSessionMcp.close();
   if (agentCliProcess) await stopProcess(agentCliProcess);
   if (webUiProcess) await stopProcess(webUiProcess);
+  if (workspaceLaunchProcess) await stopProcess(workspaceLaunchProcess);
   try {
     const record = findLatestSessionRecord(siteRoot, agentId);
     if (record?.event_endpoint) await closeNarsSession(record.event_endpoint);
@@ -498,6 +537,7 @@ try {
   if (projectionBridgePid) await stopProcessByPid(projectionBridgePid);
   if (projectionAssetServer?.server) await closeHttpServer(projectionAssetServer.server);
   await closeHttpServer(projectionWorkerServer);
+  for (const pid of [...workspaceLaunchOwnedPids].reverse()) await stopProcessByPid(pid);
   if (runtimeProcess) await stopProcess(runtimeProcess);
   if (provider) await provider.close();
   if (ownsSiteRoot) await removeEphemeralSiteRoot(siteRoot);
@@ -507,6 +547,183 @@ async function createEphemeralSiteRoot() {
   const root = await mkdtemp(join(tmpdir(), 'narada-live-launcher-'));
   await mkdir(join(root, '.narada', 'crew', 'nars-sessions'), { recursive: true });
   return root;
+}
+
+async function runOrdinaryWorkspaceLaunchProjectionScenario({
+  siteRoot,
+  siteId,
+  agentId,
+  intelligenceFixture,
+  projectionWorkerBaseUrl,
+  timeoutMs,
+}: any) {
+  assert.ok(projectionWorkerBaseUrl, 'workspace-launch projection scenario requires a local Cloudflare Worker');
+  const trace = (message: string) => console.error(`live-e2e: workspace-launch ${message}`);
+
+  const launcherPath = join(siteRoot, 'live-workspace-launcher.ps1');
+  const registryPath = join(siteRoot, 'live-workspace-launch-registry.json');
+  const resultPath = join(siteRuntimeRoot(siteRoot), 'runtime', 'workspace-launch-results', 'live-workspace-launch-projection.json');
+  const projectionLogPath = join(siteRuntimeRoot(siteRoot), 'runtime', 'workspace-launch-results', 'live-workspace-launch-projection.log');
+  await mkdir(join(siteRuntimeRoot(siteRoot), 'runtime', 'workspace-launch-results'), { recursive: true });
+  await writeFile(join(siteRoot, '.env'), `NARADA_CLOUDFLARE_NARS_PROJECTION_URL=${projectionWorkerBaseUrl}\n`, 'utf8');
+  await writeFile(launcherPath, '$ErrorActionPreference = "Stop"\n', 'utf8');
+  await writeFile(registryPath, `${JSON.stringify({
+    NaradaRoot: REPO_ROOT,
+    SiteRoot: siteRoot,
+    WorkspaceRoot: REPO_ROOT,
+    Agents: [{
+      Agent: agentId,
+      Title: 'Live workspace launch projection',
+      Role: 'resident',
+      Site: siteId,
+      NaradaRoot: REPO_ROOT,
+      SiteRoot: siteRoot,
+      WorkspaceRoot: REPO_ROOT,
+      LauncherPath: launcherPath,
+      OperatorSurface: 'agent-web-ui',
+      Runtime: 'narada-agent-runtime-server',
+      McpScope: 'none',
+    }],
+  }, null, 2)}\n`, 'utf8');
+
+  const launchArgs = [
+    join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js'),
+    'launcher',
+    'workspace-launch',
+    '--config-path', registryPath,
+    '--agent', agentId,
+    '--authority', 'auto',
+    '--mcp-scope', 'none',
+    '--no-wait-for-enter-before-exec',
+    '--result-path', resultPath,
+    '--suppress-result-output',
+    '--format', 'json',
+  ];
+  assert.equal(launchArgs.includes('--cloudflare-api-base-url'), false, 'ordinary workspace launch must not receive an explicit projection URL');
+
+  workspaceLaunchProcess = spawnTestChild(process.execPath, launchArgs, {
+    cwd: REPO_ROOT,
+    env: {
+      ...process.env,
+      NARADA_PROPER_ROOT: REPO_ROOT,
+      NARADA_USER_SITE_ROOT: siteRoot,
+      NARADA_INTELLIGENCE_CONTEXT_PATH: intelligenceFixture.contextPath,
+      NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+      NARADA_WORKSPACE_LAUNCH_HIDDEN_PROJECTION_LOG: projectionLogPath,
+      NARADA_WORKSPACE_LAUNCH_PROJECTION_READINESS_TIMEOUT_MS: '30000',
+      NARADA_OPERATOR_ROUTER_STATE_ROOT: join(siteRuntimeRoot(siteRoot), 'operator-router'),
+      NARADA_OPERATOR_ROUTER_PORT: '0',
+      NARADA_AI_API_KEY: 'live-e2e-fixture-key',
+      NARADA_AI_BASE_URL: 'http://127.0.0.1:9/stale-provider',
+      NARADA_AI_MODEL: 'stale-env-model',
+      KIMI_CODE_API_KEY: 'live-e2e-fixture-key',
+      KIMI_CODE_API_BASE_URL: provider.baseUrl,
+      KIMI_CODE_MODEL: 'stale-env-model',
+      DEEPSEEK_API_KEY: 'live-e2e-fixture-key',
+      DEEPSEEK_API_BASE_URL: provider.baseUrl,
+      DEEPSEEK_MODEL: 'deepseek-fixture-model',
+    },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  trace('invoked');
+  const launchOutput = collectProcessOutput(workspaceLaunchProcess);
+  const launchProcess = workspaceLaunchProcess;
+  try {
+    await waitFor(() => launchProcess.exitCode !== null, { timeoutMs, label: 'ordinary_workspace_launch_exit' });
+  } catch (error) {
+    const diagnostics = [
+      existsSync(resultPath) ? `result=${JSON.stringify(readJsonFile(resultPath)).slice(0, 8000)}` : '',
+      existsSync(projectionLogPath) ? `projection_log=${readFileSync(projectionLogPath, 'utf8').slice(-6000)}` : '',
+    ].filter(Boolean).join(': ');
+    if (launchProcess.exitCode === null) await stopProcess(launchProcess);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)}: workspace_launch_output=${launchOutput.all().slice(0, 6000)}${diagnostics ? `: ${diagnostics}` : ''}`,
+    );
+  } finally {
+    workspaceLaunchProcess = null;
+  }
+  trace(`exited:${launchProcess.exitCode}`);
+  assert.equal(
+    launchProcess.exitCode,
+    0,
+    `ordinary workspace launch failed: ${launchOutput.all().slice(0, 6000)}${existsSync(resultPath) ? `: result=${JSON.stringify(readJsonFile(resultPath)).slice(0, 12000)}` : ''}${existsSync(projectionLogPath) ? `: projection_log=${readFileSync(projectionLogPath, 'utf8').slice(-12000)}` : ''}`,
+  );
+
+  const launchResult = await waitFor(() => {
+    if (!existsSync(resultPath)) return false;
+    try {
+      return readJsonFile(resultPath);
+    } catch {
+      return false;
+    }
+  }, { timeoutMs, label: 'ordinary_workspace_launch_result' });
+  assert.equal(launchResult.schema, 'narada.workspace_launch.launch_result.v1');
+  assert.equal(launchResult.status, 'launched');
+  assert.equal(launchResult.hidden_runtime_invoked, true);
+  trace('result accepted');
+  const launchedAgent = launchResult.selected_agents?.find((candidate: any) => candidate.agent === agentId)
+    ?? launchResult.selected_agents?.[0];
+  assert.ok(launchedAgent, 'ordinary workspace launch must return the selected agent plan');
+  const projectionCommand = launchedAgent.operator_projection_start_command;
+  assert.ok(Array.isArray(projectionCommand), 'ordinary workspace launch must execute a hidden Web UI projection');
+  const cloudflareFlagIndex = projectionCommand.indexOf('--cloudflare-api-base-url');
+  assert.ok(cloudflareFlagIndex >= 0, `workspace launch projection command omitted the Cloudflare URL: ${JSON.stringify(projectionCommand)}`);
+  assert.equal(projectionCommand[cloudflareFlagIndex + 1], projectionWorkerBaseUrl);
+
+  const projectionLaunch = launchResult.hidden_projection_launches?.[0];
+  assert.ok(projectionLaunch, 'ordinary workspace launch must record the hidden Web UI projection process');
+  assert.ok(projectionLaunch.readiness_path, 'ordinary workspace launch must record the projection readiness path');
+  const readiness = await waitFor(() => {
+    if (!existsSync(projectionLaunch.readiness_path)) return false;
+    try {
+      return readJsonFile(projectionLaunch.readiness_path);
+    } catch {
+      return false;
+    }
+  }, { timeoutMs, label: 'ordinary_workspace_projection_readiness' });
+  assert.equal(readiness.schema, 'narada.agent_web_ui.readiness.v1');
+  assert.equal(readiness.status, 'ready');
+  assert.equal(typeof readiness.url, 'string');
+  assert.ok(readiness.url.trim().length > 0);
+  trace(`projection ready:${readiness.url}`);
+
+  const record = await waitFor(() => findLatestSessionRecord(siteRoot, agentId), {
+    timeoutMs,
+    label: 'ordinary_workspace_launch_session_record',
+  });
+  assert.equal(record.session_id, readiness.session_id);
+  assert.equal(record.runtime_kind, 'narada-agent-runtime-server');
+  assert.equal(record.launch_operator_surface_kind, 'agent-web-ui');
+  await waitForHealthy(record.health_endpoint, timeoutMs);
+  trace(`session healthy:${record.session_id}`);
+
+  trace(`opening browser:${readiness.url}`);
+  const projectedPage = await openCdpPage({
+    browserPath,
+    url: readiness.url,
+    workDir: siteRuntimeRoot(siteRoot),
+  });
+  trace('browser opened');
+  trace('enabling Cloudflare Projection status box');
+  await showCloudflareProjectionBox({ page: projectedPage, timeoutMs });
+  trace('waiting for Cloudflare URL field');
+  await projectedPage.waitForExpression("document.querySelector('#cloudflare-api-base-url') !== null", timeoutMs);
+  trace('Cloudflare URL field found');
+  const projectedCloudflareUrl = await projectedPage.evaluate("document.querySelector('#cloudflare-api-base-url')?.value ?? null");
+  assert.equal(projectedCloudflareUrl, projectionWorkerBaseUrl);
+  trace('ui projection contains configured Cloudflare URL');
+
+  return {
+    record,
+    page: projectedPage,
+    sessionAgentId: record.agent_id,
+    ownedPids: [
+      ...(launchResult.hidden_projection_launches ?? []),
+      ...(launchResult.hidden_runtime_launches ?? []),
+    ]
+      .map((launch: any) => Number(launch.pid))
+      .filter((pid: number, index: number, pids: number[]) => Number.isInteger(pid) && pid > 0 && pids.indexOf(pid) === index),
+  };
 }
 
 function parseArgs(args: any) {
@@ -1022,7 +1239,7 @@ async function runExternalInputProjectionScenario({
   }
 
   await selectProjectionView({ page, view: 'conversation', timeoutMs });
-  const readProjectionRows = () => page.evaluate(`Array.from(document.querySelectorAll('#events > li.event[data-event-kind]:not(.event-agent-activity)')).map((row) => ({
+  const readProjectionRows = () => page.evaluate(`Array.from(document.querySelectorAll('#events li.event[data-event-kind]:not(.event-agent-activity):not([data-event-kind="turn_group"])')).map((row) => ({
     kind: row.dataset.eventKind,
     text: row.textContent ?? '',
     disposition: Array.from(row.classList)
@@ -1411,6 +1628,43 @@ function sequenceFromSessionReplayMessage(message: any) {
   return Number.isFinite(sequence) ? sequence : null;
 }
 
+async function showCloudflareProjectionBox({ page, timeoutMs }: any) {
+  await page.waitForExpression("document.querySelector('button[aria-label=\"Choose Status boxes\"]') !== null", timeoutMs);
+  await page.click('button[aria-label="Choose Status boxes"]');
+  await page.waitForExpression("document.querySelector('#status-row-box-selector-panel') !== null", timeoutMs);
+  await page.clickInputForText('#status-row-box-selector-panel', 'Cloudflare Projection', {
+    textSelector: 'strong',
+  });
+  try {
+    await page.waitForExpression(`(() => {
+      const item = Array.from(document.querySelectorAll('#status-row-box-selector-panel li'))
+        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection');
+      return item?.querySelector('input[type="checkbox"]')?.checked === true;
+    })()`, timeoutMs);
+  } catch (error) {
+    const state = await page.evaluate(`(() => {
+      const item = Array.from(document.querySelectorAll('#status-row-box-selector-panel li'))
+        .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection');
+      const input = item?.querySelector('input[type="checkbox"]');
+      return {
+        item: Boolean(item),
+        checked: input?.checked ?? null,
+        disabled: input?.disabled ?? null,
+        dataVisible: item?.getAttribute('data-visible') ?? null,
+        outerHTML: item?.outerHTML?.slice(0, 1200) ?? null,
+      };
+    })()`);
+    throw new Error(`cloudflare_box_toggle_timeout:${error instanceof Error ? error.message : ''}:${JSON.stringify(state)}`);
+  }
+  const selected = await page.evaluate(`(() => {
+    const item = Array.from(document.querySelectorAll('#status-row-box-selector-panel li'))
+      .find((candidate) => candidate.querySelector('strong')?.textContent?.trim() === 'Cloudflare Projection');
+    return { ok: Boolean(item), checked: item?.querySelector('input[type="checkbox"]')?.checked === true };
+  })()`);
+  assert.deepEqual(selected, { ok: true, checked: true });
+  await page.click('#status-row-box-selector-panel button[aria-label="Close status boxes"]');
+}
+
 async function publishCloudflareProjectionFromBox({
   page,
   record,
@@ -1460,6 +1714,12 @@ async function publishCloudflareProjectionFromBox({
   assert.deepEqual(selected, { ok: true, checked: true });
   await page.click('#status-row-box-selector-panel button[aria-label="Close status boxes"]');
   await page.waitForExpression("document.querySelector('#cloudflare-api-base-url') !== null", timeoutMs);
+  const configuredCloudflareApiBaseUrl = await page.evaluate("document.querySelector('#cloudflare-api-base-url')?.value ?? null");
+  assert.equal(
+    configuredCloudflareApiBaseUrl,
+    cloudflareApiBaseUrl,
+    'live agent-web-ui must inject the configured Cloudflare projection Worker URL',
+  );
 
   await page.evaluate(`(() => {
     window.__liveE2eProjectionStart = null;

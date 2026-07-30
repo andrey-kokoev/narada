@@ -57,6 +57,8 @@ export function useSessionState(
     loadEarlier: connection.loadEarlier,
     streamText: connection.streamText,
     streamLive: connection.streamLive,
+    streamPhase: connection.streamPhase,
+    streamReason: connection.streamReason,
     stop,
   };
 }

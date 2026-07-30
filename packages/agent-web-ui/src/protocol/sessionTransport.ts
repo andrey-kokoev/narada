@@ -59,5 +59,5 @@ export interface SessionTransport {
   markPendingOperatorInputRetried(requestId: string | null | undefined, retryRequestId?: string | null): boolean;
   subscribeView(view: string): boolean;
   readEventsPage(options: { view?: string; beforeSequence?: number; afterSequence?: number; direction?: 'forward' | 'backward'; limit?: number }): boolean;
-  close(): void;
+  close(reason?: string): void;
 }

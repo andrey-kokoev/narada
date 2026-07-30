@@ -318,6 +318,13 @@ describe('Cloudflare NARS projection schemas', () => {
       expect(response.status).toBe(101);
       expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'websocket_connected' }));
 
+      sockets[0].client.send(JSON.stringify({ event: 'websocket_heartbeat', transport: 'cloudflare_projection_websocket' }));
+      expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({
+        event: 'websocket_heartbeat_ack',
+        transport: 'cloudflare_projection_websocket',
+        projection_id: intent.projection_id,
+      }));
+
       expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events`, {
         method: 'POST',
         headers: { 'x-narada-bridge-token-fingerprint': registered.remote_access.bridge_credential.token_fingerprint },
@@ -926,6 +933,42 @@ describe('Cloudflare Worker routes', () => {
     expect(requested[0]).toContain('cloudflare_projection_id=proj_1');
   });
 
+  test('canonicalizes legacy projection session URLs and serves the root bootstrap entry', async () => {
+    const worker = createCloudflareNarsProjectionWorker();
+    const projectionId = 'proj_legacy_route';
+    const apiBaseUrl = 'https://projection.example.test';
+    const browserToken = 'fingerprint:proj_legacy_route:browser';
+    const legacyUrl = `${apiBaseUrl}/sessions/?cloudflare_projection_id=${encodeURIComponent(projectionId)}&cloudflare_api_base_url=${encodeURIComponent(apiBaseUrl)}&cloudflare_browser_token=${encodeURIComponent(browserToken)}`;
+    const legacyResponse = await worker.fetch(new Request(legacyUrl), {
+      ASSETS: { fetch: () => new Response('unexpected asset request') },
+    });
+    expect(legacyResponse.status).toBe(307);
+    expect(legacyResponse.headers.get('cache-control')).toBe('no-store');
+    const location = legacyResponse.headers.get('location');
+    expect(location).toBeTruthy();
+    const canonicalUrl = new URL(location as string);
+    expect(canonicalUrl.pathname).toBe('/');
+    expect(canonicalUrl.searchParams.get('cloudflare_projection_id')).toBe(projectionId);
+    expect(canonicalUrl.searchParams.get('cloudflare_api_base_url')).toBe(apiBaseUrl);
+    expect(canonicalUrl.searchParams.get('cloudflare_browser_token')).toBe(browserToken);
+
+    const requested: string[] = [];
+    const rootResponse = await worker.fetch(new Request(canonicalUrl), {
+      ASSETS: {
+        fetch(request) {
+          requested.push(request.url);
+          return new Response('<script id="nars-config">__NARADA_AGENT_WEB_UI_CONFIG__</script><script src="./assets/app.js"></script>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
+        },
+      },
+    });
+    expect(rootResponse.status).toBe(200);
+    const rootContent = await rootResponse.text();
+    expect(rootContent).not.toContain('__NARADA_AGENT_WEB_UI_CONFIG__');
+    expect(rootContent).toContain('/sessions/assets/app.js');
+    expect(new URL(requested[0]).pathname).toBe('/sessions/');
+    expect(new URL(requested[0]).searchParams.get('cloudflare_projection_id')).toBe(projectionId);
+  });
+
   test('serves the immutable Cloudflare asset fingerprint through an explicit no-store route', async () => {
     const requested: string[] = [];
     const manifest = {
@@ -1143,8 +1186,10 @@ interface FakeWebSocket {
   messages: string[];
   peer: FakeWebSocket | null;
   closed: boolean;
+  listeners: Partial<Record<FakeWebSocketEvent, Array<(event?: { data?: string }) => void>>>;
   accept(): void;
   addEventListener(type: FakeWebSocketEvent, handler: (event?: { data?: string }) => void): void;
+  emit(type: FakeWebSocketEvent, event?: { data?: string }): void;
   send(message: string): void;
   close(code?: number, reason?: string): void;
 }
@@ -1161,10 +1206,17 @@ function createFakeWebSocketPair(): FakeWebSocketPair {
     messages: [],
     peer: null,
     closed: false,
+    listeners: {},
     accept() {},
-    addEventListener() {},
+    addEventListener(type, handler) {
+      this.listeners[type] = [...(this.listeners[type] ?? []), handler];
+    },
+    emit(type, event) {
+      for (const handler of this.listeners[type] ?? []) handler(event);
+    },
     send(message: string) {
       this.peer?.messages.push(message);
+      this.peer?.emit('message', { data: message });
     },
     close() {
       this.closed = true;

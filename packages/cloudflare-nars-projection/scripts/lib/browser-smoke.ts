@@ -56,7 +56,7 @@ export function buildHeadlessBrowserArgs({ userDataDir, url = 'about:blank', wid
   ];
 }
 
-export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 } }: AnyRecord): Promise<any> {
+export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 }, instrumentWebSocketClose = false }: AnyRecord): Promise<any> {
   const userDataDir = mkdtempSync(join(tmpdir(), userDataPrefix));
   const child: any = spawnHiddenPostureProcess(browserPath, buildHeadlessBrowserArgs({ userDataDir, url, width: viewport.width, height: viewport.height }), { stdio: ['ignore', 'ignore', 'pipe'], posture: 'test_child' });
 
@@ -97,10 +97,59 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
   const networkWaiters = new Set<AnyRecord>();
   const webSocketRequests = new Map<string, AnyRecord>();
   const webSocketFrames: AnyRecord[] = [];
+  const webSocketFramesSent: AnyRecord[] = [];
+  const webSocketClosures: AnyRecord[] = [];
   const webSocketFrameWaiters = new Set<AnyRecord>();
+  const runtimeDiagnostics: AnyRecord[] = [];
   const executionContextsByFrame = new Map<string, number>();
   ws.addEventListener('message', (message: any) => {
     const payload = JSON.parse(String(message.data));
+    if (payload.method === 'Runtime.consoleAPICalled') {
+      const params = payload.params ?? {};
+      runtimeDiagnostics.push({
+        kind: 'console',
+        type: params.type ?? null,
+        values: (params.args ?? []).slice(0, 4).map((argument: AnyRecord) => remoteObjectDiagnostic(argument)),
+      });
+      if (runtimeDiagnostics.length > 40) runtimeDiagnostics.shift();
+      return;
+    }
+    if (payload.method === 'Network.webSocketClosed') {
+      const request = webSocketRequests.get(payload.params?.requestId) ?? {};
+      webSocketClosures.push({
+        request_id: payload.params?.requestId ?? null,
+        url: request.url ?? null,
+        timestamp: payload.params?.timestamp ?? null,
+        status_code: payload.params?.statusCode ?? null,
+        reason: payload.params?.reason ?? null,
+      });
+      if (webSocketClosures.length > 20) webSocketClosures.shift();
+      return;
+    }
+    if (payload.method === 'Network.webSocketFrameError') {
+      const request = webSocketRequests.get(payload.params?.requestId) ?? {};
+      webSocketClosures.push({
+        kind: 'frame_error',
+        request_id: payload.params?.requestId ?? null,
+        url: request.url ?? null,
+        error_message: payload.params?.errorMessage ?? null,
+      });
+      if (webSocketClosures.length > 20) webSocketClosures.shift();
+      return;
+    }
+    if (payload.method === 'Runtime.exceptionThrown') {
+      const details = payload.params?.exceptionDetails ?? {};
+      runtimeDiagnostics.push({
+        kind: 'exception',
+        text: details.text ?? null,
+        url: details.url ?? null,
+        line_number: details.lineNumber ?? null,
+        column_number: details.columnNumber ?? null,
+        description: details.exception?.description ?? null,
+      });
+      if (runtimeDiagnostics.length > 40) runtimeDiagnostics.shift();
+      return;
+    }
     if (payload.method === 'Runtime.executionContextCreated') {
       const context = payload.params?.context;
       const frameId = context?.auxData?.frameId;
@@ -157,6 +206,17 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       }
       return;
     }
+    if (payload.method === 'Network.webSocketFrameSent') {
+      const request = webSocketRequests.get(payload.params.requestId) ?? networkRequests.get(payload.params.requestId) ?? {};
+      webSocketFramesSent.push({
+        request_id: payload.params.requestId,
+        url: request.url,
+        payload_data: payload.params.response?.payloadData ?? '',
+        opcode: payload.params.response?.opcode,
+      });
+      if (webSocketFramesSent.length > 40) webSocketFramesSent.shift();
+      return;
+    }
     const waiter = pending.get(payload.id);
     if (!waiter) return;
     pending.delete(payload.id);
@@ -173,6 +233,31 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
   await send('Runtime.enable');
   await send('Page.enable');
   await send('Network.enable');
+  if (instrumentWebSocketClose) {
+    await send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `(() => {
+        const records = [];
+        const OriginalWebSocket = window.WebSocket;
+        window.__naradaWebSocketDiagnostics = records;
+        window.WebSocket = new Proxy(OriginalWebSocket, {
+          construct(target, args, newTarget) {
+            const socket = Reflect.construct(target, args, newTarget);
+            const record = { url: String(args[0] ?? ''), close_calls: [], close_events: [], error_count: 0 };
+            records.push(record);
+            const close = socket.close.bind(socket);
+            socket.close = (code, reason) => {
+              record.close_calls.push({ code: code ?? null, reason: reason ?? null, at: Date.now() });
+              return close(code, reason);
+            };
+            socket.addEventListener('close', (event) => record.close_events.push({ code: event.code, reason: event.reason, was_clean: event.wasClean, at: Date.now() }));
+            socket.addEventListener('error', () => { record.error_count += 1; });
+            return socket;
+          },
+        });
+      })();`,
+    });
+    await send('Page.reload', { ignoreCache: true });
+  }
 
   return {
     async evaluate(expression: string): Promise<any> {
@@ -332,6 +417,18 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
     webSocketFrames() {
       return webSocketFrames.slice();
     },
+    webSocketFramesSent() {
+      return webSocketFramesSent.slice();
+    },
+    webSocketClosures() {
+      return webSocketClosures.slice();
+    },
+    async webSocketInstrumentation(): Promise<any> {
+      return await this.evaluate('window.__naradaWebSocketDiagnostics ?? []');
+    },
+    runtimeDiagnostics() {
+      return runtimeDiagnostics.slice();
+    },
     async waitForWebSocketFrame(predicate: (entry: AnyRecord) => boolean, timeoutMs: number): Promise<any> {
       const started = Date.now();
       const existing = webSocketFrames.find(predicate);
@@ -379,6 +476,28 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
       });
       await rm(userDataDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }).catch(() => {});
     },
+  };
+}
+
+function remoteObjectDiagnostic(argument: AnyRecord): AnyRecord {
+  const preview = argument?.preview;
+  return {
+    type: argument?.type ?? null,
+    subtype: argument?.subtype ?? null,
+    value: typeof argument?.value === 'string' || typeof argument?.value === 'number' || typeof argument?.value === 'boolean'
+      ? argument.value
+      : null,
+    description: typeof argument?.description === 'string' ? argument.description.slice(0, 2000) : null,
+    preview: preview && typeof preview === 'object'
+      ? {
+        type: preview.type ?? null,
+        description: typeof preview.description === 'string' ? preview.description.slice(0, 2000) : null,
+        properties: (preview.properties ?? []).slice(0, 24).map((property: AnyRecord) => ({
+          name: property.name ?? null,
+          value: typeof property.value === 'string' ? property.value.slice(0, 500) : property.value ?? null,
+        })),
+      }
+      : null,
   };
 }
 

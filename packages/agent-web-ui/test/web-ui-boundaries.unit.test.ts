@@ -9,6 +9,7 @@ import {
   canTransitionNarsTransport,
   createNarsTransportLifecycle,
   transitionNarsTransport,
+  type NarsTransportPhase,
 } from '../src/protocol/sessionTransportAdapters';
 import {
   PENDING_OPERATOR_INPUT_PHASES,
@@ -38,6 +39,7 @@ import {
   readJsonPreference,
   writeBooleanPreference,
 } from '../src/app/lib/browserPreferences.ts';
+import { CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS } from '../src/protocol/cloudflareSessionTransport';
 import { createNarsClient } from '../src/protocol/narsClient';
 import { createSessionProjection } from '../src/session-projection.ts';
 import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
@@ -246,6 +248,157 @@ describe('agent-web-ui runtime boundaries', () => {
 
     expect(topology.status).toBe('degraded');
     expect(topology.verdictLabel).toBe('attached, degraded');
+  });
+
+  it('keeps an intentional event-view reconnect neutral until the replacement stream is live', async () => {
+    const streamText = shallowRef('stream reconnecting in 1s');
+    const streamLive = shallowRef(false);
+    const streamPhase = shallowRef<NarsTransportPhase>('reconnecting');
+    const streamReason = shallowRef<string | null>('event_view_changed');
+    const healthText = shallowRef('healthy');
+    const healthBody = shallowRef<Record<string, unknown> | null>({ status: 'healthy', session_id: 'session-1' });
+    const sessionIdentity = shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' });
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText,
+      streamLive,
+      streamPhase,
+      streamReason,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    });
+    const stop = vi.fn();
+    const errorSink = vi.fn();
+    useRuntimeTopologyFailFast({
+      topology: topology.topology,
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      activeTurnId: shallowRef<string | boolean | null>(null),
+      stop,
+      errorSink,
+    });
+
+    expect(topology.topology.value.status).toBe('reconfiguring');
+    expect(topology.topology.value.verdictLabel).toBe('attached, switching view');
+    expect(stop).not.toHaveBeenCalled();
+
+    streamPhase.value = 'opening';
+    await nextTick();
+    expect(topology.topology.value.status).toBe('reconfiguring');
+    streamPhase.value = 'replaying';
+    await nextTick();
+    expect(topology.topology.value.status).toBe('reconfiguring');
+
+    streamPhase.value = 'live';
+    streamReason.value = null;
+    streamLive.value = true;
+    streamText.value = 'stream connected';
+    await nextTick();
+
+    expect(topology.topology.value.status).toBe('live');
+    expect(stop).not.toHaveBeenCalled();
+    expect(errorSink).not.toHaveBeenCalled();
+  });
+
+  it('keeps an expected projection revocation terminal rather than treating it as a transport fault', async () => {
+    const streamText = shallowRef('closed');
+    const streamLive = shallowRef(false);
+    const streamPhase = shallowRef<NarsTransportPhase>('closed');
+    const streamReason = shallowRef<string | null>('projection_revoked');
+    const healthText = shallowRef('healthy');
+    const healthBody = shallowRef<Record<string, unknown> | null>({ status: 'healthy', session_id: 'session-1' });
+    const sessionIdentity = shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' });
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText,
+      streamLive,
+      streamPhase,
+      streamReason,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    });
+    const stop = vi.fn();
+    const errorSink = vi.fn();
+    useRuntimeTopologyFailFast({
+      topology: topology.topology,
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      activeTurnId: shallowRef<string | boolean | null>(null),
+      stop,
+      errorSink,
+    });
+
+    expect(topology.topology.value.status).toBe('closed');
+    expect(topology.topology.value.verdictLabel).toBe('projection revoked');
+    expect(topology.topology.value.canSendInput).toBe(false);
+    await nextTick();
+    expect(stop).not.toHaveBeenCalled();
+    expect(errorSink).not.toHaveBeenCalled();
+  });
+
+  it('maps a refused projection health response to a terminal revocation even before transport closure is observed', async () => {
+    const streamText = shallowRef('reconnecting in 1s');
+    const streamLive = shallowRef(false);
+    const streamPhase = shallowRef<NarsTransportPhase>('reconnecting');
+    const streamReason = shallowRef<string | null>('remote_websocket_closed');
+    const healthText = shallowRef('projection refused · projection_revoked');
+    const healthBody = shallowRef<Record<string, unknown> | null>({
+      status: 'refused',
+      code: 'projection_revoked',
+      projection_id: 'projection-1',
+      session_id: 'session-1',
+    });
+    const sessionIdentity = shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' });
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText,
+      streamLive,
+      streamPhase,
+      streamReason,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    });
+    const stop = vi.fn();
+    const errorSink = vi.fn();
+    useRuntimeTopologyFailFast({
+      topology: topology.topology,
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      activeTurnId: shallowRef<string | boolean | null>(null),
+      stop,
+      errorSink,
+    });
+
+    expect(topology.topology.value.status).toBe('closed');
+    expect(topology.topology.value.verdictLabel).toBe('projection revoked');
+    expect(topology.topology.value.canSendInput).toBe(false);
+    await nextTick();
+    expect(stop).not.toHaveBeenCalled();
+    expect(errorSink).not.toHaveBeenCalled();
   });
 
   it('does not demote a retained healthy snapshot for transient health poll text', () => {
@@ -556,6 +709,45 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(timers.some((timer: any) => timer.cleared)).toBe(true);
   });
 
+  it('sends a bounded Cloudflare projection heartbeat while the socket is live', async () => {
+    const sockets: FakeSocket[] = [];
+    const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
+    let nextTimerId = 0;
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const client = createNarsClient({
+      endpoint: 'https://projection.example/events',
+      WebSocketCtor,
+      fetchFn: vi.fn(async () => ({ ok: true, status: 200, async json() { return { events: [], has_more: false }; } })) as unknown as typeof fetch,
+      timers: {
+        setTimeout(handler: TimerHandler, delay?: number) {
+          const timer = { id: ++nextTimerId, delay: delay ?? 0, handler: handler as () => void, cleared: false };
+          timers.push(timer);
+          return timer.id;
+        },
+        clearTimeout(id: number) {
+          const timer = timers.find((candidate: any) => candidate.id === id);
+          if (timer) timer.cleared = true;
+        },
+      },
+    });
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
+    sockets[0].open();
+    const heartbeat = timers.find((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS);
+    expect(heartbeat).toBeDefined();
+    heartbeat!.cleared = true;
+    heartbeat?.handler();
+    expect(sockets[0].sentFrames.at(-1)).toBe(JSON.stringify({ event: 'websocket_heartbeat', transport: 'cloudflare_projection_websocket' }));
+    expect(timers.filter((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS && !timer.cleared)).toHaveLength(1);
+    client.close();
+    expect(timers.filter((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS && !timer.cleared)).toHaveLength(0);
+  });
+
   it('times out an unacknowledged operator input without resending and reconciles a late acknowledgment', () => {
     const sockets: FakeSocket[] = [];
     const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
@@ -613,6 +805,7 @@ describe('agent-web-ui runtime boundaries', () => {
       reason_code: 'nars_ack_timeout',
     }));
     expect(timers.filter((timer: any) => timer.delay === 5000 && !timer.cleared)).toHaveLength(0);
+    expect(sockets[0].readyState).toBe(1);
     expect(sockets[0].sentFrames.filter((frame: any) => JSON.parse(frame).id === 'request-timeout')).toHaveLength(1);
     expect(JSON.parse(storageValues.get('pending-input-test') ?? '[]')).toEqual([
       expect.objectContaining({ request_id: 'request-timeout', phase: 'timed_out' }),

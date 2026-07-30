@@ -190,8 +190,10 @@ function Apply-ActionState {
         return
     }
     if ($state.status -eq 'succeeded') {
-        $finished = try { [DateTime]::Parse([string]$state.finished_at) } catch { [DateTime]::UtcNow }
-        if (([DateTime]::UtcNow - $finished.ToUniversalTime()).TotalSeconds -le 5) {
+        $finished = [DateTimeOffset]::MinValue
+        $parsed = [DateTimeOffset]::TryParse([string]$state.finished_at, [ref]$finished)
+        $ageSeconds = if ($parsed) { ([DateTimeOffset]::UtcNow - $finished.ToUniversalTime()).TotalSeconds } else { [double]::PositiveInfinity }
+        if ($ageSeconds -ge 0 -and $ageSeconds -le 5) {
             $subtitleText.Text = 'Console restarted'
             $subtitleText.Visibility = 'Visible'
             return

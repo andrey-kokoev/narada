@@ -741,14 +741,20 @@ function defaultSleep(milliseconds: number): Promise<void> {
 
 class CarrierTransitionFailure extends Error {
   readonly reason: string;
+  readonly failureState: 'preparation_failed' | 'drain_failed' | 'seal_failed' | 'target_activation_failed' | 'transition_aborted';
+  readonly errorCode: string;
+  readonly evidence: JsonRecord;
 
   constructor(
-    readonly failureState: 'preparation_failed' | 'drain_failed' | 'seal_failed' | 'target_activation_failed' | 'transition_aborted',
-    readonly errorCode: string,
+    failureState: 'preparation_failed' | 'drain_failed' | 'seal_failed' | 'target_activation_failed' | 'transition_aborted',
+    errorCode: string,
     message: string,
-    readonly evidence: JsonRecord,
+    evidence: JsonRecord,
   ) {
     super(message);
+    this.failureState = failureState;
+    this.errorCode = errorCode;
+    this.evidence = evidence;
     this.reason = message;
   }
 }

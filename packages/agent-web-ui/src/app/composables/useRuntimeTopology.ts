@@ -1,4 +1,5 @@
 import { computed, type Ref } from 'vue';
+import type { NarsTransportPhase } from '../../protocol/sessionTransportAdapters';
 import type { McpInventorySummary } from './useMcpInventory';
 import type { SessionIdentitySummary } from './useNarsEvents';
 
@@ -34,7 +35,7 @@ function controlInputBridgeNode(bridge: Record<string, unknown> | null): Runtime
 }
 
 export interface RuntimeTopologySummary {
-  status: 'live' | 'degraded' | 'stale' | 'unavailable';
+  status: 'live' | 'reconfiguring' | 'closed' | 'degraded' | 'stale' | 'unavailable';
   statusText: string;
   verdictLabel: string;
   primaryCause: string;
@@ -59,6 +60,9 @@ export interface RuntimeTopologyOptions {
   streamText: Ref<string>;
   /** Canonical transport lifecycle state. */
   streamLive: Ref<boolean>;
+  /** Optional transport lifecycle details used to distinguish planned view changes from faults. */
+  streamPhase?: Ref<NarsTransportPhase>;
+  streamReason?: Ref<string | null>;
   healthText: Ref<string>;
   healthBody: Ref<Record<string, unknown> | null>;
   sessionIdentity: Ref<SessionIdentitySummary>;
@@ -69,7 +73,7 @@ export interface RuntimeTopologyOptions {
 export function useRuntimeTopology(options: RuntimeTopologyOptions) {
   const topology = computed<RuntimeTopologySummary>(() => {
     const canonical = canonicalRuntimeTopology(options.healthBody.value);
-    if (canonical) return canonical;
+    if (canonical) return overlayTransportTopology(canonical, options);
     return fallbackRuntimeTopology(options);
   });
   return { topology };
@@ -85,7 +89,8 @@ function canonicalRuntimeTopology(health: Record<string, unknown> | null): Runti
   const controlInputBridge = objectField(health, 'control_input_bridge');
   const mcp = objectField(raw, 'mcp');
   const mcpChildren = arrayField(mcp, 'children');
-  const status = canonicalStatus(stringField(raw, 'status'), booleanField(authority, 'stale_source') === true);
+  const healthCode = stringField(health, 'code');
+  const status = canonicalStatus(stringField(raw, 'status'), booleanField(authority, 'stale_source') === true, healthCode);
   const inputPolicy = stringField(authority, 'input_policy');
   const stale = booleanField(authority, 'stale_source') === true;
   const sessionId = stringField(raw, 'session_id');
@@ -101,6 +106,7 @@ function canonicalRuntimeTopology(health: Record<string, unknown> | null): Runti
     sessionId,
     mcpStartupFailures: numberField(mcp, 'startup_failure_count') ?? 0,
     mcpRuntimeFaults: numberField(mcp, 'runtime_fault_count') ?? 0,
+    terminalReason: healthCode,
   });
   return {
     status,
@@ -196,15 +202,23 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
   const healthText = options.healthText.value;
   const streamText = options.streamText.value;
   const healthStatus = stringField(health, 'status')?.toLowerCase();
+  const healthCode = stringField(health, 'code');
+  const projectionRevoked = healthCode === 'projection_revoked';
   const healthUnavailable = !health || healthStatus === 'unavailable' || healthStatus === 'error';
   const mcpDegraded = (options.mcpInventory.value.startupFailureCount ?? 0) > 0 || (options.mcpInventory.value.runtimeFaultCount ?? 0) > 0;
+  const plannedViewReconfiguration = isPlannedViewReconfiguration(options);
+  const expectedTerminalClosure = projectionRevoked || isExpectedTerminalClosure(options);
   const status: RuntimeTopologySummary['status'] = stale
     ? 'stale'
-    : healthUnavailable || !options.healthEndpoint
-      ? 'unavailable'
-      : mcpDegraded || !options.streamLive.value
-        ? 'degraded'
-        : 'live';
+    : expectedTerminalClosure
+      ? 'closed'
+      : healthUnavailable || !options.healthEndpoint
+        ? 'unavailable'
+        : mcpDegraded || (!options.streamLive.value && !plannedViewReconfiguration)
+          ? 'degraded'
+          : plannedViewReconfiguration
+            ? 'reconfiguring'
+            : 'live';
   const posture = runtimePosture({
     status,
     stale,
@@ -212,6 +226,7 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
     sessionId,
     mcpStartupFailures: options.mcpInventory.value.startupFailureCount ?? 0,
     mcpRuntimeFaults: options.mcpInventory.value.runtimeFaultCount ?? 0,
+    terminalReason: healthCode ?? options.streamReason?.value,
   });
   return {
     status,
@@ -239,6 +254,64 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
       eventStream: options.eventEndpoint,
     },
   };
+}
+
+function overlayTransportTopology(topology: RuntimeTopologySummary, options: RuntimeTopologyOptions): RuntimeTopologySummary {
+  if (topology.stale) return topology;
+  if (isExpectedTerminalClosure(options)) {
+    const status: RuntimeTopologySummary['status'] = 'closed';
+    const posture = runtimePosture({
+      status,
+      stale: topology.stale,
+      inputPolicy: topology.inputPolicy,
+      sessionId: topology.sessionId,
+      mcpStartupFailures: 0,
+      mcpRuntimeFaults: 0,
+      terminalReason: options.streamReason?.value,
+    });
+    return {
+      ...topology,
+      status,
+      statusText: posture.verdictLabel,
+      verdictLabel: posture.verdictLabel,
+      primaryCause: posture.primaryCause,
+      operatorHint: posture.operatorHint,
+      canSendInput: posture.canSendInput,
+    };
+  }
+  if (topology.status !== 'live' || options.streamLive.value) return topology;
+  const status: RuntimeTopologySummary['status'] = isPlannedViewReconfiguration(options)
+    ? 'reconfiguring'
+    : 'degraded';
+  const posture = runtimePosture({
+    status,
+    stale: topology.stale,
+    inputPolicy: topology.inputPolicy,
+    sessionId: topology.sessionId,
+    mcpStartupFailures: 0,
+    mcpRuntimeFaults: 0,
+  });
+  return {
+    ...topology,
+    status,
+    statusText: posture.verdictLabel,
+    verdictLabel: posture.verdictLabel,
+    primaryCause: posture.primaryCause,
+    operatorHint: posture.operatorHint,
+    canSendInput: posture.canSendInput,
+  };
+}
+
+function isPlannedViewReconfiguration(options: RuntimeTopologyOptions): boolean {
+  return (options.streamPhase?.value === 'reconnecting'
+    || options.streamPhase?.value === 'opening'
+    || options.streamPhase?.value === 'replaying')
+    && options.streamReason?.value === 'event_view_changed';
+}
+
+function isExpectedTerminalClosure(options: RuntimeTopologyOptions): boolean {
+  return options.streamPhase?.value === 'closed'
+    && ['projection_revoked', 'authority_session_revoked', 'session_closed'].includes(options.streamReason?.value ?? '');
 }
 
 function fallbackLaunchNode(health: Record<string, unknown> | null, healthText: string): RuntimeTopologyNode {
@@ -327,10 +400,12 @@ function fallbackMcpNode(inventory: McpInventorySummary): RuntimeTopologyNode {
   };
 }
 
-function canonicalStatus(status: string | null, stale: boolean): RuntimeTopologySummary['status'] {
+function canonicalStatus(status: string | null, stale: boolean, healthCode: string | null = null): RuntimeTopologySummary['status'] {
   if (stale) return 'stale';
+  if (healthCode === 'projection_revoked') return 'closed';
   if (status === 'live') return 'live';
-  if (status === 'degraded' || status === 'closed') return 'degraded';
+  if (status === 'closed') return 'closed';
+  if (status === 'degraded') return 'degraded';
   return 'unavailable';
 }
 
@@ -341,6 +416,7 @@ function runtimePosture({
   sessionId,
   mcpStartupFailures,
   mcpRuntimeFaults,
+  terminalReason,
 }: {
   status: RuntimeTopologySummary['status'];
   stale: boolean;
@@ -348,12 +424,23 @@ function runtimePosture({
   sessionId: string | null;
   mcpStartupFailures: number;
   mcpRuntimeFaults: number;
+  terminalReason?: string | null;
 }): Pick<RuntimeTopologySummary, 'verdictLabel' | 'primaryCause' | 'operatorHint' | 'canSendInput'> {
   if (stale) {
     return {
       verdictLabel: 'stale attachment',
       primaryCause: 'This browser is attached to superseded authority.',
       operatorHint: 'Start a new session or attach to the live authority before sending input.',
+      canSendInput: false,
+    };
+  }
+  if (status === 'closed') {
+    return {
+      verdictLabel: terminalReason === 'projection_revoked' ? 'projection revoked' : 'attachment closed',
+      primaryCause: terminalReason === 'projection_revoked'
+        ? 'The Cloudflare projection was revoked by its authority.'
+        : 'The attached runtime reached a terminal lifecycle state.',
+      operatorHint: 'Start or attach to a new active session before sending input.',
       canSendInput: false,
     };
   }
@@ -386,6 +473,14 @@ function runtimePosture({
       verdictLabel: 'attached, degraded',
       primaryCause: 'Runtime health is degraded, but authority is not stale.',
       operatorHint: 'Check endpoints and heartbeat before starting sensitive work.',
+      canSendInput: true,
+    };
+  }
+  if (status=== 'reconfiguring') {
+    return {
+      verdictLabel: 'attached, switching view',
+      primaryCause: 'The selected event view is being applied to the live stream.',
+      operatorHint: 'The event stream is reconnecting for the selected view.',
       canSendInput: true,
     };
   }

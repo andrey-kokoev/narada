@@ -66,6 +66,7 @@ packages/*/.tmp-*.db
 # Cloudflare deployment assets are assembled by the package build.
 packages/cloudflare-nars-projection/public/
 packages/cloudflare-nars-projection/scripts-dist/
+packages/layers/cli/tsx-*/
 packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-reconciliation/
 packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-command-results/
 packages/layers/cli/.ai/inbox.db

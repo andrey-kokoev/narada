@@ -86,7 +86,14 @@ function isRedStatus(status: RuntimeTopologySummary['status']): boolean {
 }
 
 function defaultRuntimeTopologyErrorSink(error: Error, snapshot: RuntimeTopologyFaultSnapshot) {
-  console.error('[Narada Agent Web UI] fatal runtime topology transition', { error, snapshot });
+  console.error(
+    '[Narada Agent Web UI] fatal runtime topology transition',
+    { error, snapshot },
+    JSON.stringify({
+      error: { name: error.name, message: error.message },
+      snapshot,
+    }),
+  );
   queueMicrotask(() => {
     throw error;
   });

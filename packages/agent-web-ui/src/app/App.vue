@@ -92,6 +92,8 @@ const runtimeTopology = useRuntimeTopology({
   inputEndpoint: props.config.inputEndpoint ?? null,
   streamText: session.streamText,
   streamLive: session.streamLive,
+  streamPhase: session.streamPhase,
+  streamReason: session.streamReason,
   healthText: session.health.text,
   healthBody: session.health.body,
   sessionIdentity: session.sessionIdentity,

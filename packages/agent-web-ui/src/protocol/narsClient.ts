@@ -22,7 +22,7 @@ export interface NarsClientOptions {
   fetchFn?: typeof fetch;
   timers?: Pick<typeof globalThis, 'setTimeout' | 'clearTimeout'>;
   onStatus?: (status: string) => void;
-  onTransportState?: (phase: NarsTransportPhase) => void;
+  onTransportState?: (phase: NarsTransportPhase, reason?: string | null) => void;
   onEvent?: (event: unknown) => void;
   onDecodeError?: (message: string) => void;
 }
@@ -86,7 +86,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     sendFrameImpl: undefined as ((frame: SessionProtocolFrame) => boolean) | undefined,
     subscribeView: undefined as ((view: string) => boolean) | undefined,
   };
-  const notifyTransportState = () => options.onTransportState?.(state.lifecycle.phase);
+  const notifyTransportState = () => options.onTransportState?.(state.lifecycle.phase, state.lifecycle.reason);
   const currentTransportCorrelation = (): SessionTransportCorrelation => ({
     transport: isCloudflareTransport ? 'cloudflare-projection' : 'local-websocket',
     endpoint: options.endpoint ?? null,
@@ -190,14 +190,6 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       message: `NARS did not acknowledge this input within ${operatorInputAckTimeoutMs}ms; no automatic resend was attempted.`,
     }));
     options.onStatus?.(`input acknowledgment timed out after ${Math.ceil(operatorInputAckTimeoutMs / 1000)}s`);
-    const socket = state.socket;
-    if (socket) {
-      try {
-        socket.close();
-      } catch {
-        // The socket close path owns reconnect scheduling.
-      }
-    }
   };
 
   const trackPendingOperatorInput = (frame: SessionProtocolFrame) => {
@@ -370,7 +362,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
     readEventsPage(options: any) {
       return connection.sendFrame(buildAgentWebUiEventsReadFrame(options));
     },
-    close() {
+    close(reason?: string) {
       if (isNarsTransportClosed(state.lifecycle)) return;
       transitionNarsTransport(state.lifecycle, { type: 'close_requested' });
       notifyTransportState();
@@ -394,6 +386,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       state.socket = null;
       socket?.close?.();
       transitionNarsTransport(state.lifecycle, { type: 'closed' });
+      if (reason) state.lifecycle.reason = reason;
       notifyTransportState();
     },
   };

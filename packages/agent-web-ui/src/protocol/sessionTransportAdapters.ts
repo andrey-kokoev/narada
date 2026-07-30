@@ -53,7 +53,6 @@ export function transitionNarsTransport(lifecycle: NarsTransportLifecycle, event
   switch (event.type) {
     case 'open_requested':
       lifecycle.phase = 'opening';
-      lifecycle.reason = null;
       return;
     case 'replay_started':
       lifecycle.phase = 'replaying';

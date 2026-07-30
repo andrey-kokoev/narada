@@ -146,6 +146,8 @@ interface SseSubscriber {
 
 interface WorkerWebSocket extends WebSocket {
   accept(): void;
+  serializeAttachment?(attachment: unknown): void;
+  deserializeAttachment?(): unknown;
 }
 
 interface WorkerWebSocketPair {
@@ -165,6 +167,8 @@ interface DurableObjectStateLike {
     get<T = unknown>(key: string): Promise<T | undefined> | T | undefined;
     put(key: string, value: unknown): Promise<void> | void;
   };
+  acceptWebSocket?(socket: WorkerWebSocket): void;
+  getWebSockets?(): WorkerWebSocket[];
   waitUntil?(promise: Promise<unknown>): void;
 }
 
@@ -383,7 +387,99 @@ export class NarsProjectionState {
     private readonly state?: DurableObjectStateLike,
     private readonly env?: CloudflareNarsProjectionWorkerEnv,
     private readonly options: NarsProjectionStateOptions = {},
-  ) {}
+  ) {
+    this.restoreAcceptedSockets();
+  }
+
+  private restoreAcceptedSockets(): void {
+    const acceptedSockets = this.state?.getWebSockets?.() ?? [];
+    let restoredProjectionCount = 0;
+    let restoredAuthorityCount = 0;
+    for (const socket of acceptedSockets) {
+      const attachment = objectRecord(socket.deserializeAttachment?.());
+      if (attachment?.kind === 'projection'
+        && typeof attachment.projectionId === 'string'
+        && typeof attachment.view === 'string') {
+        if (![...this.sockets].some((subscriber) => subscriber.socket === socket)) {
+          this.sockets.add({ projectionId: attachment.projectionId, view: attachment.view, socket });
+          restoredProjectionCount += 1;
+        }
+      } else if (attachment?.kind === 'authority' && typeof attachment.sessionId === 'string') {
+        if (![...this.authoritySockets].some((subscriber) => subscriber.socket === socket)) {
+          this.authoritySockets.add({ sessionId: attachment.sessionId, socket });
+          restoredAuthorityCount += 1;
+        }
+      }
+    }
+    if (acceptedSockets.length > 0) {
+      console.log(JSON.stringify({
+        event: 'projection_websocket_registry_restored',
+        accepted_socket_count: acceptedSockets.length,
+        restored_projection_count: restoredProjectionCount,
+        restored_authority_count: restoredAuthorityCount,
+        projection_socket_count: this.sockets.size,
+        authority_socket_count: this.authoritySockets.size,
+      }));
+    }
+  }
+
+  webSocketMessage(socket: WorkerWebSocket, message: string | ArrayBuffer): void {
+    const attachment = objectRecord(socket.deserializeAttachment?.());
+    if (attachment?.kind !== 'projection' || typeof attachment.projectionId !== 'string') return;
+    this.handleProjectionWebSocketMessage(socket, attachment.projectionId, message);
+  }
+
+  webSocketClose(socket: WorkerWebSocket, code?: number, reason?: string, wasClean?: boolean): void {
+    console.log(JSON.stringify({
+      event: 'projection_websocket_closed',
+      code: code ?? null,
+      reason: reason ?? null,
+      was_clean: wasClean ?? null,
+      attachment: objectRecord(socket.deserializeAttachment?.()),
+      accepted_socket_count: this.state?.getWebSockets?.().length ?? null,
+    }));
+    this.sockets.forEach((subscriber) => {
+      if (subscriber.socket === socket) this.sockets.delete(subscriber);
+    });
+    this.authoritySockets.forEach((subscriber) => {
+      if (subscriber.socket === socket) this.authoritySockets.delete(subscriber);
+    });
+  }
+
+  webSocketError(socket: WorkerWebSocket): void {
+    console.log(JSON.stringify({
+      event: 'projection_websocket_error',
+      attachment: objectRecord(socket.deserializeAttachment?.()),
+      accepted_socket_count: this.state?.getWebSockets?.().length ?? null,
+    }));
+    this.webSocketClose(socket);
+  }
+
+  private acceptWebSocket(socket: WorkerWebSocket): boolean {
+    if (this.state?.acceptWebSocket) {
+      this.state.acceptWebSocket(socket);
+      return true;
+    }
+    socket.accept();
+    return false;
+  }
+
+  private handleProjectionWebSocketMessage(socket: WorkerWebSocket, projectionId: string, message: string | ArrayBuffer): void {
+    try {
+      const parsed = typeof message === 'string'
+        ? JSON.parse(message)
+        : JSON.parse(new TextDecoder().decode(message));
+      const record = objectRecord(parsed);
+      if (record?.event !== 'websocket_heartbeat') return;
+      socket.send(JSON.stringify({
+        event: 'websocket_heartbeat_ack',
+        transport: 'cloudflare_projection_websocket',
+        projection_id: projectionId,
+      }));
+    } catch {
+      // Ignore non-JSON application frames; projection events are server-originated.
+    }
+  }
 
   async fetch(request: Request): Promise<Response> {
     if (!this.state?.storage) {
@@ -506,6 +602,17 @@ export class NarsProjectionState {
     const body = await response.json().catch(() => null);
     const event = objectRecord(body)?.event as ProjectedEvent | undefined;
     if (!event || body?.status !== 'published') return;
+    this.restoreAcceptedSockets();
+    const eventPayload = objectRecord(event.payload);
+    if (eventPayload?.event === 'user_message') {
+      console.log(JSON.stringify({
+        event: 'projection_websocket_broadcast',
+        projection_id: event.projection_id,
+        event_sequence: event.event_sequence ?? null,
+        projection_socket_count: this.sockets.size,
+        accepted_socket_count: this.state?.getWebSockets?.().length ?? null,
+      }));
+    }
     const encoder = new TextEncoder();
     for (const subscriber of [...this.subscribers]) {
       if (subscriber.projectionId !== event.projection_id || !projectedEventMatchesView(event, subscriber.view)) continue;
@@ -528,6 +635,13 @@ export class NarsProjectionState {
   private async broadcastProjectionRevoked(response: Response, projectionId: string): Promise<void> {
     const body = await response.json().catch(() => null);
     if (body?.status !== 'revoked') return;
+    this.restoreAcceptedSockets();
+    console.log(JSON.stringify({
+      event: 'projection_websocket_revocation_broadcast',
+      projection_id: projectionId,
+      projection_socket_count: this.sockets.size,
+      accepted_socket_count: this.state?.getWebSockets?.().length ?? null,
+    }));
     const payload = {
       event: 'projection_revoked',
       type: 'projection.revoked',
@@ -582,10 +696,24 @@ export class NarsProjectionState {
     const client = pair[0];
     const server = pair[1];
     const subscriber = { projectionId: args.projectionId, view, socket: server };
-    server.accept();
+    const hibernating = this.acceptWebSocket(server);
+    server.serializeAttachment?.({ kind: 'projection', projectionId: args.projectionId, view });
     this.sockets.add(subscriber);
-    server.addEventListener('close', () => this.sockets.delete(subscriber));
-    server.addEventListener('error', () => this.sockets.delete(subscriber));
+    console.log(JSON.stringify({
+      event: 'projection_websocket_opened',
+      projection_id: args.projectionId,
+      view,
+      hibernating,
+      projection_socket_count: this.sockets.size,
+      accepted_socket_count: this.state?.getWebSockets?.().length ?? null,
+    }));
+    if (!hibernating) {
+      server.addEventListener('close', () => this.sockets.delete(subscriber));
+      server.addEventListener('error', () => this.sockets.delete(subscriber));
+      server.addEventListener('message', (event: MessageEvent<unknown>) => {
+        this.handleProjectionWebSocketMessage(server, args.projectionId, event.data as string | ArrayBuffer);
+      });
+    }
     server.send(JSON.stringify({
       event: 'websocket_connected',
       transport: 'cloudflare_projection_websocket',
@@ -619,10 +747,13 @@ export class NarsProjectionState {
     const client = pair[0];
     const server = pair[1];
     const subscriber = { sessionId: args.sessionId, socket: server };
-    server.accept();
+    const hibernating = this.acceptWebSocket(server);
+    server.serializeAttachment?.({ kind: 'authority', sessionId: args.sessionId });
     this.authoritySockets.add(subscriber);
-    server.addEventListener('close', () => this.authoritySockets.delete(subscriber));
-    server.addEventListener('error', () => this.authoritySockets.delete(subscriber));
+    if (!hibernating) {
+      server.addEventListener('close', () => this.authoritySockets.delete(subscriber));
+      server.addEventListener('error', () => this.authoritySockets.delete(subscriber));
+    }
     server.send(JSON.stringify({
       event: 'websocket_connected',
       transport: 'cloudflare_authority_websocket',
@@ -636,6 +767,7 @@ export class NarsProjectionState {
   private async broadcastAuthorityEvents(response: Response): Promise<void> {
     const body = await response.json().catch(() => null);
     if (body?.status !== 'admitted' || !Array.isArray(body.events)) return;
+    this.restoreAcceptedSockets();
     for (const event of body.events as CloudflareNarsAuthorityEvent[]) {
       for (const subscriber of [...this.authoritySockets]) {
         if (subscriber.sessionId !== event.session_id) continue;
@@ -651,6 +783,7 @@ export class NarsProjectionState {
   private async broadcastAuthorityRevoked(response: Response, sessionId: string): Promise<void> {
     const body = await response.json().catch(() => null);
     if (body?.status !== 'revoked') return;
+    this.restoreAcceptedSockets();
     for (const subscriber of [...this.authoritySockets]) {
       if (subscriber.sessionId !== sessionId) continue;
       try {
@@ -854,8 +987,22 @@ async function serveAssetManifest(request: Request, env: CloudflareNarsProjectio
 
 async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionWorkerEnv, workspaceDirectory: CloudflareNarsWorkspaceDirectoryService, now: () => string): Promise<Response> {
   const url = new URL(request.url);
+  const hasProjectionBootstrap = url.searchParams.has('cloudflare_projection_id');
+  const legacyProjectionEntry = hasProjectionBootstrap
+    && (url.pathname === '/sessions' || url.pathname === '/sessions/');
+  if (legacyProjectionEntry) {
+    const canonicalUrl = new URL(url);
+    canonicalUrl.pathname = '/';
+    return new Response(null, {
+      status: 307,
+      headers: {
+        location: canonicalUrl.toString(),
+        'cache-control': 'no-store',
+      },
+    });
+  }
   const directProjectionEntry = url.pathname === '/'
-    && url.searchParams.has('cloudflare_projection_id');
+    && hasProjectionBootstrap;
   const workspaceLanding = !directProjectionEntry
     && (url.pathname === '/' || url.pathname === OPERATOR_CONSOLE_PATH || url.pathname === `${OPERATOR_CONSOLE_PATH}/`);
   if (workspaceLanding) {
@@ -877,11 +1024,13 @@ async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionW
   if (consoleDocument && !consoleLease) return json(refusal('operator_console_route_not_leased'), 404);
   if (consoleDocument && !consoleUiConfig) return json(refusal('operator_console_route_configuration_unavailable'), 503);
   const assetUrl = new URL(url);
-  if (directProjectionEntry) assetUrl.pathname = '/sessions/index.html';
+  // Fetch the directory form. Cloudflare's asset binding redirects an
+  // internal `/sessions/index.html` fetch to `/sessions/`; the directory form
+  // avoids leaking that redirect into the canonical projection URL.
+  if (directProjectionEntry || (sessionDocument && !hasFileExtension(url.pathname))) assetUrl.pathname = '/sessions/';
   if (consoleDocument) assetUrl.pathname = `${OPERATOR_CONSOLE_PATH}/index.html`;
-  if (sessionDocument && !hasFileExtension(url.pathname)) assetUrl.pathname = '/sessions/index.html';
   const response = await env.ASSETS.fetch(new Request(assetUrl, request));
-  if ((!sessionDocument && !consoleDocument) || !isHtmlResponse(response)) return response;
+  if ((!directProjectionEntry && !sessionDocument && !consoleDocument) || !isHtmlResponse(response)) return response;
   const lease = consoleDocument ? consoleLease : (env.NARS_WORKSPACE_DIRECTORY
     ? await lookupWorkspaceRouteInDurableObject(url.pathname, env)
     : workspaceDirectory.findByPath(url.pathname, now()));
@@ -907,7 +1056,10 @@ async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionW
   headers.delete('content-md5');
   headers.delete('digest');
   headers.set('cache-control', 'no-store');
-  return new Response(content
+  const documentContent = directProjectionEntry
+    ? content.replaceAll('./assets/', '/sessions/assets/')
+    : content;
+  return new Response(documentContent
     .replace('__NARADA_AGENT_WEB_UI_CONFIG__', serializeHtmlJson(uiConfig ?? {}))
     .replace('__NARADA_OPERATOR_CONSOLE_CONFIG__', serializeHtmlJson(consoleConfig)), {
     status: response.status,

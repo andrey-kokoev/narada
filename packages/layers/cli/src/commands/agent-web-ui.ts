@@ -1,7 +1,8 @@
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { createHash, randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
 import { agentIdentityDisplay } from '@narada2/agent-identity';
 import {
@@ -107,6 +108,39 @@ function closeStartedServer(server: unknown): Promise<void> {
   const close = (server as { close?: (callback: () => void) => void }).close;
   if (typeof close !== 'function') return Promise.resolve();
   return new Promise((resolve) => close.call(server, resolve));
+}
+
+function readSiteEnvValue(siteRoot: string | null | undefined, key: string): string | null {
+  if (!siteRoot) return null;
+  for (const path of [join(siteRoot, '.env'), join(siteRoot, '.narada', '.env')]) {
+    try {
+      const line = readFileSync(path, 'utf8')
+        .split(/\r?\n/)
+        .find((candidate) => candidate.trim().startsWith(`${key}=`));
+      if (!line) continue;
+      const value = line.slice(line.indexOf('=') + 1).trim();
+      if (!value) continue;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        return value.slice(1, -1).trim() || null;
+      }
+      return value;
+    } catch {
+      // Site env is optional; an unreadable file must not block attachment.
+    }
+  }
+  return null;
+}
+
+export function resolveCloudflareProjectionApiBaseUrl(
+  explicitValue: string | null | undefined,
+  siteRoot: string | null | undefined,
+): string | null {
+  return explicitValue?.trim()
+    || readSiteEnvValue(siteRoot, 'NARADA_CLOUDFLARE_NARS_PROJECTION_URL')
+    || readSiteEnvValue(siteRoot, 'CLOUDFLARE_NARS_PROJECTION_URL')
+    || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
+    || process.env.CLOUDFLARE_NARS_PROJECTION_URL
+    || null;
 }
 
 
@@ -476,10 +510,7 @@ export async function agentWebUiAttachCommand(
     publicArtifactBasePath: publicArtifactPath,
     publicArtifactTransport: publicArtifactPath ? 'operator-router' : null,
     artifactRoot: agentWebUiArtifact?.artifact_root ?? null,
-    cloudflareApiBaseUrl: options.cloudflareApiBaseUrl?.trim()
-      || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
-      || process.env.CLOUDFLARE_NARS_PROJECTION_URL
-      || null,
+    cloudflareApiBaseUrl: resolveCloudflareProjectionApiBaseUrl(options.cloudflareApiBaseUrl, siteRoot),
   });
   await projectionDebug(`server_started:${started.url}`);
   const routeIds: string[] = [];
@@ -882,4 +913,3 @@ function formatAuthorityTransition(authority: AuthorityTransitionSnapshot): stri
   const target = authority.reattach?.target_session_id ? ` -> ${authority.reattach.target_session_id}` : '';
   return `${host}${epoch}${transition}${target}`;
 }
-

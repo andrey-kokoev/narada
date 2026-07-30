@@ -1,16 +1,22 @@
 import { buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada2/nars-client-projection-contract';
-import { applyRuntimeEventToWebUiState, isTerminalRuntimeEvent, sequenceFromRuntimeMessage } from '../runtime-events.ts';
+import { applyRuntimeEventToWebUiState, isTerminalRuntimeEvent, sequenceFromRuntimeMessage, unwrapRuntimeEvent } from '../runtime-events.ts';
 import { reconnectDelayForAttempt } from '../event-stream.ts';
 import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareEventsRead, cloudflareReplayCompleted, cloudflareSubscriptionStarted, cloudflareWebSocketEndpoint } from './cloudflare-session-contract.ts';
 import { isProjectionInputAdmissionAccepted, toSessionProtocolFrame } from './sessionTransport';
 import { isNarsTransportClosed, isNarsTransportOpening, transitionNarsTransport, type NarsClientAdapterContext } from './sessionTransportAdapters';
 
 const REMOTE_RECONCILE_OVERLAP_EVENTS = 1000;
+export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS = 10_000;
+export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_EVENT = 'websocket_heartbeat';
+export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_ACK_EVENT = 'websocket_heartbeat_ack';
 
 export function startCloudflareSessionTransport(context: NarsClientAdapterContext): void {
-  const { options, connection, state, WebSocketCtor, setTimeoutFn } = context;
+  const { options, connection, state, WebSocketCtor, setTimeoutFn, clearTimeoutFn } = context;
   const fetchFn = options.fetchFn ?? globalThis.fetch;
+  const notifyTransportState = () => options.onTransportState?.(state.lifecycle.phase, state.lifecycle.reason);
   let replaySerial = 0;
+  let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
+  let heartbeatSocketGeneration: number | null = null;
   const makeSubscribeFrame = (sinceSequence: number | null = state.lastSequence) => buildAgentWebUiSubscribeFrame({
     maxReplay: options.maxReplay,
     view: state.view,
@@ -97,6 +103,7 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
   };
   const scheduleRemoteReconnect = (reason: string) => {
     if (isNarsTransportClosed(state.lifecycle) || state.reconnectTimer) return;
+    stopRemoteHeartbeat();
     const staleSocket = state.socket;
     state.socket = null;
     state.socketGeneration += 1;
@@ -106,7 +113,7 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
       // The reconnect timer remains the source of truth after a failed close.
     }
     transitionNarsTransport(state.lifecycle, { type: 'reconnect_scheduled', reason });
-    options.onTransportState?.(state.lifecycle.phase);
+    notifyTransportState();
     const delayMs = reconnectDelayForAttempt(state.lifecycle.attempt);
     options.onStatus?.(`stream reconnecting in ${Math.ceil(delayMs / 1000)}s`);
     options.onEvent?.({ event: 'projection_stream_unavailable', message: reason });
@@ -114,6 +121,32 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
       state.reconnectTimer = null;
       void connectRemoteWebSocket();
     }, delayMs);
+  };
+  const stopRemoteHeartbeat = (socketGeneration?: number) => {
+    if (socketGeneration !== undefined && heartbeatSocketGeneration !== socketGeneration) return;
+    if (heartbeatTimer !== null) clearTimeoutFn(heartbeatTimer);
+    heartbeatTimer = null;
+    heartbeatSocketGeneration = null;
+  };
+  const scheduleRemoteHeartbeat = (socket: WebSocket, socketGeneration: number, isCurrent: () => boolean) => {
+    stopRemoteHeartbeat();
+    heartbeatSocketGeneration = socketGeneration;
+    const tick = () => {
+      heartbeatTimer = null;
+      if (!isCurrent() || isNarsTransportClosed(state.lifecycle)) {
+        stopRemoteHeartbeat(socketGeneration);
+        return;
+      }
+      try {
+        socket.send(JSON.stringify({ event: CLOUDFLARE_WEBSOCKET_HEARTBEAT_EVENT, transport: 'cloudflare_projection_websocket' }));
+      } catch {
+        stopRemoteHeartbeat(socketGeneration);
+        scheduleRemoteReconnect('remote_websocket_heartbeat_failed');
+        return;
+      }
+      heartbeatTimer = setTimeoutFn(tick, CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS);
+    };
+    tick();
   };
   const scheduleRemoteInputCatchUp = () => {
     const sinceBeforeInput = remoteOverlapCursor(state.lastSequence);
@@ -126,10 +159,10 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
   const connectRemoteWebSocket = async () => {
     if (isNarsTransportClosed(state.lifecycle) || isNarsTransportOpening(state.lifecycle)) return;
     transitionNarsTransport(state.lifecycle, { type: 'open_requested' });
-    options.onTransportState?.(state.lifecycle.phase);
+    notifyTransportState();
     try {
       transitionNarsTransport(state.lifecycle, { type: 'replay_started' });
-      options.onTransportState?.(state.lifecycle.phase);
+      notifyTransportState();
       const replayRequestId = `cloudflare_replay_${Date.now()}_${++replaySerial}`;
       const subscriptionId = `sub_${replayRequestId}`;
       options.onEvent?.(cloudflareSubscriptionStarted({
@@ -162,8 +195,9 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
       socket.addEventListener('open', () => {
         if (!isCurrent()) return;
         transitionNarsTransport(state.lifecycle, { type: 'connected' });
-        options.onTransportState?.(state.lifecycle.phase);
+        notifyTransportState();
         options.onStatus?.('stream connected');
+        scheduleRemoteHeartbeat(socket, socketGeneration, isCurrent);
         scheduleRemoteReconcile();
       });
       socket.addEventListener('message', (event: any) => {
@@ -174,9 +208,11 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
             options.onEvent?.(message);
             return;
           }
+          if (message?.event === CLOUDFLARE_WEBSOCKET_HEARTBEAT_ACK_EVENT) return;
           processRuntimeMessage(message);
           if (isTerminalRuntimeEvent(message)) {
-            connection.close();
+            const terminalEvent = unwrapRuntimeEvent(message)?.event;
+            connection.close(typeof terminalEvent === 'string' ? terminalEvent : 'terminal_runtime_event');
             options.onStatus?.('closed');
           }
         } catch (error) {
@@ -184,6 +220,7 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
         }
       });
       socket.addEventListener('close', () => {
+        stopRemoteHeartbeat(socketGeneration);
         if (!isCurrent()) return;
         scheduleRemoteReconnect('remote_websocket_closed');
       });

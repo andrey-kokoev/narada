@@ -1,5 +1,6 @@
 import { computed, onBeforeUnmount, reactive, ref, shallowRef, watch, type Ref } from 'vue';
 import { createNarsClient, type NarsClientConnection } from '../../protocol/narsClient';
+import type { NarsTransportPhase } from '../../protocol/sessionTransportAdapters';
 import { isTransportLive } from '../lib/operatorInputReadiness';
 
 export interface NarsConnectionConfig {
@@ -28,6 +29,8 @@ export function useNarsConnection(
 ) {
   const streamText = ref(config.eventEndpoint ? 'starting' : 'event endpoint not configured');
   const streamLive = ref(false);
+  const streamPhase = ref<NarsTransportPhase>(config.eventEndpoint ? 'idle' : 'unconfigured');
+  const streamReason = ref<string | null>(null);
   const activeTurnId = ref<string | boolean | null>(null);
   const connection = shallowRef<NarsClientConnection | null>(null);
   const history = reactive<Record<string, NarsEventHistoryState>>({});
@@ -56,7 +59,12 @@ export function useNarsConnection(
     maxReplay: config.maxReplay,
     view: transportViewForProjection(config.view?.value ?? 'conversation'),
     onStatus(status: any) { if (!stopped) streamText.value = status; },
-    onTransportState(phase: any) { if (!stopped) streamLive.value = isTransportLive(phase); },
+    onTransportState(phase: NarsTransportPhase, reason: string | null = null) {
+      if (stopped) return;
+      streamPhase.value = phase;
+      streamReason.value = reason;
+      streamLive.value = isTransportLive(phase);
+    },
     onEvent(event: any) {
       if (stopped) return;
       activeTurnId.value = connection.value?.activeTurnId ?? null;
@@ -114,6 +122,8 @@ export function useNarsConnection(
     connection,
     streamText,
     streamLive,
+    streamPhase,
+    streamReason,
     activeTurnId,
     history,
     hasEarlierEvents: computed(() => historyFor(config.view?.value ?? 'conversation').hasMore),

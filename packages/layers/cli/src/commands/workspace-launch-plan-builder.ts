@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/launch-process-ownership';
 import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
@@ -39,6 +40,26 @@ import { workspaceLaunchProjectionReadinessPath } from './workspace-launch-proce
 
 function normalizeMcpScope(value: string | undefined): string {
   return normalizeExplicitWorkspaceLaunchMcpScope(value, 'the Site/agent launch record or explicit launcher option');
+}
+
+function readWorkspaceLaunchEnvValue(siteRoot: string, key: string): string | null {
+  for (const path of [join(siteRoot, '.env'), join(siteRoot, '.narada', '.env')]) {
+    try {
+      const line = readFileSync(path, 'utf8')
+        .split(/\r?\n/)
+        .find((candidate) => candidate.trim().startsWith(`${key}=`));
+      if (!line) continue;
+      const value = line.slice(line.indexOf('=') + 1).trim();
+      if (!value) continue;
+      if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+        return value.slice(1, -1).trim() || null;
+      }
+      return value;
+    } catch {
+      // A missing or unreadable optional Site env file does not block launch.
+    }
+  }
+  return null;
 }
 
 function agentTuiAttachTerminalTab(record: WorkspaceLaunchRecord, naradaProper: string, launchBindingPath: string | null): WorkspaceLaunchTerminalTab {
@@ -135,6 +156,8 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     authority,
   });
   const cloudflareApiBaseUrl = options.cloudflareApiBaseUrl?.trim()
+    || readWorkspaceLaunchEnvValue(record.site_root, 'NARADA_CLOUDFLARE_NARS_PROJECTION_URL')
+    || readWorkspaceLaunchEnvValue(record.site_root, 'CLOUDFLARE_NARS_PROJECTION_URL')
     || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
     || process.env.CLOUDFLARE_NARS_PROJECTION_URL
     || null;
