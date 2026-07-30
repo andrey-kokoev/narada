@@ -789,6 +789,46 @@ test('turn summary aggregates provider-nested tool items', () => {
   assert.deepEqual(summaryRows[0].summary.tools, ['narada-sonar-agent-context.agent_context_startup_sequence']);
 });
 
+test('turn summary unwraps production provider telemetry tool items', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test' };
+  const events = [
+    { ...base, event: 'turn_started', turn_id: 'turn_wrapped_provider_tools', timestamp: '2026-07-08T20:49:39.000Z' },
+    {
+      ...base,
+      event: 'kernel_provider_telemetry',
+      timestamp: '2026-07-08T20:49:40.000Z',
+      source_event: {
+        type: 'item.started',
+        item: {
+          id: 'tool_1',
+          type: 'mcp_tool_call',
+          server: 'narada-sonar-agent-context',
+          tool: 'agent_context_startup_sequence',
+        },
+      },
+    },
+    {
+      ...base,
+      event: 'kernel_provider_telemetry',
+      timestamp: '2026-07-08T20:49:41.000Z',
+      source_event: {
+        type: 'item.completed',
+        item: {
+          id: 'tool_1',
+          type: 'mcp_tool_call',
+          server: 'narada-sonar-agent-context',
+          tool: 'agent_context_startup_sequence',
+        },
+      },
+    },
+    { ...base, event: 'turn_complete', turn_id: 'turn_wrapped_provider_tools', terminal_state: 'completed', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const summaryRows = projection.rows.filter((row: any) => row.kind === 'turn_summary');
+  assert.equal(summaryRows[0].summary.text, 'Turn · 3s · 1 tools');
+  assert.deepEqual(summaryRows[0].summary.tools, ['narada-sonar-agent-context.agent_context_startup_sequence']);
+});
+
 test('turn summary aggregates canonical carrier tool lifecycle events', () => {
   const base = { agent_id: 'resident', session_id: 'carrier_test' };
   const events = [
@@ -808,6 +848,77 @@ test('turn summary aggregates canonical carrier tool lifecycle events', () => {
   assert.equal(summaryRows[0].summary.toolResultCount, 2);
   assert.equal(summaryRows[0].summary.toolFailureCount, 1);
   assert.deepEqual(summaryRows[0].summary.tools, ['fs_read_file', 'fs_write_file']);
+});
+
+test('turn summary deduplicates carrier and execution lifecycle events', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test' };
+  const events = [
+    { ...base, event: 'turn_started', turn_id: 'turn_deduplicated_tools', timestamp: '2026-07-08T20:49:39.000Z' },
+    {
+      ...base,
+      event: 'carrier_tool_requested',
+      turn_id: 'turn_deduplicated_tools',
+      tool_call_id: 'call_1',
+      tool_name: 'fs_read_file',
+      timestamp: '2026-07-08T20:49:40.000Z',
+    },
+    {
+      ...base,
+      event: 'tool_execution_state_transition',
+      turn_id: 'turn_deduplicated_tools',
+      execution_id: 'execution_1',
+      tool_name: 'fs_read_file',
+      execution_state: 'executing',
+      timestamp: '2026-07-08T20:49:40.500Z',
+    },
+    {
+      ...base,
+      event: 'tool_execution_completed',
+      turn_id: 'turn_deduplicated_tools',
+      execution_id: 'execution_1',
+      tool_name: 'fs_read_file',
+      execution_state: 'completed',
+      timestamp: '2026-07-08T20:49:41.000Z',
+    },
+    {
+      ...base,
+      event: 'carrier_tool_completed',
+      turn_id: 'turn_deduplicated_tools',
+      tool_call_id: 'call_1',
+      tool_name: 'fs_read_file',
+      status: 'completed',
+      timestamp: '2026-07-08T20:49:41.500Z',
+    },
+    { ...base, event: 'turn_complete', turn_id: 'turn_deduplicated_tools', terminal_state: 'completed', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const summaryRows = projection.rows.filter((row: any) => row.kind === 'turn_summary');
+  assert.equal(summaryRows[0].summary.text, 'Turn · 3s · 1 tools');
+  assert.equal(summaryRows[0].summary.toolCallCount, 1);
+  assert.equal(summaryRows[0].summary.toolResultCount, 1);
+  assert.deepEqual(summaryRows[0].summary.tools, ['fs_read_file']);
+});
+
+test('turn summary counts an execution completion without a request', () => {
+  const base = { agent_id: 'resident', session_id: 'carrier_test' };
+  const events = [
+    { ...base, event: 'turn_started', turn_id: 'turn_completion_only_tool', timestamp: '2026-07-08T20:49:39.000Z' },
+    {
+      ...base,
+      event: 'tool_execution_completed',
+      turn_id: 'turn_completion_only_tool',
+      execution_id: 'execution_1',
+      tool_name: 'fs_read_file',
+      execution_state: 'completed',
+      timestamp: '2026-07-08T20:49:41.000Z',
+    },
+    { ...base, event: 'turn_complete', turn_id: 'turn_completion_only_tool', terminal_state: 'completed', timestamp: '2026-07-08T20:49:42.000Z' },
+  ];
+  const projection = createSessionProjection(events, { verbosity: 'conversation' });
+  const summaryRows = projection.rows.filter((row: any) => row.kind === 'turn_summary');
+  assert.equal(summaryRows[0].summary.text, 'Turn · 3s · 1 tools');
+  assert.equal(summaryRows[0].summary.toolCallCount, 1);
+  assert.equal(summaryRows[0].summary.toolResultCount, 1);
 });
 
 test('turn summary reports zero tools for tool-less turns', () => {

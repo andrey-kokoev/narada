@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
+import { seedLiveIntelligenceRegistry } from './live-intelligence-registry-fixture.js';
 
 const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.js');
 
@@ -14,11 +15,15 @@ const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
 const CLI_ENTRYPOINT = join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js');
 const ROUTER_ENTRYPOINT = join(REPO_ROOT, 'packages', 'operator-router', 'dist', 'main.js');
 const PROVIDER_ENTRYPOINT = join(REPO_ROOT, 'packages', 'agent-web-ui', 'test', 'fixtures', 'full-live-provider-fixture.ts');
+const TOOL_MCP_ENTRYPOINT = join(REPO_ROOT, 'packages', 'agent-web-ui', 'test', 'fixtures', 'full-live-tool-mcp.ts');
 const WEB_UI_SIGNAL_RELAY_ENTRYPOINT = join(REPO_ROOT, 'packages', 'agent-web-ui', 'test', 'fixtures', 'full-live-agent-web-ui-signal-relay.ts');
 const AGENT_CONTEXT_MIGRATION_FIXTURE = join(REPO_ROOT, 'packages', 'agent-web-ui', 'test', 'fixtures', 'full-live-agent-context-migration.sql');
 const AGENT_EVENTS_MIGRATION_FIXTURE = join(REPO_ROOT, 'packages', 'agent-web-ui', 'test', 'fixtures', 'full-live-agent-events-migration.sql');
 const CODEX_ADMISSIONS_MIGRATION_FIXTURE = join(REPO_ROOT, 'packages', 'agent-web-ui', 'test', 'fixtures', 'full-live-codex-session-admissions-migration.sql');
 const TIMEOUT_MS = Number(process.env.NARADA_FULL_LIVE_E2E_TIMEOUT_MS ?? 90_000);
+const scenarioArgumentIndex = process.argv.indexOf('--scenario');
+const liveScenario = scenarioArgumentIndex >= 0 ? process.argv[scenarioArgumentIndex + 1] ?? 'full' : 'full';
+assert.ok(liveScenario === 'full' || liveScenario === 'tool_count', 'unsupported full live E2E scenario: ' + liveScenario);
 const browserPath = findHeadlessBrowser();
 
 assert.ok(browserPath, 'full live E2E requires an installed Chromium-family browser');
@@ -41,12 +46,29 @@ let providerTranscriptFile = null;
 let providerPortFile = null;
 let resultEvidence = null;
 let sessionIdForCleanup = '';
+let narsProcessPidForCleanup = null;
 
 let runError = null;
 try {
   await runFullLiveE2e();
 } catch (error) {
   runError = error;
+}
+
+async function stopProcessByPid(pid: any, label: any) {
+  const numericPid = Number(pid);
+  if (!Number.isInteger(numericPid) || numericPid <= 0 || numericPid === process.pid) return;
+  try {
+    process.kill(numericPid, 0);
+  } catch {
+    return;
+  }
+  if (process.platform === 'win32') {
+    const killer = spawnTestChild('taskkill.exe', ['/PID', String(numericPid), '/T', '/F'], { stdio: 'ignore' });
+    await waitForExit(killer, 5000);
+    return;
+  }
+  try { process.kill(numericPid, 'SIGTERM'); } catch {}
 }
 const cleanupErrors = await cleanup();
 if (runError) {
@@ -63,6 +85,21 @@ async function runFullLiveE2e() {
   siteRoot = await mkdtemp(join(tmpdir(), 'narada-full-live-router-'));
   await mkdir(join(siteRoot, '.narada', 'crew', 'nars-sessions'), { recursive: true });
   await mkdir(join(siteRoot, '.ai', 'db', 'migrations'), { recursive: true });
+  await mkdir(join(siteRoot, '.ai', 'mcp'), { recursive: true });
+  await writeFile(
+    join(siteRoot, '.ai', 'mcp', 'full-live-tool.json'),
+    JSON.stringify({
+      mcpServers: {
+        'narada-full-live-tool': {
+          command: process.execPath,
+          args: [TOOL_MCP_ENTRYPOINT],
+          startup_timeout_sec: 10,
+          request_timeout_ms: 10000,
+        },
+      },
+    }) + '\n',
+    'utf8',
+  );
   await writeFile(
     join(siteRoot, '.ai', 'db', 'migrations', '001-agent-context-materializations.sql'),
     await readFile(AGENT_CONTEXT_MIGRATION_FIXTURE, 'utf8'),
@@ -116,6 +153,13 @@ async function runFullLiveE2e() {
   providerBaseUrl = providerReady.base_url;
   assert.equal(providerReady.schema, 'narada.full_live.provider_ready.v1');
   assert.equal(providerReady.pid, providerProcess.pid);
+  const intelligenceFixture = await seedLiveIntelligenceRegistry(siteRoot, {
+    siteId,
+    providerId: 'kimi-code-api',
+    endpointBaseUrl: providerBaseUrl,
+  });
+  assert.equal(intelligenceFixture.targetSiteId, `site:${siteId}`);
+  assert.equal(intelligenceFixture.registryDbPath, join(siteRoot, '.ai', 'intelligence-registry.db'));
 
   routerPort = await reservePort();
   routerUrl = 'http://127.0.0.1:' + routerPort;
@@ -134,8 +178,7 @@ async function runFullLiveE2e() {
     '--workspace-root', REPO_ROOT,
     '--agent', agentId,
     '--runtime', 'narada-agent-runtime-server',
-    '--intelligence-provider', 'kimi-code-api',
-    '--mcp-scope', 'none',
+    '--mcp-scope', 'local-site',
     '--exec',
     '--launch-binding', launchBindingPath,
     '--format', 'json',
@@ -146,7 +189,8 @@ async function runFullLiveE2e() {
       NARADA_SITE_ROOT: siteRoot,
       NARADA_WORKSPACE_ROOT: REPO_ROOT,
       NARADA_SITE_ID: siteId,
-      NARADA_MCP_SCOPE: 'none',
+      NARADA_MCP_SCOPE: 'local-site',
+      NARADA_INTELLIGENCE_CONTEXT_PATH: join(siteRoot, '.narada', 'intelligence-launch-context.json'),
       NARADA_INTELLIGENCE_PROVIDER: 'kimi-code-api',
       NARADA_AI_API_KEY: 'full-live-fixture-key',
       NARADA_AI_BASE_URL: providerBaseUrl,
@@ -164,6 +208,7 @@ async function runFullLiveE2e() {
   const record = await waitForSessionRecord(siteRoot, agentId);
   sessionIdForCleanup = record.session_id;
   const narsProcessPid = Number(record.process_ownership?.pid);
+  narsProcessPidForCleanup = narsProcessPid;
   assert.ok(Number.isInteger(narsProcessPid) && narsProcessPid > 0 && narsProcessPid !== process.pid, JSON.stringify(record.process_ownership));
   assert.equal(record.agent_id, agentId);
   assert.equal(record.runtime_kind, 'narada-agent-runtime-server');
@@ -176,11 +221,10 @@ async function runFullLiveE2e() {
     (event: any) => event.event === 'session_started',
     'runtime_session_started',
   );
-  assert.equal(startupEvent.provider, 'kimi-code-api');
-  assert.equal(startupEvent.model, 'full-live-fixture-model');
-  assert.equal(startupEvent.mcp_scope, 'none');
-  assert.equal(startupEvent.mcp_operational_state, 'disabled');
-  await waitForHealthy(record.health_endpoint, 'nars_health');
+  assert.equal(startupEvent.provider, intelligenceFixture.defaultProviderId);
+  assert.equal(startupEvent.mcp_scope, 'local-site');
+  const narsHealth = await waitForHealthy(record.health_endpoint, 'nars_health');
+  assert.equal(narsHealth.mcp_operational_state, 'healthy', JSON.stringify(narsHealth));
 
   webUiProcess = spawnTestChild(process.execPath, [
     WEB_UI_SIGNAL_RELAY_ENTRYPOINT,
@@ -203,10 +247,22 @@ async function runFullLiveE2e() {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   });
   webUiOutput = collectProcessOutput(webUiProcess);
-  const urlMatch = await waitFor(
-    () => webUiOutput.all().match(/agent-web-ui:\s+(http:\/\/127\.0\.0\.1:\d+\/sessions\/[^\s]+\/?)/),
-    'agent_web_ui_public_url',
-  );
+  let urlMatch;
+  try {
+    urlMatch = await waitFor(
+      () => webUiOutput.all().match(/agent-web-ui:\s+(http:\/\/127\.0\.0\.1:\d+\/sessions\/[^\s]+\/?)/),
+      'agent_web_ui_public_url',
+    );
+  } catch (error) {
+    error.message += '\nweb_ui_output=' + JSON.stringify(webUiOutput.all().slice(-4000));
+    error.message += '\nrouter_output=' + JSON.stringify(routerOutput?.all?.().slice(-2000) ?? '');
+    error.message += '\nrouter_process=' + JSON.stringify({
+      pid: routerProcess?.pid ?? null,
+      exit_code: routerProcess?.exitCode ?? null,
+      signal: routerProcess?.signalCode ?? null,
+    });
+    throw error;
+  }
   const publicWebUiUrl = normalizeHttpUrl(urlMatch[1]);
   const publicWebSocketUrl = publicWebUiUrl.replace(/^http:/, 'ws:') + 'events';
   const publicWebUiPath = normalizePathname(new URL(publicWebUiUrl).pathname);
@@ -275,6 +331,116 @@ async function runFullLiveE2e() {
   );
   await assertUiCompleted(page, baseline.requestId);
   assert.equal(readProviderRecords().filter((entry: any) => entry.content === 'full-live baseline sentinel').length, 1);
+
+  const toolCountFromIndex = readJsonlFile(record.events_path).length;
+  const toolCountSubmitted = await submitUiInput(page, 'full-live tool-count sentinel');
+  await waitForProviderContent('full-live tool-count sentinel', 1);
+  const toolCountQueued = await waitForEvent(
+    record.events_path,
+    toolCountFromIndex,
+    (event: any) => event.event === 'input_event_queued' && event.idempotency_key === toolCountSubmitted.idempotencyKey,
+    'tool_count_input_queued',
+  );
+  const toolCountTurnStarted = await waitForEvent(
+    record.events_path,
+    toolCountFromIndex,
+    (event: any) => event.event === 'carrier_turn_started' && event.turn_id === toolCountQueued.event_id,
+    'tool_count_turn_started',
+  );
+  const toolCountToolRequested = await waitForEvent(
+    record.events_path,
+    toolCountFromIndex,
+    (event: any) => event.event === 'carrier_tool_requested'
+      && event.turn_id === toolCountTurnStarted.turn_id
+      && String(event.tool_name ?? event.name ?? '') === 'full_live_tool_probe',
+    'tool_count_tool_requested',
+  );
+  const toolCountToolCompleted = await waitForEvent(
+    record.events_path,
+    toolCountFromIndex,
+    (event: any) => event.event === 'carrier_tool_completed'
+      && event.turn_id === toolCountTurnStarted.turn_id
+      && String(event.tool_name ?? event.name ?? '') === 'full_live_tool_probe',
+    'tool_count_tool_completed',
+  );
+  assert.equal(toolCountToolRequested.tool_name ?? toolCountToolRequested.name, 'full_live_tool_probe');
+  assert.equal(toolCountToolCompleted.tool_name ?? toolCountToolCompleted.name, 'full_live_tool_probe');
+  const toolCountOperation = await waitForCompletedOperation(
+    record.events_path,
+    toolCountFromIndex,
+    toolCountSubmitted,
+    'tool_count_operation',
+    toolCountTurnStarted,
+  );
+  assert.equal(toolCountOperation.assistant.content, 'Full live provider response: full-live tool-count sentinel');
+  await page.waitForExpression(
+    'document.body.textContent.includes("Full live provider response: full-live tool-count sentinel")',
+    TIMEOUT_MS,
+  );
+  await assertUiCompleted(page, toolCountSubmitted.requestId);
+  const toolCountSummaryText = await assertUiTurnSummaryHasNonZeroToolCount(
+    page,
+    toolCountTurnStarted.turn_id,
+    'full_live_tool_probe',
+  );
+
+  if (liveScenario === 'tool_count') {
+    const closeFromIndex = readJsonlFile(record.events_path).length;
+    await page.fill('#operator-input', '/exit');
+    await page.click('.composer-submit');
+    const sessionClosed = await waitForEvent(
+      record.events_path,
+      closeFromIndex,
+      (event: any) => event.event === 'session_closed',
+      'tool_count_ui_exit_session_closed',
+    );
+    assert.equal(sessionClosed.terminal_state, 'closed');
+    await waitForEndpointClosed(record.health_endpoint, 'tool_count_nars_health_closed');
+    await waitForProcessNotAlive(narsProcessPid, 'tool_count_nars_process_closed');
+    narsProcessPidForCleanup = null;
+
+    resultEvidence = {
+      schema: 'narada.agent_web_ui.full_live_tool_count_e2e.result.v1',
+      status: 'passed',
+      topology: {
+        browser: 'chromium-cdp',
+        operator_router: 'child',
+        agent_web_ui: 'child',
+        nars_runtime: 'child',
+        deterministic_provider: 'separate-child',
+        mcp_child: 'separate-child',
+      },
+      session_id: record.session_id,
+      public_web_ui_url: publicWebUiUrl,
+      public_websocket_url: publicWebSocketUrl,
+      direct_nars_websocket_url: record.event_endpoint,
+      events_path: record.events_path,
+      provider_transcript_path: providerTranscriptFile,
+      provider_pid: providerReady.pid,
+      provider_request_count: readProviderRecords().length,
+      tool_call: {
+        turn_id: toolCountTurnStarted.turn_id,
+        tool_name: 'full_live_tool_probe',
+        requested: true,
+        completed: true,
+        assistant_response: toolCountOperation.assistant.content,
+      },
+      tool_count_rendering: {
+        summary_text: toolCountSummaryText,
+        non_zero: true,
+        rendered_tool_name: 'full_live_tool_probe',
+      },
+      browser_observation: {
+        public_websocket_created: page.network.websocketCreated.filter((url: any) => sameUrl(url, publicWebSocketUrl)).length,
+        direct_nars_websocket_created: page.network.websocketCreated.filter((url: any) => sameUrl(url, record.event_endpoint)).length,
+        websocket_closed: page.network.websocketClosed.length,
+        navigations: page.network.navigations.length,
+      },
+      nars_health_closed: true,
+      nars_process_closed: true,
+    };
+    return;
+  }
 
   await writeControl({ hold: true, release: false });
   const interruptedFromIndex = readJsonlFile(record.events_path).length;
@@ -353,10 +519,37 @@ async function runFullLiveE2e() {
     },
     'router_restarted_session_routes',
   );
-  await waitFor(
-    () => page.network.websocketCreated.filter((url: any) => sameUrl(url, publicWebSocketUrl)).length >= 2,
-    'browser_public_websocket_reconnected',
-  );
+  try {
+    await waitFor(
+      () => page.network.websocketCreated.filter((url: any) => sameUrl(url, publicWebSocketUrl)).length >= 2,
+      'browser_public_websocket_reconnected',
+    );
+  } catch (error) {
+    const browserState = await page.evaluate(
+      '(() => ({'
+        + 'connection: document.querySelector(".connection-status")?.textContent?.trim() ?? null,'
+        + 'stream: document.querySelector("[data-testid=stream-status]")?.textContent?.trim() ?? null,'
+        + 'socketStates: (window.__fullLiveSockets || []).map((socket) => socket.readyState), '
+        + '}))()',
+    ).catch((evaluationError: any) => ({ evaluation_error: String(evaluationError) }));
+    const created = page.network.websocketCreated.slice(-8);
+    const closed = page.network.websocketClosed.slice(-8).map((entry: any) => ({
+      url: entry.url ?? null,
+      code: entry.code ?? null,
+      reason: entry.reason ?? null,
+    }));
+    const routerTail = routerOutput?.all?.().slice(-2000) ?? '';
+    throw new Error(
+      (error instanceof Error ? error.message : String(error))
+      + '\\npublic_websocket_url=' + publicWebSocketUrl
+      + '\\nwebsocket_created_count=' + page.network.websocketCreated.length
+      + '\\nwebsocket_created_tail=' + JSON.stringify(created)
+      + '\\nwebsocket_closed_tail=' + JSON.stringify(closed)
+      + '\\nbrowser_state=' + JSON.stringify(browserState)
+      + '\\nrouter_routes=' + JSON.stringify(await readSessionRoutes(routerUrl, record.session_id))
+      + '\\nrouter_output_tail=' + routerTail,
+    );
+  }
   assert.equal(page.network.navigations.length, navigationCountBeforeRouterStop);
   await page.waitForExpression(
     'document.body.textContent.includes("Full live provider response: full-live interrupted sentinel")',
@@ -422,6 +615,7 @@ async function runFullLiveE2e() {
   assert.equal(sessionClosed.terminal_state, 'closed');
   await waitForEndpointClosed(record.health_endpoint, 'nars_health_closed');
   await waitForProcessNotAlive(narsProcessPid, 'nars_process_closed');
+  narsProcessPidForCleanup = null;
 
   resultEvidence = {
     schema: 'narada.agent_web_ui.full_live_router_nars_provider_e2e.result.v1',
@@ -453,6 +647,12 @@ async function runFullLiveE2e() {
       idempotency_key: retry.idempotencyKey,
       deduplicated: true,
       provider_requests_for_sentinel: 1,
+    },
+    tool_count_rendering: {
+      turn_id: toolCountTurnStarted.turn_id,
+      tool_name: 'full_live_tool_probe',
+      summary_text: toolCountSummaryText,
+      non_zero: true,
     },
     browser_observation: {
       public_websocket_created: page.network.websocketCreated.filter((url: any) => sameUrl(url, publicWebSocketUrl)).length,
@@ -586,6 +786,100 @@ async function assertUiCompleted(currentPage: any, requestId: any) {
   assert.match(status, /Input delivered/);
   assert.equal(status.includes('Waiting for agent'), false);
   assert.equal(status.includes('Steering the active turn'), false);
+}
+
+async function assertUiTurnSummaryHasNonZeroToolCount(currentPage: any, turnId: any, toolName: any) {
+  const turnIdLiteral = JSON.stringify(turnId);
+  const summaryText = await currentPage.waitForExpression(
+    '(() => {'
+      + 'const group = Array.from(document.querySelectorAll(".turn-group"))'
+      + '.find((node) => node.getAttribute("data-turn-id") === ' + turnIdLiteral + ');'
+      + 'return group?.querySelector(".turn-summary-text")?.textContent?.trim() || false;'
+      + '})()',
+    TIMEOUT_MS,
+  );
+  const unwrapBrowserEvents = (message: any): any[] => {
+    if (!message || typeof message !== 'object') return [];
+    if (message.event === 'session_events_read' && Array.isArray(message.events)) {
+      return message.events.flatMap((event: any) => unwrapBrowserEvents(event));
+    }
+    if (message.event === 'session_event' && message.payload && typeof message.payload === 'object') {
+      return unwrapBrowserEvents(message.payload);
+    }
+    if (typeof message.event_kind === 'string' && message.payload && typeof message.payload === 'object') {
+      return [{
+        ...message.payload,
+        event: message.event_kind,
+        event_kind: message.event_kind,
+        ...(message.event_sequence === undefined ? {} : { event_sequence: message.event_sequence }),
+        ...(message.sequence === undefined ? {} : { sequence: message.sequence }),
+      }];
+    }
+    return [message];
+  };
+  const browserToolEvents = currentPage.network.websocketReceived
+    .map((frame: any) => frame?.response?.payloadData)
+    .filter((payload: any) => typeof payload === 'string')
+    .map((payload: string) => {
+      try { return JSON.parse(payload); } catch { return null; }
+    })
+    .flatMap((message: any) => unwrapBrowserEvents(message))
+    .filter((event: any) => event?.turn_id === turnId && [
+      'carrier_tool_requested',
+      'carrier_tool_completed',
+    ].includes(event?.event))
+    .map((event: any) => ({
+      event: event.event,
+      turn_id: event.turn_id,
+      tool_name: event.tool_name ?? event.name ?? null,
+      tool_call_id: event.tool_call_id ?? event.execution_id ?? null,
+    }));
+  const browserPayloadDiagnostics = currentPage.network.websocketReceived
+    .map((frame: any) => ({
+      url: frame?.response?.url ?? null,
+      payload: typeof frame?.response?.payloadData === 'string'
+        ? frame.response.payloadData.slice(0, 500)
+        : null,
+    }))
+    .filter((entry: any) => entry.payload !== null)
+    .slice(-12);
+  assert.ok(
+    browserToolEvents.length >= 2,
+    `browser did not receive both live tool lifecycle events: ${JSON.stringify({
+      tool_events: browserToolEvents,
+      received_frame_count: currentPage.network.websocketReceived.length,
+      websocket_urls: currentPage.network.websocketCreated.slice(-8),
+      payloads: browserPayloadDiagnostics,
+    })}`,
+  );
+  assert.match(
+    summaryText,
+    /\b[1-9]\d* tools\b/,
+    `browser received live tool events but rendered an incoherent summary: ${JSON.stringify({ summaryText, browserToolEvents })}`,
+  );
+  assert.doesNotMatch(summaryText, /\b0 tools\b/);
+  const expanded = await currentPage.evaluate(
+    '(() => {'
+      + 'const group = Array.from(document.querySelectorAll(".turn-group"))'
+      + '.find((node) => node.getAttribute("data-turn-id") === ' + turnIdLiteral + ');'
+      + 'const button = group?.querySelector(".turn-summary-toggle");'
+      + 'button?.click();'
+      + 'return Boolean(button);'
+      + '})()',
+  );
+  assert.equal(expanded, true);
+  const renderedTool = await currentPage.waitForExpression(
+    '(() => {'
+      + 'const group = Array.from(document.querySelectorAll(".turn-group"))'
+      + '.find((node) => node.getAttribute("data-turn-id") === ' + turnIdLiteral + ');'
+      + 'return Array.from(group?.querySelectorAll(".turn-summary-tools-list li") ?? [])'
+      + '.map((node) => node.textContent?.trim() || "")'
+      + '.includes(' + JSON.stringify(toolName) + ');'
+      + '})()',
+    TIMEOUT_MS,
+  );
+  assert.equal(renderedTool, true);
+  return summaryText;
 }
 
 async function waitForProviderContent(content: any, count: any) {
@@ -897,7 +1191,7 @@ async function openCdpPage({ browserPath, url, workDir }: any) {
     '--user-data-dir=' + userDataDir,
     '--window-position=-32000,-32000',
     '--window-size=1280,900',
-    url,
+    'about:blank',
   ], {
     stdio: ['ignore', 'ignore', 'pipe'],
   });
@@ -1015,6 +1309,8 @@ async function cleanup() {
   }
   try { await stopProcess(runtimeProcess, 'nars_runtime'); } catch (error) { cleanupErrors.push(error); }
   runtimeProcess = null;
+  try { await stopProcessByPid(narsProcessPidForCleanup, 'nars_runtime_child'); } catch (error) { cleanupErrors.push(error); }
+  narsProcessPidForCleanup = null;
   try { await stopProcess(routerProcess, 'operator_router'); } catch (error) { cleanupErrors.push(error); }
   routerProcess = null;
   try { await stopProcess(providerProcess, 'deterministic_provider'); } catch (error) { cleanupErrors.push(error); }

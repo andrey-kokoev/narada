@@ -24,6 +24,13 @@ const server = createServer(async (request: any, response: any) => {
     const userContent = typeof latestMessage?.content === 'string'
       ? latestMessage.content
       : JSON.stringify(latestMessage?.content ?? '');
+    const serializedMessages = JSON.stringify(requestBody.messages ?? []);
+    const hasToolResult = Array.isArray(requestBody.messages)
+      && requestBody.messages.some((message: any) => message?.role === 'tool');
+    const toolCountTurn = userContent === 'full-live tool-count sentinel'
+      || (latestMessage?.role === 'tool' && serializedMessages.includes('full-live tool-count sentinel'));
+    const shouldCallTool = toolCountTurn && !hasToolResult;
+    const responseContent = toolCountTurn ? 'full-live tool-count sentinel' : userContent;
     requestNumber += 1;
     await appendFile(transcriptFile, JSON.stringify({
       schema: 'narada.full_live.provider_request.v1',
@@ -41,8 +48,19 @@ const server = createServer(async (request: any, response: any) => {
       choices: [{
         message: {
           role: 'assistant',
-          content: 'Full live provider response: ' + userContent,
+          content: shouldCallTool ? null : 'Full live provider response: ' + responseContent,
+          ...(shouldCallTool ? {
+            tool_calls: [{
+              id: 'full-live-tool-count-call',
+              type: 'function',
+              function: {
+                name: 'full_live_tool_probe',
+                arguments: JSON.stringify({ marker: 'full-live-tool-count' }),
+              },
+            }],
+          } : {}),
         },
+        finish_reason: shouldCallTool ? 'tool_calls' : 'stop',
       }],
     }));
   } catch (error) {
