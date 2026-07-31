@@ -5,9 +5,9 @@ import { fileURLToPath } from 'node:url';
 
 import { buildCanonicalCloudflareTestSeed } from '@narada2/invokable-intelligence-contract';
 
-const deploymentRevision = 4;
-const createdAt = '2026-07-20T20:25:00.000Z';
-const validUntil = '2036-07-20T20:25:00.000Z';
+const deploymentRevision = 6;
+const createdAt = '2026-07-31T04:16:55.000Z';
+const validUntil = '2036-07-31T04:16:55.000Z';
 const targetSiteId = 'site:narada-cloudflare';
 const targetSiteRegistryId = 'site_narada_cloudflare';
 const siteRegistryId = 'narada.cloudflare-site-registry.v1';
@@ -325,6 +325,12 @@ for (const record of seed.records) {
   }
   if (document.schema=== 'narada.invokable-intelligence.access-grant.v1') {
     document.actions = ['invoke'];
+    if (document.id === 'grant:andrey-cloudflare-workers-ai') {
+      document.scope.purposes = [...new Set([...(document.scope.purposes ?? []), 'nars-turn'])];
+    }
+  }
+  if (document.schema=== 'narada.invokable-intelligence.data-governance-requirement.v1') {
+    document.purposes = [...new Set([...(document.purposes ?? []), 'nars-turn'])];
   }
   if (document.schema=== 'narada.invokable-intelligence.service-entitlement.v1') {
     document.features = ['invoke'];
@@ -403,7 +409,7 @@ const materializations = seed.records
           payload_ref: payloadRecord.id,
         },
         allowed_scope: {
-          purposes: ['operator-chat', 'carrier-turn'],
+          purposes: ['operator-chat', 'carrier-turn', 'nars-turn'],
           target_site_ids: [targetSiteId],
            principal_ids: [principalId, servicePrincipalId],
         },

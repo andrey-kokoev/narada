@@ -4,7 +4,7 @@ import { dirname, resolve } from 'node:path';
 import { validateRemoteCloudflareApiBaseUrl } from './lib/live-boundary.js';
 
 type AnyRecord = Record<string, any>;
-type SmokeArgs = { live: boolean; quiet: boolean; help: boolean; format: string; cloudflareApiBaseUrl: string | null; evidencePath: string | null; sessionId: string | null; siteId: string | null; agentId: string | null };
+type SmokeArgs = { live: boolean; quiet: boolean; help: boolean; format: string; cloudflareApiBaseUrl: string | null; evidencePath: string | null; sessionId: string | null; siteId: string | null; agentId: string | null; authorityCredential: string | null };
 
 const args = parseArgs(process.argv.slice(2));
 if (args.help) {
@@ -15,7 +15,7 @@ if (args.help) {
     '  pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live',
     '',
     'Live mode:',
-    '  pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url <url>',
+    '  pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url <url> --browser-token <fingerprint>',
     '',
   ].join('\n'));
   process.exit(0);
@@ -37,8 +37,15 @@ async function run(): Promise<AnyRecord> {
       status: 'planned',
       code: 'live_flag_required',
       purpose: 'Prove the projection Worker cannot become a second intelligence-selection or execution authority.',
-      required: ['--live', '--cloudflare-api-base-url'],
+      required: ['--live', '--cloudflare-api-base-url', '--browser-token'],
     };
+  }
+  if (!args.authorityCredential) {
+    return persist({
+      schema: 'narada.cloudflare_nars_projection.intelligence_boundary_live_smoke.v1',
+      status: 'refused',
+      code: 'browser_token_required',
+    });
   }
   if (!args.cloudflareApiBaseUrl) {
     return persist({
@@ -100,6 +107,9 @@ async function run(): Promise<AnyRecord> {
       : [];
 
     cleanup = await fetchJson(sessionBase, { method: 'DELETE' });
+    const providerCapableTarget =
+      serviceHealth.body?.execution_availability === 'available'
+      || sessionHealth.body?.execution_availability === 'available';
     const passed =
       serviceHealth.body?.status === 'degraded'
       && serviceHealth.body?.execution === 'canonical_invokable_intelligence_gateway'
@@ -116,11 +126,18 @@ async function run(): Promise<AnyRecord> {
       && replayKinds.length === 1
       && replayKinds[0] === 'session_started'
       && cleanup.body?.status === 'revoked';
+    const code = passed
+      ? 'projection_boundary_verified'
+      : providerCapableTarget
+        ? 'synthetic_smoke_requires_synthetic_deployment'
+        : 'projection_boundary_check_failed';
 
     return persist({
       schema: 'narada.cloudflare_nars_projection.intelligence_boundary_live_smoke.v1',
       status: passed ? 'passed' : 'failed',
-      code: passed ? 'projection_boundary_verified' : 'projection_boundary_check_failed',
+      code,
+      expected_deployment_mode: 'synthetic_infrastructure_only',
+      observed_execution_availability: serviceHealth.body?.execution_availability ?? sessionHealth.body?.execution_availability ?? null,
       deployment_boundary: remoteBoundary.deployment_boundary,
       remote_cloudflare_origin: remoteBoundary.origin,
       cloudflare_api_base_url: baseUrl,
@@ -155,7 +172,10 @@ async function run(): Promise<AnyRecord> {
 async function fetchJson(url: string, { method = 'GET', body }: AnyRecord = {}): Promise<AnyRecord> {
   const response = await fetch(url, {
     method,
-    headers: body === undefined ? undefined : { 'content-type': 'application/json' },
+    headers: {
+      ...(body === undefined ? {} : { 'content-type': 'application/json' }),
+      ...(args.authorityCredential ? { 'x-narada-browser-token-fingerprint': args.authorityCredential } : {}),
+    },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
   const text = await response.text();
@@ -191,6 +211,7 @@ function parseArgs(values: string[]): SmokeArgs {
     sessionId: null,
     siteId: null,
     agentId: null,
+    authorityCredential: null,
   };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
@@ -204,6 +225,7 @@ function parseArgs(values: string[]): SmokeArgs {
     else if (value === '--session-id') parsed.sessionId = values[++index] ?? null;
     else if (value === '--site-id') parsed.siteId = values[++index] ?? null;
     else if (value === '--agent-id') parsed.agentId = values[++index] ?? null;
+    else if (value === '--browser-token' || value === '--authority-credential') parsed.authorityCredential = values[++index] ?? null;
     else throw new Error(`unknown_option:${value}`);
   }
   return parsed;

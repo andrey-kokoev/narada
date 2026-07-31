@@ -7,17 +7,15 @@
  * promotes environment values into intelligence authority.
  */
 
-import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization/d1';
-import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
 import {
   latestCatalogRecords,
   resolveInvocationPrincipalAdmission,
   siteMatchesRegistryIdentity,
 } from '@narada2/invokable-intelligence-contract';
 import {
-  buildResolverContext,
-  createLocalInvocationGateway,
+  createCloudflareInvocationGateway,
 } from '@narada2/invokable-intelligence-runtime';
+import type { CloudflareInvocationAdmission } from '@narada2/invokable-intelligence-runtime';
 
 export const CARRIER_INTELLIGENCE_ADAPTER_ID = 'adapter:workers-ai-binding';
 export const CLOUDFLARE_SITE_REGISTRY_ID = 'narada.cloudflare-site-registry.v1';
@@ -322,11 +320,7 @@ async function assertInitializedCatalog(store: any) {
   }
 }
 
-/**
- * Build the canonical invocation gateway over an already admitted D1 catalog.
- * `adapterFactory` receives the store and returns the Workers-AI transport
- * implementation. It has no selection authority.
- */
+/** Build the shared Cloudflare gateway over a carrier-admitted D1 catalog. */
 export async function createCarrierIntelligenceGateway(
   env: any,
   adapterFactory: any,
@@ -348,97 +342,40 @@ export async function createCarrierIntelligenceGateway(
     throw error;
   }
 
-  const store = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB);
-  let materialization: any = null;
-  try {
-    materialization = await D1MaterializationStore.open(env.INTELLIGENCE_REGISTRY_DB);
-    await assertInitializedCatalog(store);
-    const invocationAdapter = adapterFactory(store);
-    const siteAdmissionEvidenceRef = catalogEvidenceReference(await store.listCatalogRecords());
-    const runtimeEvidence = {
-      request_admitted: true,
-      worker_runtime: true,
-      ai_binding_available: typeof env.AI?.run === 'function',
-      request_evidence_ref: auditAuthority.admissionRef,
-      request_artifact_ref: 'cloudflare-carrier:authenticated-request',
-      binding_evidence_ref: auditAuthority.admissionRef,
-      binding_artifact_ref: 'cloudflare-worker-binding:AI',
-      runtime_evidence_ref: auditAuthority.admissionRef,
-      runtime_artifact_ref: 'cloudflare-worker:runtime',
-      site_admission_evidence_ref: siteAdmissionEvidenceRef,
-    };
-    const canonicalGateway = createLocalInvocationGateway({
-      store,
-      adapterFor: (adapter: any) => adapter.id === CARRIER_INTELLIGENCE_ADAPTER_ID
-        ? invocationAdapter
-        : null,
-      clock,
-      contextFor: async ({ request, clock: decisionClock }: any) => {
-        const context = request.resolutionContext;
-        return buildResolverContext({
-          targetSite: context.targetSite,
-          userSite: context.userSite,
-          hostSite: context.hostSite,
-        }, {
-          clock: decisionClock,
-          runtime: 'workers',
-          access: context.access,
-          topologyObservations: topologyObservations(
-            context.catalogRecords,
-            decisionClock,
-            runtimeEvidence,
-          ),
-        });
-      },
-      materializationFor: ({ intent, context }: any) => materialization.acquire({
-        destination_site_id: context.targetSite.id,
-        resolver: 'cloudflare',
-        target_site_id: context.targetSite.id,
-        purpose: intent.purpose,
-        ...(intent.principal ? { principal_id: intent.principal } : {}),
-        now: context.clock.instant,
-      }),
-      auditAuthority,
-      resultPayloadPolicy: ({ request, intent, plan, producedAt }: any) => {
-        const context = request.resolutionContext;
-        return {
-          media_type: 'application/json',
-          classification: context.access.data_classification,
-          retention: {
-            mode: 'never-retain',
-            policy_ref: plan.access.governance_requirement_ids[0],
-            residency: context.hostSite.id,
-          },
-          access: {
-            allowed_principals: intent.principal ? [intent.principal] : [],
-            capability_refs: ['capability:invocation-result-read'],
-          },
-          disposition: 'never-retained',
-          tombstone: {
-            disposed_at: producedAt,
-            reason_code: 'runtime-result-never-retain',
-            evidence_ref: auditAuthority.admissionRef,
-          },
-        };
-      },
-    });
-    const gateway = {
-      async invoke(request: any) {
-        const admitted = await admitCarrierInvocationRequest(store, request);
-        return canonicalGateway.invoke({
-          ...request,
-          principal: admitted.principalId,
-          authorityBinding: admitted.authorityBinding,
-          resolutionContext: admitted,
-        });
-      },
-    };
-    return { gateway, store, materialization };
-  } catch (error: any) {
-    await Promise.allSettled([
-      ...(materialization ? [materialization.close()] : []),
-      store.close(),
-    ]);
-    throw error;
-  }
+  const runtimeEvidence = {
+    request_admitted: true,
+    worker_runtime: true,
+    ai_binding_available: typeof env.AI?.run === 'function',
+    request_evidence_ref: auditAuthority.admissionRef,
+    request_artifact_ref: 'cloudflare-carrier:authenticated-request',
+    binding_evidence_ref: auditAuthority.admissionRef,
+    binding_artifact_ref: 'cloudflare-worker-binding:AI',
+    runtime_evidence_ref: auditAuthority.admissionRef,
+    runtime_artifact_ref: 'cloudflare-worker:runtime',
+    site_admission_evidence_ref: 'site-config:narada-cloudflare:invokable-intelligence:runtime',
+  };
+  const handle = await createCloudflareInvocationGateway({
+    registryDb: env.INTELLIGENCE_REGISTRY_DB,
+    runtimeCapabilities: {
+      aiBinding: typeof env.AI?.run === 'function',
+      outboundFetch: typeof globalThis.fetch === 'function',
+    },
+    adapterFor: (adapter, store) => adapter.id === CARRIER_INTELLIGENCE_ADAPTER_ID
+      ? adapterFactory(store)
+      : null,
+    assertReady: (store) => assertInitializedCatalog(store),
+    admitRequest: async (store, request) => admitCarrierInvocationRequest(store, request) as Promise<CloudflareInvocationAdmission>,
+    topologyObservationsFor: ({ records, clock: decisionClock }) => topologyObservations(records, decisionClock, {
+      ...runtimeEvidence,
+      site_admission_evidence_ref: catalogEvidenceReference(records),
+    }),
+    clock,
+    auditAuthority,
+  });
+  return {
+    ...handle,
+    gateway: {
+      invoke: (request: any) => handle.gateway.invoke(request),
+    },
+  };
 }

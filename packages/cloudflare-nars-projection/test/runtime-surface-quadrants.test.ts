@@ -165,12 +165,13 @@ describe('negative authority cases', () => {
     });
   });
 
-  test('cloudflare-origin revocation blocks health, replay, and input with typed refusals', async () => {
+  test('cloudflare-origin revocation blocks mutation but leaves terminal replay observable', async () => {
     const service = createCloudflareNarsAuthorityService({ max_events: 10 });
     const created = service.createSession({ session_id: 'cf_revoke_1', site_id: 'narada.test', agent_id: 'cloudflare.resident' }, now);
     expect(service.revokeSession(created.session_id, now)).toMatchObject({ status: 'revoked' });
     expect(service.readHealth(created.session_id)).toMatchObject({ status: 'refused', code: 'session_revoked' });
-    expect(service.readEvents({ session_id: created.session_id })).toMatchObject({ status: 'refused', code: 'session_revoked' });
+    expect(service.readEvents({ session_id: created.session_id })).toMatchObject({ status: 'ok', terminal: true });
+    expect(service.readEvents({ session_id: created.session_id }).events.map((event) => event.payload.event)).toContain('authority_session_revoked');
     expect(await service.submitInput({ session_id: created.session_id, method: 'conversation.send', payload: {}, now })).toMatchObject({ status: 'refused', code: 'session_revoked' });
   });
 });

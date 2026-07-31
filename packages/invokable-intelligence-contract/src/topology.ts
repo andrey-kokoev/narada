@@ -63,6 +63,11 @@ export interface ExecutionTopologyNode {
   locus: ExecutionTopologyLocus;
   /** Adapter/provider/endpoint registry identity where the node embodies one. */
   resource?: ResourceRef;
+  /** Explicit runtime capability consumed by this topology node. */
+  runtime_binding?: {
+    kind: "cloudflare-binding" | "outbound-fetch";
+    name?: string;
+  };
   feasibility_authority: TopologyAuthorityRef;
   required_feasibility: TopologyFeasibilityRequirement[];
 }
@@ -655,9 +660,9 @@ export const CLOUDFLARE_EXECUTION_TOPOLOGY: ExecutionTopology = {
     { id: "cf-launcher", kind: "launcher", locus: { kind: "local-machine", site_id: "site:pc", execution_locus: executionLocus("operator-pc") }, feasibility_authority: authority("site:pc", "launcher-site"), required_feasibility: ["launcher-available"] },
     { id: "cf-carrier", kind: "carrier", locus: { kind: "cloudflare-worker", site_id: "site:cloudflare-account", execution_locus: executionLocus("cloudflare-carrier"), deployment_ref: "worker:narada-cloudflare-carrier" }, feasibility_authority: authority("site:cloudflare-account", "carrier-site"), required_feasibility: ["carrier-deployed"] },
     { id: "cf-runtime", kind: "runtime", locus: { kind: "cloudflare-worker", site_id: "site:cloudflare-account", execution_locus: executionLocus("cloudflare-carrier") }, feasibility_authority: authority("site:cloudflare-account", "execution-site"), required_feasibility: ["runtime-available"] },
-    { id: "cf-adapter", kind: "adapter", locus: { kind: "cloudflare-worker", site_id: "site:cloudflare-account", execution_locus: executionLocus("cloudflare-carrier") }, resource: { kind: "adapter", id: "adapter:workers-ai-binding" }, feasibility_authority: authority("site:cloudflare-account", "execution-site"), required_feasibility: ["adapter-supported"] },
-    { id: "cf-service", kind: "inference-service", locus: { kind: "cloudflare-account", site_id: "site:cloudflare-account", deployment_ref: "binding:AI" }, resource: { kind: "inference-provider", id: "inference-provider:cloudflare-workers-ai" }, feasibility_authority: authority("site:cloudflare-account", "service-site"), required_feasibility: ["service-available"] },
-    { id: "cf-endpoint", kind: "endpoint", locus: { kind: "remote-service", site_id: "site:cloudflare-account" }, resource: { kind: "inference-endpoint", id: "inference-endpoint:cf-workers-ai-default" }, feasibility_authority: authority("site:cloudflare-account", "service-site"), required_feasibility: ["endpoint-available"] },
+    { id: "cf-adapter", kind: "adapter", locus: { kind: "cloudflare-worker", site_id: "site:cloudflare-account", execution_locus: executionLocus("cloudflare-carrier") }, resource: { kind: "adapter", id: "adapter:workers-ai-binding" }, runtime_binding: { kind: "cloudflare-binding", name: "AI" }, feasibility_authority: authority("site:cloudflare-account", "execution-site"), required_feasibility: ["adapter-supported"] },
+    { id: "cf-service", kind: "inference-service", locus: { kind: "cloudflare-account", site_id: "site:cloudflare-account", deployment_ref: "binding:AI" }, resource: { kind: "inference-provider", id: "inference-provider:cloudflare-workers-ai" }, runtime_binding: { kind: "cloudflare-binding", name: "AI" }, feasibility_authority: authority("site:cloudflare-account", "service-site"), required_feasibility: ["service-available"] },
+    { id: "cf-endpoint", kind: "endpoint", locus: { kind: "remote-service", site_id: "site:cloudflare-account" }, resource: { kind: "inference-endpoint", id: "inference-endpoint:cf-workers-ai-default" }, runtime_binding: { kind: "cloudflare-binding", name: "AI" }, feasibility_authority: authority("site:cloudflare-account", "service-site"), required_feasibility: ["endpoint-available"] },
   ],
   edges: [
     { id: "c1", from: "cf-client", to: "cf-launcher", kind: "operator-handoff", boundary: { kinds: ["process"] }, feasibility_authority: authority("site:user", "client-site"), required_feasibility: ["boundary-admitted"] },

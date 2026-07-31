@@ -4,6 +4,22 @@ compatibility_date = "2026-06-30"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+[vars]
+# Authority sessions are bearer-bound to the browser credential used to
+# create them. Local unit fixtures may explicitly disable this requirement.
+NARS_AUTHORITY_REQUIRE_CREDENTIAL = "true"
+# HTTPS provider adapters require an explicit deployment capability. Workers
+# AI is the default provider route for this worker.
+NARS_OUTBOUND_PROVIDER_ENABLED = "false"
+
+[ai]
+binding = "AI"
+
+[[d1_databases]]
+binding = "INTELLIGENCE_REGISTRY_DB"
+database_name = "narada-cloudflare-site-registry"
+database_id = "170ca715-9c9e-4c48-896f-0e8daba72217"
+
 [[durable_objects.bindings]]
 name = "NARS_PROJECTION_STATE"
 class_name = "NarsProjectionState"
@@ -26,6 +42,7 @@ binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/*"]
 
-# This projection Worker does not select or execute intelligence from Worker
-# variables. Cloudflare invocation authority belongs to the D1-backed
-# invokable-intelligence gateway in @narada2/cloudflare-carrier.
+# The Worker supplies only infrastructure bindings. Catalog selection,
+# credential locators, plan validation, and invocation evidence remain owned
+# by the shared D1-backed invokable-intelligence gateway. NARS owns its own
+# Durable Object session and event journal.

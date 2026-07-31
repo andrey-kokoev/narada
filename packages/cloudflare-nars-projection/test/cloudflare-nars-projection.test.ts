@@ -891,6 +891,7 @@ describe('Cloudflare Worker routes', () => {
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.session_context_read', status: 'ok' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority.diagnostic_probe', status: 'failed' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority-artifacts.artifact_register', status: 'ok', mcp_fabric_scope: 'all' }));
+      expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'session_artifact_registered', artifact: expect.objectContaining({ artifact_id: 'art_cf_authority_html' }) }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'mcp_runtime_fault', error_code: 'cloudflare_authority_diagnostic_probe_failed' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'assistant_message', execution_kind: 'cloudflare_test_fixture' }));
       expect(liveMessages).toContainEqual(expect.objectContaining({ event: 'turn_complete', terminal_state: 'completed' }));
@@ -902,11 +903,29 @@ describe('Cloudflare Worker routes', () => {
       expect(replayAfterInput.events.map((entry: { payload: { event: string } }) => entry.payload.event)).toContain('session_artifact_registered');
       expect(replayAfterInput.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'tool_result', tool_name: 'cf-authority-artifacts.artifact_register', mcp_fabric_scope: 'all' }) }));
 
+      const closeCreated = await jsonOf(outerWorker.fetch(new Request('https://projection.example.test/api/nars/authority/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ session_id: 'cf_session_close_1', site_id: 'narada.cloudflare.test', agent_id: 'cloudflare.resident' }),
+      }), env));
+      expect(closeCreated).toMatchObject({ status: 'created', session_id: 'cf_session_close_1' });
+      const closeBase = 'https://projection.example.test/api/nars/authority/sessions/cf_session_close_1';
+      await withCloudflareWebSocketResponse(() => outerWorker.fetch(new Request(`${closeBase}/events/websocket?since_sequence=0`, {
+        headers: { Upgrade: 'websocket' },
+      }), env));
+      const closeInput = await jsonOf(outerWorker.fetch(new Request(`${closeBase}/input`, {
+        method: 'POST',
+        body: JSON.stringify({ method: 'session.close', payload: { message: 'close' } }),
+      }), env));
+      expect(closeInput).toMatchObject({ status: 'admitted', method: 'session.close' });
+      expect(sockets[1].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'session_closed' }));
+      expect(sockets[1].client.closed).toBe(true);
+      expect(await jsonOf(outerWorker.fetch(new Request(`${closeBase}/events?since_sequence=0`), env))).toMatchObject({ status: 'ok', terminal: true });
+
       expect(await jsonOf(outerWorker.fetch(new Request(base, { method: 'DELETE' }), env))).toMatchObject({ status: 'revoked', session_id: 'cf_session_runtime_1' });
       expect(sockets[0].client.messages.map(JSON.parse)).toContainEqual(expect.objectContaining({ event: 'authority_session_revoked', code: 'session_revoked', session_id: 'cf_session_runtime_1' }));
       expect(sockets[0].client.closed).toBe(true);
       expect(await jsonOf(outerWorker.fetch(new Request(`${base}/health`), env))).toMatchObject({ status: 'refused', code: 'session_revoked' });
-      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env))).toMatchObject({ status: 'refused', code: 'session_revoked' });
+      expect(await jsonOf(outerWorker.fetch(new Request(`${base}/events?since_sequence=0`), env))).toMatchObject({ status: 'ok', terminal: true });
       expect(await jsonOf(outerWorker.fetch(new Request(`${base}/input`, {
         method: 'POST',
         body: JSON.stringify({ method: 'conversation.send', payload: { message: 'after revoke' } }),

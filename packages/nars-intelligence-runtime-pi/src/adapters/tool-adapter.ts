@@ -303,6 +303,11 @@ export function createNarsPiCapabilityGateway({
         turn_id: invocationContext.turn_id,
         input_event_id: invocationContext.input_id,
         status: projected.status ?? 'unknown',
+        // Preserve the admitted capability result at the lifecycle boundary.
+        // The runtime server dispatches lifecycle hooks from this event; a
+        // status-only projection makes result-driven hooks (such as task
+        // executability) impossible to run from a real Pi/NARS tool call.
+        result: projected,
         effect_confirmation: projected.effect_confirmation,
         capability_identity: invocationContext.capability_identity,
         authority_posture: invocationContext.authority_posture,
