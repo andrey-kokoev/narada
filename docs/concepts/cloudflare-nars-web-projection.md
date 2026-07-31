@@ -120,7 +120,7 @@ There are three live smoke lineages and they prove different authority shapes:
 | --- | --- | --- | --- |
 | `pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live` | Local NARS session. | Remote projection store, hosted browser shell, event/artifact cache, and input relay. | A local authoritative NARS session can be projected to Cloudflare and consumed remotely without moving session authority. |
 | `pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live` | Cloudflare synthetic NARS authority runtime. | Session authority for a synthetic no-provider/no-tools runtime. | Cloudflare can own session identity, event replay, WebSocket live delivery, input admission, health, and revocation for a synthetic NARS authority slice. |
-| `pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live` | Historical provider-capable projection slice. | Earlier real provider dispatch proof from the Worker/DO lane. | Historical Task 2120 evidence only. Current selection authority is the D1-backed canonical invokable-intelligence runtime in `@narada2/cloudflare-carrier`; provider/model environment bindings are retired. |
+| `pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live` | Cloudflare-origin provider-capable NARS authority runtime. | D1 catalog/plan resolution, Cloudflare-reachable provider execution, Durable Object session/event authority, and Cloudflare-native MCP fabric. | A Cloudflare NARS authority can resolve an admitted plan, execute a provider-backed turn, persist provider/assistant/terminal evidence, graduate capability evidence, and revoke the session. |
 
 The command names expose the authority-origin axis. Compatibility aliases currently remain: `smoke:live` maps to `smoke:local-origin-live`, and `smoke:authority-live` maps to `smoke:cloudflare-origin-live`. Passing one does not imply the others have passed.
 
@@ -160,6 +160,35 @@ narada-agent-web-ui --cloudflare-authority-session-id <session-id> --cloudflare-
 That local surface uses the authority WebSocket endpoint for event delivery and the authority input endpoint for operator input admission.
 
 This slice proves Cloudflare can be an authority runtime in the runtime projection graph without pretending to be a local NARS projection cache and without invoking intelligence providers or MCP tools.
+
+## Cloudflare-Native Provider-Capable NARS Runtime
+
+The provider-capable lane is the production runtime shape for a NARS session whose authority is Cloudflare-native. It is separate from the synthetic boundary smoke above: the synthetic lane proves the authority lifecycle without provider execution; this lane proves the same lifecycle with the shared invokable-intelligence gateway and a Cloudflare-reachable provider.
+
+```text
+Cloudflare Worker + NARS Durable Object
+  owns session identity, ordered events, replay, health, input serialization, abort, and revocation
+  admits principal/site identity before invocation
+  calls the shared Cloudflare invocation gateway
+
+shared Cloudflare invocation gateway
+  resolves the D1 catalog and immutable plan per request
+  validates topology, capability, access, credential-locator, idempotency, retry, and materialization boundaries
+  selects the catalog-admitted adapter without selecting a model from environment configuration
+
+Cloudflare provider adapter
+  executes Workers AI through the AI binding or a catalog-admitted HTTPS endpoint through fetch
+  resolves only named Worker secret bindings for catalog credential locators
+  refuses adapter runtime families that are not Workers-compatible
+```
+
+The Cloudflare authority requires an explicit `principal_id` at production session creation. The session may also bind `site_id`, `user_site_id`, and `host_site_id`; invocation admission verifies those identities against D1 resources before resolving a plan. A request may provide a requested model or inference provider, but the canonical D1 catalog and resolver remain authoritative. No model, provider, endpoint, or thinking/default option is selected by an environment variable.
+
+The Worker supplies infrastructure capability only: `INTELLIGENCE_REGISTRY_DB`, the optional `AI` binding for Workers AI routes, the Worker `fetch` capability for catalog-admitted HTTPS routes, and named secret bindings referenced by `credential-locator` records with `store: "env"`. Local filesystem, shell, local MCP, and local artifact authority are intentionally absent. The NARS-native MCP fabric admits only Cloudflare-native loci and session-owned authority tools.
+
+For a provider-backed turn, the Durable Object appends `provider_request`, `intelligence_plan`, `provider_response`, `assistant_message`, `tool_call`, `tool_result`, `provider_error`, `tool_loop_limit`, and `turn_complete` events as applicable. The shared gateway owns invocation evidence, plan revalidation, idempotency, retry/readback, and result materialization policy; the Durable Object owns the ordered NARS journal and session lifecycle. A completed provider invocation changes the runtime capability profile from `provider_execution: declared` to `provider_execution: present`; a failed or refused invocation does not.
+
+This lane is executable only when the deployed Worker has the D1 binding and the selected catalog route is feasible in the Workers runtime. A Workers AI route requires the `AI` binding. A catalog URL route requires outbound fetch and a credential locator that resolves to an admitted named binding when authentication is required. A non-Workers adapter is not silently emulated or redirected through a local carrier.
 
 ## Cloudflare MCP Fabric
 
@@ -206,14 +235,18 @@ The normalized fabric summary is part of session and health diagnostics. It incl
 The deployed Cloudflare-origin authority path has an explicit live smoke command:
 
 ```bash
-pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://narada-nars-projection.andrei-kokoev.workers.dev
+pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://<synthetic-nars-worker> --browser-token fingerprint:<operator-browser>
 ```
+
+This command is for the dedicated synthetic deployment only. Deploy that
+worker with `wrangler.synthetic.toml`; the production `wrangler.toml` has D1
+and AI bindings and must be tested with the provider-capable smoke instead.
 
 Running the command without `--live` is a safe planning mode. It does not mutate Cloudflare state and prints the command shape required for a live run.
 
 By default, the smoke is operator-readable. It prints each phase while it works, then summarizes the authority origin, authority runtime kind, Worker URL, synthetic session id, hosted web UI URL, WebSocket endpoint, check statuses, cleanup status, evidence path, latest evidence path, and evidence index path. For machine-readable output, pass `--format json`; the full evidence object is also written to disk.
 
-The smoke creates one synthetic Cloudflare-origin NARS authority session, checks service and session health, checks bounded replay, opens the authority WebSocket, admits one `session.submit` input, observes synthetic user/assistant/turn completion events, checks the hosted web UI shell, revokes the session, and verifies post-revoke refusal for health, replay, and input.
+The smoke creates one synthetic Cloudflare-origin NARS authority session, checks service and session health, checks bounded replay, opens the authority WebSocket, admits one `session.submit` input, observes synthetic user/assistant/turn completion events, checks the hosted web UI shell, revokes the session, verifies post-revoke refusal for health and input, and verifies replay of the terminal revocation event.
 
 Current evidence boundary:
 
@@ -221,7 +254,7 @@ Current evidence boundary:
 2. The Cloudflare authority runtime can create a synthetic session and emit canonical replayable events.
 3. The authority WebSocket can deliver replay plus live synthetic turn events to a non-browser observer.
 4. The authority input endpoint can admit an operator `session.submit` envelope and emit the expected synthetic user, assistant, and completion events.
-5. Session revocation makes direct health, replay, and input APIs refuse with `session_revoked`.
+5. Session revocation makes direct health and input APIs refuse with `session_revoked`, while credential-bound replay exposes the canonical terminal revocation event.
 6. Hosted web UI evidence is compositional. `hosted_shell_check_kind: http_html_shell_only` proves only that the deployed Worker returns the web UI document for an authority-session URL. `hosted_web_ui_evidence.levels[]` records the ordered proof levels, and `strongest_hosted_web_ui_evidence: browser_level_authority_e2e` is the browser-level proof: it opens the deployed web UI in a real browser, verifies JavaScript boot and authority URL configuration, renders replay and live WebSocket events, submits operator input through the composer, renders the synthetic assistant response and turn completion without duplicate user/assistant messages, revokes the session, and verifies the UI reports revoked/disconnected state.
 
 Resolution item #4 is the browser-level hosted web UI proof. It is resolved only when the deployed `smoke:cloudflare-origin-live` evidence includes `hosted_browser.status: passed`, `strongest_hosted_web_ui_evidence: browser_level_authority_e2e`, and the browser-level `hosted_web_ui_evidence.levels[]` all pass. Shell-only evidence is still retained as a fast availability check but is not sufficient for #4.
@@ -232,8 +265,8 @@ Evidence Status:
 
 | Field | Value |
 | --- | --- |
-| Status | Browser-level deployed authority E2E passed. |
-| Last verified command | `pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://narada-nars-projection.andrei-kokoev.workers.dev` |
+| Status | Requires fresh evidence from the dedicated synthetic deployment. |
+| Last verified command | Not asserted here; run the command above with the current synthetic Worker URL and browser token. |
 | Strongest evidence | `browser_level_authority_e2e` |
 | Evidence fields | `hosted_web_ui_evidence.levels[]`, `strongest_hosted_web_ui_evidence`, `evidence_path`, `evidence_latest_path`, `evidence_index_path` |
 | Known gaps | This lineage covers the synthetic runtime slice. The provider/tool-capable Cloudflare authority slice is decided and implemented (Tasks 2112–2115) with its own lineage; see Deployed Provider-Capable Authority Smoke below. |
@@ -244,21 +277,21 @@ If the smoke fails after creating a synthetic session, it performs a best-effort
 
 ### Deployed Provider-Capable Authority Smoke
 
-The provider-capable Cloudflare-origin authority runtime (`cloudflare_provider_http_adapter`, decided in Task 2112, implemented in Tasks 2113–2115) has its own live smoke lineage:
+The provider-capable Cloudflare-origin authority runtime has its own live smoke lineage:
 
 ```bash
-pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live
+pnpm --filter @narada2/cloudflare-nars-projection smoke:provider-capable-live -- --live --cloudflare-api-base-url https://<nars-worker> --principal-id principal:<operator> --browser-token fingerprint:<operator-browser>
 ```
 
 Running without `--live` is a safe planning mode: no mutation, prints the required arguments.
 
-**Current intelligence authority.** The historical provider-binding smoke is retained only as lineage. The current `@narada2/cloudflare-carrier` Worker receives an `INTELLIGENCE_REGISTRY_DB` D1 binding and an `AI` inference-runtime binding. Offering, route, endpoint, model, capability, access, temporal, and credential-locator decisions are canonical D1 resources resolved per invocation. Environment variables and Worker vars do not select intelligence.
+**Current intelligence authority.** Both the Cloudflare NARS authority runtime and the Cloudflare carrier use the shared `@narada2/invokable-intelligence-runtime` Cloudflare gateway. The `@narada2/cloudflare-nars-projection` Worker receives an `INTELLIGENCE_REGISTRY_DB` D1 binding and an optional `AI` inference-runtime binding. Offering, route, endpoint, model, capability, access, temporal, and credential-locator decisions are canonical D1 resources resolved per invocation. Environment variables and Worker vars provide infrastructure and named secret values only; they do not select intelligence.
 
 An empty or unauthorized catalog refuses before inference. A selected route is revalidated before dispatch, and readback links intent, plan, snapshot, revalidation, attempt, result, outcome, observation, evidence, telemetry, and materialization provenance.
 
-A live run creates a provider-capable session, verifies `provider_execution` capability graduates `declared → present` only on executed turn evidence, checks replay for `provider_request`/`provider_response`/`assistant_message`/`turn_complete`, revokes, and verifies post-revoke refusals. Evidence follows the same append-only + latest + index contract under `.narada/crew/nars-projections/`.
+A live run creates a principal-bound provider-capable session, verifies the session begins with `provider_execution: declared`, admits one provider-backed turn, checks live WebSocket delivery and replay for `provider_request`/`provider_response`/`assistant_message`/`turn_complete`, verifies the cancellation control path, verifies a mismatched browser credential is rejected, verifies post-turn health reports `provider_execution: present`, revokes, and verifies terminal revocation replay. The smoke writes an explicit evidence object under `.narada/evidence/`; a live pass must come from the deployed Worker and is not implied by the planning-mode result.
 
-**Historical status (2026-07-19):** Task 2120 proved the earlier binding-based slice live. That evidence remains valid for its deployed version but does not authorize or describe the current canonical selection path.
+The synthetic `smoke:cloudflare-origin-live` and provider-capable `smoke:provider-capable-live` commands are intentionally non-substitutable. The former proves the no-provider boundary; the latter is the production provider-execution proof.
 
 ## Projection Instance
 

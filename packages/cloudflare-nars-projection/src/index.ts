@@ -635,6 +635,10 @@ export interface CloudflareNarsProjectionIntentInput {
   created_at?: string;
   expires_at?: string | null;
   remote_registration?: Record<string, unknown> | null;
+  authority_runtime_host?: 'local' | 'cloudflare-host';
+  authority_epoch?: number;
+  authority_runtime_id?: string | null;
+  runtime_surface_contract?: NarsRuntimeSurfaceContract | null;
 }
 
 export function createCloudflareNarsProjectionWorkerService(options: {
@@ -2417,7 +2421,7 @@ export interface CloudflareNarsProjectionIntent {
   expires_at: string | null;
   revoked_at: string | null;
   remote_registration: Record<string, unknown> | null;
-  authority_runtime_host?: 'local';
+  authority_runtime_host?: 'local' | 'cloudflare-host';
   authority_epoch?: number;
   authority_runtime_id?: string;
   runtime_surface_contract?: NarsRuntimeSurfaceContract;
@@ -2431,7 +2435,7 @@ export interface ProjectionCredentialRecord {
   created_at: string;
   expires_at: string | null;
   revoked_at: string | null;
-  authority_runtime_host?: 'local';
+  authority_runtime_host?: 'local' | 'cloudflare-host';
   authority_epoch?: number;
   authority_runtime_id?: string;
   runtime_surface_contract?: NarsRuntimeSurfaceContract;
@@ -2471,7 +2475,7 @@ export interface CloudflareNarsRemoteAccessRecord {
   created_at: string;
   expires_at: string | null;
   revoked_at: string | null;
-  authority_runtime_host?: 'local';
+  authority_runtime_host?: 'local' | 'cloudflare-host';
   authority_epoch?: number;
   authority_runtime_id?: string;
   runtime_surface_contract?: NarsRuntimeSurfaceContract;
@@ -2885,6 +2889,36 @@ export function createCloudflareNarsProjectionIntent(input: CloudflareNarsProjec
   const siteId = requireNonEmpty(input.site_id, 'site_id');
   const sessionId = requireNonEmpty(input.nars_session_id, 'nars_session_id');
   const projectionId = input.projection_id?.trim() || `proj_${safeToken(siteId)}_${safeToken(sessionId)}`;
+  const authorityRuntimeHost = input.authority_runtime_host ?? 'local';
+  const authorityEpoch = Number.isInteger(input.authority_epoch) && input.authority_epoch! >= 1 ? input.authority_epoch! : 1;
+  const authorityRuntimeId = input.authority_runtime_id?.trim()
+    || (authorityRuntimeHost === 'cloudflare-host' ? `cloudflare-nars-authority:${sessionId}` : `local-nars:${sessionId}`);
+  const runtimeSurfaceContract = input.runtime_surface_contract ?? (authorityRuntimeHost === 'cloudflare-host'
+    ? buildCloudflareNarsAuthorityRuntimeSurfaceContract({
+      session_id: sessionId,
+      mcp_fabric: {
+        schema: 'narada.cloudflare_nars_authority.mcp_fabric.v1',
+        status: 'refused',
+        requested_scope: 'all',
+        requested_loci: [],
+        effective_loci: [],
+        required_loci: [],
+        optional_loci: [],
+        server_count: 0,
+        server_names: [],
+        servers: [],
+      },
+      authority_epoch: authorityEpoch,
+      authority_runtime_id: authorityRuntimeId,
+      provider_execution_state: 'declared',
+      capability_evidence: null,
+    }, 'cloudflare')
+    : buildLocalProjectionRuntimeSurfaceContract({
+      projection_id: projectionId,
+      nars_session_id: sessionId,
+      authority_epoch: authorityEpoch,
+      authority_runtime_id: authorityRuntimeId,
+    }, now));
   return {
     schema: CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA,
     projection_id: projectionId,
@@ -2905,15 +2939,10 @@ export function createCloudflareNarsProjectionIntent(input: CloudflareNarsProjec
     expires_at: input.expires_at ?? null,
     revoked_at: null,
     remote_registration: input.remote_registration ?? null,
-    authority_runtime_host: 'local',
-    authority_epoch: 1,
-    authority_runtime_id: `local-nars:${sessionId}`,
-    runtime_surface_contract: buildLocalProjectionRuntimeSurfaceContract({
-      projection_id: projectionId,
-      nars_session_id: sessionId,
-      authority_epoch: 1,
-      authority_runtime_id: `local-nars:${sessionId}`,
-    }, now),
+    authority_runtime_host: authorityRuntimeHost,
+    authority_epoch: authorityEpoch,
+    authority_runtime_id: authorityRuntimeId,
+    runtime_surface_contract: runtimeSurfaceContract,
   };
 }
 

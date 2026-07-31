@@ -56,9 +56,10 @@ export function buildHeadlessBrowserArgs({ userDataDir, url = 'about:blank', wid
   ];
 }
 
-export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 }, instrumentWebSocketClose = false }: AnyRecord): Promise<any> {
+export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 }, instrumentWebSocketClose = false, extraHeaders = {} }: AnyRecord): Promise<any> {
+  const hasExtraHeaders = Object.keys(extraHeaders ?? {}).length > 0;
   const userDataDir = mkdtempSync(join(tmpdir(), userDataPrefix));
-  const child: any = spawnHiddenPostureProcess(browserPath, buildHeadlessBrowserArgs({ userDataDir, url, width: viewport.width, height: viewport.height }), { stdio: ['ignore', 'ignore', 'pipe'], posture: 'test_child' });
+  const child: any = spawnHiddenPostureProcess(browserPath, buildHeadlessBrowserArgs({ userDataDir, url: hasExtraHeaders ? 'about:blank' : url, width: viewport.width, height: viewport.height }), { stdio: ['ignore', 'ignore', 'pipe'], posture: 'test_child' });
 
   const browserWsUrl = await new Promise<any>((resolve, reject) => {
     let stderr = '';
@@ -233,6 +234,9 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
   await send('Runtime.enable');
   await send('Page.enable');
   await send('Network.enable');
+  if (hasExtraHeaders) {
+    await send('Network.setExtraHTTPHeaders', { headers: extraHeaders });
+  }
   if (instrumentWebSocketClose) {
     await send('Page.addScriptToEvaluateOnNewDocument', {
       source: `(() => {
@@ -243,6 +247,7 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
           construct(target, args, newTarget) {
             const socket = Reflect.construct(target, args, newTarget);
             const record = { url: String(args[0] ?? ''), close_calls: [], close_events: [], error_count: 0 };
+            Object.defineProperty(record, 'socket', { value: socket, enumerable: false });
             records.push(record);
             const close = socket.close.bind(socket);
             socket.close = (code, reason) => {
@@ -254,10 +259,22 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
             return socket;
           },
         });
+        window.__naradaCloseWebSockets = (urlPart) => {
+          const matched = records.filter((record) => !urlPart || record.url.includes(String(urlPart)));
+          let closed = 0;
+          for (const record of matched) {
+            try {
+              record.socket.close(4000, 'live-e2e reconnect');
+              closed += 1;
+            } catch {}
+          }
+          return { matched: matched.length, closed };
+        };
       })();`,
     });
-    await send('Page.reload', { ignoreCache: true });
+    if (!hasExtraHeaders) await send('Page.reload', { ignoreCache: true });
   }
+  if (hasExtraHeaders) await send('Page.navigate', { url });
 
   return {
     async evaluate(expression: string): Promise<any> {
@@ -426,6 +443,9 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
     async webSocketInstrumentation(): Promise<any> {
       return await this.evaluate('window.__naradaWebSocketDiagnostics ?? []');
     },
+    async closeWebSockets(urlPart: string): Promise<any> {
+      return await this.evaluate(`window.__naradaCloseWebSockets?.(${JSON.stringify(urlPart)}) ?? { matched: 0, closed: 0 }`);
+    },
     runtimeDiagnostics() {
       return runtimeDiagnostics.slice();
     },
@@ -454,6 +474,9 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
     },
     async reload(): Promise<any> {
       return await send('Page.reload', { ignoreCache: true });
+    },
+    async navigate(nextUrl: string): Promise<any> {
+      return await send('Page.navigate', { url: nextUrl });
     },
     async close(): Promise<void> {
       try {

@@ -220,7 +220,7 @@ describe('Cloudflare Workspace Route Directory', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
   });
 
-  test('serves a route-directory landing and refuses unleased Console routes', async () => {
+  test('serves a route-directory landing, redirects the Console entry, and refuses unleased Console routes', async () => {
     const requestedPaths: string[] = [];
     const worker = createCloudflareNarsProjectionWorker({ now: () => now });
     const env = {
@@ -239,8 +239,8 @@ describe('Cloudflare Workspace Route Directory', () => {
     expect(root.status).toBe(200);
     expect(await root.text()).toContain('Narada Cloudflare Workspace');
     const consoleLanding = await worker.fetch(new Request(`https://workspace.example.test${OPERATOR_CONSOLE_PATH}/`), env);
-    expect(consoleLanding.status).toBe(200);
-    expect(await consoleLanding.text()).toContain('Only routes currently leased');
+    expect(consoleLanding.status).toBe(302);
+    expect(new URL(consoleLanding.headers.get('location') ?? '', 'https://workspace.example.test').pathname).toBe('/console/agents');
 
     const unleased = await worker.fetch(new Request('https://workspace.example.test/console/registry'), env);
     expect(unleased.status).toBe(404);

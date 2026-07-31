@@ -11,6 +11,26 @@ NARS_AUTHORITY_REQUIRE_CREDENTIAL = "true"
 # HTTPS provider adapters require an explicit deployment capability. Workers
 # AI is the default provider route for this worker.
 NARS_OUTBOUND_PROVIDER_ENABLED = "false"
+# The remote Operator Console mirror is enabled only after these deployment
+# values and the matching Cloudflare Access application are configured. The
+# tunnel URL/origin are intentionally deployment-specific; the bridge token is
+# a Wrangler secret, not a vars value.
+OPERATOR_CONSOLE_ACCESS_REQUIRED = "true"
+OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN = "https://global-maxima.cloudflareaccess.com"
+OPERATOR_CONSOLE_ACCESS_AUDIENCE = "724f8cc4382825eaf4b4f2d439e77989f68ee4afe67552f5a65b51691feec4e5"
+# OPERATOR_CONSOLE_GATEWAY_URL = "https://console-gateway.example.test"
+# OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN = "https://console-gateway.example.test"
+# The gateway is reached through a private Workers VPC service. The URL is an
+# internal HTTP authority name used for the Host header; it is not public DNS.
+OPERATOR_CONSOLE_GATEWAY_TRANSPORT = "vpc-service"
+OPERATOR_CONSOLE_GATEWAY_URL = "http://operator-console.internal"
+OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN = "http://operator-console.internal"
+OPERATOR_CONSOLE_GATEWAY_TCP_HOST = "127.0.0.1"
+OPERATOR_CONSOLE_GATEWAY_TCP_PORT = "61730"
+# Optional fleet projection. The canonical User Site registry is materialized
+# into this variable by deployment tooling; keep gateway bindings and tokens
+# out of the browser and out of this JSON. See config/host-fleet.registry.example.json.
+# NARADA_HOST_FLEET_REGISTRY = "..."
 
 [ai]
 binding = "AI"
@@ -41,6 +61,19 @@ directory = "public"
 binding = "ASSETS"
 not_found_handling = "single-page-application"
 run_worker_first = ["/*"]
+
+[[vpc_services]]
+binding = "OPERATOR_CONSOLE_GATEWAY"
+service_id = "019fb864-48c5-7433-993c-380abb1037b0"
+remote = true
+
+# HTTP VPC services do not provide a reliable long-lived WebSocket response to
+# the Worker fetch API. The same tunnel is also bound as a VPC Network so the
+# Worker can use the documented raw-TCP connect API for the WebSocket leg.
+[[vpc_networks]]
+binding = "OPERATOR_CONSOLE_GATEWAY_NETWORK"
+tunnel_id = "b850c3df-10c3-4c3d-adf8-0d000c680794"
+remote = true
 
 # The Worker supplies only infrastructure bindings. Catalog selection,
 # credential locators, plan validation, and invocation evidence remain owned

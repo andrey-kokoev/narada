@@ -4,6 +4,9 @@
  * Operator console for cross-Site health, attention queue, and control requests.
  */
 
+import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
@@ -14,6 +17,7 @@ import {
 } from '../lib/console-core.js';
 import { stopOperatorConsoleProjection } from './console-projection-lifecycle.js';
 import { startOperatorConsoleOverlay } from '@narada2/operator-console-overlay';
+import { createOperatorConsoleRemoteGateway, type OperatorConsoleRemoteGateway } from '@narada2/operator-console-remote-gateway';
 
 export interface ConsoleOptions {
   format?: string;
@@ -32,6 +36,57 @@ export interface ConsoleOverlayOptions extends ConsoleOptions {
   state_root?: string;
   visibility_policy?: 'always' | 'windows-terminal';
   refresh_seconds?: number;
+}
+
+export interface ConsoleGatewayOptions extends ConsoleOptions {
+  host?: string;
+  port?: number;
+  router_url?: string;
+  router_state_root?: string;
+  router_token?: string;
+  bridge_token?: string;
+}
+
+export interface ConsoleGatewayStartResult {
+  gateway: OperatorConsoleRemoteGateway;
+  url: string;
+  router_url: string;
+}
+
+export async function consoleGatewayCommand(
+  options: ConsoleGatewayOptions,
+  _context: CommandContext,
+): Promise<ConsoleGatewayStartResult> {
+  const routerUrl = options.router_url?.trim()
+    || process.env.NARADA_OPERATOR_ROUTER_URL?.trim()
+    || 'http://127.0.0.1:61729';
+  const routerToken = options.router_token?.trim()
+    || process.env.NARADA_OPERATOR_ROUTER_TOKEN?.trim()
+    || await readRouterToken(options.router_state_root);
+  const bridgeToken = options.bridge_token?.trim()
+    || process.env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN?.trim();
+  if (!bridgeToken) throw new Error('operator_console_gateway_bridge_token_required');
+  const gateway = createOperatorConsoleRemoteGateway({
+    router_url: routerUrl,
+    router_token: routerToken,
+    bridge_token: bridgeToken,
+    host: options.host,
+    port: options.port,
+  });
+  return { gateway, url: await gateway.start(), router_url: routerUrl };
+}
+
+async function readRouterToken(stateRoot?: string): Promise<string> {
+  const root = stateRoot?.trim()
+    || process.env.NARADA_OPERATOR_ROUTER_STATE_ROOT?.trim()
+    || join(process.env.LOCALAPPDATA?.trim() || join(process.env.USERPROFILE?.trim() || process.env.HOME?.trim() || homedir(), 'AppData', 'Local'), 'Narada', 'operator-router');
+  try {
+    const token = (await readFile(join(root, 'registration-token'), 'utf8')).trim();
+    if (token) return token;
+  } catch {
+    // Normalize the missing-secret path into one actionable command error.
+  }
+  throw new Error(`operator_console_gateway_router_token_unavailable:${root}`);
 }
 
 export async function consoleOverlayCommand(

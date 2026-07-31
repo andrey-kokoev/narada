@@ -81,9 +81,6 @@ importers:
       '@narada2/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.19
 
   ../mcp-surfaces/packages/git-mcp:
     dependencies:
@@ -157,11 +154,7 @@ importers:
 
   ../mcp-surfaces/packages/shared/execution-contract: {}
 
-  ../mcp-surfaces/packages/shared/mcp-e2e-harness:
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.19
+  ../mcp-surfaces/packages/shared/mcp-e2e-harness: {}
 
   ../mcp-surfaces/packages/shared/mcp-fabric-contracts:
     dependencies:
@@ -178,9 +171,6 @@ importers:
 
   ../mcp-surfaces/packages/shared/mcp-runtime-proxy:
     dependencies:
-      '@narada2/artifact-integrity':
-        specifier: workspace:*
-        version: link:../../../../narada-core/packages/artifact-integrity
       '@narada2/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../mcp-fabric-contracts
@@ -199,10 +189,6 @@ importers:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
-    devDependencies:
-      '@types/node':
-        specifier: ^20.10.0
-        version: 20.19.39
 
   ../mcp-surfaces/packages/structured-command-mcp:
     dependencies:
@@ -219,9 +205,6 @@ importers:
       '@narada2/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
-      '@narada2/mcp-runtime-proxy':
-        specifier: workspace:*
-        version: link:../shared/mcp-runtime-proxy
 
   ../mcp-surfaces/packages/task-lifecycle-mcp:
     dependencies:
@@ -602,9 +585,6 @@ importers:
       '@narada2/site-common-tools':
         specifier: workspace:*
         version: link:../site-common-tools
-    peerDependencies:
-      '@narada2/site-common-tools':
-        specifier: 0.1.0
 
   packages/carrier-command-contract: {}
 
@@ -691,6 +671,9 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
+      '@narada2/invokable-intelligence-runtime':
+        specifier: workspace:*
+        version: link:../invokable-intelligence-runtime
       '@narada2/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -764,6 +747,22 @@ importers:
 
   packages/evidence-confirmation-contract:
     devDependencies:
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
+  packages/host-fleet:
+    dependencies:
+      '@narada2/sqlite':
+        specifier: workspace:*
+        version: link:../sqlite
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
       tsx:
         specifier: ^4.7.0
         version: 4.21.0
@@ -876,6 +875,9 @@ importers:
       '@narada2/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
+      '@narada2/invokable-intelligence-materialization':
+        specifier: workspace:*
+        version: link:../invokable-intelligence-materialization
       '@narada2/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
@@ -961,6 +963,9 @@ importers:
       '@narada2/control-plane':
         specifier: workspace:*
         version: link:../control-plane
+      '@narada2/host-fleet':
+        specifier: workspace:*
+        version: link:../../host-fleet
       '@narada2/intent-zones':
         specifier: workspace:*
         version: link:../../intent-zones
@@ -994,6 +999,9 @@ importers:
       '@narada2/mcp-fabric':
         specifier: workspace:*
         version: link:../../mcp-fabric
+      '@narada2/mcp-fabric-contracts':
+        specifier: workspace:*
+        version: link:../../../../mcp-surfaces/packages/shared/mcp-fabric-contracts
       '@narada2/mcp-transport':
         specifier: workspace:*
         version: link:../../../../mcp-surfaces/packages/shared/mcp-transport
@@ -1024,9 +1032,15 @@ importers:
       '@narada2/operator-console-contract':
         specifier: workspace:*
         version: link:../../operator-console-contract
+      '@narada2/operator-console-mirror-runtime':
+        specifier: workspace:*
+        version: link:../../operator-console-mirror-runtime
       '@narada2/operator-console-overlay':
         specifier: workspace:*
         version: link:../../operator-console-overlay
+      '@narada2/operator-console-remote-gateway':
+        specifier: workspace:*
+        version: link:../../operator-console-remote-gateway
       '@narada2/operator-console-runtime':
         specifier: workspace:*
         version: link:../../operator-console-runtime
@@ -1386,6 +1400,25 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
+  packages/operator-console-mirror-runtime:
+    dependencies:
+      '@narada2/operator-console-remote-gateway':
+        specifier: workspace:*
+        version: link:../operator-console-remote-gateway
+      '@narada2/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
   packages/operator-console-overlay:
     dependencies:
       '@narada2/operator-console-contract':
@@ -1404,6 +1437,25 @@ importers:
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.19
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
+
+  packages/operator-console-remote-gateway:
+    dependencies:
+      '@narada2/operator-console-contract':
+        specifier: workspace:*
+        version: link:../operator-console-contract
+      '@narada2/operator-router':
+        specifier: workspace:*
+        version: link:../operator-router
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
       typescript:
         specifier: ^5.3.0
         version: 5.9.3
@@ -8414,7 +8466,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@22.19.19)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0))
+      vitest: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@20.19.39)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0))
 
   '@vitest/expect@1.6.1':
     dependencies:

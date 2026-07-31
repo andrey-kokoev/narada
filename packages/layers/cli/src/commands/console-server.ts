@@ -9,6 +9,7 @@
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
+import type { Duplex } from 'node:stream';
 import { createRequire } from 'node:module';
 import { dirname, resolve, sep } from 'node:path';
 import { openRegistry, createObservationFactory, createControlClientFactory } from '../lib/console-core.js';
@@ -30,6 +31,7 @@ import {
 } from '@narada2/operator-router';
 import {
   OPERATOR_CONSOLE_AGENTS_PATH,
+  OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA,
   OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH,
   operatorSurfaceDescriptors,
   projectOperatorWorkspaceRouteDirectory,
@@ -40,7 +42,18 @@ import {
   type OperatorSurfaceId,
   type OperatorSurfaceRouteDescriptor,
   type OperatorSurfaceRouteAvailabilityOverrides,
+  type OperatorConsoleHttpRouteParity,
+  type OperatorConsoleHttpRouteParityEntry,
 } from '@narada2/operator-console-contract';
+import {
+  createHostGatewayClient,
+  relayHostGatewayWebSocket,
+  resolveHostGatewayCredential,
+  resolveHostGatewayEnvironmentCredential,
+  resolveRuntimeTarget,
+  openHostFleetRegistry,
+  type HostFleetRegistry,
+} from '@narada2/host-fleet';
 
 export const DEFAULT_OPERATOR_CONSOLE_PORT = DEFAULT_OPERATOR_ROUTER_PORT;
 export const OPERATOR_CONSOLE_IDENTITY = 'narada.operator-console';
@@ -48,6 +61,56 @@ const OPERATOR_CONSOLE_HEALTH_SCHEMA = 'narada.operator_console.health.v1';
 const OPERATOR_CONSOLE_ROUTES_SCHEMA = 'narada.operator_console.routes.v1';
 const OPERATOR_CONSOLE_PROBE_TIMEOUT_MS = 800;
 const moduleRequire = createRequire(import.meta.url);
+
+function projectOperatorConsoleHttpRouteParity(
+  routes: readonly ReturnType<typeof createConsoleServerRoutes>[number][],
+  liveRoutes: readonly OperatorConsoleHttpRouteParityEntry[] = [],
+  generatedAt = new Date().toISOString(),
+): OperatorConsoleHttpRouteParity {
+  const specialRoutes: OperatorConsoleHttpRouteParityEntry[] = [
+    {
+      routeId: 'operator-console.workspace-route-directory',
+      method: 'GET',
+      protocol: 'http',
+      pattern: '^\\/console\\/routes\\/?$',
+      disposition: 'proxy',
+      kind: 'observation',
+      intentKind: null,
+    },
+    {
+      routeId: 'operator-console.surfaces-page',
+      method: 'GET',
+      protocol: 'http',
+      pattern: '^\\/console\\/surfaces\\/?$',
+      disposition: 'proxy',
+      kind: 'document',
+      intentKind: null,
+    },
+  ];
+  const routeEntries: OperatorConsoleHttpRouteParityEntry[] = routes.map((route) => ({
+    routeId: route.route_id,
+    method: route.method,
+    protocol: 'http',
+    pattern: route.pattern.source,
+    disposition: route.remote_disposition,
+    kind: route.remote_kind,
+    intentKind: route.remote_intent,
+  }));
+  const entries = [...specialRoutes, ...routeEntries, ...liveRoutes];
+  const status = entries.every((entry) => entry.routeId.length > 0
+    && entry.method.length > 0
+    && entry.pattern.length > 0
+    && (entry.kind !== 'intent' || entry.intentKind !== null))
+    ? 'complete'
+    : 'incomplete';
+  return {
+    schema: OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA,
+    status,
+    source: 'local_operator_console_route_table',
+    generatedAt,
+    routes: entries,
+  };
+}
 
 function resolveOperatorConsoleArtifactOptions(): { packageRoot: string; published: boolean } | undefined {
   try {
@@ -96,10 +159,15 @@ interface WorkspaceRouteProjection {
   additionalRoutes: OperatorSurfaceAdditionalRouteOverrides;
   routeAvailability: OperatorSurfaceRouteAvailabilityOverrides;
   surfaceAvailability: OperatorSurfaceAvailabilityOverrides;
+  httpRoutes: OperatorConsoleHttpRouteParityEntry[];
 }
 
 function emptyWorkspaceRouteProjection(): WorkspaceRouteProjection {
-  return { additionalRoutes: {}, routeAvailability: {}, surfaceAvailability: {} };
+  return { additionalRoutes: {}, routeAvailability: {}, surfaceAvailability: {}, httpRoutes: [] };
+}
+
+function regexEscape(value: string): string {
+  return value.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&');
 }
 
 function dynamicWorkspaceRouteLabel(surfaceId: OperatorSurfaceId, route: OperatorRouterRouteProjection): string {
@@ -114,7 +182,7 @@ function projectLiveRouterRoutes(routes: readonly OperatorRouterRouteProjection[
   const routeAvailability = new Map<OperatorSurfaceId, Record<string, OperatorSurfaceAvailability>>();
 
   for (const route of routes) {
-    if (!route.protocols.includes('http') || !concreteWorkspaceRoutePath(route.public_path)) continue;
+    if (!concreteWorkspaceRoutePath(route.public_path)) continue;
     const surfaceId = route.route_class === 'site-operations'
       ? 'site-operations'
       : route.route_class === 'agent-web-ui'
@@ -123,6 +191,23 @@ function projectLiveRouterRoutes(routes: readonly OperatorRouterRouteProjection[
           ? 'artifacts'
           : null;
     if (!surfaceId) continue;
+    const pattern = route.route_mode === 'exact'
+      ? `^${regexEscape(route.public_path)}$`
+      : `^${regexEscape(route.public_path)}(?:/.*)?$`;
+    for (const method of route.methods) {
+      const normalizedMethod = method.toUpperCase();
+      const protocol = route.protocols.includes('http') ? 'http' : 'websocket';
+      projection.httpRoutes.push({
+        routeId: `router.${route.route_id}.${protocol}.${normalizedMethod.toLowerCase()}`,
+        method: normalizedMethod,
+        protocol,
+        pattern,
+        disposition: protocol === 'websocket' || ['GET', 'HEAD', 'OPTIONS'].includes(normalizedMethod) ? 'proxy' : 'local-only',
+        kind: normalizedMethod === 'GET' ? 'observation' : 'intent',
+        intentKind: normalizedMethod === 'GET' ? null : `router.${route.route_class}.${normalizedMethod.toLowerCase()}`,
+      });
+    }
+    if (!route.protocols.includes('http')) continue;
     const routeId = `router-${route.route_id}`;
     const surfaceRouteList = surfaceRoutes.get(surfaceId) ?? [];
     surfaceRouteList.push({
@@ -179,6 +264,7 @@ function mergeWorkspaceSurfaceAvailability(
 export interface ConsoleServerConfig {
   port: number;
   host?: string;
+  onboardingPlatform?: 'windows' | 'linux';
   ingressMode?: 'diagnostic' | 'router';
   operatorRouterUrl?: string;
   readOperatorRouterRoutes?: typeof readOperatorRouterRoutes;
@@ -192,6 +278,9 @@ export interface ConsoleServerConfig {
   siteAgentPending?: SiteAgentPendingTracker;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
+  hostFleetRegistry?: HostFleetRegistry;
+  hostFleetCredentialResolver?: (credentialRef: string) => string | Promise<string | null> | null;
+  hostFleetFetch?: typeof fetch;
 }
 
 export interface ConsoleServer {
@@ -200,6 +289,95 @@ export interface ConsoleServer {
   isRunning(): boolean;
   getUrl(): string | null;
   getOwnership(): 'started' | 'attached' | 'diagnostic';
+}
+
+const HOST_FLEET_SESSION_WEBSOCKET_PATTERN = /^\/console\/hosts\/api\/sessions\/([^/]+)\/([^/]+)\/([^/]+)\/events\/?$/u;
+
+function writeUpgradeRefusal(socket: Duplex, status: number, reason: string): void {
+  if (socket.destroyed) return;
+  const phrase = status === 400 ? 'Bad Request' : status === 404 ? 'Not Found' : status === 409 ? 'Conflict' : 'Service Unavailable';
+  const body = JSON.stringify({ schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason });
+  socket.write(`HTTP/1.1 ${status} ${phrase}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`);
+  socket.destroy();
+}
+
+function decodePathSegment(value: string): string | null {
+  try {
+    const decoded = decodeURIComponent(value);
+    return decoded && !decoded.includes('/') && !decoded.includes('\\') && !decoded.includes('..') ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+async function handleHostFleetSessionUpgrade(args: {
+  request: IncomingMessage;
+  socket: Duplex;
+  head: Buffer;
+  registry: HostFleetRegistry;
+  credentialResolver?: (credentialRef: string) => string | Promise<string | null> | null;
+  fetchFn?: typeof fetch;
+}): Promise<boolean> {
+  const requestUrl = new URL(args.request.url ?? '/', `http://${args.request.headers.host ?? '127.0.0.1'}`);
+  const match = HOST_FLEET_SESSION_WEBSOCKET_PATTERN.exec(requestUrl.pathname);
+  if (!match) return false;
+  if (args.request.method !== 'GET' || args.request.headers.upgrade?.toLowerCase() !== 'websocket') {
+    writeUpgradeRefusal(args.socket, 400, 'host_fleet_websocket_upgrade_required');
+    return true;
+  }
+  const hostId = decodePathSegment(match[1]!);
+  const instanceId = decodePathSegment(match[2]!);
+  const sessionId = decodePathSegment(match[3]!);
+  const siteId = requestUrl.searchParams.get('site_id')?.trim() ?? '';
+  const agentId = requestUrl.searchParams.get('agent_id')?.trim() ?? '';
+  if (!hostId || !instanceId || !sessionId || !siteId || !agentId) {
+    writeUpgradeRefusal(args.socket, 400, 'host_fleet_websocket_target_required');
+    return true;
+  }
+  const host = args.registry.getHost({ host_id: hostId, host_instance_id: instanceId });
+  if (!host) {
+    writeUpgradeRefusal(args.socket, 404, 'host_not_registered');
+    return true;
+  }
+  if (host.lifecycle_state === 'revoked' || host.lifecycle_state === 'retired') {
+    writeUpgradeRefusal(args.socket, 409, `host_${host.lifecycle_state}`);
+    return true;
+  }
+  if (!host.admitted_sites.includes(siteId)) {
+    writeUpgradeRefusal(args.socket, 409, 'host_site_not_admitted');
+    return true;
+  }
+  try {
+    const client = createHostGatewayClient(host, {
+      fetch_fn: args.fetchFn,
+      credential_resolver: args.credentialResolver ?? resolveHostGatewayEnvironmentCredential,
+    });
+    const discovery = await client.sessions();
+    const resolution = resolveRuntimeTarget(discovery.sessions, {
+      host_id: host.host_id,
+      host_instance_id: host.host_instance_id,
+      site_id: siteId,
+      agent_id: agentId,
+      runtime_session_id: sessionId,
+    });
+    if (resolution.status !== 'resolved') {
+      writeUpgradeRefusal(args.socket, 409, resolution.refusal.reason);
+      return true;
+    }
+    const credential = await resolveHostGatewayCredential(host, args.credentialResolver ?? resolveHostGatewayEnvironmentCredential);
+    relayHostGatewayWebSocket({
+      record: host,
+      host,
+      session_id: resolution.target.runtime_session_id,
+      credential,
+      client: args.socket,
+      request: args.request,
+      head: args.head,
+    });
+  } catch (error) {
+    writeUpgradeRefusal(args.socket, 503, error instanceof Error ? error.message : String(error));
+  }
+  return true;
 }
 
 export interface EnsureConsoleServerResult {
@@ -267,6 +445,8 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       resolveOperatorConsoleArtifactOptions(),
     ).artifact_root;
   const registry = await openRegistry();
+  const hostFleetRegistry = config.hostFleetRegistry ?? openHostFleetRegistry();
+  const ownsHostFleetRegistry = config.hostFleetRegistry === undefined;
 
   const observationFactory = createObservationFactory();
   const controlClientFactory = createControlClientFactory(registry);
@@ -292,8 +472,12 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     siteAgentAdmission,
     siteAgentLifecycle,
     siteAgentPending: config.siteAgentPending ?? createSiteAgentPendingTracker(),
+    hostFleetRegistry,
+    hostFleetCredentialResolver: config.hostFleetCredentialResolver,
+    hostFleetFetch: config.hostFleetFetch,
     workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,
+    onboardingPlatform: config.onboardingPlatform ?? (process.platform === 'win32' ? 'windows' : 'linux'),
   };
 
   const routes = createConsoleServerRoutes(routeContext);
@@ -317,25 +501,31 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     additionalRoutes: OperatorSurfaceAdditionalRouteOverrides;
     routeAvailability: OperatorSurfaceRouteAvailabilityOverrides;
     surfaceAvailability: OperatorSurfaceAvailabilityOverrides;
+    httpRoutes: OperatorConsoleHttpRouteParityEntry[];
   }> {
     const live = await currentWorkspaceRouteProjection();
     return {
       additionalRoutes: live.additionalRoutes,
       routeAvailability: mergeWorkspaceRouteAvailability(routeAvailability, live.routeAvailability),
       surfaceAvailability: mergeWorkspaceSurfaceAvailability(surfaceAvailability, live.surfaceAvailability),
+      httpRoutes: live.httpRoutes,
     };
   }
 
   async function currentWorkspaceRouteDirectory(): Promise<OperatorWorkspaceRouteDirectory> {
     const workspaceProjection = await currentWorkspaceProjection();
-    return projectOperatorWorkspaceRouteDirectory({
-      availability: workspaceProjection.surfaceAvailability,
-      routeAvailability: workspaceProjection.routeAvailability,
-      additionalRoutes: workspaceProjection.additionalRoutes,
-    });
+    return {
+      ...projectOperatorWorkspaceRouteDirectory({
+        availability: workspaceProjection.surfaceAvailability,
+        routeAvailability: workspaceProjection.routeAvailability,
+        additionalRoutes: workspaceProjection.additionalRoutes,
+      }),
+      httpRouteParity: projectOperatorConsoleHttpRouteParity(routes, workspaceProjection.httpRoutes),
+    };
   }
 
   let server: Server | null = null;
+  const activeHostFleetSockets = new Set<Duplex>();
   let isRunning = false;
   let serverUrl: string | null = null;
 
@@ -356,12 +546,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       const pathname = url.pathname;
 
       if (pathname === '/health' && req.method === 'GET') {
-        const workspaceProjection = await currentWorkspaceProjection();
-        const routeDirectory = projectOperatorWorkspaceRouteDirectory({
-          availability: workspaceProjection.surfaceAvailability,
-          routeAvailability: workspaceProjection.routeAvailability,
-          additionalRoutes: workspaceProjection.additionalRoutes,
-        });
+        const routeDirectory = await currentWorkspaceRouteDirectory();
         const surfaceCatalog = routeDirectory.surfaces;
         const routeCount = surfaceCatalog.reduce((count, surface) => count + surface.projectedRoutes.length, 0);
         const degradedSurfaceCount = surfaceCatalog.filter((surface) => surface.availability !== 'available').length;
@@ -373,6 +558,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
           listener_host: host,
           listener_port: port,
           route_count: routes.length + 2,
+          http_route_parity: routeDirectory.httpRouteParity,
           workspace_route_directory_schema: routeDirectory.schema,
           workspace_route_count: routeCount,
           surface_count: surfaceCatalog.length,
@@ -392,6 +578,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
           schema: OPERATOR_CONSOLE_ROUTES_SCHEMA,
           identity: OPERATOR_CONSOLE_IDENTITY,
           directory_schema: routeDirectory.schema,
+          http_route_parity: projectOperatorConsoleHttpRouteParity(routes),
           routes: routeDirectory.surfaces.flatMap((surface) => surface.projectedRoutes.map((route) => ({
             surface_id: surface.id,
             path: route.path,
@@ -404,13 +591,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       }
 
       if (pathname === OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH && req.method === 'GET') {
-        const workspaceProjection = await currentWorkspaceProjection();
-        const routeDirectory = projectOperatorWorkspaceRouteDirectory({
-          availability: workspaceProjection.surfaceAvailability,
-          routeAvailability: workspaceProjection.routeAvailability,
-          additionalRoutes: workspaceProjection.additionalRoutes,
-        });
-        jsonResponse(res, 200, routeDirectory);
+        jsonResponse(res, 200, await currentWorkspaceRouteDirectory());
         return;
       }
 
@@ -477,6 +658,23 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
             });
           });
 
+          server.on('upgrade', (req, socket, head) => {
+            activeHostFleetSockets.add(socket);
+            socket.once('close', () => activeHostFleetSockets.delete(socket));
+            handleHostFleetSessionUpgrade({
+              request: req,
+              socket,
+              head,
+              registry: hostFleetRegistry,
+              credentialResolver: config.hostFleetCredentialResolver,
+              fetchFn: config.hostFleetFetch,
+            }).then((handled) => {
+              if (!handled && !socket.destroyed) socket.destroy();
+            }).catch(() => {
+              if (!socket.destroyed) writeUpgradeRefusal(socket, 503, 'host_fleet_websocket_internal_error');
+            });
+          });
+
           server.on('error', (error) => {
             reject(error);
           });
@@ -503,7 +701,10 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       try {
         await siteAgentLaunch.close?.();
       } finally {
+        for (const socket of activeHostFleetSockets) socket.destroy();
+        activeHostFleetSockets.clear();
         registry.close();
+        if (ownsHostFleetRegistry) hostFleetRegistry.close();
         if (server) {
           await new Promise<void>((resolve) => {
             server!.close(() => {

@@ -49,7 +49,7 @@ export function renderCloudflareWorkspacePage(
     <main>
       <p><code>${escapeHtml(host)}</code></p>
       <h1>Narada Cloudflare Workspace</h1>
-      <p>This host is a projection surface. Only routes currently leased to this Cloudflare workspace are available here. Local Narada remains the authority for site registry and runtime state.</p>
+      <p>This host is a projection surface. Only routes currently admitted to this Cloudflare workspace are available here. Local Narada remains the authority for site registry and runtime state.</p>
       <ul>${routeMarkup}</ul>
       <p><small>${escapeHtml(origin)}</small></p>
     </main>

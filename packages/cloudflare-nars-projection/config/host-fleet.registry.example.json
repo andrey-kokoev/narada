@@ -1,0 +1,44 @@
+{
+  "schema": "narada.cloudflare.host_fleet_registry.v1",
+  "revision": 1,
+  "hosts": [
+    {
+      "host_id": "desktop-sunroom-2",
+      "host_instance_id": "desktop-instance-YYYY-MM",
+      "display_name": "Desktop Sunroom 2",
+      "platform": "windows",
+      "lifecycle_state": "active",
+      "admitted_sites": ["sonar"],
+      "capabilities": ["sessions", "events"],
+      "gateway": {
+        "transport": "service-binding",
+        "binding": "DESKTOP_GATEWAY",
+        "credential_binding": "DESKTOP_TOKEN",
+        "admitted_paths": [
+          "/health",
+          "/console/sessions/api/sessions",
+          "/sessions/*"
+        ]
+      }
+    },
+    {
+      "host_id": "zima-board-2",
+      "host_instance_id": "zima-instance-YYYY-MM",
+      "display_name": "ZimaBoard 2",
+      "platform": "linux",
+      "lifecycle_state": "active",
+      "admitted_sites": ["sonar"],
+      "capabilities": ["sessions", "events"],
+      "gateway": {
+        "transport": "service-binding",
+        "binding": "ZIMA_GATEWAY",
+        "credential_binding": "ZIMA_TOKEN",
+        "admitted_paths": [
+          "/health",
+          "/console/sessions/api/sessions",
+          "/sessions/*"
+        ]
+      }
+    }
+  ]
+}

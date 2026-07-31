@@ -1,10 +1,13 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { createServer } from 'node:http';
+import { createServer, type Server as HttpServer } from 'node:http';
+import { createConnection, type Socket } from 'node:net';
 import {
   createConsoleServer,
   ensureConsoleServer,
   OPERATOR_CONSOLE_IDENTITY,
 } from '../../src/commands/console-server.js';
+import Database from '@narada2/sqlite';
+import { HostFleetRegistry } from '@narada2/host-fleet';
 
 // The Registry page embeds a built package artifact; this test must read it from the real checkout.
 vi.unmock('node:fs');
@@ -17,6 +20,41 @@ function createMockLogger() {
     error: vi.fn(),
     trace: vi.fn(),
   };
+}
+
+function readSocketUntil(socket: Socket, marker: string, timeoutMs = 5_000): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    let buffer = Buffer.alloc(0);
+    const timer = setTimeout(() => {
+      socket.off('data', onData);
+      reject(new Error(`socket_marker_timeout:${marker}`));
+    }, timeoutMs);
+    const onData = (chunk: Buffer): void => {
+      buffer = Buffer.concat([buffer, chunk]);
+      if (!buffer.toString('latin1').includes(marker)) return;
+      clearTimeout(timer);
+      socket.off('data', onData);
+      resolve(buffer);
+    };
+    socket.on('data', onData);
+    socket.once('error', (error) => {
+      clearTimeout(timer);
+      socket.off('data', onData);
+      reject(error);
+    });
+  });
+}
+
+function maskedWebSocketText(payload: string): Buffer {
+  const content = Buffer.from(payload, 'utf8');
+  const mask = Buffer.from([0x01, 0x02, 0x03, 0x04]);
+  const masked = Buffer.from(content.map((byte, index) => byte ^ mask[index % 4]!));
+  return Buffer.concat([Buffer.from([0x81, 0x80 | content.length]), mask, masked]);
+}
+
+function unmaskedWebSocketText(payload: string): Buffer {
+  const content = Buffer.from(payload, 'utf8');
+  return Buffer.concat([Buffer.from([0x81, content.length]), content]);
 }
 
 const mockDb = {
@@ -1241,6 +1279,216 @@ describe('console server', () => {
       expect(invalidDiscovery.status).toBe(400);
       expect(registryReadModel.discoverPlan).toHaveBeenCalledTimes(1);
       await server.stop();
+    });
+  });
+
+  describe('Host Fleet browser projection', () => {
+    it('projects two same-named host installations without exposing credential references', async () => {
+      const hostRegistry = new HostFleetRegistry(new Database(':memory:'));
+      const hostInput = (hostId: string, instanceId: string, displayName: string) => ({
+        host_id: hostId,
+        host_instance_id: instanceId,
+        display_name: displayName,
+        platform: 'linux' as const,
+        gateway: {
+          endpoint: 'http://127.0.0.1:61730',
+          transport: 'ssh-tunnel' as const,
+          admitted_paths: ['/health', '/console/routes', '/console/sessions/api/sessions', '/sessions/*'],
+        },
+        credential_ref: `env://NARADA_${hostId.toUpperCase().replaceAll('-', '_')}_TOKEN`,
+        admitted_sites: ['sonar'],
+      });
+      hostRegistry.registerHost(hostInput('desktop-sunroom-2', 'desktop-instance', 'Desktop Sunroom 2'));
+      hostRegistry.registerHost(hostInput('zima-board-2', 'zima-instance', 'ZimaBoard 2'));
+
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', hostFleetRegistry: hostRegistry });
+      try {
+        const url = await server.start();
+        const response = await fetch(`${url}/console/hosts/api`);
+        const body = await response.json() as { schema: string; status: string; count: number; hosts: Array<Record<string, unknown>> };
+        expect(response.status).toBe(200);
+        expect(body.schema).toBe('narada.operator_console.host_fleet.v1');
+        expect(body.status).toBe('success');
+        expect(body.count).toBe(2);
+        expect(body.hosts.map((host) => `${host.host_id}@${host.host_instance_id}`)).toEqual([
+          'desktop-sunroom-2@desktop-instance',
+          'zima-board-2@zima-instance',
+        ]);
+        expect(body.hosts[0]).not.toHaveProperty('credential_ref');
+        const page = await fetch(`${url}/console/hosts`);
+        expect(page.status).toBe(200);
+        expect(await page.text()).toContain('<div id="app"></div>');
+      } finally {
+        await server.stop();
+        hostRegistry.close();
+      }
+    });
+
+    it('discovers and resolves exact host sessions without falling back across hosts', async () => {
+      const hostRegistry = new HostFleetRegistry(new Database(':memory:'));
+      const hostInput = (hostId: string, instanceId: string) => ({
+        host_id: hostId,
+        host_instance_id: instanceId,
+        display_name: hostId,
+        platform: 'linux' as const,
+        gateway: {
+          endpoint: 'http://127.0.0.1:61730',
+          transport: 'ssh-tunnel' as const,
+          admitted_paths: ['/health', '/console/routes', '/console/sessions/api/sessions', '/sessions/*'],
+        },
+        credential_ref: `env://${hostId.toUpperCase().replaceAll('-', '_')}_TOKEN`,
+        admitted_sites: ['sonar'],
+      });
+      hostRegistry.registerHost(hostInput('desktop-sunroom-2', 'desktop-instance'));
+      hostRegistry.registerHost(hostInput('zima-board-2', 'zima-instance'));
+      const sessionsByHost = new Map([
+        ['desktop-sunroom-2', 'desktop-session'],
+        ['zima-board-2', 'zima-session'],
+      ]);
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        hostFleetRegistry: hostRegistry,
+        hostFleetCredentialResolver: (ref) => ref.includes('ZIMA') ? 'zima-token' : 'desktop-token',
+        hostFleetFetch: async (input, init) => {
+          const request = new Request(String(input), init);
+          const hostId = request.headers.get('x-narada-host-id') ?? 'unknown';
+          assert.equal(request.headers.get('x-narada-operator-console-bridge-token'), hostId === 'zima-board-2' ? 'zima-token' : 'desktop-token');
+          const sessionId = sessionsByHost.get(hostId);
+          return new Response(JSON.stringify({
+            schema: 'narada.operator_console.agent_sessions.v1',
+            status: 'success',
+            generated_at: '2026-07-31T12:00:00.000Z',
+            count: 1,
+            sessions: [{
+              session_id: sessionId,
+              site_id: 'sonar',
+              agent_id: 'resident',
+              display_state: 'active',
+              health_status: 'healthy',
+              started_at: '2026-07-31T11:59:00.000Z',
+              last_seen_at: '2026-07-31T12:00:00.000Z',
+            }],
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+      });
+      try {
+        const url = await server.start();
+        const listResponse = await fetch(`${url}/console/hosts/api/sessions`);
+        const listBody = await listResponse.json() as { status: string; count: number; hosts: Array<{ host: { host_id: string }; sessions: Array<{ target: { runtime_session_id: string } }> }> };
+        expect(listResponse.status).toBe(200);
+        expect(listBody.status).toBe('success');
+        expect(listBody.count).toBe(2);
+        expect(listBody.hosts.map((entry) => entry.sessions[0]?.target.runtime_session_id)).toEqual(['desktop-session', 'zima-session']);
+
+        const targetResponse = await fetch(`${url}/console/hosts/api/target?host_id=zima-board-2&host_instance_id=zima-instance&site_id=sonar&agent_id=resident`);
+        const targetBody = await targetResponse.json() as { status: string; target: { runtime_session_id: string } };
+        expect(targetResponse.status).toBe(200);
+        expect(targetBody.status).toBe('resolved');
+        expect(targetBody.target.runtime_session_id).toBe('zima-session');
+
+        const partialResponse = await fetch(`${url}/console/hosts/api/sessions?host_id=zima-board-2`);
+        expect(partialResponse.status).toBe(400);
+        expect((await partialResponse.json() as { refusals: string[] }).refusals).toContain('host_session_filter_requires_host_id_and_instance_id');
+      } finally {
+        await server.stop();
+        hostRegistry.close();
+      }
+    });
+
+    it('relays the exact host session WebSocket in both directions', async () => {
+      const upstream = createServer() as HttpServer;
+      let upstreamSocket: Socket | null = null;
+      upstream.on('upgrade', (request, socket) => {
+        expect(request.headers['x-narada-host-id']).toBe('zima-board-2');
+        expect(request.headers['x-narada-host-instance-id']).toBe('zima-instance');
+        expect(request.headers['x-narada-operator-console-bridge-token']).toBe('zima-token');
+        expect(request.url).toBe('/sessions/zima-session/events');
+        upstreamSocket = socket;
+        socket.write('HTTP/1.1 101 Switching Protocols\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n');
+        socket.on('data', (chunk) => socket.write(chunk));
+      });
+      await new Promise<void>((resolve, reject) => {
+        upstream.once('error', reject);
+        upstream.listen(0, '127.0.0.1', () => resolve());
+      });
+      const address = upstream.address();
+      if (!address || typeof address === 'string') throw new Error('upstream_address_missing');
+
+      const hostRegistry = new HostFleetRegistry(new Database(':memory:'));
+      hostRegistry.registerHost({
+        host_id: 'zima-board-2',
+        host_instance_id: 'zima-instance',
+        display_name: 'ZimaBoard 2',
+        platform: 'linux',
+        gateway: {
+          endpoint: `http://127.0.0.1:${address.port}`,
+          transport: 'ssh-tunnel',
+          admitted_paths: ['/console/sessions/api/sessions', '/sessions/*'],
+        },
+        credential_ref: 'secret://narada/zima-gateway',
+        admitted_sites: ['sonar'],
+      });
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        hostFleetRegistry: hostRegistry,
+        hostFleetCredentialResolver: () => 'zima-token',
+        hostFleetFetch: async (input, init) => {
+          const request = new Request(String(input), init);
+          expect(request.headers.get('x-narada-host-id')).toBe('zima-board-2');
+          expect(request.headers.get('x-narada-host-instance-id')).toBe('zima-instance');
+          expect(request.headers.get('x-narada-operator-console-bridge-token')).toBe('zima-token');
+          return new Response(JSON.stringify({
+            schema: 'narada.operator_console.agent_sessions.v1',
+            status: 'success',
+            generated_at: '2026-07-31T12:00:00.000Z',
+            count: 1,
+            sessions: [{
+              session_id: 'zima-session',
+              site_id: 'sonar',
+              agent_id: 'resident',
+              display_state: 'active',
+              health_status: 'healthy',
+            }],
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+      });
+      let client: Socket | null = null;
+      try {
+        const url = await server.start();
+        const endpoint = new URL(url);
+        client = createConnection({ host: endpoint.hostname, port: Number(endpoint.port) });
+        await new Promise<void>((resolve, reject) => {
+          client!.once('connect', () => resolve());
+          client!.once('error', reject);
+        });
+        client.write([
+          'GET /console/hosts/api/sessions/zima-board-2/zima-instance/zima-session/events?site_id=sonar&agent_id=resident HTTP/1.1',
+          `Host: ${endpoint.host}`,
+          'Connection: Upgrade',
+          'Upgrade: websocket',
+          'Sec-WebSocket-Key: ZimaFleetTestKey==',
+          'Sec-WebSocket-Version: 13',
+          '\r\n',
+        ].join('\r\n'));
+        const handshake = await readSocketUntil(client, '101 Switching Protocols');
+        expect(handshake.toString('latin1')).toContain('101 Switching Protocols');
+        const operatorFrame = maskedWebSocketText('operator-input');
+        client.write(operatorFrame);
+        const echoed = await readSocketUntil(client, operatorFrame.toString('latin1'));
+        expect(echoed.subarray(echoed.indexOf(operatorFrame))).toEqual(operatorFrame);
+        expect(upstreamSocket).not.toBeNull();
+        upstreamSocket!.write(unmaskedWebSocketText('host-event'));
+        const hostEvent = await readSocketUntil(client, 'host-event');
+        expect(hostEvent.toString('latin1')).toContain('host-event');
+      } finally {
+        client?.destroy();
+        await server.stop();
+        hostRegistry.close();
+        upstreamSocket?.destroy();
+        await new Promise<void>((resolve) => upstream.close(() => resolve()));
+      }
     });
   });
   describe('site-agent overview invariant diagnostics', () => {

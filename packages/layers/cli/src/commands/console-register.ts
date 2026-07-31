@@ -5,6 +5,7 @@ import {
   consoleControlCommand,
   consoleStopCommand,
   consoleOverlayCommand,
+  consoleGatewayCommand,
 } from './console.js';
 import { DEFAULT_OPERATOR_CONSOLE_PORT, createConsoleServer } from './console-server.js';
 import {
@@ -16,6 +17,15 @@ import {
   restartOperatorConsoleRuntime,
   serveOperatorConsoleRuntime,
 } from '@narada2/operator-console-runtime';
+import {
+  consoleMirrorRotateCommand,
+  consoleMirrorRunCommand,
+  consoleMirrorRestartCommand,
+  consoleMirrorStartCommand,
+  consoleMirrorStatusCommand,
+  consoleMirrorStopCommand,
+  type ConsoleMirrorCommandOptions,
+} from './console-mirror.js';
 import {silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { openOperatorConsoleWorkspace } from '../lib/operator-console-browser.js';
 import {
@@ -177,6 +187,145 @@ export function registerConsoleCommands(program: Command): void {
     .option('--no-open', 'Do not open the Operator Workspace in the default browser', false)
     .addOption(new Option('--runtime-instance <nonce>', 'Internal Operator Console runtime identity nonce').hideHelp())
     .action(runConsoleServe);
+
+  consoleCmd
+    .command('gateway')
+    .description('Start the authenticated local crossing boundary for a remote Operator Console')
+    .option('--host <host>', 'Loopback host to bind to', '127.0.0.1')
+    .option('--port <port>', 'Gateway port (0 for an ephemeral diagnostic port)', '61730')
+    .option('--router-url <url>', 'Stable local Operator Router URL', 'http://127.0.0.1:61729')
+    .option('--router-state-root <path>', 'Operator Router state root used to read its registration token')
+    .option('--router-token <token>', 'Router token; prefer NARADA_OPERATOR_ROUTER_TOKEN or the state root file')
+    .option('--bridge-token <token>', 'Bridge token; prefer NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN')
+    .action(async (opts: CommanderOptionValues) => {
+      const started = await consoleGatewayCommand({
+        host: String(opts.host ?? '127.0.0.1'),
+        port: Number.parseInt(String(opts.port ?? '61730'), 10),
+        router_url: String(opts.routerUrl ?? 'http://127.0.0.1:61729'),
+        router_state_root: opts.routerStateRoot as string | undefined,
+        router_token: opts.routerToken as string | undefined,
+        bridge_token: opts.bridgeToken as string | undefined,
+      }, silentCommandContext());
+      emitLongLivedCommandStartup([
+        `Operator Console remote gateway: ${started.url}`,
+        `Operator Router upstream: ${started.router_url}`,
+        'Bridge credential: configured (not displayed)',
+        'Admitted routes: Console parity plus read-only leased workspace routes',
+        'Press Ctrl+C to stop',
+      ]);
+      let stopping = false;
+      const stop = async (): Promise<void> => {
+        if (stopping) return;
+        stopping = true;
+        await started.gateway.stop();
+        exitLongLivedCommandSuccessfully();
+      };
+      process.once('SIGINT', stop);
+      process.once('SIGTERM', stop);
+    });
+
+  const mirrorCmd = consoleCmd
+    .command('mirror')
+    .description('Manage the governed Cloudflare projection of the local Operator Console');
+
+  addMirrorOptions(mirrorCmd.command('start').description('Start the detached Operator Console mirror host'))
+    .action(async (opts: CommanderOptionValues) => {
+      const result = await consoleMirrorStartCommand(mirrorOptionsFromCommander(opts), silentCommandContext());
+      emitFormatterBackedCommandResult({ exitCode: 0, result }, { format: opts.format });
+    });
+
+  addMirrorOptions(mirrorCmd.command('restart').description('Restart the mirror host with current credentials'))
+    .action(async (opts: CommanderOptionValues) => {
+      const result = await consoleMirrorRestartCommand(mirrorOptionsFromCommander(opts), silentCommandContext());
+      emitFormatterBackedCommandResult({ exitCode: 0, result }, { format: opts.format });
+    });
+
+  addMirrorOptions(mirrorCmd.command('rotate').description('Rotate mirror credentials by tearing down and restarting'))
+    .action(async (opts: CommanderOptionValues) => {
+      const result = await consoleMirrorRotateCommand(mirrorOptionsFromCommander(opts), silentCommandContext());
+      emitFormatterBackedCommandResult({ exitCode: 0, result }, { format: opts.format });
+    });
+
+  mirrorCmd.command('status')
+    .description('Show mirror process, gateway, and tunnel health')
+    .option('--state-root <path>', 'Mirror lifecycle state root')
+    .option('--timeout-ms <milliseconds>', 'Health probe timeout', '3000')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .action(async (opts: CommanderOptionValues) => {
+      const result = await consoleMirrorStatusCommand({
+        state_root: opts.stateRoot as string | undefined,
+        timeout_ms: Number.parseInt(String(opts.timeoutMs ?? '3000'), 10),
+      }, silentCommandContext());
+      emitFormatterBackedCommandResult({ exitCode: 0, result }, { format: opts.format });
+    });
+
+  mirrorCmd.command('stop')
+    .description('Stop the owned mirror host and tunnel')
+    .option('--state-root <path>', 'Mirror lifecycle state root')
+    .option('--timeout-ms <milliseconds>', 'Shutdown timeout', '5000')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .action(async (opts: CommanderOptionValues) => {
+      const result = await consoleMirrorStopCommand({
+        state_root: opts.stateRoot as string | undefined,
+        timeout_ms: Number.parseInt(String(opts.timeoutMs ?? '5000'), 10),
+      }, silentCommandContext());
+      emitFormatterBackedCommandResult({ exitCode: 0, result }, { format: opts.format });
+    });
+
+  const mirrorRun = addMirrorOptions(mirrorCmd.command('run', { hidden: true }));
+  mirrorRun
+    .addOption(new Option('--run-nonce <nonce>', 'Internal lifecycle nonce').hideHelp())
+    .addOption(new Option('--operation <operation>', 'Internal lifecycle operation').hideHelp())
+    .addOption(new Option('--log-path <path>', 'Internal host log path').hideHelp())
+    .action(async (opts: CommanderOptionValues) => {
+    await consoleMirrorRunCommand(mirrorOptionsFromCommander(opts), silentCommandContext());
+  });
+}
+
+function addMirrorOptions(command: Command): Command {
+  return command
+    .option('--host <host>', 'Loopback gateway host', '127.0.0.1')
+    .option('--gateway-port <port>', 'Loopback gateway port', '61730')
+    .option('--router-url <url>', 'Stable local Operator Router URL', 'http://127.0.0.1:61729')
+    .option('--router-state-root <path>', 'Operator Router state root')
+    .option('--bridge-token-file <path>', 'User-local file containing the mirror bridge token')
+    .option('--cloudflared-binary <path>', 'cloudflared executable', 'cloudflared')
+    .option('--wrangler-binary <path>', 'Wrangler executable for managed named tunnels')
+    .option('--tunnel-runner <runner>', 'Tunnel runner: cloudflared or wrangler')
+    .option('--tunnel-token-file <path>', 'Remotely managed tunnel token file')
+    .option('--tunnel-name <name>', 'Locally managed tunnel name')
+    .option('--cloudflared-config <path>', 'cloudflared configuration file')
+    .option('--metrics-host <host>', 'Loopback cloudflared metrics host', '127.0.0.1')
+    .option('--metrics-port <port>', 'Loopback cloudflared metrics port', '61731')
+    .option('--public-origin <url>', 'Expected Cloudflare Worker gateway origin')
+    .option('--state-root <path>', 'Mirror lifecycle state root')
+    .option('--lock-timeout-ms <milliseconds>', 'Lifecycle lock wait timeout', '120000')
+    .option('--timeout-ms <milliseconds>', 'Startup timeout', '30000')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto');
+}
+
+function mirrorOptionsFromCommander(opts: CommanderOptionValues): ConsoleMirrorCommandOptions {
+  return {
+    host: opts.host as string | undefined,
+    gateway_port: Number.parseInt(String(opts.gatewayPort ?? '61730'), 10),
+    router_url: opts.routerUrl as string | undefined,
+    router_state_root: opts.routerStateRoot as string | undefined,
+    bridge_token_file: opts.bridgeTokenFile as string | undefined,
+    cloudflared_binary: opts.cloudflaredBinary as string | undefined,
+    wrangler_binary: opts.wranglerBinary as string | undefined,
+    tunnel_runner: opts.tunnelRunner as ConsoleMirrorCommandOptions['tunnel_runner'],
+    tunnel_token_file: opts.tunnelTokenFile as string | undefined,
+    tunnel_name: opts.tunnelName as string | undefined,
+    cloudflared_config: opts.cloudflaredConfig as string | undefined,
+    metrics_host: opts.metricsHost as string | undefined,
+    metrics_port: Number.parseInt(String(opts.metricsPort ?? '61731'), 10),
+    public_origin: opts.publicOrigin as string | undefined,
+    state_root: opts.stateRoot as string | undefined,
+    lock_timeout_ms: Number.parseInt(String(opts.lockTimeoutMs ?? '120000'), 10),
+    log_path: opts.logPath as string | undefined,
+    operation: opts.operation as ConsoleMirrorCommandOptions['operation'],
+    timeout_ms: Number.parseInt(String(opts.timeoutMs ?? '30000'), 10),
+  };
 }
 
 async function runConsoleServe(opts: CommanderOptionValues): Promise<void> {

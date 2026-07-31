@@ -23,8 +23,12 @@ import {
 import {
   OPERATOR_CONSOLE_PATH,
 } from '@narada2/operator-console-contract';
-import type { OperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
+import type {
+  OperatorConsoleHttpRouteParityEntry,
+  OperatorWorkspaceRouteDirectory,
+} from '@narada2/operator-console-contract';
 import { renderCloudflareWorkspacePage } from './cloudflare-workspace-page.js';
+import { handleCloudflareHostFleetRequest, isCloudflareHostFleetPath } from './cloudflare-host-fleet.js';
 
 export interface CloudflareNarsProjectionWorkerEnv {
   [binding: string]: unknown;
@@ -35,6 +39,33 @@ export interface CloudflareNarsProjectionWorkerEnv {
   AI?: CloudflareNarsRuntimeEnvironment['AI'];
   NARS_OUTBOUND_PROVIDER_ENABLED?: CloudflareNarsRuntimeEnvironment['NARS_OUTBOUND_PROVIDER_ENABLED'];
   NARS_AUTHORITY_REQUIRE_CREDENTIAL?: string | boolean;
+  OPERATOR_CONSOLE_GATEWAY_URL?: string;
+  OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN?: string;
+  OPERATOR_CONSOLE_GATEWAY_TOKEN?: string;
+  OPERATOR_CONSOLE_GATEWAY_TRANSPORT?: string;
+  OPERATOR_CONSOLE_GATEWAY?: CloudflareNarsOperatorConsoleGatewayBinding;
+  OPERATOR_CONSOLE_GATEWAY_NETWORK?: CloudflareNarsOperatorConsoleGatewayNetworkBinding;
+  OPERATOR_CONSOLE_GATEWAY_TCP_HOST?: string;
+  OPERATOR_CONSOLE_GATEWAY_TCP_PORT?: string | number;
+  OPERATOR_CONSOLE_ACCESS_REQUIRED?: string | boolean;
+  OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN?: string;
+  OPERATOR_CONSOLE_ACCESS_AUDIENCE?: string;
+  OPERATOR_CONSOLE_GATEWAY_TIMEOUT_MS?: string | number;
+  NARADA_HOST_FLEET_REGISTRY?: string;
+}
+
+export interface CloudflareNarsOperatorConsoleGatewayBinding {
+  fetch(input: Request | string | URL, init?: RequestInit): Promise<Response>;
+}
+
+export interface CloudflareNarsOperatorConsoleTcpSocket {
+  readable: ReadableStream<Uint8Array>;
+  writable: WritableStream<Uint8Array>;
+  close?(): void;
+}
+
+export interface CloudflareNarsOperatorConsoleGatewayNetworkBinding {
+  connect(address: string | { hostname: string; port: number }): Promise<CloudflareNarsOperatorConsoleTcpSocket>;
 }
 
 export interface NarsProjectionStateOptions {
@@ -153,7 +184,7 @@ interface SseSubscriber {
 }
 
 interface WorkerWebSocket extends WebSocket {
-  accept(): void;
+  accept(options?: { allowHalfOpen?: boolean }): void;
   serializeAttachment?(attachment: unknown): void;
   deserializeAttachment?(): unknown;
 }
@@ -188,6 +219,8 @@ export interface CloudflareNarsProjectionWorkerOptions {
   workspace_directory_service?: CloudflareNarsWorkspaceDirectoryService;
   now?: () => string;
   require_authority_credential?: boolean;
+  fetch_fn?: typeof fetch;
+  require_operator_console_access?: boolean;
 }
 
 export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProjectionWorkerOptions = {}) {
@@ -201,12 +234,43 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
   };
   const workspaceDirectory = options.workspace_directory_service ?? createCloudflareNarsWorkspaceDirectoryService();
   const now = options.now ?? (() => new Date().toISOString());
+  const fetchFn = options.fetch_fn ?? fetch;
   return {
     async fetch(request: Request, env: CloudflareNarsProjectionWorkerEnv = {}): Promise<Response> {
       const url = new URL(request.url);
       const path = trimPath(url.pathname);
-      if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env, workspaceDirectory, now);
+      const directProjectionEntry = url.pathname === '/' && url.searchParams.has('cloudflare_projection_id');
+      if (isCloudflareHostFleetPath(url.pathname)) {
+        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
+        if (accessFailure) return accessFailure;
+        const response = await handleCloudflareHostFleetRequest(request, env, now, fetchFn);
+        if (response) return response;
+      }
+      if (isOperatorConsolePath(url.pathname) || (url.pathname === '/' && !directProjectionEntry && (operatorConsoleGatewayConfigured(env) || operatorConsoleAccessRequired(env, options)))) {
+        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
+        if (accessFailure) return accessFailure;
+        if (isOperatorConsoleApiPath(url.pathname)) {
+          return proxyAdmittedOperatorWorkspaceRoute(request, env, fetchFn, now);
+        }
+      }
+      if (operatorConsoleGatewayConfigured(env)
+        && (isPotentialOperatorWorkspaceRoute(url.pathname) || isOperatorConsoleGatewayPath(url.pathname))) {
+        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
+        if (accessFailure) return accessFailure;
+        return proxyAdmittedOperatorWorkspaceRoute(request, env, fetchFn, now);
+      }
+      if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env, workspaceDirectory, now, fetchFn);
       if (request.method === 'OPTIONS') return corsResponse();
+      if (path === 'api/nars/operator-console/routes' || path === 'api/nars/operator-console/health') {
+        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
+        if (accessFailure) return accessFailure;
+      }
+      if (path === 'api/nars/operator-console/routes' && request.method === 'GET') {
+        return readOperatorConsoleRouteDirectory(request, env, fetchFn, now);
+      }
+      if (path === 'api/nars/operator-console/health' && request.method === 'GET') {
+        return readOperatorConsoleGatewayHealth(request, env, fetchFn, now);
+      }
       if (request.method === 'GET' && path === 'api/nars/assets/manifest') {
         return serveAssetManifest(request, env);
       }
@@ -1093,7 +1157,1009 @@ async function serveAssetManifest(request: Request, env: CloudflareNarsProjectio
   });
 }
 
-async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionWorkerEnv, workspaceDirectory: CloudflareNarsWorkspaceDirectoryService, now: () => string): Promise<Response> {
+function isOperatorConsolePath(pathname: string): boolean {
+  return pathname === OPERATOR_CONSOLE_PATH || pathname.startsWith(`${OPERATOR_CONSOLE_PATH}/`);
+}
+
+const OPERATOR_CONSOLE_STATIC_DOCUMENT_PATHS = new Set([
+  `${OPERATOR_CONSOLE_PATH}/agents`,
+  `${OPERATOR_CONSOLE_PATH}/registry`,
+  `${OPERATOR_CONSOLE_PATH}/registry/add`,
+  `${OPERATOR_CONSOLE_PATH}/registry/manage`,
+  `${OPERATOR_CONSOLE_PATH}/launch`,
+  `${OPERATOR_CONSOLE_PATH}/onboarding`,
+  `${OPERATOR_CONSOLE_PATH}/sessions`,
+]);
+
+function isOperatorConsoleEntryPath(pathname: string): boolean {
+  return pathname === OPERATOR_CONSOLE_PATH || pathname === `${OPERATOR_CONSOLE_PATH}/`;
+}
+
+function isOperatorConsoleAssetPath(pathname: string): boolean {
+  return pathname === `${OPERATOR_CONSOLE_PATH}/assets`
+    || pathname.startsWith(`${OPERATOR_CONSOLE_PATH}/assets/`);
+}
+
+function isOperatorConsoleStaticDocumentPath(pathname: string): boolean {
+  const normalizedPath = pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  return OPERATOR_CONSOLE_STATIC_DOCUMENT_PATHS.has(normalizedPath);
+}
+
+function isOperatorConsoleApiPath(pathname: string): boolean {
+  return pathname.includes(`${OPERATOR_CONSOLE_PATH}/`) && pathname.includes('/api/');
+}
+
+function isOperatorConsoleGatewayPath(pathname: string): boolean {
+  return isOperatorConsolePath(pathname)
+    && !isOperatorConsoleEntryPath(pathname)
+    && !isOperatorConsoleAssetPath(pathname)
+    && !isOperatorConsoleStaticDocumentPath(pathname);
+}
+
+function operatorConsoleAccessRequired(
+  env: CloudflareNarsProjectionWorkerEnv,
+  options: CloudflareNarsProjectionWorkerOptions,
+): boolean {
+  if (options.require_operator_console_access !== undefined) return options.require_operator_console_access;
+  const value = env.OPERATOR_CONSOLE_ACCESS_REQUIRED;
+  return value === true || value === 'true';
+}
+
+function operatorConsoleGatewayTransport(env: CloudflareNarsProjectionWorkerEnv): 'public-tunnel' | 'vpc-service' | null {
+  const value = env.OPERATOR_CONSOLE_GATEWAY_TRANSPORT?.trim() || 'public-tunnel';
+  return value === 'public-tunnel' || value === 'vpc-service' ? value : null;
+}
+
+function operatorConsoleGatewayBinding(env: CloudflareNarsProjectionWorkerEnv): CloudflareNarsOperatorConsoleGatewayBinding | null {
+  const binding = env.OPERATOR_CONSOLE_GATEWAY;
+  return binding && typeof binding.fetch === 'function' ? binding : null;
+}
+
+function operatorConsoleGatewayNetwork(env: CloudflareNarsProjectionWorkerEnv): CloudflareNarsOperatorConsoleGatewayNetworkBinding | null {
+  const binding = env.OPERATOR_CONSOLE_GATEWAY_NETWORK;
+  return binding && typeof binding.connect === 'function' ? binding : null;
+}
+
+function operatorConsoleGatewayTransportHealth(env: CloudflareNarsProjectionWorkerEnv): {
+  status: 'ready' | 'degraded' | 'unconfigured';
+  transport: 'public-tunnel' | 'vpc-service' | null;
+  websocket: {
+    status: 'ready' | 'unavailable' | 'not_configured';
+    transport: 'gateway-websocket-upgrade' | 'vpc-network-tcp' | null;
+    refusal_code?: string;
+  };
+} {
+  const configuration = operatorConsoleGatewayConfiguration(env);
+  if (!configuration) {
+    return {
+      status: 'unconfigured',
+      transport: null,
+      websocket: { status: 'not_configured', transport: null, refusal_code: 'operator_console_gateway_not_configured_or_pinned' },
+    };
+  }
+  if (configuration.transport === 'vpc-service') {
+    const available = Boolean(operatorConsoleGatewayNetwork(env));
+    return {
+      status: available ? 'ready' : 'degraded',
+      transport: configuration.transport,
+      websocket: available
+        ? { status: 'ready', transport: 'vpc-network-tcp' }
+        : { status: 'unavailable', transport: 'vpc-network-tcp', refusal_code: 'operator_console_gateway_network_binding_unavailable' },
+    };
+  }
+  return {
+    status: 'ready',
+    transport: configuration.transport,
+    websocket: { status: 'ready', transport: 'gateway-websocket-upgrade' },
+  };
+}
+
+function operatorConsoleGatewayConfiguration(
+  env: CloudflareNarsProjectionWorkerEnv,
+): { baseUrl: string; token: string; transport: 'public-tunnel' | 'vpc-service' } | null {
+  const rawUrl = env.OPERATOR_CONSOLE_GATEWAY_URL?.trim();
+  const token = env.OPERATOR_CONSOLE_GATEWAY_TOKEN?.trim();
+  const rawPin = env.OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN?.trim();
+  const transport = operatorConsoleGatewayTransport(env);
+  if (!rawUrl || !token || !rawPin) return null;
+  if (!transport || (transport === 'vpc-service' && !operatorConsoleGatewayBinding(env))) return null;
+  try {
+    const target = new URL(rawUrl);
+    const pin = new URL(rawPin);
+    if (target.protocol !== 'http:' && target.protocol !== 'https:') return null;
+    if (target.username || target.password || target.search || target.hash || target.pathname !== '/') return null;
+    if (pin.username || pin.password || pin.search || pin.hash || pin.pathname !== '/') return null;
+    if (target.origin !== pin.origin) return null;
+    if ((env.OPERATOR_CONSOLE_ACCESS_REQUIRED === true || env.OPERATOR_CONSOLE_ACCESS_REQUIRED === 'true') && transport !== 'vpc-service') {
+      if (target.protocol !== 'https:' || pin.protocol !== 'https:') return null;
+    }
+    return { baseUrl: target.toString().replace(/\/$/, ''), token, transport };
+  } catch {
+    return null;
+  }
+}
+
+function operatorConsoleGatewayConfigured(env: CloudflareNarsProjectionWorkerEnv): boolean {
+  return Boolean(operatorConsoleGatewayConfiguration(env));
+}
+
+interface AccessJwk extends JsonWebKey {
+  kid?: string;
+}
+
+interface AccessJwkSet {
+  keys: AccessJwk[];
+  expiresAt: number;
+}
+
+const accessJwkCache = new Map<string, AccessJwkSet>();
+
+async function authorizeOperatorConsoleAccess(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  options: CloudflareNarsProjectionWorkerOptions,
+  fetchFn: typeof fetch,
+): Promise<Response | null> {
+  if (!operatorConsoleAccessRequired(env, options)) return null;
+  const token = request.headers.get('cf-access-jwt-assertion')?.trim();
+  if (!token) return json(refusal('operator_console_access_required'), 401);
+  const issuer = normalizeAccessTeamDomain(env.OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN);
+  const audience = env.OPERATOR_CONSOLE_ACCESS_AUDIENCE?.trim();
+  if (!issuer || !audience) return json(refusal('operator_console_access_validation_not_configured'), 503);
+  try {
+    await verifyCloudflareAccessJwt(token, issuer, audience, fetchFn);
+    return null;
+  } catch {
+    return json(refusal('operator_console_access_invalid'), 403);
+  }
+}
+
+async function verifyCloudflareAccessJwt(
+  token: string,
+  issuer: string,
+  audience: string,
+  fetchFn: typeof fetch,
+): Promise<void> {
+  const parts = token.split('.');
+  if (parts.length !== 3) throw new Error('access_jwt_shape_invalid');
+  const header = parseBase64UrlJson(parts[0]);
+  const claims = parseBase64UrlJson(parts[1]);
+  if (header.alg !== 'RS256' || typeof header.kid !== 'string') throw new Error('access_jwt_header_invalid');
+  if (claims.iss !== issuer) throw new Error('access_jwt_issuer_invalid');
+  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
+  if (!audiences.includes(audience)) throw new Error('access_jwt_audience_invalid');
+  const nowSeconds = Math.floor(Date.now() / 1000);
+  if (typeof claims.exp !== 'number' || claims.exp <= nowSeconds) throw new Error('access_jwt_expired');
+  if (typeof claims.nbf === 'number' && claims.nbf > nowSeconds + 30) throw new Error('access_jwt_not_yet_valid');
+  let keySet = await readCloudflareAccessJwks(issuer, fetchFn, false);
+  let key = keySet.keys.find((candidate) => candidate.kid === header.kid);
+  if (!key) {
+    keySet = await readCloudflareAccessJwks(issuer, fetchFn, true);
+    key = keySet.keys.find((candidate) => candidate.kid === header.kid);
+  }
+  if (!key) throw new Error('access_jwt_key_not_found');
+  const cryptoKey = await globalThis.crypto.subtle.importKey(
+    'jwk',
+    key,
+    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  const valid = await globalThis.crypto.subtle.verify(
+    'RSASSA-PKCS1-v1_5',
+    cryptoKey,
+    toArrayBuffer(decodeBase64Url(parts[2])),
+    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
+  );
+  if (!valid) throw new Error('access_jwt_signature_invalid');
+}
+
+async function readCloudflareAccessJwks(issuer: string, fetchFn: typeof fetch, forceRefresh: boolean): Promise<AccessJwkSet> {
+  const cached = accessJwkCache.get(issuer);
+  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached;
+  const response = await fetchFn(`${issuer}/cdn-cgi/access/certs`, { signal: AbortSignal.timeout(5_000) });
+  const payload: unknown = await response.json().catch(() => null);
+  const record = objectRecord(payload);
+  if (!response.ok || !record || !Array.isArray(record.keys)) throw new Error('access_jwks_unavailable');
+  const keys = record.keys.filter((value): value is AccessJwk => value !== null && typeof value === 'object' && !Array.isArray(value));
+  const next = { keys, expiresAt: Date.now() + 5 * 60_000 };
+  accessJwkCache.set(issuer, next);
+  return next;
+}
+
+function normalizeAccessTeamDomain(value: string | undefined): string | null {
+  const raw = value?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) return null;
+    return parsed.toString().replace(/\/$/, '');
+  } catch {
+    return null;
+  }
+}
+
+function parseBase64UrlJson(value: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(new TextDecoder().decode(decodeBase64Url(value)));
+  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('access_jwt_json_invalid');
+  return parsed as Record<string, unknown>;
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  const normalized = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
+}
+
+function operatorConsoleGatewayTimeoutMs(env: CloudflareNarsProjectionWorkerEnv): number {
+  const value = Number(env.OPERATOR_CONSOLE_GATEWAY_TIMEOUT_MS ?? 30_000);
+  return Number.isInteger(value) && value >= 100 && value <= 120_000 ? value : 30_000;
+}
+
+async function fetchOperatorConsoleGateway(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  fetchFn: typeof fetch,
+  pathname: string,
+): Promise<Response> {
+  const configuration = operatorConsoleGatewayConfiguration(env);
+  if (!configuration) return json(refusal('operator_console_gateway_not_configured_or_pinned'), 503);
+  const gatewayBinding = configuration.transport === 'vpc-service' ? operatorConsoleGatewayBinding(env) : null;
+  if (configuration.transport === 'vpc-service' && !gatewayBinding) return json(refusal('operator_console_gateway_vpc_binding_unavailable'), 503);
+  const sourceUrl = new URL(request.url);
+  const target = new URL(pathname + sourceUrl.search, `${configuration.baseUrl}/`);
+  const headers = new Headers();
+  for (const name of ['accept', 'content-type', 'if-none-match', 'if-modified-since', 'cache-control', 'x-request-id']) {
+    const value = request.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  headers.set('x-narada-operator-console-bridge-token', configuration.token);
+  const init: RequestInit = {
+    method: request.method,
+    headers,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(operatorConsoleGatewayTimeoutMs(env)),
+  };
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    // Buffer Console mutation bodies so the same adapter works in Workers and
+    // Node-based test/gateway fetch implementations without stream-duplex quirks.
+    init.body = await request.arrayBuffer();
+    // The VPC service hop must receive an explicitly framed request body. A
+    // browser POST can arrive at the Worker without a reusable content-length
+    // header, and leaving the buffered body to transport-specific inference
+    // can leave the loopback gateway waiting for the request terminator.
+    headers.set('content-length', String((init.body as ArrayBuffer).byteLength));
+  }
+  try {
+    // Passing one fully formed Request keeps the body and method together for
+    // service bindings. Some bindings accept URL + init for GET but do not
+    // reliably preserve POST framing across the VPC boundary.
+    const upstreamRequest = new Request(target, init);
+    return await (gatewayBinding ? gatewayBinding.fetch(upstreamRequest) : fetchFn(upstreamRequest));
+  } catch {
+    return json(refusal('operator_console_gateway_unavailable'), 503);
+  }
+}
+
+async function proxyOperatorConsoleRequest(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  fetchFn: typeof fetch,
+  _now: () => string,
+): Promise<Response> {
+  const upstream = await fetchOperatorConsoleGateway(request, env, fetchFn, new URL(request.url).pathname);
+  if (upstream.headers.get('content-type')?.includes('application/json')) {
+    const body = await upstream.text();
+    let parsed = false;
+    let payload: unknown;
+    try {
+      payload = JSON.parse(body);
+      parsed = true;
+    } catch {
+      // Preserve a malformed upstream body below; the gateway still owns its
+      // response contract and the Worker must not invent a JSON payload.
+    }
+    if (parsed) {
+      if (!upstream.ok) return json(redactOperatorConsoleRemotePayload(payload), upstream.status);
+      const headers = new Headers(upstream.headers);
+      headers.delete('content-length');
+      headers.delete('content-encoding');
+      headers.delete('etag');
+      headers.delete('set-cookie');
+      headers.set('cache-control', 'no-store');
+      return new Response(JSON.stringify(redactOperatorConsoleRemotePayload(payload)), {
+        status: upstream.status,
+        statusText: upstream.statusText,
+        headers: withCorsHeaders(headers),
+      });
+    }
+    if (!upstream.ok) return json(refusal('operator_console_gateway_request_failed'), upstream.status);
+    const headers = new Headers(upstream.headers);
+    headers.delete('content-length');
+    headers.delete('content-encoding');
+    headers.delete('etag');
+    headers.delete('set-cookie');
+    headers.set('cache-control', 'no-store');
+    return new Response(body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: withCorsHeaders(headers),
+    });
+  }
+  if (upstream.ok && isHtmlResponse(upstream) && isOperatorConsoleSessionDocumentPath(new URL(request.url).pathname)) {
+    const body = await upstream.text();
+    const rewritten = rewriteOperatorConsoleSessionDocument(request, body);
+    if (!rewritten.ok) return json(refusal('operator_console_session_config_unavailable'), 502);
+    const headers = new Headers(upstream.headers);
+    headers.delete('content-length');
+    headers.delete('content-encoding');
+    headers.delete('etag');
+    headers.delete('set-cookie');
+    headers.set('cache-control', 'no-store');
+    return new Response(rewritten.body, {
+      status: upstream.status,
+      statusText: upstream.statusText,
+      headers: withCorsHeaders(headers),
+    });
+  }
+  const headers = new Headers(upstream.headers);
+  headers.delete('content-length');
+  headers.delete('content-encoding');
+  headers.delete('etag');
+  headers.delete('set-cookie');
+  headers.set('cache-control', 'no-store');
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: withCorsHeaders(headers),
+  });
+}
+
+function isOperatorConsoleSessionDocumentPath(pathname: string): boolean {
+  return /^\/sessions\/[^/]+\/?$/.test(pathname);
+}
+
+function rewriteOperatorConsoleSessionDocument(request: Request, body: string): { ok: true; body: string } | { ok: false } {
+  const script = body.match(/(<script\b(?=[^>]*\bid=["']nars-config["'])[^>]*>)([\s\S]*?)(<\/script>)/i);
+  if (!script) return { ok: false };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(script[2]?.trim() ?? '');
+  } catch {
+    return { ok: false };
+  }
+  const config = objectRecord(parsed);
+  if (!config) return { ok: false };
+  const sourceUrl = new URL(request.url);
+  const eventEndpoint = new URL(sourceUrl.origin);
+  eventEndpoint.protocol = sourceUrl.protocol === 'https:' ? 'wss:' : 'ws:';
+  eventEndpoint.pathname = `${sourceUrl.pathname.replace(/\/+$/, '')}/events`;
+  eventEndpoint.search = '';
+  const rewrittenConfig: Record<string, unknown> = {
+    ...config,
+    eventEndpoint: eventEndpoint.toString(),
+  };
+  if ('event_endpoint' in config) rewrittenConfig.event_endpoint = eventEndpoint.toString();
+  return {
+    ok: true,
+    body: body.replace(script[0], `${script[1]}${serializeHtmlJson(rewrittenConfig)}${script[3]}`),
+  };
+}
+
+const OPERATOR_CONSOLE_REMOTE_REDACTED_VALUE = '[local value withheld]';
+const OPERATOR_CONSOLE_REMOTE_SENSITIVE_KEYS = new Set([
+  'root',
+  'siteroot',
+  'registrypath',
+  'statepath',
+  'sourcepath',
+  'targeturl',
+  'healthurl',
+  'routerurl',
+  'gatewayurl',
+  'logpath',
+  'tunnellogpath',
+  'tokenfile',
+]);
+
+function isOperatorConsoleRemoteSensitiveKey(key: string): boolean {
+  return OPERATOR_CONSOLE_REMOTE_SENSITIVE_KEYS.has(key.replaceAll('_', '').replaceAll('-', '').toLowerCase());
+}
+
+function isOperatorConsoleRemoteLocalString(value: string): boolean {
+  return /(?:^|[^a-z])[a-z]:[\\/]/i.test(value)
+    || /^(?:\\\\|\/(?:Users|home|tmp|var|opt|mnt|ProgramData|data)(?:[\\/]|$))/i.test(value)
+    || /(?:127\.0\.0\.1|localhost|operator-console\.internal)(?::\d+)?/i.test(value);
+}
+
+function redactOperatorConsoleRemotePayload(value: unknown, key?: string): unknown {
+  if (key && isOperatorConsoleRemoteSensitiveKey(key)) {
+    return value === null ? null : OPERATOR_CONSOLE_REMOTE_REDACTED_VALUE;
+  }
+  if (typeof value === 'string') return isOperatorConsoleRemoteLocalString(value) ? OPERATOR_CONSOLE_REMOTE_REDACTED_VALUE : value;
+  if (Array.isArray(value)) return value.map((item) => redactOperatorConsoleRemotePayload(item));
+  const record = objectRecord(value);
+  if (!record) return value;
+  return Object.fromEntries(Object.entries(record).map(([entryKey, entryValue]) => [
+    entryKey,
+    redactOperatorConsoleRemotePayload(entryValue, entryKey),
+  ]));
+}
+
+async function proxyAdmittedOperatorWorkspaceRoute(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  fetchFn: typeof fetch,
+  now: () => string,
+): Promise<Response> {
+  const directoryResponse = await readOperatorConsoleRouteDirectory(request, env, fetchFn, now);
+  const directory = await directoryResponse.clone().json().catch(() => null);
+  if (!directoryResponse.ok || !isWorkspaceRouteDirectory(directory)) return directoryResponse;
+  const pathname = new URL(request.url).pathname;
+  const upgrade = request.headers.get('upgrade')?.toLowerCase() === 'websocket';
+  const parity = directory.httpRouteParity?.routes ?? [];
+  const requestedMethod = request.method.toUpperCase();
+  const matching = parity.filter((route) => route.disposition === 'proxy'
+    && (route.method === requestedMethod || (requestedMethod === 'HEAD' && route.method === 'GET'))
+    && matchesParityPath(route, pathname));
+  if (upgrade) {
+    const websocketRoute = matching.find((route) => route.protocol === 'websocket');
+    return websocketRoute
+      ? proxyOperatorConsoleWorkspaceWebSocket(request, env, fetchFn)
+      : json(refusal('operator_console_workspace_route_not_admitted'), 404);
+  }
+  const httpRoute = matching.find((route) => route.protocol === 'http');
+  if (!httpRoute) return json(refusal('operator_console_workspace_route_not_admitted'), 404);
+  return proxyOperatorConsoleRequest(request, env, fetchFn, now);
+}
+
+function isPotentialOperatorWorkspaceRoute(pathname: string): boolean {
+  return pathname.startsWith('/sessions/')
+    || pathname.startsWith('/artifacts/')
+    || pathname.startsWith('/sites/');
+}
+
+function matchesParityPath(route: OperatorConsoleHttpRouteParityEntry, pathname: string): boolean {
+  try { return new RegExp(route.pattern).test(pathname); } catch { return false; }
+}
+
+async function proxyOperatorConsoleWorkspaceWebSocket(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  fetchFn: typeof fetch,
+): Promise<Response> {
+  const network = operatorConsoleGatewayNetwork(env);
+  const configuration = operatorConsoleGatewayConfiguration(env);
+  if (configuration?.transport === 'vpc-service') {
+    return network
+      ? proxyOperatorConsoleWorkspaceWebSocketViaTcp(request, env, network)
+      : json(refusal('operator_console_gateway_network_binding_unavailable'), 503);
+  }
+  return proxyOperatorConsoleWorkspaceWebSocketViaHttp(request, env, fetchFn);
+}
+
+const OPERATOR_CONSOLE_WEBSOCKET_GUID = '258EAFA5-E914-47DA-95CA-C5AB0DC85B11';
+const OPERATOR_CONSOLE_WEBSOCKET_MAX_FRAME_BYTES = 16 * 1024 * 1024;
+const OPERATOR_CONSOLE_WEBSOCKET_MAX_HANDSHAKE_BYTES = 64 * 1024;
+
+type OperatorConsoleTcpWebSocketFrame = {
+  fin: boolean;
+  opcode: number;
+  payload: Uint8Array;
+};
+
+type OperatorConsoleTcpWebSocketParser = {
+  buffer: Uint8Array;
+  fragmentedOpcode: number | null;
+  fragmentedPayload: Uint8Array[];
+  fragmentedBytes: number;
+};
+
+async function proxyOperatorConsoleWorkspaceWebSocketViaTcp(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  network: CloudflareNarsOperatorConsoleGatewayNetworkBinding,
+): Promise<Response> {
+  const configuration = operatorConsoleGatewayConfiguration(env);
+  if (!configuration) return json(refusal('operator_console_gateway_not_configured_or_pinned'), 503);
+  const key = request.headers.get('sec-websocket-key');
+  if (!key) return json(refusal('operator_console_websocket_key_required'), 400);
+  const tcpPort = Number(env.OPERATOR_CONSOLE_GATEWAY_TCP_PORT ?? 61_730);
+  const tcpHost = env.OPERATOR_CONSOLE_GATEWAY_TCP_HOST?.trim() || '127.0.0.1';
+  if (!Number.isInteger(tcpPort) || tcpPort < 1 || tcpPort > 65_535 || !tcpHost || /[\s/]/u.test(tcpHost)) {
+    return json(refusal('operator_console_gateway_tcp_address_invalid'), 503);
+  }
+
+  let socket: CloudflareNarsOperatorConsoleTcpSocket;
+  try {
+    socket = await readOperatorConsoleWithTimeout(
+      network.connect({ hostname: tcpHost, port: tcpPort }),
+      Number(env.OPERATOR_CONSOLE_GATEWAY_TIMEOUT_MS ?? 30_000),
+    );
+  } catch (error) {
+    console.log(JSON.stringify({
+      event: 'operator_console_websocket_connect_failed',
+      error: operatorConsoleGatewayErrorSummary(error),
+    }));
+    return json(refusal('operator_console_websocket_upstream_unavailable'), 503);
+  }
+  const reader = socket.readable.getReader();
+  const writer = socket.writable.getWriter();
+  let closed = false;
+  const closeTcp = (): void => {
+    if (closed) return;
+    closed = true;
+    void reader.cancel().catch(() => undefined);
+    void writer.close().catch(() => undefined);
+    try { socket.close?.(); } catch { /* best effort */ }
+  };
+
+  try {
+    const source = new URL(request.url);
+    const gatewayHost = new URL(configuration.baseUrl).host;
+    const handshakeLines = [
+      `GET ${source.pathname}${source.search} HTTP/1.1`,
+      `Host: ${gatewayHost}`,
+      'Connection: Upgrade',
+      'Upgrade: websocket',
+      `x-narada-operator-console-bridge-token: ${configuration.token}`,
+      `Sec-WebSocket-Key: ${key}`,
+      `Sec-WebSocket-Version: ${request.headers.get('sec-websocket-version') ?? '13'}`,
+    ];
+    const protocol = request.headers.get('sec-websocket-protocol');
+    if (protocol) handshakeLines.push(`Sec-WebSocket-Protocol: ${protocol}`);
+    const extensions = request.headers.get('sec-websocket-extensions');
+    if (extensions) handshakeLines.push(`Sec-WebSocket-Extensions: ${extensions}`);
+    await writer.write(new TextEncoder().encode(`${handshakeLines.join('\r\n')}\r\n\r\n`));
+    const handshake = await readOperatorConsoleTcpWebSocketHandshake(reader, key, Number(env.OPERATOR_CONSOLE_GATEWAY_TIMEOUT_MS ?? 30_000));
+
+    const pair = new WebSocketPair();
+    const client = pair[0];
+    const server = pair[1];
+    server.accept({ allowHalfOpen: true });
+    const parser = createOperatorConsoleTcpWebSocketParser();
+    let writeChain = Promise.resolve();
+    let bridgeClosed = false;
+    const closeBridge = (code = 1011, reason = 'operator_console_websocket_closed'): void => {
+      if (bridgeClosed) return;
+      bridgeClosed = true;
+      try { server.close(code, reason); } catch { /* best effort */ }
+      closeTcp();
+    };
+    const queueUpstream = (frame: Uint8Array): Promise<void> => {
+      writeChain = writeChain.then(async () => {
+        if (!bridgeClosed) await writer.write(frame);
+      });
+      return writeChain;
+    };
+
+    server.addEventListener('message', (event: MessageEvent<unknown>) => {
+      void operatorConsoleWebSocketData(event.data)
+        .then((data) => queueUpstream(encodeOperatorConsoleClientWebSocketFrame(0x1, data)))
+        .catch(() => closeBridge());
+    });
+    server.addEventListener('close', (event: CloseEvent) => {
+      const code = Number.isInteger(event.code) && event.code > 0 ? event.code : 1000;
+      const reason = event.reason || 'client_closed';
+      void queueUpstream(encodeOperatorConsoleClientWebSocketFrame(0x8, encodeOperatorConsoleClosePayload(code, reason)))
+        .finally(closeTcp);
+    });
+    server.addEventListener('error', () => closeBridge());
+
+    void pumpOperatorConsoleTcpWebSocket({
+      reader,
+      parser,
+      initialBytes: handshake.remainder,
+      server,
+      queueUpstream,
+      closeBridge,
+    });
+    return webSocketUpgradeResponse(client);
+  } catch (error) {
+    closeTcp();
+    console.log(JSON.stringify({
+      event: 'operator_console_websocket_upstream_failed',
+      error: operatorConsoleGatewayErrorSummary(error),
+    }));
+    const code = error instanceof Error && error.message === 'operator_console_websocket_upstream_invalid_handshake'
+      ? 'operator_console_websocket_upstream_invalid_handshake'
+      : 'operator_console_websocket_upstream_unavailable';
+    return json(refusal(code), 502);
+  }
+}
+
+function operatorConsoleGatewayErrorSummary(error: unknown): { name: string; message: string } {
+  if (error instanceof Error) {
+    return {
+      name: error.name || 'Error',
+      message: error.message.slice(0, 256),
+    };
+  }
+  return {
+    name: typeof error,
+    message: 'non_error_throwable',
+  };
+}
+
+async function readOperatorConsoleTcpWebSocketHandshake(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  key: string,
+  timeoutMs: number,
+): Promise<{ remainder: Uint8Array }> {
+  const deadline = Date.now() + Math.max(500, timeoutMs);
+  let buffer = new Uint8Array(0);
+  const delimiter = new Uint8Array([13, 10, 13, 10]);
+  while (true) {
+    const headerEnd = indexOfOperatorConsoleBytes(buffer, delimiter);
+    if (headerEnd >= 0) {
+      const headerBytes = buffer.slice(0, headerEnd);
+      const header = new TextDecoder().decode(headerBytes);
+      if (!/^HTTP\/1\.1 101(?:\s|$)/u.test(header)) throw new Error('operator_console_websocket_upstream_invalid_handshake');
+      const accepted = readOperatorConsoleHttpHeader(header, 'sec-websocket-accept');
+      if (!accepted || accepted !== await operatorConsoleWebSocketAccept(key)) {
+        throw new Error('operator_console_websocket_upstream_invalid_handshake');
+      }
+      return { remainder: buffer.slice(headerEnd + delimiter.byteLength) };
+    }
+    if (buffer.byteLength > OPERATOR_CONSOLE_WEBSOCKET_MAX_HANDSHAKE_BYTES) {
+      throw new Error('operator_console_websocket_upstream_invalid_handshake');
+    }
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) throw new Error('operator_console_websocket_upstream_unavailable');
+    const result = await readOperatorConsoleWithTimeout(reader.read(), remaining);
+    if (result.done) throw new Error('operator_console_websocket_upstream_unavailable');
+    buffer = concatenateOperatorConsoleBytes(buffer, result.value) as Uint8Array<ArrayBuffer>;
+  }
+}
+
+async function pumpOperatorConsoleTcpWebSocket(args: {
+  reader: ReadableStreamDefaultReader<Uint8Array>;
+  parser: OperatorConsoleTcpWebSocketParser;
+  initialBytes: Uint8Array;
+  server: WorkerWebSocket;
+  queueUpstream: (frame: Uint8Array) => Promise<void>;
+  closeBridge: (code?: number, reason?: string) => void;
+}): Promise<void> {
+  try {
+    if (args.initialBytes.byteLength > 0) await handleOperatorConsoleTcpWebSocketFrames(args, args.initialBytes);
+    while (true) {
+      const result = await args.reader.read();
+      if (result.done) throw new Error('operator_console_websocket_upstream_closed');
+      await handleOperatorConsoleTcpWebSocketFrames(args, result.value);
+    }
+  } catch {
+    args.closeBridge(1011, 'operator_console_websocket_upstream_closed');
+  }
+}
+
+async function handleOperatorConsoleTcpWebSocketFrames(
+  args: {
+    parser: OperatorConsoleTcpWebSocketParser;
+    server: WorkerWebSocket;
+    queueUpstream: (frame: Uint8Array) => Promise<void>;
+    closeBridge: (code?: number, reason?: string) => void;
+  },
+  chunk: Uint8Array,
+): Promise<void> {
+  const frames = parseOperatorConsoleTcpWebSocketFrames(args.parser, chunk);
+  for (const frame of frames) {
+    if (frame.opcode === 0x9) {
+      await args.queueUpstream(encodeOperatorConsoleClientWebSocketFrame(0xA, frame.payload));
+      continue;
+    }
+    if (frame.opcode === 0xA) continue;
+    if (frame.opcode === 0x8) {
+      const close = decodeOperatorConsoleClosePayload(frame.payload);
+      try { args.server.close(close.code, close.reason); } catch { /* best effort */ }
+      args.closeBridge(close.code, close.reason || 'upstream_closed');
+      return;
+    }
+    if (frame.opcode !== 0x0 && frame.opcode !== 0x1 && frame.opcode !== 0x2) {
+      args.closeBridge(1002, 'operator_console_websocket_opcode_invalid');
+      return;
+    }
+    if (frame.opcode !== 0x0 && args.parser.fragmentedOpcode !== null) {
+      args.closeBridge(1002, 'operator_console_websocket_fragment_invalid');
+      return;
+    }
+    if (frame.opcode !== 0x0 && !frame.fin) {
+      args.parser.fragmentedOpcode = frame.opcode;
+      args.parser.fragmentedPayload = [frame.payload];
+      args.parser.fragmentedBytes = frame.payload.byteLength;
+      continue;
+    }
+    if (frame.opcode === 0x0) {
+      if (args.parser.fragmentedOpcode === null) {
+        args.closeBridge(1002, 'operator_console_websocket_fragment_invalid');
+        return;
+      }
+      args.parser.fragmentedPayload.push(frame.payload);
+      args.parser.fragmentedBytes += frame.payload.byteLength;
+      if (!frame.fin) continue;
+      const opcode = args.parser.fragmentedOpcode;
+      const payload = concatenateOperatorConsoleChunks(args.parser.fragmentedPayload, args.parser.fragmentedBytes);
+      args.parser.fragmentedOpcode = null;
+      args.parser.fragmentedPayload = [];
+      args.parser.fragmentedBytes = 0;
+      sendOperatorConsoleWebSocketMessage(args.server, opcode, payload);
+      continue;
+    }
+    sendOperatorConsoleWebSocketMessage(args.server, frame.opcode, frame.payload);
+  }
+}
+
+function sendOperatorConsoleWebSocketMessage(server: WorkerWebSocket, opcode: number, payload: Uint8Array): void {
+  if (opcode === 0x1) server.send(new TextDecoder().decode(payload));
+  else server.send(payload.slice().buffer as ArrayBuffer);
+}
+
+function createOperatorConsoleTcpWebSocketParser(): OperatorConsoleTcpWebSocketParser {
+  return { buffer: new Uint8Array(0), fragmentedOpcode: null, fragmentedPayload: [], fragmentedBytes: 0 };
+}
+
+function parseOperatorConsoleTcpWebSocketFrames(
+  parser: OperatorConsoleTcpWebSocketParser,
+  chunk: Uint8Array,
+): OperatorConsoleTcpWebSocketFrame[] {
+  parser.buffer = concatenateOperatorConsoleBytes(parser.buffer, chunk);
+  const frames: OperatorConsoleTcpWebSocketFrame[] = [];
+  while (parser.buffer.byteLength >= 2) {
+    const first = parser.buffer[0] ?? 0;
+    const second = parser.buffer[1] ?? 0;
+    const fin = (first & 0x80) !== 0;
+    const rsv = first & 0x70;
+    const opcode = first & 0x0F;
+    if (rsv !== 0) throw new Error('operator_console_websocket_extensions_unsupported');
+    let length = second & 0x7F;
+    let offset = 2;
+    if (length === 126) {
+      if (parser.buffer.byteLength < offset + 2) break;
+      length = ((parser.buffer[offset] ?? 0) << 8) | (parser.buffer[offset + 1] ?? 0);
+      offset += 2;
+    } else if (length === 127) {
+      if (parser.buffer.byteLength < offset + 8) break;
+      length = 0;
+      for (let index = 0; index < 8; index += 1) {
+        length = length * 256 + (parser.buffer[offset + index] ?? 0);
+        if (length > OPERATOR_CONSOLE_WEBSOCKET_MAX_FRAME_BYTES) throw new Error('operator_console_websocket_frame_too_large');
+      }
+      offset += 8;
+    }
+    if (length > OPERATOR_CONSOLE_WEBSOCKET_MAX_FRAME_BYTES) throw new Error('operator_console_websocket_frame_too_large');
+    const masked = (second & 0x80) !== 0;
+    if (masked) offset += 4;
+    if (parser.buffer.byteLength < offset + length) break;
+    const mask = masked ? parser.buffer.slice(offset - 4, offset) : null;
+    const payload = parser.buffer.slice(offset, offset + length);
+    if (mask) for (let index = 0; index < payload.byteLength; index += 1) payload[index] = (payload[index] ?? 0) ^ (mask[index % 4] ?? 0);
+    parser.buffer = parser.buffer.slice(offset + length);
+    frames.push({ fin, opcode, payload });
+  }
+  return frames;
+}
+
+function encodeOperatorConsoleClientWebSocketFrame(opcode: number, payload: Uint8Array): Uint8Array {
+  if (payload.byteLength > OPERATOR_CONSOLE_WEBSOCKET_MAX_FRAME_BYTES) throw new Error('operator_console_websocket_frame_too_large');
+  const mask = new Uint8Array(4);
+  crypto.getRandomValues(mask);
+  const lengthBytes = payload.byteLength < 126 ? 0 : payload.byteLength <= 65_535 ? 2 : 8;
+  const header = 2 + lengthBytes + 4;
+  const frame = new Uint8Array(header + payload.byteLength);
+  frame[0] = 0x80 | (opcode & 0x0F);
+  if (lengthBytes === 0) frame[1] = 0x80 | payload.byteLength;
+  else if (lengthBytes === 2) {
+    frame[1] = 0x80 | 126;
+    frame[2] = (payload.byteLength >>> 8) & 0xFF;
+    frame[3] = payload.byteLength & 0xFF;
+  } else {
+    frame[1] = 0x80 | 127;
+    let remaining = payload.byteLength;
+    for (let index = 9; index >= 2; index -= 1) {
+      frame[index] = remaining & 0xFF;
+      remaining = Math.floor(remaining / 256);
+    }
+  }
+  frame.set(mask, 2 + lengthBytes);
+  for (let index = 0; index < payload.byteLength; index += 1) {
+    frame[header + index] = (payload[index] ?? 0) ^ (mask[index % 4] ?? 0);
+  }
+  return frame;
+}
+
+function encodeOperatorConsoleClosePayload(code: number, reason: string): Uint8Array {
+  const reasonBytes = new TextEncoder().encode(reason).slice(0, 123);
+  const payload = new Uint8Array(2 + reasonBytes.byteLength);
+  payload[0] = (code >>> 8) & 0xFF;
+  payload[1] = code & 0xFF;
+  payload.set(reasonBytes, 2);
+  return payload;
+}
+
+function decodeOperatorConsoleClosePayload(payload: Uint8Array): { code: number; reason: string } {
+  if (payload.byteLength < 2) return { code: 1000, reason: '' };
+  return {
+    code: (payload[0] ?? 0) * 256 + (payload[1] ?? 0),
+    reason: new TextDecoder().decode(payload.slice(2)),
+  };
+}
+
+async function operatorConsoleWebSocketData(value: unknown): Promise<Uint8Array> {
+  if (typeof value === 'string') return new TextEncoder().encode(value);
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  if (value instanceof Blob) return new Uint8Array(await value.arrayBuffer());
+  throw new Error('operator_console_websocket_message_invalid');
+}
+
+async function operatorConsoleWebSocketAccept(key: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-1', new TextEncoder().encode(`${key}${OPERATOR_CONSOLE_WEBSOCKET_GUID}`));
+  return base64FromOperatorConsoleBytes(new Uint8Array(digest));
+}
+
+function base64FromOperatorConsoleBytes(bytes: Uint8Array): string {
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary);
+}
+
+function readOperatorConsoleHttpHeader(header: string, name: string): string | null {
+  const prefix = `${name}:`;
+  const line = header.split('\r\n').find((candidate) => candidate.toLowerCase().startsWith(prefix.toLowerCase()));
+  return line ? line.slice(prefix.length).trim() : null;
+}
+
+async function readOperatorConsoleWithTimeout<T>(value: T | PromiseLike<T>, timeoutMs: number): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('operator_console_websocket_upstream_unavailable')), timeoutMs);
+    Promise.resolve(value).then((resolved) => { clearTimeout(timer); resolve(resolved); }, (error) => { clearTimeout(timer); reject(error); });
+  });
+}
+
+function concatenateOperatorConsoleBytes(left: Uint8Array, right: Uint8Array): Uint8Array {
+  const result = new Uint8Array(left.byteLength + right.byteLength);
+  result.set(left, 0);
+  result.set(right, left.byteLength);
+  return result;
+}
+
+function concatenateOperatorConsoleChunks(chunks: readonly Uint8Array[], total: number): Uint8Array {
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    result.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return result;
+}
+
+function indexOfOperatorConsoleBytes(value: Uint8Array, needle: Uint8Array): number {
+  outer: for (let index = 0; index <= value.byteLength - needle.byteLength; index += 1) {
+    for (let offset = 0; offset < needle.byteLength; offset += 1) {
+      if (value[index + offset] !== needle[offset]) continue outer;
+    }
+    return index;
+  }
+  return -1;
+}
+
+async function proxyOperatorConsoleWorkspaceWebSocketViaHttp(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  fetchFn: typeof fetch,
+): Promise<Response> {
+  const configuration = operatorConsoleGatewayConfiguration(env);
+  if (!configuration) return json(refusal('operator_console_gateway_not_configured_or_pinned'), 503);
+  const gatewayBinding = configuration.transport === 'vpc-service' ? operatorConsoleGatewayBinding(env) : null;
+  if (configuration.transport === 'vpc-service' && !gatewayBinding) return json(refusal('operator_console_gateway_vpc_binding_unavailable'), 503);
+  const source = new URL(request.url);
+  const target = new URL(source.pathname + source.search, `${configuration.baseUrl}/`);
+  const headers = new Headers({
+    Upgrade: 'websocket',
+    'x-narada-operator-console-bridge-token': configuration.token,
+  });
+  const protocol = request.headers.get('sec-websocket-protocol');
+  if (protocol) headers.set('sec-websocket-protocol', protocol);
+  let upstream: Response;
+  try {
+    upstream = await (gatewayBinding ? gatewayBinding.fetch(target, {
+      method: 'GET',
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(operatorConsoleGatewayTimeoutMs(env)),
+    }) : fetchFn(target, {
+      method: 'GET',
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(operatorConsoleGatewayTimeoutMs(env)),
+    }));
+  } catch {
+    return json(refusal('operator_console_websocket_upstream_unavailable'), 503);
+  }
+  const upstreamSocket = (upstream as Response & { webSocket?: WorkerWebSocket }).webSocket;
+  if (upstream.status !== 101 || !upstreamSocket) return json(refusal('operator_console_websocket_upstream_unavailable'), 502);
+  const pair = new WebSocketPair();
+  const client = pair[0];
+  const server = pair[1];
+  server.accept();
+  upstreamSocket.accept?.();
+  let closed = false;
+  const closeBoth = (code = 1011, reason = 'operator_console_websocket_closed'): void => {
+    if (closed) return;
+    closed = true;
+    try { server.close(code, reason); } catch { /* best effort */ }
+    try { upstreamSocket.close(code, reason); } catch { /* best effort */ }
+  };
+  server.addEventListener('message', (event: MessageEvent<unknown>) => {
+    try { upstreamSocket.send(event.data as string | ArrayBuffer | Blob); } catch { closeBoth(); }
+  });
+  upstreamSocket.addEventListener('message', (event: MessageEvent<unknown>) => {
+    try { server.send(event.data as string | ArrayBuffer | Blob); } catch { closeBoth(); }
+  });
+  server.addEventListener('close', () => closeBoth(1000, 'client_closed'));
+  server.addEventListener('error', () => closeBoth());
+  upstreamSocket.addEventListener('close', () => closeBoth(1011, 'gateway_closed'));
+  upstreamSocket.addEventListener('error', () => closeBoth());
+  return webSocketUpgradeResponse(client);
+}
+
+function webSocketUpgradeResponse(client: WorkerWebSocket): Response {
+  try {
+    return new Response(null, { status: 101, webSocket: client } as ResponseInit & { webSocket: WorkerWebSocket });
+  } catch {
+    // Node's WHATWG Response rejects 101; keep unit tests transport-neutral
+    // while Cloudflare receives the native upgrade response above.
+    const response = new Response(null, { status: 200 });
+    Object.defineProperty(response, 'status', { value: 101 });
+    Object.defineProperty(response, 'webSocket', { value: client });
+    return response;
+  }
+}
+
+async function readOperatorConsoleRouteDirectory(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  fetchFn: typeof fetch,
+  _now: () => string,
+): Promise<Response> {
+  const discoveryRequest = new Request(request.url, {
+    method: 'GET',
+    headers: request.headers,
+  });
+  const upstream = await fetchOperatorConsoleGateway(discoveryRequest, env, fetchFn, '/console/routes');
+  const payload = await upstream.json().catch(() => null);
+  if (!upstream.ok) return json(payload ?? refusal('operator_console_route_directory_unavailable'), upstream.status);
+  if (!isWorkspaceRouteDirectory(payload)) return json(refusal('operator_console_route_directory_invalid'), 502);
+  const origin = new URL(request.url).origin;
+  return json({ ...payload, workspaceHost: { kind: 'cloudflare', id: 'worker', origin } });
+}
+
+async function readOperatorConsoleGatewayHealth(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  fetchFn: typeof fetch,
+  _now: () => string,
+): Promise<Response> {
+  const upstream = await fetchOperatorConsoleGateway(request, env, fetchFn, '/health');
+  const payload = await upstream.json().catch(() => null);
+  const transport = operatorConsoleGatewayTransportHealth(env);
+  const healthy = upstream.ok && transport.status === 'ready';
+  return json({
+    schema: 'narada.operator_console.cloudflare_mirror_health.v1',
+    status: healthy ? 'healthy' : 'degraded',
+    transport,
+    gateway: payload,
+  }, healthy ? 200 : 503);
+}
+
+async function serveStaticAsset(
+  request: Request,
+  env: CloudflareNarsProjectionWorkerEnv,
+  workspaceDirectory: CloudflareNarsWorkspaceDirectoryService,
+  now: () => string,
+  fetchFn: typeof fetch,
+): Promise<Response> {
   const url = new URL(request.url);
   const hasProjectionBootstrap = url.searchParams.has('cloudflare_projection_id');
   const legacyProjectionEntry = hasProjectionBootstrap
@@ -1111,10 +2177,32 @@ async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionW
   }
   const directProjectionEntry = url.pathname === '/'
     && hasProjectionBootstrap;
-  const workspaceLanding = !directProjectionEntry
-    && (url.pathname === '/' || url.pathname === OPERATOR_CONSOLE_PATH || url.pathname === `${OPERATOR_CONSOLE_PATH}/`);
+  const operatorConsoleEntry = !directProjectionEntry
+    && (url.pathname === OPERATOR_CONSOLE_PATH || url.pathname === `${OPERATOR_CONSOLE_PATH}/`);
+  if (operatorConsoleEntry) {
+    const canonicalUrl = new URL(url);
+    canonicalUrl.pathname = `${OPERATOR_CONSOLE_PATH}/agents`;
+    return new Response(null, {
+      status: 302,
+      headers: {
+        location: canonicalUrl.toString(),
+        'cache-control': 'no-store',
+      },
+    });
+  }
+  const workspaceLanding = !directProjectionEntry && url.pathname === '/';
   if (workspaceLanding) {
-    const directory = await readWorkspaceDirectoryForPage(request, env, workspaceDirectory, now);
+    let directory: OperatorWorkspaceRouteDirectory;
+    if (operatorConsoleGatewayConfigured(env)) {
+      const remoteDirectory = await readOperatorConsoleRouteDirectory(request, env, fetchFn, now);
+      const payload = await remoteDirectory.json().catch(() => null);
+      if (!remoteDirectory.ok || !isWorkspaceRouteDirectory(payload)) {
+        return json(payload ?? refusal('operator_console_route_directory_unavailable'), remoteDirectory.status || 503);
+      }
+      directory = payload;
+    } else {
+      directory = await readWorkspaceDirectoryForPage(request, env, workspaceDirectory, now);
+    }
     return new Response(renderCloudflareWorkspacePage(directory, url.origin), {
       status: 200,
       headers: withCorsHeaders({ 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }),
@@ -1122,21 +2210,22 @@ async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionW
   }
   if (!env.ASSETS?.fetch) return json(refusal('static_assets_not_configured'), 404);
   const sessionDocument = url.pathname === '/sessions' || url.pathname === '/sessions/' || url.pathname.startsWith('/sessions/');
-  const consoleDocument = isDocumentPath(url.pathname, OPERATOR_CONSOLE_PATH);
+  const consoleDocument = isOperatorConsoleStaticDocumentPath(url.pathname);
   const consoleLease = consoleDocument
     ? (env.NARS_WORKSPACE_DIRECTORY
       ? await lookupWorkspaceRouteInDurableObject(url.pathname, env)
       : workspaceDirectory.findByPath(url.pathname, now()))
     : null;
   const consoleUiConfig = objectRecord(consoleLease?.ui_config);
-  if (consoleDocument && !consoleLease) return json(refusal('operator_console_route_not_leased'), 404);
-  if (consoleDocument && !consoleUiConfig) return json(refusal('operator_console_route_configuration_unavailable'), 503);
+  if (consoleDocument && !consoleLease && !operatorConsoleGatewayConfigured(env)) return json(refusal('operator_console_route_not_leased'), 404);
+  if (consoleDocument && !consoleUiConfig && !operatorConsoleGatewayConfigured(env)) return json(refusal('operator_console_route_configuration_unavailable'), 503);
   const assetUrl = new URL(url);
-  // Fetch the directory form. Cloudflare's asset binding redirects an
-  // internal `/sessions/index.html` fetch to `/sessions/`; the directory form
-  // avoids leaking that redirect into the canonical projection URL.
+  // Fetch directory forms for SPA entrypoints. Cloudflare's asset binding
+  // redirects an internal `/sessions/index.html` or `/console/index.html`
+  // fetch to its directory URL; using the directory form avoids leaking that
+  // redirect into the canonical projection URL.
   if (directProjectionEntry || (sessionDocument && !hasFileExtension(url.pathname))) assetUrl.pathname = '/sessions/';
-  if (consoleDocument) assetUrl.pathname = `${OPERATOR_CONSOLE_PATH}/index.html`;
+  if (consoleDocument) assetUrl.pathname = `${OPERATOR_CONSOLE_PATH}/`;
   const response = await env.ASSETS.fetch(new Request(assetUrl, request));
   if ((!directProjectionEntry && !sessionDocument && !consoleDocument) || !isHtmlResponse(response)) return response;
   const lease = consoleDocument ? consoleLease : (env.NARS_WORKSPACE_DIRECTORY
@@ -1153,7 +2242,16 @@ async function serveStaticAsset(request: Request, env: CloudflareNarsProjectionW
         browserToken: stringOrUndefined(consoleRouteDirectory.browser_token) ?? null,
       },
     }
-    : {};
+       : operatorConsoleGatewayConfigured(env)
+        ? {
+          routeDirectory: {
+            endpoint: '/api/nars/operator-console/routes',
+            projectionId: null,
+            browserToken: null,
+            timeoutMs: operatorConsoleGatewayTimeoutMs(env),
+          },
+        }
+        : {};
   const content = await response.text();
   const headers = new Headers(response.headers);
   // The body is no longer the immutable asset returned by ASSETS. Do not
