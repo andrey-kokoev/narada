@@ -18,6 +18,11 @@ import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
 import { spawnTestChild } from '@narada2/process-launch-posture';
 import { recordLiveEvidence } from './live-test-harness.js';
 
+/**
+ * Evidence posture: partial-production-launch. The runtime, launch binding,
+ * four client surfaces, and durable event oracle are real; inference, MCP,
+ * and PI-RPC inputs are deterministic fixtures.
+ */
 const liveEnabled: any = process.argv.includes('--enable-live-e2e')
   || process.env.NARADA_AGENT_PI_TUI_LIVE_E2E === '1';
 
@@ -597,7 +602,7 @@ try {
     },
     sessionIds: [record.session_id],
     status: 'passed',
-    posture: 'production-launch',
+    posture: 'partial-production-launch',
   });
 
   console.log(JSON.stringify({

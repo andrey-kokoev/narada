@@ -42,7 +42,12 @@ async function stopFixture(fixture: LiveFixture, clients: readonly NarsAttachCli
   fixture.input.destroy();
 }
 
-describe('agent-pi-tui live NARS attachment', () => {
+/**
+ * Evidence posture: fixture-boundary. The attach client and event-stream
+ * projection are real, but the NARS input and event hub are in-process
+ * fixtures; this does not prove a launched runtime or provider path.
+ */
+describe('[fixture-boundary] agent-pi-tui NARS attachment', () => {
   it('attaches four projection clients, replays, delivers, and detaches locally', async () => {
     const fixture: any = await startFixture();
     const clients: any = Array.from({ length: 4 }, () => new NarsAttachClient({

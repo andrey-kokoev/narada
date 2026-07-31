@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
+import { validateRemoteCloudflareApiBaseUrl } from './lib/live-boundary.js';
 
 type AnyRecord = Record<string, any>;
 type SmokeArgs = { live: boolean; quiet: boolean; help: boolean; format: string; cloudflareApiBaseUrl: string | null; evidencePath: string | null; sessionId: string | null; siteId: string | null; agentId: string | null };
@@ -47,7 +48,18 @@ async function run(): Promise<AnyRecord> {
     });
   }
 
-  const baseUrl = args.cloudflareApiBaseUrl.replace(/\/+$/, '');
+  const remoteBoundary = validateRemoteCloudflareApiBaseUrl(args.cloudflareApiBaseUrl);
+  if (!remoteBoundary.ok) {
+    return persist({
+      schema: 'narada.cloudflare_nars_projection.intelligence_boundary_live_smoke.v1',
+      status: 'refused',
+      code: remoteBoundary.code,
+      message: remoteBoundary.message,
+      deployment_boundary: 'remote_https_worker',
+    });
+  }
+
+  const baseUrl = remoteBoundary.origin;
   const sessionId = args.sessionId ?? `cf_projection_boundary_${Date.now()}`;
   const sessionBase = `${baseUrl}/api/nars/authority/sessions/${encodeURIComponent(sessionId)}`;
   let cleanup: AnyRecord = { status: 'not_attempted' };
@@ -109,6 +121,8 @@ async function run(): Promise<AnyRecord> {
       schema: 'narada.cloudflare_nars_projection.intelligence_boundary_live_smoke.v1',
       status: passed ? 'passed' : 'failed',
       code: passed ? 'projection_boundary_verified' : 'projection_boundary_check_failed',
+      deployment_boundary: remoteBoundary.deployment_boundary,
+      remote_cloudflare_origin: remoteBoundary.origin,
       cloudflare_api_base_url: baseUrl,
       session_id: sessionId,
       checks: {

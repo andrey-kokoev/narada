@@ -15,6 +15,12 @@ import { createSiteAgentLaunchGateway } from '../../dist/commands/site-agent-lau
 import { createSiteAgentLifecycleGateway } from '../../dist/commands/site-agent-lifecycle-gateway.js';
 import { readWorkspaceLaunchRecords } from '../../dist/commands/workspace-launch-registry.js';
 
+/**
+ * Evidence posture: partial-production-launch. The Console, browser, gates,
+ * registries, and child-process boundary are real; the launcher command is a
+ * deterministic injected fixture. The real workspace-launch path is covered
+ * by operator-console-real-launch-e2e.test.ts.
+ */
 const SITE_ID = 'narada';
 const SITE_DISPLAY_NAME = 'Operator Console Agent Lifecycle E2E';
 const RESIDENT_AGENT_ID = SITE_ID + '.resident';
@@ -195,7 +201,7 @@ function makeOverview(readRecords, runtimeByAgent) {
 }
 
 test(
-  'Operator Console admits, launches, stops, and deletes a Site agent through the live UI',
+  '[partial-production-launch] Operator Console admits, launches, stops, and deletes a Site agent through the live UI',
   { skip: process.platform !== 'win32' },
   async () => {
     const previousEnvironment = {
@@ -203,7 +209,7 @@ test(
       NARADA_USER_SITE_ROOT: process.env.NARADA_USER_SITE_ROOT,
     };
     const fixtureRoot = await mkdtemp(join(tmpdir(), 'operator-console-agent-lifecycle-'));
-    const userSiteRoot = join(fixtureRoot, 'Narada', '.registry');
+    const userSiteRoot = join(fixtureRoot, 'user-site-root');
     const siteRoot = join(fixtureRoot, 'site-root');
     let consoleServer = null;
     let browser = null;

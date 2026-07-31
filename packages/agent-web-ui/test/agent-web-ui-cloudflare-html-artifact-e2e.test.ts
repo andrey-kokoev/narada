@@ -19,6 +19,10 @@ import {
 } from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
 import { startSessionCoreRuntime, waitFor } from './e2e/nars-runtime-fixture.js';
 
+/**
+ * Evidence posture: fixture-boundary. The Worker is executed in-process and
+ * exposed by a local Node HTTP server; no deployed Worker is exercised here.
+ */
 const now = '2026-07-01T12:00:00.000Z';
 const speechMcpMain = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/dist/src/main.js', import.meta.url));
 const speechProviderRegistryPath = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/config/provider-registry.v2.json', import.meta.url));
@@ -73,6 +77,11 @@ async function createRealNarsSiteWithHtmlArtifact() {
 
     const artifact = await registerArtifact(htmlPath, 'html', 'Remote HTML Preview', 'text/html; charset=utf-8');
     const audioArtifact = await registerArtifact(audioPath, 'audio', 'Remote Audio Briefing');
+    const presentedHtmlResponse = await fetch(new URL(`/sessions/${sessionId}/artifacts/${artifact.artifact_id}/message`, runtime.healthProjection.url), {
+      method: 'POST',
+      body: JSON.stringify({ text: 'HTML preview is ready.' }),
+    });
+    assert.equal(presentedHtmlResponse.status, 201);
     const presentedAudioResponse = await fetch(new URL(`/sessions/${sessionId}/artifacts/${audioArtifact.artifact_id}/message`, runtime.healthProjection.url), {
       method: 'POST',
       body: JSON.stringify({ text: 'Spoken version is ready.' }),
@@ -208,7 +217,7 @@ async function callLiveSpeechMcp({ siteRoot, outputPath, text }: any) {
   return response.result.structuredContent;
 }
 
-test('hosted Cloudflare projection web UI renders explicitly admitted local NARS HTML artifact', async () => {
+test('[fixture-boundary] local Worker emulation renders an explicitly admitted local NARS HTML artifact', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for hosted artifact E2E');
 
@@ -223,6 +232,7 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
   const assetServerResult = await startAgentWebUiServer({
     host: '127.0.0.1',
     port: 0,
+    sessionId,
     cloudflareProjectionId: projectionId,
     cloudflareApiBaseUrl: workerBaseUrl,
   });
@@ -231,7 +241,11 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
     ASSETS: {
       fetch(request: any) {
         const url = new URL(request.url);
-        const assetPath = url.pathname === '/sessions/index.html' ? '/' : url.pathname;
+        const assetPath = url.pathname === '/sessions/' || url.pathname === '/sessions/index.html'
+          ? '/'
+          : url.pathname.startsWith('/sessions/assets/')
+            ? url.pathname.replace(/^\/sessions/, '')
+            : url.pathname;
         return fetch(`${assetBaseUrl}${assetPath}${url.search}`);
       },
     },
@@ -284,9 +298,12 @@ test('hosted Cloudflare projection web UI renders explicitly admitted local NARS
 
     const hostedUrl = `${workerBaseUrl}/?cloudflare_projection_id=${encodeURIComponent(projectionId)}&cloudflare_api_base_url=${encodeURIComponent(workerBaseUrl)}&cloudflare_browser_token=${encodeURIComponent(browserToken)}`;
     page = await openCdpPage({ browserPath, url: hostedUrl, userDataPrefix: 'narada-agent-web-ui-html-artifact-e2e-' });
-    assert.equal((await waitForPageText(page, 'Browser projection attached', 15000)).found, true);
-    assert.equal((await waitForPageText(page, 'Remote HTML Preview', 15000)).found, true);
-    assert.equal((await waitForPageText(page, 'Remote Audio Briefing', 15000)).found, true);
+    const attached = await waitForPageText(page, 'Browser projection attached', 15000);
+    if (!attached.found) throw new Error(JSON.stringify({ attached, body: await page.evaluate('document.body?.innerText?.slice(0, 1000) ?? ""'), runtime: page.runtimeDiagnostics().slice(-8), websocket: page.webSocketFrames().slice(-4), servedResponses: servedResponses.slice(-8).map((entry: any) => ({ method: entry.method, url: entry.url, status: entry.status, body: entry.body?.slice(0, 300) })) }));
+    const remoteHtml = await waitForPageText(page, 'Remote HTML Preview', 15000);
+    if (!remoteHtml.found) throw new Error(JSON.stringify({ remoteHtml, body: await page.evaluate('document.body?.innerText?.slice(0, 1200) ?? ""'), runtime: page.runtimeDiagnostics().slice(-8), websocket: page.webSocketFrames().slice(-6), servedResponses: servedResponses.slice(-12).map((entry: any) => ({ method: entry.method, url: entry.url, status: entry.status, body: entry.body?.slice(0, 300) })) }));
+    const remoteAudio = await waitForPageText(page, 'Remote Audio Briefing', 15000);
+    if (!remoteAudio.found) throw new Error(JSON.stringify({ remoteAudio, body: await page.evaluate('document.body?.innerText?.slice(0, 1200) ?? ""'), runtime: page.runtimeDiagnostics().slice(-8), websocket: page.webSocketFrames().slice(-6), servedResponses: servedResponses.slice(-12).map((entry: any) => ({ method: entry.method, url: entry.url, status: entry.status, body: entry.body?.slice(0, 300) })) }));
     const iframe = await waitForPageTextWithAction(
       page,
       'Remote HTML Preview',

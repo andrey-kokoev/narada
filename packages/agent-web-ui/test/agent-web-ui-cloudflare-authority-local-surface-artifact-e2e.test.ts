@@ -3,6 +3,7 @@ import { createServer } from 'node:http';
 import test from 'node:test';
 import {
   createCloudflareNarsAuthorityService,
+  createCloudflareNarsTestRuntimeExecutor,
   createCloudflareNarsWorkspaceDirectoryService,
 } from '@narada2/cloudflare-nars-projection';
 import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
@@ -14,6 +15,11 @@ import {
   waitForPageTextWithAction,
 } from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
 
+/**
+ * Evidence posture: fixture-boundary. These tests run the Worker and its
+ * authority service in-process behind a local HTTP server. They do not prove
+ * a deployed Cloudflare Worker; that claim belongs to the --live smoke lane.
+ */
 const now = '2026-07-01T13:00:00.000Z';
 
 function listen(server: any, host: any= '127.0.0.1') {
@@ -72,15 +78,22 @@ async function jsonOf(responseOrPromise: any) {
   return response.json();
 }
 async function setProjectionView(page: any, value: any) {
-  return page.selectOption('#projection-verbosity', value);
+  const started = Date.now();
+  let options = [];
+  while (Date.now() - started < 10000) {
+    options = await page.evaluate('Array.from(document.querySelectorAll("#projection-verbosity option")).map((option) => option.value)');
+    if (options.includes(value)) return page.selectOption('#projection-verbosity', value);
+    await new Promise((resolve: any) => setTimeout(resolve, 100));
+  }
+  throw new Error(`cdp_projection_view_option_not_ready:${value}:${JSON.stringify(options)}`);
 }
 
-test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders authority HTML artifact', async () => {
+test('[fixture-boundary] local Agent Web UI submits through an in-process Cloudflare Worker authority and renders an HTML artifact', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for Cloudflare authority local-surface artifact E2E');
 
   const sessionId = 'cf_authority_local_surface_artifact_e2e';
-  const authorityService = createCloudflareNarsAuthorityService();
+  const authorityService = createCloudflareNarsAuthorityService({ runtime_executor: createCloudflareNarsTestRuntimeExecutor() });
   const worker = createCloudflareNarsProjectionWorker({ now: () => now, authority_service: authorityService });
   const servedResponses = [];
   const envRef = { current: {} };
@@ -109,13 +122,16 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
   let page = null;
   try {
     page = await openCdpPage({ browserPath, url: localWeb.url, userDataPrefix: 'narada-cf-authority-local-surface-artifact-' });
-    const initialReplay = await waitForPageText(page, 'cloudflare.resident', 15000);
-    assert.equal(initialReplay.found, true, JSON.stringify(initialReplay));
+    assert.deepEqual(await setProjectionView(page, 'operations'), { ok: true, value: 'operations' });
+    const initialReplay = await waitForPageText(page, 'Session started', 15000);
+    if (!initialReplay.found) throw new Error(JSON.stringify({ initialReplay, body: await page.evaluate('document.body?.innerText?.slice(0, 1000) ?? ""'), runtime: page.runtimeDiagnostics().slice(-8), websocket: page.webSocketFrames().slice(-4) }));
+    assert.deepEqual(await setProjectionView(page, 'conversation'), { ok: true, value: 'conversation' });
 
     await page.fill('#operator-input', 'Create an HTML artifact in the Cloudflare authority runtime');
     await page.click('.composer-submit');
 
-    assert.equal((await waitForPageText(page, 'Cloudflare Authority HTML Preview', 15000)).found, true);
+    const artifactText = await waitForPageText(page, 'Cloudflare Authority HTML Preview', 15000);
+    if (!artifactText.found) throw new Error(JSON.stringify({ artifactText, body: await page.evaluate('document.body?.innerText?.slice(0, 1000) ?? ""'), runtime: page.runtimeDiagnostics().slice(-8), websocket: page.webSocketFrames().slice(-6) }));
     const iframe = await waitForPageTextWithAction(
       page,
       'Cloudflare Authority HTML Preview',
@@ -175,13 +191,14 @@ test('local agent-web-ui submits to Cloudflare-hosted NARS authority and renders
   }
 });
 
-test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and renders authority HTML artifact', async () => {
+test('[fixture-boundary] local browser assets submit through an in-process Cloudflare Worker route and render an HTML artifact', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for Cloudflare authority hosted-surface artifact E2E');
 
   const sessionId = 'cf_authority_hosted_surface_artifact_e2e';
   const workspaceDirectory = createCloudflareNarsWorkspaceDirectoryService();
-  const worker = createCloudflareNarsProjectionWorker({ now: () => now, workspace_directory_service: workspaceDirectory });
+  const authorityService = createCloudflareNarsAuthorityService({ runtime_executor: createCloudflareNarsTestRuntimeExecutor() });
+  const worker = createCloudflareNarsProjectionWorker({ now: () => now, authority_service: authorityService, workspace_directory_service: workspaceDirectory });
   const envRef = { current: {} };
   const servedResponses = [];
   const workerServer = createWorkerHttpServer(worker, envRef, servedResponses);
@@ -230,7 +247,7 @@ test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and r
     ASSETS: {
       fetch(request: any) {
         const url = new URL(request.url);
-        const assetPath = url.pathname === '/sessions/index.html'
+        const assetPath = url.pathname === '/sessions/' || url.pathname === '/sessions/index.html'
           ? '/'
           : url.pathname.startsWith('/sessions/assets/')
             ? url.pathname.replace(/^\/sessions/, '')
@@ -243,13 +260,16 @@ test('hosted Cloudflare web UI submits to Cloudflare-hosted NARS authority and r
   let page = null;
   try {
     page = await openCdpPage({ browserPath, url: `${workerBaseUrl}${routePath}`, userDataPrefix: 'narada-cf-authority-hosted-surface-artifact-' });
-    const initialReplay = await waitForPageText(page, 'cloudflare.resident', 15000);
-    assert.equal(initialReplay.found, true, JSON.stringify({ initialReplay, servedResponses }));
+    assert.deepEqual(await setProjectionView(page, 'operations'), { ok: true, value: 'operations' });
+    const initialReplay = await waitForPageText(page, 'Session started', 15000);
+    if (!initialReplay.found) throw new Error(JSON.stringify({ initialReplay, body: await page.evaluate('document.body?.innerText?.slice(0, 1000) ?? ""'), runtime: page.runtimeDiagnostics().slice(-8), websocket: page.webSocketFrames().slice(-4), servedResponses: servedResponses.slice(-8).map((entry: any) => ({ method: entry.method, url: entry.url, status: entry.status, body: entry.body?.slice(0, 300) })) }));
+    assert.deepEqual(await setProjectionView(page, 'conversation'), { ok: true, value: 'conversation' });
 
     await page.fill('#operator-input', 'Create an HTML artifact in the Cloudflare authority runtime from hosted UI');
     await page.click('.composer-submit');
 
-    assert.equal((await waitForPageText(page, 'Cloudflare Authority HTML Preview', 15000)).found, true);
+    const artifactText = await waitForPageText(page, 'Cloudflare Authority HTML Preview', 15000);
+    if (!artifactText.found) throw new Error(JSON.stringify({ artifactText, body: await page.evaluate('document.body?.innerText?.slice(0, 1000) ?? ""'), runtime: page.runtimeDiagnostics().slice(-8), websocket: page.webSocketFrames().slice(-6), servedResponses: servedResponses.slice(-12).map((entry: any) => ({ method: entry.method, url: entry.url, status: entry.status, body: entry.body?.slice(0, 300) })) }));
     const iframe = await waitForPageTextWithAction(
       page,
       'Cloudflare Authority HTML Preview',

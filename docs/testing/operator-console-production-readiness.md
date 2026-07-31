@@ -33,7 +33,7 @@ Failure must identify the stale artifact and the required build command before a
 
 ### 2. Isolated real browser launch
 
-Test: `operator-console-real-launch-e2e.test.mjs`.
+Test: `operator-console-real-launch-e2e.test.ts`.
 
 Setup: temporary User Site registry, temporary Site root, seeded valid intelligence catalog, actual operator console server, actual operator router, actual browser, and an actual NARS-backed agent-web-ui launch.
 
@@ -78,6 +78,23 @@ Proof:
 - a genuine schema or validation failure remains explicit and actionable.
 
 This is the regression guard for the immutable migration conflict that blocked `andrey-user.architect`.
+
+### Evidence posture
+
+The repository has three intentionally separate E2E postures:
+
+- `fixture-boundary`: real browser and protocol surfaces over deterministic HTTP/WebSocket/API fixtures. These tests are for UI and
+  state-matrix coverage and must not be reported as runtime-launch proof.
+- `local-process-boundary`: real Router, launcher, NARS process, session index, health, and operator-surface attachment, usually with
+  deterministic provider or MCP dependencies.
+- `deployed-live`: a public HTTPS Cloudflare Worker and the deployed asset/runtime boundary. A `--live` smoke refuses loopback,
+  private, `.local`, or non-HTTPS origins.
+
+The default Operator Console UI matrix in
+`packages/layers/cli/test/integration/operator-console-ui-e2e.test.ts` is
+`fixture-boundary`. The real launch gate is the isolated
+`operator-console-real-launch-e2e.test.ts`, and the canonical Router journey
+is a composition test with its fixture posture declared in its test name.
 
 ### 5. Runtime-start failure and missing-session-index refusal
 
@@ -142,7 +159,7 @@ This is the final production-evidence gate. It is intentionally opt-in because i
 
 ## Non-claims
 
-- `operator-console-ui-e2e.test.mjs` is a UI/route fixture test; it does not prove runtime launch.
+- `operator-console-ui-e2e.test.ts` is a `fixture-boundary` UI/route matrix; it does not prove runtime launch.
 - A successful `200` response alone does not prove session correctness.
 - A session directory alone does not prove runtime startup; `session_started`, index presence, health, and exact identity correlation are required.
 - A clean temporary catalog does not prove User Site bootstrap or migration safety.

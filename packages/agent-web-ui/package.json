@@ -71,7 +71,8 @@
     "test:projection": "pnpm run build && playwright test --config playwright.projection.config.ts",
     "test:e2e:headed": "pnpm run build && playwright test --config playwright.config.ts --headed",
     "test:e2e:ui": "pnpm run build && playwright test --config playwright.config.ts --ui",
-    "test:browser:cdp": "pnpm run build && node --import tsx --test test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.ts test/agent-web-ui-cloudflare-html-artifact-e2e.test.ts test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.ts"
+    "test:browser:local-projection": "pnpm run build && node --import tsx --test test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.ts test/agent-web-ui-cloudflare-html-artifact-e2e.test.ts test/agent-web-ui-local-submit-html-artifact-cloudflare-e2e.test.ts",
+    "test:browser:cdp": "pnpm run test:browser:local-projection"
   },
   "dependencies": {
     "@narada2/agent-identity": "workspace:*",

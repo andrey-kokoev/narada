@@ -108,6 +108,7 @@
       "claimed_embodiments": ["local-nars", "remote-cloudflare-projection"],
       "proof_refs": [
         "packages/layers/cli/test/integration/operator-journey-acceptance-e2e.test.ts",
+        "packages/layers/cli/test/integration/operator-console-real-launch-e2e.test.ts",
         "docs/concepts/cloudflare-nars-web-projection.md"
       ]
     }

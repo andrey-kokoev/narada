@@ -6,6 +6,13 @@ import { chromium } from '@playwright/test';
 import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
 import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from '../../dist/commands/console-ui-assets.js';
 
+/**
+ * Evidence posture: fixture-boundary. The browser and Operator Console UI
+ * are real, but this file supplies a deterministic hand-written API server
+ * for state-matrix coverage. It does not prove launch, NARS health, session
+ * indexing, or runtime attachment. Those claims belong to the real-launch
+ * integration suite.
+ */
 const site = {
   site_id: 'site-a',
   site_root: 'D:/code/site-a',
@@ -41,6 +48,14 @@ function siteAgent(agentId, role, runtimeState, workState, sessionId = null) {
       selected_session_id: sessionId,
     },
     work: { state: workState, detail: null, source: 'principal-runtime' },
+    operator_surfaces: {
+      default_kind: 'agent-web-ui',
+      choices: [
+        { kind: 'agent-web-ui', label: 'Web UI', status: 'available', reason: null },
+        { kind: 'agent-cli', label: 'CLI', status: 'available', reason: null },
+        { kind: 'agent-tui', label: 'TUI', status: 'available', reason: null },
+      ],
+    },
     actions: {
       start: runtimeState === 'stopped',
       inspect: runtimeState === 'running' && Boolean(sessionId),
@@ -286,6 +301,14 @@ async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguou
         sendJson(res, 200, siteAgentOverview(siteAgentLaunched, { userSiteResidentAmbiguous }));
         return;
       }
+      if (req.method === 'GET' && pathname === '/console/agents/api/pending') {
+        sendJson(res, 200, {
+          schema: 'narada.operator_console.agent_pending.v1',
+          status: 'success',
+          pending: [],
+        });
+        return;
+      }
       if (req.method === 'POST' && pathname === '/console/agents/api/launch') {
         const input = await readJson(req);
         requests.push({ pathname, input });
@@ -462,7 +485,7 @@ async function assertNoHorizontalOverflow(page, viewport) {
   assert.ok(widths.body <= widths.viewport, viewport + ' body overflow: ' + JSON.stringify(widths));
 }
 
-test('Operator Console Vue registry projection works at desktop and mobile widths', async () => {
+test('[fixture-boundary] Operator Console Vue registry projection works at desktop and mobile widths', async () => {
   const fixture = await startFixtureServer();
   const browser = await chromium.launch();
   try {
@@ -519,7 +542,7 @@ test('LIVE Operator Console reproduces ambiguous resident action on the running 
   }
 });
 
-test('Operator Console Sites and Agents groups authority, launches admitted agents, and routes inspection', async () => {
+test('[fixture-boundary] Operator Console Sites and Agents groups authority, launches admitted agents, and routes inspection', async () => {
   const fixture = await startFixtureServer({ agentSessions: [
     { ...activeAgentSession, session_id: 'session-a', agent_id: 'site-a.architect' },
     { ...activeAgentSession, session_id: 'session-b', agent_id: 'site-a.architect' },
@@ -579,7 +602,7 @@ test('Operator Console Sites and Agents groups authority, launches admitted agen
     assert.equal(await popup.getByText(launchedAgentSessionId).isVisible(), true);
     assert.deepEqual(fixture.requests.at(-1), {
       pathname: '/console/agents/api/launch',
-      input: { site_id: 'site-a', agent_id: 'site-a.resident' },
+      input: { site_id: 'site-a', agent_id: 'site-a.resident', operator_surface: 'agent-web-ui' },
     });
     assert.equal(fixture.requests.filter((request) => request.pathname === '/console/agents/api/launch').length, 1);
     await page.getByText('site-a.resident started. Its Web UI opens when the route is ready.').waitFor();
@@ -603,7 +626,7 @@ test('Operator Console Sites and Agents groups authority, launches admitted agen
   }
 });
 
-test('Operator Console reproduces user-site ambiguous resident with empty Agent Sessions inventory', async () => {
+test('[fixture-boundary] Operator Console reproduces user-site ambiguous resident with empty Agent Sessions inventory', async () => {
   const fixture = await startFixtureServer({ userSiteResidentAmbiguous: true });
   const browser = await chromium.launch();
   try {
@@ -625,7 +648,7 @@ test('Operator Console reproduces user-site ambiguous resident with empty Agent 
   }
 });
 
-test('Operator Console session inventory renders canonical lifecycle posture without overflow', async () => {
+test('[fixture-boundary] Operator Console session inventory renders canonical lifecycle posture without overflow', async () => {
   const fixture = await startFixtureServer({ agentSessions: [activeAgentSession] });
   const browser = await chromium.launch();
   try {
@@ -647,7 +670,7 @@ test('Operator Console session inventory renders canonical lifecycle posture wit
   }
 });
 
-test('Operator Console launch page renders the site runtime view and rejects unknown routes', async () => {
+test('[fixture-boundary] Operator Console launch page renders the site runtime view and rejects unknown routes', async () => {
   const fixture = await startFixtureServer();
   const browser = await chromium.launch();
   try {
@@ -666,7 +689,7 @@ test('Operator Console launch page renders the site runtime view and rejects unk
   }
 });
 
-test('Operator Console first-use onboarding projects ready, starting, and healthy states', async () => {
+test('[fixture-boundary] Operator Console first-use onboarding projects ready, starting, and healthy states', async () => {
   const fixture = await startFixtureServer();
   const browser = await chromium.launch();
   try {
@@ -692,7 +715,7 @@ test('Operator Console first-use onboarding projects ready, starting, and health
   }
 });
 
-test('Operator Console Vue exposes retired-record recovery and exact purge confirmation', async () => {
+test('[fixture-boundary] Operator Console Vue exposes retired-record recovery and exact purge confirmation', async () => {
   const fixture = await startFixtureServer();
   const browser = await chromium.launch();
   try {
@@ -729,7 +752,7 @@ test('Operator Console Vue exposes retired-record recovery and exact purge confi
   }
 });
 
-test('Operator Console Vue mutation pages preserve plan/apply and revision safeguards', async () => {
+test('[fixture-boundary] Operator Console Vue mutation pages preserve plan/apply and revision safeguards', async () => {
   const fixture = await startFixtureServer();
   const browser = await chromium.launch();
   try {

@@ -18,6 +18,10 @@ import {
   waitForPageTextWithAction,
 } from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
 
+/**
+ * Evidence posture: fixture-boundary. This compares local NARS session-core
+ * behavior with an in-process Worker emulation; it is not deployed evidence.
+ */
 const now = '2026-07-01T12:30:00.000Z';
 
 function listen(server: any, host: any= '127.0.0.1') {
@@ -117,12 +121,18 @@ async function startRealLocalNarsRuntime() {
         }),
       });
       assert.equal(response.status, 201);
-      return (await response.json()).artifact;
+      const artifact = (await response.json()).artifact;
+      const presented = await fetch(new URL(`/sessions/${runtime.sessionId}/artifacts/${artifact.artifact_id}/message`, runtime.healthProjection.url), {
+        method: 'POST',
+        body: JSON.stringify({ text: 'HTML artifact is ready.' }),
+      });
+      assert.equal(presented.status, 201);
+      return artifact;
     },
   };
 }
 
-test('local runtime input renders artifact and MCP lanes on local and Cloudflare-hosted web surfaces', { concurrency: false }, async () => {
+test('[fixture-boundary] local runtime input renders artifact and MCP lanes across local and Worker-emulated web surfaces', { concurrency: false }, async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for local-submit artifact E2E');
 
@@ -138,6 +148,7 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
   const assetServerResult = await startAgentWebUiServer({
     host: '127.0.0.1',
     port: 0,
+    sessionId,
     cloudflareProjectionId: projectionId,
     cloudflareApiBaseUrl: workerBaseUrl,
   });
@@ -146,7 +157,11 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     ASSETS: {
       fetch(request: any) {
         const url = new URL(request.url);
-        const assetPath = url.pathname === '/sessions/index.html' ? '/' : url.pathname;
+        const assetPath = url.pathname === '/sessions/' || url.pathname === '/sessions/index.html'
+          ? '/'
+          : url.pathname.startsWith('/sessions/assets/')
+            ? url.pathname.replace(/^\/sessions/, '')
+            : url.pathname;
         return fetch(`${assetBaseUrl}${assetPath}${url.search}`);
       },
     },
@@ -156,7 +171,8 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
   let remotePage = null;
   try {
     localPage = await openCdpPage({ browserPath, url: localWeb.url, userDataPrefix: 'narada-local-submit-artifact-local-' });
-    assert.equal((await waitForPageText(localPage, 'resident', 15000)).found, true);
+    const localResident = await waitForPageText(localPage, 'resident', 15000);
+    if (!localResident.found) throw new Error(JSON.stringify({ localResident, body: await localPage.evaluate('document.body?.innerText?.slice(0, 1000) ?? ""'), runtime: localPage.runtimeDiagnostics().slice(-8), websocket: localPage.webSocketFrames().slice(-4) }));
     await localPage.fill('#operator-input', 'Create an HTML artifact from the local surface');
     await localPage.click('.composer-submit');
 
@@ -169,8 +185,10 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     const artifact = await localRuntime.registerHtmlArtifact();
     const artifactId = artifact.artifact_id;
     assert.ok(artifactId, JSON.stringify(artifact));
-    assert.equal((await waitForPageText(localPage, 'Artifact request accepted by real NARS runtime.', 15000)).found, true);
-    assert.equal((await waitForPageText(localPage, 'Local Submit HTML Preview', 15000)).found, true);
+    const accepted = await waitForPageText(localPage, 'Artifact request accepted by real NARS runtime.', 15000);
+    if (!accepted.found) throw new Error(JSON.stringify({ accepted, body: await localPage.evaluate('document.body?.innerText?.slice(0, 1200) ?? ""'), runtime: localPage.runtimeDiagnostics().slice(-8), websocket: localPage.webSocketFrames().slice(-6), events: localRuntime.events.slice(-12).map((event: any) => ({ event: event.event, status: event.status, code: event.code })) }));
+    const localPreview = await waitForPageText(localPage, 'Local Submit HTML Preview', 15000);
+    if (!localPreview.found) throw new Error(JSON.stringify({ localPreview, body: await localPage.evaluate('document.body?.innerText?.slice(0, 1200) ?? ""'), runtime: localPage.runtimeDiagnostics().slice(-8), websocket: localPage.webSocketFrames().slice(-6), events: localRuntime.events.slice(-12).map((event: any) => ({ event: event.event, status: event.status, code: event.code })) }));
     const localIframe = await waitForPageTextWithAction(
       localPage,
       'Local Submit HTML Preview',
@@ -286,7 +304,14 @@ test('local runtime input renders artifact and MCP lanes on local and Cloudflare
     assert.equal(delivery?.delivered_count, 1, JSON.stringify(delivery));
     assert.equal(admittedInputs.length, 1, JSON.stringify(admittedInputs));
     assert.equal(admittedInputs[0].method, 'conversation.send');
-    assert.deepEqual(admittedInputs[0].payload, { message: 'Remote Cloudflare surface message for local NARS admission', source: 'manual_operator' });
+    assert.deepEqual(
+      {
+        message: admittedInputs[0].payload?.message,
+        source: admittedInputs[0].payload?.source,
+      },
+      { message: 'Remote Cloudflare surface message for local NARS admission', source: 'manual_operator' },
+    );
+    assert.match(admittedInputs[0].payload?.idempotency_key ?? '', /^agent-web-ui:session\.submit:[0-9a-f-]{36}$/);
 
     const revoked = await jsonOf(worker.fetch(new Request(`${workerBaseUrl}/api/nars/projections/${projectionId}`, { method: 'DELETE' })));
     assert.equal(revoked.status, 'revoked');

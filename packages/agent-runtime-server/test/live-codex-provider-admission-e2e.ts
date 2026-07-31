@@ -77,6 +77,12 @@ const TIMEOUT_MS: any = Number(process.env.NARADA_LIVE_CODEX_E2E_TIMEOUT_MS ?? 1
 const STARTUP_TIMEOUT_MS: any = Number(process.env.NARADA_LIVE_CODEX_E2E_STARTUP_TIMEOUT_MS ?? 60_000);
 const SITE_ID: any = `codex-live-e2e-${Date.now()}`;
 
+/**
+ * Evidence posture: partial-production-launch. The Narada launcher/runtime
+ * and Codex subscription session are exercised through real child processes,
+ * while the intelligence catalog is an ephemeral canonical test seed. This
+ * is not a deployed Site or Cloudflare proof.
+ */
 if (!process.argv.includes(LIVE_ENABLE_FLAG)) {
   console.log(`live Codex E2E not run; invoke this file with ${LIVE_ENABLE_FLAG} or use the package script`);
 } else {
@@ -86,6 +92,8 @@ if (!process.argv.includes(LIVE_ENABLE_FLAG)) {
     console.error(JSON.stringify({
       schema: 'narada.agent_runtime_server.live_codex_provider_admission_e2e.v1',
       status: 'failed',
+      evidence_posture: 'partial-production-launch',
+      provider_boundary: 'codex-subscription-session',
       error: error instanceof Error ? error.message : String(error),
     }, null, 2));
     process.exitCode = 1;
@@ -146,6 +154,9 @@ async function runLiveCodexAdmissionE2e() {
     console.log(JSON.stringify({
       schema: 'narada.agent_runtime_server.live_codex_provider_admission_e2e.v1',
       status: 'passed',
+      evidence_posture: 'partial-production-launch',
+      provider_boundary: 'codex-subscription-session',
+      catalog_boundary: 'ephemeral-canonical-test-seed',
       site_id: SITE_ID,
       sessions: [runtimeSessionId(first.record), runtimeSessionId(second.record)],
       providers: ['codex-subscription', 'codex-subscription'],

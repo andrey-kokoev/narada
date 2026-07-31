@@ -9,6 +9,11 @@ import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
 import { seedLiveIntelligenceRegistry } from './live-intelligence-registry-fixture.js';
 
+/**
+ * Evidence posture: partial-production-launch. Router, Agent Web UI, NARS,
+ * MCP, and browser run as child processes; the provider is a deterministic
+ * child fixture. This does not prove a real provider or deployed Worker.
+ */
 const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.js');
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -402,6 +407,8 @@ async function runFullLiveE2e() {
     resultEvidence = {
       schema: 'narada.agent_web_ui.full_live_tool_count_e2e.result.v1',
       status: 'passed',
+      evidence_posture: 'partial-production-launch',
+      provider_boundary: 'deterministic-child-fixture',
       topology: {
         browser: 'chromium-cdp',
         operator_router: 'child',
@@ -620,6 +627,8 @@ async function runFullLiveE2e() {
   resultEvidence = {
     schema: 'narada.agent_web_ui.full_live_router_nars_provider_e2e.result.v1',
     status: 'passed',
+    evidence_posture: 'partial-production-launch',
+    provider_boundary: 'deterministic-child-fixture',
     topology: {
       browser: 'chromium-cdp',
       operator_router: 'child',

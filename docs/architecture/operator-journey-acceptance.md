@@ -5,7 +5,8 @@ one stable Operator Router origin while moving through the live projections:
 
 Router -> Workspace -> Registry -> Site Operations -> Agent Web UI -> artifact
 
-The acceptance suite has complementary layers. The real-start test
+The acceptance suite has complementary layers with an explicit evidence
+posture. The real-start test
 launches the compiled `narada console serve` command as a child process and
 verifies its stable Router projection. The canonical journey test
 starts the Router through the production `ensureOperatorRouter` path, which
@@ -18,7 +19,18 @@ corresponding production-shaped routes with that Router. The runtime control
 sideband accepts either governed carrier-input envelopes or the narrow NARS
 session-core control methods; it does not accept arbitrary commands.
 Both tests keep browser navigation
-on the Router origin, not on any backing server URL.
+on the Router origin, not on any backing server URL. The canonical journey
+test is `fixture-boundary`: its NARS health/event endpoint is a deliberately
+narrow transport fixture, so its green result proves Router and projection
+composition but does not prove a spawned NARS runtime, session admission, or
+provider execution.
+
+The real-runtime claim is owned by
+`packages/layers/cli/test/integration/operator-console-real-launch-e2e.test.ts`
+and `operator-launch-journey.test.ts`. Those tests launch the governed
+workspace path and verify an actual NARS session index, runtime health, exact
+identity binding, and operator-surface attachment. A fixture-boundary test
+must not be cited as a substitute for either real-runtime test.
 
 The launcher acceptance layer (`test:launcher-acceptance`) drives the real
 installed User Site `Start-NaradaWorkspace.ps1` against the compiled

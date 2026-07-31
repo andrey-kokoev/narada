@@ -31,12 +31,17 @@ const tsxLoader = pathToFileURL(tsxEntrypoint).href;
 const liveEnabled = process.argv.includes('--enable-live-e2e')
   || process.env.NARADA_CARRIER_RESTART_LIVE_E2E === '1';
 
+/**
+ * Evidence posture: partial-production-launch. The carrier/runtime restart
+ * processes and durable session source are real; the intelligence catalog,
+ * provider endpoint, and MCP child are deterministic test fixtures.
+ */
 const SITE_ID = 'narada';
 const AGENT_ID = `${SITE_ID}.resident`;
 const REQUESTED_BY = 'principal-andrey';
 const TIMEOUT_MS = 90_000;
 
-test('live carrier restart drains a real NARS source and activates a real successor', {
+test('[partial-production-launch] carrier restart drains a real NARS source and activates a real successor', {
   skip: !liveEnabled,
   timeout: TIMEOUT_MS + 30_000,
 }, async () => {

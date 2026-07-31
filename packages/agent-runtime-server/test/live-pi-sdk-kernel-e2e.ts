@@ -41,7 +41,13 @@ function durableEvents(eventsPath: any) {
   return readNarsEventLog(eventsPath).events;
 }
 
-test('live Pi SDK NARS session is substitutable across four attached clients', async () => {
+/**
+ * Evidence posture: fixture-boundary. The NARS service and Pi SDK kernel are
+ * real in-process code, but the provider adapter and tool gateway are
+ * deterministic adapters. This does not prove provider, launcher, or MCP
+ * deployment behavior.
+ */
+test('[fixture-boundary] Pi SDK NARS session is substitutable across four attached clients', async () => {
   const root: any = mkdtempSync(join(tmpdir(), 'narada-live-pi-sdk-'));
   const sessionPath: any = join(root, 'session.json');
   const eventsPath: any = join(root, 'events.jsonl');

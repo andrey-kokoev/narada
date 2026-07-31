@@ -19,6 +19,7 @@ import {
   waitForPageTextOccurrence,
   waitForPageTextWithAction,
 } from './lib/browser-smoke.js';
+import { validateRemoteCloudflareApiBaseUrl } from './lib/live-boundary.js';
 
 const args: AnyRecord = parseArgs(process.argv.slice(2));
 const now = new Date().toISOString();
@@ -50,6 +51,18 @@ async function run(): Promise<AnyRecord> {
       evidence_path: evidencePath,
     }, evidencePaths, true);
   }
+  const remoteBoundary = validateRemoteCloudflareApiBaseUrl(args.cloudflareApiBaseUrl);
+  if (!remoteBoundary.ok) {
+    return evidence({
+      schema: 'narada.cloudflare_nars_projection.live_smoke.v1',
+      status: 'refused',
+      code: remoteBoundary.code,
+      message: remoteBoundary.message,
+      deployment_boundary: 'remote_https_worker',
+      evidence_path: evidencePath,
+    }, evidencePaths, true);
+  }
+  args.cloudflareApiBaseUrl = remoteBoundary.origin;
   const preflight: AnyRecord = await preflightCloudflareProjectionRegistration({
     cloudflare_api_base_url: args.cloudflareApiBaseUrl,
     cloudflare_carrier_api_base_url: args.cloudflareCarrierUrl,
@@ -145,6 +158,8 @@ async function run(): Promise<AnyRecord> {
     authority_origin: 'local',
     authority_runtime_kind: 'local_nars_authority_runtime',
     smoke_lineage: 'local-origin-live',
+    deployment_boundary: remoteBoundary.deployment_boundary,
+    remote_cloudflare_origin: remoteBoundary.origin,
     projection_id: projectionId,
     hosted_web_url: hostedWebUrl,
     legacy_hosted_web_url: legacyHostedWebUrl.toString(),

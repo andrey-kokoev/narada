@@ -381,9 +381,10 @@ test('ordinary Agent Web UI browser UX tests stay Playwright-owned', async () =>
   assert.match(packageJson.scripts?.['test:runtime:slash-commands'] ?? '', /playwright test --config playwright\.config\.ts test\/e2e\/live-slash-smoke\.spec\.ts/);
   assert.equal(packageJson.scripts?.['test:live:slash-commands'], undefined);
   assert.match(packageJson.scripts?.['test:projection'] ?? '', /playwright test --config playwright\.projection\.config\.ts/);
-  assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-authority-local-surface-artifact-e2e\.test\.ts/);
-  assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-cloudflare-html-artifact-e2e\.test\.ts/);
-  assert.match(packageJson.scripts?.['test:browser:cdp'] ?? '', /agent-web-ui-local-submit-html-artifact-cloudflare-e2e\.test\.ts/);
+  assert.match(packageJson.scripts?.['test:browser:local-projection'] ?? '', /agent-web-ui-cloudflare-authority-local-surface-artifact-e2e\.test\.ts/);
+  assert.match(packageJson.scripts?.['test:browser:local-projection'] ?? '', /agent-web-ui-cloudflare-html-artifact-e2e\.test\.ts/);
+  assert.match(packageJson.scripts?.['test:browser:local-projection'] ?? '', /agent-web-ui-local-submit-html-artifact-cloudflare-e2e\.test\.ts/);
+  assert.equal(packageJson.scripts?.['test:browser:cdp'], 'pnpm run test:browser:local-projection');
 });
 
 test('favicon resolver applies ordered safe descriptors and manages one head link', () => {

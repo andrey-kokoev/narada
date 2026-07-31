@@ -17,7 +17,12 @@ const now = '2026-07-05T12:00:00.000Z';
 const speechMcpMain = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/dist/src/main.js', import.meta.url));
 const speechProviderRegistryPath = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/config/provider-registry.v2.json', import.meta.url));
 
-test('live speech MCP retained audio projects as a NARS audio artifact in agent-web-ui', async () => {
+/**
+ * Evidence posture: partial-production-launch. The speech MCP child, SAPI
+ * provider, browser, and Agent Web UI are real; the NARS session is the
+ * deterministic runtime fixture supplied by this package's E2E harness.
+ */
+test('[partial-production-launch] speech MCP retained audio projects as a NARS audio artifact in agent-web-ui', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for live speech audio projection E2E');
   assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada2/speech-mcp build`);

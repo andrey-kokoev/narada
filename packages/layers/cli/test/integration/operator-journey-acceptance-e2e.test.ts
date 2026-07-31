@@ -17,6 +17,13 @@ import { ensureOperatorRouter, registerOperatorRouteSet } from '@narada2/operato
 import { createConsoleServer } from '../../dist/commands/console-server.js';
 import { createWorkbenchServer } from '../../dist/commands/workbench-server.js';
 
+/**
+ * Evidence posture: fixture-boundary for the canonical Router journey below.
+ * The Router, Console, Workbench, Agent Web UI, browser, and route protocol
+ * are real, but the NARS health/event endpoint is an intentionally narrow
+ * transport fixture. Real NARS process/session admission is covered by
+ * operator-console-real-launch-e2e.test.ts and operator-launch-journey.test.ts.
+ */
 const SITE_ID = 'journey-site';
 const SECOND_SITE_ID = 'journey-site-alt';
 const SESSION_ID = 'journey_session';
@@ -396,7 +403,7 @@ async function waitForChildOutput(readOutput, needle, timeoutMs = 5_000) {
   throw new Error('operator_console_startup_output_timeout:' + needle);
 }
 
-test('canonical operator journey remains usable through the stable Router', async () => {
+test('[fixture-boundary] canonical Router journey remains usable through the stable Router', async () => {
   const fixtureParent = join(process.cwd(), '.ai', 'tmp', 'operator-journey');
   await mkdir(fixtureParent, { recursive: true });
   const root = await mkdtemp(join(fixtureParent, 'narada-operator-journey-'));

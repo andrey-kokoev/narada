@@ -204,7 +204,7 @@ async function removeFixtureRoot(fixtureRoot, timeoutMs = 15_000) {
 async function seedRegistry(root, siteRoot, failureSiteRoot) {
   const runtimeFailureSiteRoot = join(root, 'runtime-failure-site-root');
   const projectionFailureSiteRoot = join(root, 'projection-failure-site-root');
-  const userSiteRoot = join(root, 'Narada', '.registry');
+  const userSiteRoot = join(root, 'user-site-root');
   await mkdir(userSiteRoot, { recursive: true });
   process.env.NARADA_USER_SITE_ROOT = userSiteRoot;
   process.env.LOCALAPPDATA = root;
@@ -248,7 +248,7 @@ async function seedRegistry(root, siteRoot, failureSiteRoot) {
 }
 
 async function writeLaunchRegistry(root) {
-  const userSiteRoot = process.env.NARADA_USER_SITE_ROOT ?? join(root, 'Narada', '.registry');
+  const userSiteRoot = process.env.NARADA_USER_SITE_ROOT ?? join(root, 'user-site-root');
   const launchDir = join(userSiteRoot, 'config', 'launch');
   await mkdir(launchDir, { recursive: true });
   const siteRoot = join(root, 'site-root');
@@ -655,14 +655,12 @@ test('Operator Console launches a stopped agent into a real NARS session and rou
       .catch((error) => { console.log(`operator_console_popup_wait_failed:${error.message}`); return null; });
     const concurrentLaunchResponsePromise = process.env.NARADA_SKIP_CONCURRENT_LAUNCH === '1'
       ? null
-      : page.evaluate(async ({ baseUrl, siteId, agentId }) => {
-        const response = await fetch(`${baseUrl}/console/agents/api/launch`, {
+      : fetch(`${routerUrl}/console/agents/api/launch`, {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ site_id: siteId, agent_id: agentId }),
-        });
-        return { status: response.status, body: await response.json() };
-      }, { baseUrl: routerUrl, siteId: SITE_ID, agentId: AGENT_ID });
+          body: JSON.stringify({ site_id: SITE_ID, agent_id: AGENT_ID, operator_surface: 'agent-web-ui' }),
+          signal: AbortSignal.timeout(120_000),
+        }).then(async (response) => ({ status: response.status, body: await response.json() }));
 
     console.log('operator_console_click_start');
     await agentButton.click();
@@ -987,7 +985,7 @@ test('Operator Console admits, launches, stops, and deletes a Site agent through
   const runtimeFailureSiteRoot = join(fixtureRoot, 'runtime-failure-site-root');
   const projectionFailureSiteRoot = join(fixtureRoot, 'projection-failure-site-root');
   const routerStateRoot = join(fixtureRoot, 'operator-router-state');
-  const userSiteRoot = join(fixtureRoot, 'Narada', '.registry');
+  const userSiteRoot = join(fixtureRoot, 'user-site-root');
   const launchRegistryPath = join(userSiteRoot, 'config', 'launch', 'agents.psd1');
   const identityRegistryPath = join(siteRoot, 'operator-surfaces', 'identities.json');
   let routerOwner = null;
@@ -1080,8 +1078,9 @@ test('Operator Console admits, launches, stops, and deletes a Site agent through
     const siteBox = page.locator('.site-box[data-site-id="' + SITE_ID + '"]');
     await siteBox.waitFor({ state: 'visible' });
 
-    const addButton = siteBox.getByRole('button', { name: /Add an agent to/ });
-    await addButton.click();
+    await siteBox.hover();
+    await siteBox.locator('button.site-actions-trigger').click();
+    await page.getByRole('menuitem', { name: 'Add agent' }).click();
     const admissionDialog = page.getByRole('dialog');
     await admissionDialog.waitFor({ state: 'visible' });
     await admissionDialog.getByLabel('Role').selectOption('builder');
@@ -1132,14 +1131,39 @@ test('Operator Console admits, launches, stops, and deletes a Site agent through
     assert.match(await popup.title(), /Narada Agent Web UI|Starting/);
     const builderSessionSnapshot = discoverNarsSessions({ siteRoot }).sessions
       .filter((session) => session.agent_id === LIFECYCLE_AGENT_ID);
-    console.log('builder_session_snapshot:' + JSON.stringify(builderSessionSnapshot));
+    console.log('builder_session_snapshot:' + JSON.stringify(builderSessionSnapshot.map((session) => ({
+      session_id: session.session_id,
+      agent_id: session.agent_id,
+      site_id: session.site_id,
+      lifecycle_state: session.lifecycle_state,
+      health_status: session.health_status,
+      runtime_origin: session.runtime_origin,
+    }))));
     for (const session of builderSessionSnapshot) {
       if (session.health_endpoint) {
         const healthResponse = await fetch(session.health_endpoint, {
           signal: AbortSignal.timeout(3_000),
         }).catch(() => null);
         const healthText = healthResponse ? await healthResponse.text().catch(() => 'body_read_failed') : 'fetch_failed';
-        console.log('builder_health_snapshot:' + String(session.health_endpoint) + ':' + healthText);
+        let healthSummary: Record<string, unknown> = { body: healthText.slice(0, 160) };
+        try {
+          const health = JSON.parse(healthText) as Record<string, unknown>;
+          healthSummary = {
+            status: health.status,
+            lifecycle_state: health.lifecycle_state,
+            mcp_operational_state: health.mcp_operational_state,
+            active_turn_id: health.active_turn_id,
+            last_terminal_state: health.last_terminal_state,
+            request_posture: health.request_posture,
+          };
+        } catch {
+          // Keep only the bounded raw prefix when the endpoint is not JSON.
+        }
+        console.log('builder_health_snapshot:' + JSON.stringify({
+          endpoint: session.health_endpoint,
+          http_status: healthResponse?.status ?? null,
+          ...healthSummary,
+        }));
       }
     }
 
@@ -1167,12 +1191,31 @@ test('Operator Console admits, launches, stops, and deletes a Site agent through
         && route.session_id === sessionId
         && route.state === 'healthy'));
     controlPath = join(siteRoot, '.narada', 'crew', 'nars-sessions', sessionId, 'control.jsonl');
+    const builderCell = siteBox.locator(
+      `.agent-cell:has(> button.agent-button[aria-label^="${LIFECYCLE_AGENT_ID}:"])`,
+    );
 
+    const stopRequestPromise = page.waitForRequest((request) =>
+      request.url() === routerUrl + '/console/agents/api/stop'
+        && request.method() === 'POST',
+      { timeout: 30_000 });
     const stopResponsePromise = page.waitForResponse((response) =>
       response.url() === routerUrl + '/console/agents/api/stop'
         && response.request().method() === 'POST',
-      { timeout: 30_000 });
-    await siteBox.getByRole('button', { name: 'Stop ' + LIFECYCLE_AGENT_ID }).click();
+      { timeout: 60_000 });
+    await builderCell.hover();
+    await builderCell.locator('button.agent-actions-trigger:not(:disabled)').waitFor({ state: 'visible', timeout: 60_000 });
+    await builderCell.locator('button.agent-actions-trigger:not(:disabled)').click();
+    const stopMenuItem = page.getByRole('menuitem', { name: 'Stop runtime' });
+    await stopMenuItem.waitFor({ state: 'visible' });
+    assert.equal(await stopMenuItem.isEnabled(), true, await stopMenuItem.evaluate((element) => ({
+      ariaDisabled: element.getAttribute('aria-disabled'),
+      dataDisabled: element.getAttribute('data-disabled'),
+      disabled: (element as HTMLButtonElement).disabled,
+    })));
+    await stopMenuItem.click({ timeout: 5_000 });
+    const stopRequest = await stopRequestPromise;
+    assert.deepEqual(stopRequest.postDataJSON(), { site_id: SITE_ID, agent_id: LIFECYCLE_AGENT_ID });
     const stopResponse = await stopResponsePromise;
     const stopBody = await stopResponse.json();
     assert.equal(stopResponse.status(), 200, JSON.stringify(stopBody));
@@ -1193,7 +1236,10 @@ test('Operator Console admits, launches, stops, and deletes a Site agent through
     );
     assert.equal(stoppedOverview.agent.actions.start, true);
 
-    await siteBox.getByRole('button', { name: 'Delete ' + LIFECYCLE_AGENT_ID }).click();
+    await builderCell.hover();
+    await builderCell.locator('button.agent-actions-trigger:not(:disabled)').waitFor({ state: 'visible', timeout: 60_000 });
+    await builderCell.locator('button.agent-actions-trigger:not(:disabled)').click();
+    await page.getByRole('menuitem', { name: 'Delete admission' }).click();
     await page.getByRole('heading', { name: 'Delete ' + LIFECYCLE_AGENT_ID + '?' }).waitFor({ state: 'visible' });
     const deleteResponsePromise = page.waitForResponse((response) =>
       response.url() === routerUrl + '/console/agents/api/delete'

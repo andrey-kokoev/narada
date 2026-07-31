@@ -12,6 +12,12 @@ import { spawnTestChild } from '@narada2/process-launch-posture';
 import { startAgentWebUiServer } from '../src/server.ts';
 import { seedLiveIntelligenceRegistry } from './live-intelligence-registry-fixture.js';
 
+/**
+ * Evidence posture: partial-production-launch. The launcher, NARS session,
+ * Agent Web UI, browser, and MCP child are real processes; the inference
+ * provider and any Cloudflare Worker projection are deterministic fixtures.
+ * This is not deployed-provider or deployed-Worker evidence.
+ */
 const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.js');
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
@@ -512,6 +518,9 @@ try {
   console.log(JSON.stringify({
     schema: 'narada.agent_web_ui.live_launcher_affordance_e2e.result.v1',
     status: 'passed',
+    evidence_posture: 'partial-production-launch',
+    provider_boundary: 'fixture-child',
+    cloudflare_boundary: projectionWorkerServer ? 'in-process-worker' : 'not-exercised',
     scenario,
     site_root: siteRoot,
     site_id: siteId,

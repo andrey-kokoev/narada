@@ -8,6 +8,11 @@ import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:pat
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada2/process-launch-posture';
 
+/**
+ * Evidence posture: partial-production-launch. The launcher, NARS session,
+ * delegated-task MCP, worker run, and durable task evidence are real child
+ * boundaries; the inference provider is a deterministic fixture.
+ */
 const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.js');
 
 const TEST_ID = 'agent-web-ui-live-delegated-task-launcher-e2e';
@@ -162,6 +167,8 @@ try {
       schema: 'narada.agent_web_ui.live_delegated_task_e2e.result.v1',
       test_id: TEST_ID,
       status,
+      evidence_posture: 'partial-production-launch',
+      provider_boundary: 'fixture-child',
       site_id: siteId,
       agent_id: agentId,
       session_id: sessionRecord.session_id,
@@ -204,6 +211,8 @@ try {
     schema: 'narada.agent_web_ui.live_delegated_task_e2e.result.v1',
     test_id: TEST_ID,
     status,
+    evidence_posture: 'partial-production-launch',
+    provider_boundary: 'fixture-child',
     finished_at: new Date().toISOString(),
     site_id: siteId,
     session_id: sessionRecord?.session_id ?? null,
