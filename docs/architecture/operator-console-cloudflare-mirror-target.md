@@ -12,9 +12,10 @@ The local crossing gateway, Cloudflare Worker proxy, Access JWT admission,
   route-parity acceptance, a full disposable Site Registry mutation journey,
   and a disposable live session lease with WebSocket delivery, revocation, and
   restoration have been verified against the live deployment. Artifact content
-  and tunnel-loss acceptance remain explicit delivery work; disposable
-  stale-lease acceptance has also been verified. This document does not treat
-  a successful page render or a single dry-run as proof of those properties.
+  acceptance has also been verified with a disposable HTML artifact. Disposable
+  stale-lease and tunnel-loss acceptance have also been verified, including
+  recovery after the local mirror was restarted. This document does not treat a
+  successful page render or a single dry-run as proof of those properties.
 
 The current live verification covers:
 
@@ -28,6 +29,9 @@ The current live verification covers:
 - an authenticated disposable Site Registry add, edit, retire, and purge
   journey, with plan/apply separation, revision checks, exact purge
   confirmation, readback, and final absence verification;
+- an authenticated disposable session artifact whose metadata and HTML content
+  are readable through the Worker, followed by lifecycle archival that preserves
+  metadata while withdrawing content with a typed not-found response;
 - an authenticated disposable session page and WebSocket event through the
   Worker, including typed refusal after route revocation and successful exact
   route restoration;
@@ -38,6 +42,10 @@ The current live verification covers:
   teardown;
 - a live gateway health projection that reports the VPC Service HTTP transport
   and the VPC Network TCP WebSocket transport independently;
+- a live tunnel-loss recovery check in which the authenticated Worker returned
+  HTTP 503 with `operator_console_gateway_unavailable` after the owned mirror
+  stopped, then returned HTTP 200 after the mirror restarted; the evidence
+  contains no credential values;
 - local response preservation for the admitted legacy Console observation and
   document routes, with host-local filesystem and network metadata redacted at
   the remote JSON boundary while declared response shapes remain stable.
@@ -268,6 +276,12 @@ By default it also reads `http://127.0.0.1:61729/console/routes` and compares
 the local `surfaces` and `httpRouteParity` documents with the remote response;
 `--local-route-directory-url` may select another loopback Console Router.
 
+The live Registry mutation acceptance uses a unique disposable Site id and a
+nonexistent temporary root. It applies only after a successful plan, carries
+the observed revision through each edit/state transition, retires before
+purging, supplies the exact purge confirmation, and verifies that the record is
+absent afterward. It never mutates an existing Site.
+
 The browser portion of the gate is availability-aware. It always exercises the
 currently available primary Console routes; it records Site Operations,
 session, and artifact journeys as explicitly skipped when the authoritative
@@ -287,8 +301,9 @@ it can pass:
 ... --live --failure-mode stale-lease
 ```
 
-`tunnel-loss` requires the local bridge credential so the mirror can be
-restarted. The route modes require the local Operator Router admin token;
+`tunnel-loss` requires a live mirror whose owned state contains the bridge
+credential, or an explicit `NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN` override, so
+the mirror can be restarted. The route modes require the local Operator Router admin token;
 they revoke or shorten one concrete session-route lease, assert that the real
 Worker returns a typed unavailable/not-admitted response, restore the exact
 route, and assert that the route returns successfully. Failure-mode evidence

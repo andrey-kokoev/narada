@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -26,6 +26,7 @@ type LiveArgs = {
   accessClientSecretFile: string | null;
   accessCookieFile: string | null;
   artifactId: string | null;
+  mutationMode: 'none' | 'disposable';
   failureMode: 'none' | 'tunnel-loss' | 'route-revocation' | 'stale-lease';
   timeoutMs: number;
 };
@@ -51,12 +52,16 @@ if (args.help) {
     'If the live session has no rendered artifact reference, provide:',
     '  ... --artifact-id <session-artifact-id>',
     '',
+    'Opt-in disposable Site Registry mutation journey:',
+    '  ... --mutation-mode disposable',
+    'This adds, edits, retires, and purges a unique temporary record and verifies cleanup.',
+    '',
     'Opt-in failure checks (disrupt local projection state and restore it):',
     '  ... --failure-mode tunnel-loss',
     '  ... --failure-mode route-revocation',
     '  ... --failure-mode stale-lease',
     'Route failure modes require NARADA_OPERATOR_ROUTER_TOKEN or the local Router token file.',
-    'Tunnel-loss requires NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN so the mirror can be restored.',
+    'Tunnel-loss requires the owned mirror state or NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN so the mirror can be restored.',
     '',
     'The service-token secret or cookie value is never written to evidence or output.',
   ].join('\n'));
@@ -101,6 +106,7 @@ async function run(): Promise<AnyRecord> {
     status: 'running',
     worker_url: baseUrl,
     access_mode: headers['CF-Access-Client-Id'] ? 'service_token' : 'cf_authorization_cookie',
+    mutation_mode: args.mutationMode,
     failure_mode: args.failureMode,
     checks: {},
   };
@@ -227,6 +233,10 @@ async function run(): Promise<AnyRecord> {
       mutation_performed: registryPlan.body?.mutation_performed ?? null,
       passed: true,
     };
+
+    if (args.mutationMode === 'disposable') {
+      evidence.checks.mutation_journey = await runDisposableRegistryMutationJourney(baseUrl, registryHeaders);
+    }
 
     if (args.failureMode !== 'none') {
       return await runFailureMode({ baseUrl, headers, journeyRoutes, evidence, evidencePath });
@@ -387,6 +397,183 @@ async function run(): Promise<AnyRecord> {
   }
 }
 
+async function runDisposableRegistryMutationJourney(
+  baseUrl: string,
+  headers: Record<string, string>,
+): Promise<AnyRecord> {
+  const siteId = `operator-console-mirror-live-${Date.now()}-${process.pid}`;
+  const root = join(REPO_ROOT, '.ai', 'tmp', siteId);
+  const actor = 'operator-console-mirror-live-e2e';
+  const operationsPath = '/console/registry/api/operations';
+  const history: AnyRecord[] = [];
+
+  if (existsSync(root)) throw new Error('disposable_registry_root_already_exists');
+
+  const record = (value: { response: Response; body: AnyRecord }): AnyRecord => ({
+    http_status: value.response.status,
+    result_status: value.body?.status ?? null,
+    operation: value.body?.operation ?? null,
+    mutation_performed: value.body?.mutation_performed ?? null,
+    site_id: value.body?.site_id ?? null,
+    revision: value.body?.after?.revision ?? value.body?.site?.revision ?? null,
+    lifecycle_status: value.body?.after?.lifecycle_status ?? value.body?.site?.lifecycle_status ?? null,
+    refusals: value.body?.refusals ?? [],
+  });
+
+  const post = async (suffix: string, payload: AnyRecord): Promise<{ response: Response; body: AnyRecord }> => {
+    const value = await requestJson(baseUrl, operationsPath + suffix, headers, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+    history.push(record(value));
+    return value;
+  };
+
+  const read = async (): Promise<{ response: Response; body: AnyRecord }> => {
+    const value = await requestJson(baseUrl, `/console/registry/api/sites/${encodeURIComponent(siteId)}`, headers);
+    history.push(record(value));
+    return value;
+  };
+
+  const assertApplied = (value: { response: Response; body: AnyRecord }, operation: string): void => {
+    assert.equal(value.response.status, 200, compact(value));
+    assert.equal(value.body?.status, 'applied', compact(value));
+    assert.equal(value.body?.operation, operation, compact(value));
+    assert.equal(value.body?.mutation_performed, true, compact(value));
+  };
+
+  const cleanup = async (): Promise<AnyRecord> => {
+    const current = await read();
+    if (current.response.status === 404) return { status: 'verified_absent' };
+    assert.equal(current.response.status, 200, compact(current));
+    const currentSite = current.body?.site as AnyRecord | undefined;
+    assert.ok(currentSite, compact(current));
+    let revision = currentSite.revision as number;
+    assert.ok(Number.isInteger(revision), compact(current));
+    if (currentSite.lifecycle_status !== 'retired') {
+      const retire = await post('/apply', {
+        operation: 'retire',
+        reference: siteId,
+        reason: 'Disposable live acceptance cleanup',
+        actor,
+        expected_revision: revision,
+        confirm_apply: true,
+      });
+      assertApplied(retire, 'retire');
+      revision = retire.body.after.revision as number;
+    }
+    const purge = await post('/apply', {
+      operation: 'purge',
+      reference: siteId,
+      reason: 'Disposable live acceptance cleanup',
+      actor,
+      expected_revision: revision,
+      confirm_site_id: siteId,
+      confirm_apply: true,
+    });
+    assertApplied(purge, 'purge');
+    const final = await read();
+    assert.equal(final.response.status, 404, compact(final));
+    return { status: 'verified_absent' };
+  };
+
+  const common = {
+    site_id: siteId,
+    root,
+    variant: 'native',
+    substrate: 'windows',
+    source: 'manual',
+    source_ref: 'operator-console-mirror-live-e2e',
+    actor,
+  };
+  let applied = false;
+  try {
+    const planAdd = await post('/plan', { ...common, operation: 'add' });
+    assert.equal(planAdd.response.status, 200, compact(planAdd));
+    assert.equal(planAdd.body?.status, 'planned', compact(planAdd));
+    assert.equal(planAdd.body?.mutation_performed, false, compact(planAdd));
+
+    applied = true;
+    const applyAdd = await post('/apply', { ...common, operation: 'add', confirm_apply: true });
+    assertApplied(applyAdd, 'add');
+    const afterAdd = await read();
+    assert.equal(afterAdd.response.status, 200, compact(afterAdd));
+    const revisionAfterAdd = afterAdd.body?.site?.revision as number;
+    assert.ok(Number.isInteger(revisionAfterAdd), compact(afterAdd));
+
+    const editPayload = {
+      operation: 'edit',
+      reference: siteId,
+      aim_json: JSON.stringify({ name: 'Disposable live mirror acceptance' }),
+      reason: 'Exercise live edit contract',
+      actor,
+      expected_revision: revisionAfterAdd,
+    };
+    const planEdit = await post('/plan', editPayload);
+    assert.equal(planEdit.response.status, 200, compact(planEdit));
+    assert.equal(planEdit.body?.status, 'planned', compact(planEdit));
+    assert.equal(planEdit.body?.mutation_performed, false, compact(planEdit));
+    const applyEdit = await post('/apply', { ...editPayload, confirm_apply: true });
+    assertApplied(applyEdit, 'edit');
+    const afterEdit = await read();
+    assert.equal(afterEdit.response.status, 200, compact(afterEdit));
+    const revisionAfterEdit = afterEdit.body?.site?.revision as number;
+    assert.ok(Number.isInteger(revisionAfterEdit), compact(afterEdit));
+
+    const retirePayload = {
+      operation: 'retire',
+      reference: siteId,
+      reason: 'Exercise live lifecycle contract',
+      actor,
+      expected_revision: revisionAfterEdit,
+    };
+    const planRetire = await post('/plan', retirePayload);
+    assert.equal(planRetire.response.status, 200, compact(planRetire));
+    assert.equal(planRetire.body?.status, 'planned', compact(planRetire));
+    const applyRetire = await post('/apply', { ...retirePayload, confirm_apply: true });
+    assertApplied(applyRetire, 'retire');
+    const afterRetire = await read();
+    assert.equal(afterRetire.response.status, 200, compact(afterRetire));
+    assert.equal(afterRetire.body?.site?.lifecycle_status, 'retired', compact(afterRetire));
+    const revisionAfterRetire = afterRetire.body?.site?.revision as number;
+    assert.ok(Number.isInteger(revisionAfterRetire), compact(afterRetire));
+
+    const purgePayload = {
+      operation: 'purge',
+      reference: siteId,
+      reason: 'Exercise live purge contract',
+      actor,
+      expected_revision: revisionAfterRetire,
+      confirm_site_id: siteId,
+    };
+    const planPurge = await post('/plan', purgePayload);
+    assert.equal(planPurge.response.status, 200, compact(planPurge));
+    assert.equal(planPurge.body?.status, 'planned', compact(planPurge));
+    assert.equal(planPurge.body?.mutation_performed, false, compact(planPurge));
+    const applyPurge = await post('/apply', { ...purgePayload, confirm_apply: true });
+    assertApplied(applyPurge, 'purge');
+    applied = false;
+    const final = await read();
+    assert.equal(final.response.status, 404, compact(final));
+    return {
+      status: 'passed',
+      site_id: siteId,
+      operation_count: history.filter((entry) => entry.operation).length,
+      cleanup: 'verified_absent',
+      history,
+    };
+  } catch (error) {
+    let cleanupStatus: AnyRecord;
+    try {
+      cleanupStatus = applied ? await cleanup() : { status: 'not_needed' };
+    } catch (cleanupError) {
+      cleanupStatus = { status: 'failed', error: String(cleanupError).slice(0, 300) };
+    }
+    const primary = error instanceof Error ? error.message : String(error);
+    throw new Error(`disposable_registry_mutation_failed:${primary};cleanup=${JSON.stringify(cleanupStatus)}`);
+  }
+}
+
 function resolveArtifactPath({
   baseUrl,
   artifactBasePath,
@@ -422,9 +609,8 @@ async function runFailureMode({
   evidencePath: string;
 }): Promise<AnyRecord> {
   if (args.failureMode === 'tunnel-loss') {
-    if (!process.env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN?.trim()) {
-      throw new Error('failure_injection_bridge_token_required');
-    }
+    const restartAuthority = await resolveMirrorRestartAuthority();
+    if (!restartAuthority) throw new Error('failure_injection_mirror_restart_authority_required');
     let stopExitCode: number | null = null;
     let restartExitCode: number | null = null;
     let unavailable: { status: number | null; code: string | null; waited_ms: number } | null = null;
@@ -446,6 +632,7 @@ async function runFailureMode({
       unavailable_code: unavailable?.code ?? null,
       restart_exit_code: restartExitCode,
       restored_status: restored.status,
+      restart_authority: restartAuthority,
       passed: true,
     };
     evidence.status = 'passed';
@@ -599,6 +786,54 @@ async function runMirrorLifecycleCommand(action: 'stop' | 'restart'): Promise<nu
     };
     child.once('error', () => finish(1));
     child.once('exit', (code) => finish(typeof code === 'number' ? code : 1));
+  });
+}
+
+async function resolveMirrorRestartAuthority(): Promise<'environment' | 'owned_state' | null> {
+  if (process.env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN?.trim()) return 'environment';
+
+  const status = await runMirrorStatusCommand();
+  const bridgeTokenFile = status?.state?.bridge_token_file;
+  if (status?.status !== 'ready' || typeof bridgeTokenFile !== 'string' || !existsSync(bridgeTokenFile)) {
+    return null;
+  }
+  return 'owned_state';
+}
+
+async function runMirrorStatusCommand(): Promise<AnyRecord | null> {
+  const entrypoint = resolve(REPO_ROOT, 'packages/layers/cli/dist/main.js');
+  return await new Promise<AnyRecord | null>((resolvePromise) => {
+    let settled = false;
+    let stdout = '';
+    const child = spawn(process.execPath, [entrypoint, 'console', 'mirror', 'status', '--format', 'json'], {
+      cwd: REPO_ROOT,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'ignore'],
+      windowsHide: true,
+    });
+    const timer = setTimeout(() => {
+      child.kill();
+      finish(null);
+    }, 10_000);
+    const finish = (value: AnyRecord | null): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolvePromise(value);
+    };
+    child.stdout?.on('data', (chunk) => {
+      if (stdout.length < 100_000) stdout += String(chunk).slice(0, 100_000 - stdout.length);
+    });
+    child.once('error', () => finish(null));
+    child.once('exit', (code) => {
+      if (code !== 0) return finish(null);
+      try {
+        const parsed = JSON.parse(stdout.trim());
+        finish(parsed && typeof parsed === 'object' ? parsed as AnyRecord : null);
+      } catch {
+        finish(null);
+      }
+    });
   });
 }
 
@@ -838,6 +1073,7 @@ function parseArgs(values: string[]): LiveArgs {
     accessClientSecretFile: process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET_FILE ?? null,
     accessCookieFile: process.env.CLOUDFLARE_ACCESS_COOKIE_FILE ?? null,
     artifactId: process.env.OPERATOR_CONSOLE_MIRROR_ARTIFACT_ID ?? null,
+    mutationMode: (process.env.OPERATOR_CONSOLE_MIRROR_MUTATION_MODE ?? 'none') as LiveArgs['mutationMode'],
     failureMode: 'none',
     timeoutMs: 30_000,
   };
@@ -854,11 +1090,15 @@ function parseArgs(values: string[]): LiveArgs {
     else if (value === '--access-client-secret-file') parsed.accessClientSecretFile = values[++index] ?? null;
     else if (value === '--access-cookie-file') parsed.accessCookieFile = values[++index] ?? null;
     else if (value === '--artifact-id') parsed.artifactId = values[++index] ?? null;
+    else if (value === '--mutation-mode') parsed.mutationMode = (values[++index] ?? 'none') as LiveArgs['mutationMode'];
     else if (value === '--failure-mode') parsed.failureMode = (values[++index] ?? 'none') as LiveArgs['failureMode'];
     else if (value === '--timeout-ms') parsed.timeoutMs = Number(values[++index] ?? '30000');
   }
   if (!['none', 'tunnel-loss', 'route-revocation', 'stale-lease'].includes(parsed.failureMode)) {
     throw new Error('failure_mode_invalid');
+  }
+  if (!['none', 'disposable'].includes(parsed.mutationMode)) {
+    throw new Error('mutation_mode_invalid');
   }
   return parsed;
 }
