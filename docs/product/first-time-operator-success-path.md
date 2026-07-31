@@ -6,7 +6,7 @@ The path is deliberately explicit about authority-affecting crossings. Each cros
 
 ## Choose the Path
 
-If you are a first-time Windows user who wants a personal assistant, go directly to [User-First Windows Onboarding UX](#user-first-windows-onboarding-ux). Its front door is the User Site resident-first path; you do not need to create an ops repo, Project Site, PC Site, or remote Site first.
+If you are a first-time Operator who wants a personal assistant, go directly to [User-First Onboarding UX](#user-first-onboarding-ux). Its front door is the User Site resident-first path; you do not need to create an ops repo, Project Site, PC Site, or remote Site first. Use the substrate-specific installation runbook only for host setup and supervision details.
 
 If you already have a User Site and want to declare or run governed work, use the [Full Operation Path](#full-operation-path). The operation path is intentionally more detailed because it covers intake, Site selection, role binding, work selection, and effect proof.
 
@@ -16,7 +16,7 @@ The related terms have distinct scopes: **Personal User Site onboarding** starts
 
 Narada is not a Windows-only product. Its core CLI, documentation, task governance, inbox, and Site concepts are intended to remain portable across supported substrates.
 
-The intensively exercised first-time Operator substrate today is narrower: Windows 11 with WSL, Windows Terminal, PowerShell carrier scripts, local Git, Node tooling, and Windows User/PC Site coordination. The Operator Surface inhabitation path involving stable window labels, focused input, runtime binding, PC-locus messaging, and multi-agent ergonomics has the strongest evidence on that stack. macOS and Linux paths may run core flows, but they do not yet have equivalent evidence for spatial Operator Surface inhabitation.
+The intensively exercised first-time Operator substrate today is narrower: Windows 11 with WSL, Windows Terminal, PowerShell launcher scripts, local Git, Node tooling, and Windows User/PC Site coordination. The Operator Surface inhabitation path involving stable window labels, focused input, runtime binding, PC-locus messaging, and multi-agent ergonomics has the strongest evidence on that stack. macOS and Linux paths may run core flows, but they do not yet have equivalent evidence for spatial Operator Surface inhabitation.
 
 First-time Operator guidance should therefore point new Operators to the Windows 11 path first when they want the currently proven inhabited-agent experience, while avoiding any claim that Narada itself is Windows-only.
 
@@ -26,7 +26,7 @@ There are two valid success targets, and the simpler personal target is the defa
 
 ### Personal User Site success
 
-A first-time Windows user succeeds when they can:
+A first-time user succeeds when they can:
 
 1. start one healthy User Site `resident` assistant;
 2. see successful identity hydration;
@@ -112,13 +112,26 @@ pnpm --dir packages/layers/cli exec vitest run test/commands/operator.test.ts --
 
 Observed result for the onboarding proof: the fixture walks from an absent Site to a configured Site with missing role binding, then to a fully idle Site with a bound architect identity. It asserts bounded JSON fields, explicit blockers, precise unblock commands, governance coordinates, and final next-work guidance.
 
-## User-First Windows Onboarding UX
+## User-First Onboarding UX
 
-Status: target UX contract with the CLI first slice and User Site browser onboarding composition implemented. The PowerShell handoff, resident-first provisioning boundary, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; approved roles are materialized into the launch registry through the explicit `narada onboarding roles materialize` crossing. A clean User Site does not fabricate principal admission or launch context: the resident launch is reported as an explicit setup block until intelligence readiness is complete.
+Status: target UX contract with the CLI first slice and User Site browser onboarding composition implemented. The CLI detects the host platform by default; Windows PowerShell and native Linux are substrate-specific execution paths over the same User Site onboarding contract. The resident-first provisioning boundary, deterministic defaults, demo fallback, and NARS-backed first-use status projection exist; approved roles are materialized into the launch registry through the explicit `narada onboarding roles materialize` crossing. A clean User Site does not fabricate principal admission or launch context: the resident launch is reported as an explicit setup block until intelligence readiness is complete.
+
+Human CLI output keeps the launch payload structured while projecting a bounded handoff: the saved result path, launch/session identifiers, health and event endpoints, and the browser projection URL when one is available. A `blocked` onboarding start returns a nonzero process exit code, so shell automation cannot mistake an unresolved intelligence prerequisite for a successful launch.
 
 The default path is User Site first. A first-time user should become productive without creating a Project Site, naming a PC Site, registering a remote Site, or understanding the full Site topology.
 
-### Supported Install Boundary
+### Platform-Neutral CLI Front Door
+
+The CLI infers `windows` or `linux` from the host when `--platform` is omitted. The ordinary first-use commands are therefore:
+
+```text
+narada onboarding start --scope user-site --interactive
+narada onboarding status --scope user-site
+```
+
+Use `--platform windows` or `--platform linux` only when an explicit override is required for a controlled test or a cross-host administrative workflow. The User Site onboarding root is distinct from an explicitly named Site: on Linux it defaults to `${XDG_DATA_HOME:-$HOME/.local/share}/narada/user`, while `narada sites init <site-id> --substrate linux-user` uses `${XDG_DATA_HOME:-$HOME/.local/share}/narada/<site-id>`.
+
+### Windows Install Boundary
 
 The supported first-time Windows install boundary is the published `@narada2/cli` package. A source checkout is a contributor path and is not required for ordinary User Site use.
 
@@ -169,7 +182,7 @@ copies secret values into the report.
 
 The first-use page must preserve these branches and must not imply that a source checkout, a Site-specific MCP file, or an API key is required for the credential-free demo.
 
-### Front Door
+### Windows Front Door
 
 Once the CLI is available, the canonical command is:
 
@@ -201,7 +214,7 @@ The installed Windows handoff is equivalent:
 Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
 ```
 
-`-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, and runtime selection remains on the advanced workspace launcher path. Intelligence provider and model resolution are owned by the admitted Site intelligence catalog, not by launcher arguments. On source checkouts, the installed `Start-NaradaWorkspace.Dev.ps1` (next to the plain shim in the User Site) is the development launcher: it drives the CLI from the checkout with dist-freshness and carrier-projection checks.
+`-Onboarding` is the thin bootstrap path. Explicit Site, role, operator-surface, and runtime selection remains on the advanced workspace launcher path. Intelligence provider and model resolution are owned by the admitted Site intelligence catalog, not by launcher arguments. On source checkouts, the installed `Start-NaradaWorkspace.Dev.ps1` (next to the plain shim in the User Site) is the development launcher: it drives the CLI from the checkout with dist-freshness and operator-surface projection checks.
 
 When the onboarding launch selects the browser surface, the launcher passes an explicit User Site onboarding mode into
 Agent Web UI. The browser then shows a compact first-use panel with the resolved workspace, `resident` General assistant,
@@ -261,7 +274,7 @@ After the Operator sends the first request, the bounded readiness readback is:
 narada onboarding status --scope user-site
 ```
 
-The status command correlates the resident launch session binding with the Site-local NARS session index, probes `/health`, and reads a bounded tail of the session `events.jsonl` projection. It reports healthy session, identity hydration evidence (a successful startup tool result on tool-driven carriers, or the session start plus ready lifecycle transition on the narada-agent-runtime-server carrier), input readiness, an operator-sourced admitted input (`input_admitted_to_turn` or the runtime's `input_event_started`), and a useful or explicit no-work response. It writes only non-secret readiness evidence to `.narada/runtime/onboarding/user-site-onboarding.json`; it never copies provider output or credentials into that artifact. A legacy state without an exact launch/session binding remains pending until the operator supplies `--session`.
+The status command correlates the resident launch session binding with the Site-local NARS session index, probes `/health`, and reads a bounded tail of the session `events.jsonl` projection. It reports healthy session, identity hydration evidence (a successful startup tool result on tool-driven operator surfaces, or the session start plus ready lifecycle transition on the narada-agent-runtime-server surface), input readiness, an operator-sourced admitted input (`input_admitted_to_turn` or the runtime's `input_event_started`), and a useful or explicit no-work response. It writes only non-secret readiness evidence to `.narada/runtime/onboarding/user-site-onboarding.json`; it never copies provider output or credentials into that artifact. A legacy state without an exact launch/session binding remains pending until the operator supplies `--session`.
 
 ### Contextual Role Expansion
 

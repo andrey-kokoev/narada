@@ -14,6 +14,7 @@ import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './worksp
 import { readWorkspaceLaunchRecords, readLaunchRegistryRaw, rawLaunchRegistryAgents, type RawAgentRecord } from './workspace-launch-registry.js';
 import { narsSessionsCommand } from './nars.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
+import type { OperatorConsoleOnboardingHandoff } from '@narada2/operator-console-contract';
 
 export interface OnboardingStartOptions {
   platform?: string;
@@ -84,6 +85,9 @@ interface OnboardingState {
   launch_session_id: string | null;
   session_id: string | null;
   verification: OnboardingFirstUseVerification | null;
+  projection_binding_path: string | null;
+  projection_readiness_path: string | null;
+  projection_url: string | null;
 }
 
 interface OnboardingRoleExpansionRecommendation {
@@ -115,6 +119,7 @@ interface OnboardingStatusResult {
   readiness: OnboardingReadiness;
   verification: OnboardingFirstUseVerification | null;
   role_expansion: OnboardingRoleExpansionRecommendation;
+  handoff: OperatorConsoleOnboardingHandoff | null;
   state_path: string | null;
   next_action: string;
   reason_code?: string;
@@ -188,6 +193,7 @@ interface OnboardingResult {
   role_expansion: OnboardingRoleExpansionRecommendation;
   readiness: OnboardingReadiness;
   launch: unknown | null;
+  handoff: OperatorConsoleOnboardingHandoff | null;
   intelligence_catalog?: unknown;
   state_path: string | null;
   reason_code?: string;
@@ -349,10 +355,22 @@ function parseOnboardingState(value: unknown): OnboardingState {
   if (!(value.verification === null || isVerification(value.verification))) {
     throw new Error('onboarding_state_invalid_verification');
   }
+  for (const [key, field] of [
+    ['projection_binding_path', value.projection_binding_path],
+    ['projection_readiness_path', value.projection_readiness_path],
+    ['projection_url', value.projection_url],
+  ] as const) {
+    if (!(field === undefined || field === null || typeof field === 'string')) {
+      throw new Error(`onboarding_state_invalid_${key}`);
+    }
+  }
   return {
     ...(value as unknown as OnboardingState),
     launch_registry_path: value.launch_registry_path === undefined ? null : value.launch_registry_path as string | null,
     launch_session_id: value.launch_session_id === undefined ? null : value.launch_session_id as string | null,
+    projection_binding_path: value.projection_binding_path === undefined ? null : value.projection_binding_path as string | null,
+    projection_readiness_path: value.projection_readiness_path === undefined ? null : value.projection_readiness_path as string | null,
+    projection_url: value.projection_url === undefined ? null : value.projection_url as string | null,
   };
 }
 
@@ -366,6 +384,97 @@ function readOnboardingState(root: string): OnboardingState | null {
     throw new Error(`onboarding_state_invalid_json: ${error instanceof Error ? error.message : String(error)}`);
   }
   return parseOnboardingState(value);
+}
+
+function safeHttpUrl(value: unknown): string | null {
+  return typeof value === 'string' && /^https?:\/\//i.test(value.trim()) ? value.trim() : null;
+}
+
+function projectionHandoffFromLaunch(value: unknown, residentAgent: string): {
+  bindingPath: string | null;
+  readinessPath: string | null;
+  handoff: OperatorConsoleOnboardingHandoff | null;
+} {
+  const body = isRecord(value) && isRecord(value.result) ? value.result : value;
+  if (!isRecord(body)) return { bindingPath: null, readinessPath: null, handoff: null };
+  const agents = [
+    ...(Array.isArray(body.launch_agents) ? body.launch_agents : []),
+    ...(Array.isArray(body.selected_agents) ? body.selected_agents : []),
+  ].filter(isRecord);
+  const residentAliases = new Set(residentIdentityAliases(residentAgent));
+  const selected = agents.find((agent) => sessionIdentityAliases(agent).some((alias) => residentAliases.has(alias)))
+    ?? agents[0]
+    ?? null;
+  const binding = selected && isRecord(selected.operator_projection_launch_binding)
+    ? selected.operator_projection_launch_binding
+    : isRecord(body.operator_projection_launch_binding)
+      ? body.operator_projection_launch_binding
+      : null;
+  const bindingPath = binding && typeof binding.path === 'string' ? binding.path : null;
+  const readinessPath = bindingPath ? `${bindingPath}.ready.json` : null;
+  const requests = [
+    ...(selected && Array.isArray(selected.operator_projection_open_requests) ? selected.operator_projection_open_requests : []),
+    ...(Array.isArray(body.operator_projection_open_requests) ? body.operator_projection_open_requests : []),
+    ...(isRecord(body.operator_projection_open_request) ? [body.operator_projection_open_request] : []),
+  ].filter(isRecord);
+  const url = requests
+    .map((request) => safeHttpUrl(request.url) ?? safeHttpUrl(request.target_ref))
+    .find((candidate): candidate is string => candidate !== null) ?? null;
+  const sessionId = selected && typeof selected.launch_session_id === 'string'
+    ? selected.launch_session_id
+    : null;
+  const handoff = bindingPath || requests.length > 0
+    ? {
+        kind: 'browser' as const,
+        status: url ? 'ready' as const : 'pending' as const,
+        url,
+        session_id: sessionId,
+        message: url ? 'Agent Web UI is ready.' : 'Waiting for the Agent Web UI readiness artifact.',
+      }
+    : null;
+  return { bindingPath, readinessPath, handoff };
+}
+
+function readProjectionHandoff(state: OnboardingState): OperatorConsoleOnboardingHandoff | null {
+  const persistedUrl = safeHttpUrl(state.projection_url);
+  if (persistedUrl) {
+    return {
+      kind: 'browser',
+      status: 'ready',
+      url: persistedUrl,
+      session_id: state.launch_session_id,
+      message: 'Agent Web UI is ready.',
+    };
+  }
+  if (state.projection_readiness_path && existsSync(state.projection_readiness_path)) {
+    try {
+      const readiness = JSON.parse(readFileSync(state.projection_readiness_path, 'utf8')) as unknown;
+      const record = isRecord(readiness) ? readiness : null;
+      const url = record
+        ? safeHttpUrl(record.url) ?? safeHttpUrl(record.browser_url) ?? safeHttpUrl(record.operator_projection_url)
+        : null;
+      if (url) {
+        return {
+          kind: 'browser',
+          status: 'ready',
+          url,
+          session_id: state.launch_session_id,
+          message: 'Agent Web UI is ready.',
+        };
+      }
+    } catch {
+      // The projection may still be writing its readiness artifact.
+    }
+  }
+  return state.projection_binding_path || state.projection_readiness_path
+    ? {
+        kind: 'browser',
+        status: 'pending',
+        url: null,
+        session_id: state.launch_session_id,
+        message: 'Waiting for the Agent Web UI readiness artifact.',
+      }
+    : null;
 }
 
 async function atomicWriteText(path: string, contents: string): Promise<void> {
@@ -623,6 +732,7 @@ export async function onboardingStatusCommand(
           trigger: 'after_resident_ready',
           next_action: 'Run onboarding start before checking first-use readiness.',
         },
+        handoff: null,
         state_path: existsSync(statePath) ? statePath : null,
         next_action: 'Run `narada onboarding start` to start the User Site resident.',
         reason_code: 'onboarding_state_missing',
@@ -705,6 +815,7 @@ export async function onboardingStatusCommand(
       readiness,
       verification,
       role_expansion: roleExpansion,
+      handoff: readProjectionHandoff(state),
       state_path: priorVerificationIsStable && !roleChanged
         ? statePath
         : await persistOnboardingState(root, state.resident_agent, readiness, roleExpansion, {
@@ -738,6 +849,7 @@ export async function onboardingStatusCommand(
         trigger: 'after_resident_ready',
         next_action: 'Resolve the onboarding status prerequisite, then retry.',
       },
+      handoff: null,
       state_path: null,
       next_action: 'Resolve the reported onboarding status failure, then retry.',
       reason_code: message,
@@ -1095,6 +1207,9 @@ async function persistOnboardingState(
     launchSessionId?: string | null;
     sessionId?: string | null;
     verification?: OnboardingFirstUseVerification | null;
+    projectionBindingPath?: string | null;
+    projectionReadinessPath?: string | null;
+    projectionUrl?: string | null;
   } = {},
 ): Promise<string> {
   const path = onboardingStatePath(root);
@@ -1122,6 +1237,15 @@ async function persistOnboardingState(
     verification: metadata.verification !== undefined
       ? metadata.verification
       : previous?.verification ?? null,
+    projection_binding_path: metadata.projectionBindingPath !== undefined
+      ? metadata.projectionBindingPath
+      : previous?.projection_binding_path ?? null,
+    projection_readiness_path: metadata.projectionReadinessPath !== undefined
+      ? metadata.projectionReadinessPath
+      : previous?.projection_readiness_path ?? null,
+    projection_url: metadata.projectionUrl !== undefined
+      ? metadata.projectionUrl
+      : previous?.projection_url ?? null,
   };
   await atomicWriteJson(path, state);
   return path;
@@ -1501,6 +1625,7 @@ function baseResult(
       evidence: [],
     },
     launch: null,
+    handoff: null,
     state_path: null,
     next_action: record ? 'Confirm Start my assistant to launch the User Site resident.' : 'Register a resident launch record for this User Site, then rerun onboarding.',
   };
@@ -1721,10 +1846,15 @@ export async function onboardingStartCommand(
     };
     if (!options.noExec) {
       const launchSessionId = launchSessionIdFromResult(launch.result, resident.agent);
+      const projection = projectionHandoffFromLaunch(launch.result, resident.agent);
+      result.handoff = projection.handoff;
       result.state_path = await persistOnboardingState(root, resident.agent, result.readiness, result.role_expansion, {
         launchRegistryPath: registryPath,
         launchRequestedAt: new Date().toISOString(),
         launchSessionId,
+        projectionBindingPath: projection.bindingPath,
+        projectionReadinessPath: projection.readinessPath,
+        projectionUrl: projection.handoff?.url ?? null,
       });
     }
     result.next_action = options.noExec

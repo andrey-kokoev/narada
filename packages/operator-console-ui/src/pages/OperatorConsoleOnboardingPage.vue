@@ -1,53 +1,58 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
-import { ArrowRight, CheckCircle2, ExternalLink, LoaderCircle, Plus, RefreshCw, Sparkles, TriangleAlert } from 'lucide-vue-next';
-import { OPERATOR_CONSOLE_REGISTRY_ADD_PATH, OPERATOR_CONSOLE_SESSIONS_PATH } from '@narada2/operator-console-contract';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { ArrowRight, Check, CheckCircle2, Copy, ExternalLink, LoaderCircle, Plus, RefreshCw, Sparkles, TriangleAlert } from 'lucide-vue-next';
+import {
+  OPERATOR_CONSOLE_REGISTRY_ADD_PATH,
+  OPERATOR_CONSOLE_SESSIONS_PATH,
+  type OperatorConsoleOnboardingProjection,
+  type OperatorConsoleOnboardingSetupAction,
+  type OperatorConsoleOnboardingUiState,
+} from '@narada2/operator-console-contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
+import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 
-type OnboardingUiState = 'checking' | 'ready' | 'starting' | 'healthy' | 'needs-provider-setup' | 'blocked' | 'failed';
-
-interface OnboardingProjection {
-  schema: 'narada.operator_console.onboarding.v1';
-  status: 'success' | 'failed';
-  ui_state: OnboardingUiState;
-  posture: string;
-  doctor: Record<string, unknown> | null;
-  onboarding: Record<string, unknown> | null;
-  next_action: string;
-  actions: { start: boolean; demo: boolean };
-  error?: string;
-}
-
-const projection = ref<OnboardingProjection | null>(null);
+const projection = ref<OperatorConsoleOnboardingProjection | null>(null);
 const loading = ref(false);
 const action = ref<'live' | 'demo' | null>(null);
 const error = ref<string | null>(null);
+const copiedAction = ref<string | null>(null);
+const routeDirectory = useOperatorWorkspaceRouteDirectory();
+let polling = false;
+let pollTimer: number | null = null;
 
-const uiState = computed<OnboardingUiState>(() => projection.value?.ui_state ?? (loading.value ? 'checking' : 'failed'));
+const uiState = computed<OperatorConsoleOnboardingUiState>(() => projection.value?.ui_state ?? (loading.value ? 'checking' : 'failed'));
 const onboarding = computed(() => projection.value?.onboarding ?? null);
 const doctor = computed(() => projection.value?.doctor ?? null);
-const stateLabel = computed(() => ({
+const stateLabels: Record<OperatorConsoleOnboardingUiState, string> = {
   checking: 'Checking this installation',
   ready: 'Ready to start',
   starting: 'Starting your assistant',
+  'runtime-ready': 'Runtime is ready',
   healthy: 'Assistant is ready',
-  'needs-provider-setup': 'Provider setup needed',
+  'needs-intelligence-setup': 'Intelligence setup needed',
   blocked: 'Action needed',
   failed: 'Could not check installation',
-}[uiState.value]));
-const stateDescription = computed(() => ({
+};
+const stateDescriptions: Record<OperatorConsoleOnboardingUiState, string> = {
   checking: 'Reading the User Site and provider readiness from the local Narada CLI.',
   ready: 'Narada is ready to start one resident General assistant in your personal User Site.',
-  starting: 'The resident is starting. The Agent Web UI will open when its session is ready.',
+  starting: 'The resident is starting. This page will keep checking until its runtime is available.',
+  'runtime-ready': 'The runtime is healthy. Send one request in the Agent Web UI to complete first-use verification.',
   healthy: 'Your resident assistant is running. Continue in the Agent Web UI.',
-  'needs-provider-setup': 'Configure one intelligence provider, or use the credential-free demo to explore Narada first.',
+  'needs-intelligence-setup': 'Complete the User Site intelligence setup, or use the credential-free demo to explore Narada first.',
   blocked: 'The installation needs attention before the resident can start.',
   failed: 'The local onboarding status endpoint did not return a usable result.',
-}[uiState.value]));
+};
+const stateLabel = computed(() => stateLabels[uiState.value]);
+const stateDescription = computed(() => stateDescriptions[uiState.value]);
 
-const providerReadiness = computed(() => {
-  const rows = doctor.value?.provider_readiness;
-  return Array.isArray(rows) ? rows.filter((row): row is Record<string, unknown> => Boolean(row) && typeof row === 'object') : [];
+const setupActions = computed(() => projection.value?.setup_actions ?? []);
+const handoff = computed(() => projection.value?.handoff ?? null);
+const canAddSite = computed(() => {
+  const directory = routeDirectory?.directory.value;
+  if (!directory || routeDirectory?.error.value) return false;
+  return directory.surfaces.some((surface) => surface.projectedRoutes.some((route) =>
+    route.path === OPERATOR_CONSOLE_REGISTRY_ADD_PATH && route.availability === 'available'));
 });
 
 function recordField(record: Record<string, unknown> | null, key: string): Record<string, unknown> | null {
@@ -67,23 +72,50 @@ const nextAction = computed(() => projection.value?.next_action
   ?? stringField(onboarding.value, 'next_action')
   ?? 'Refresh the status to continue.');
 
-function providerKey(provider: Record<string, unknown>, index: number): string {
-  return `${String(provider.provider || provider.name || 'provider')}-${index}`;
+function setupActionKey(item: OperatorConsoleOnboardingSetupAction): string {
+  return item.id;
 }
 
-async function readProjection(): Promise<void> {
-  loading.value = true;
+async function readProjection(options: { showLoading?: boolean } = {}): Promise<boolean> {
+  if (options.showLoading !== false) loading.value = true;
   error.value = null;
   try {
     const response = await fetch('/console/onboarding/api/status', { headers: { Accept: 'application/json' } });
-    const body = await response.json() as OnboardingProjection;
+    const body = await response.json() as OperatorConsoleOnboardingProjection;
     if (!response.ok || body.status === 'failed') throw new Error(body.error || `Status request failed (${response.status})`);
     projection.value = body;
+    return true;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
-    projection.value = null;
+    if (options.showLoading !== false) projection.value = null;
+    return false;
   } finally {
-    loading.value = false;
+    if (options.showLoading !== false) loading.value = false;
+  }
+}
+
+function stopPolling(): void {
+  if (pollTimer !== null) window.clearTimeout(pollTimer);
+  pollTimer = null;
+  polling = false;
+}
+
+async function waitForRuntime(): Promise<void> {
+  if (polling) return;
+  polling = true;
+  const deadline = Date.now() + 60_000;
+  try {
+    while (Date.now() < deadline) {
+      await new Promise<void>((resolve) => {
+        pollTimer = window.setTimeout(resolve, 1000);
+      });
+      pollTimer = null;
+      if (!await readProjection({ showLoading: false })) continue;
+      if (uiState.value !== 'starting' && handoff.value?.status !== 'pending') return;
+    }
+    error.value = 'The resident is still starting. Refresh this page to check again.';
+  } finally {
+    stopPolling();
   }
 }
 
@@ -96,12 +128,10 @@ async function start(mode: 'live' | 'demo'): Promise<void> {
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ mode, confirm: true }),
     });
-    const body = await response.json() as OnboardingProjection;
+    const body = await response.json() as OperatorConsoleOnboardingProjection;
     projection.value = body;
     if (!response.ok || body.status === 'failed') throw new Error(body.error || `Start request failed (${response.status})`);
-    if (mode === 'live') {
-      window.setTimeout(() => { void readProjection(); }, 1500);
-    }
+    if (mode === 'live' && (body.ui_state === 'starting' || body.handoff?.status === 'pending')) await waitForRuntime();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
@@ -109,7 +139,27 @@ async function start(mode: 'live' | 'demo'): Promise<void> {
   }
 }
 
-onMounted(() => { void readProjection(); });
+async function copyCommand(item: OperatorConsoleOnboardingSetupAction): Promise<void> {
+  if (!item.command) return;
+  try {
+    await navigator.clipboard.writeText(item.command);
+    copiedAction.value = item.id;
+    window.setTimeout(() => {
+      if (copiedAction.value === item.id) copiedAction.value = null;
+    }, 1600);
+  } catch {
+    error.value = 'The command could not be copied. Select it manually.';
+  }
+}
+
+onMounted(() => {
+  void (async () => {
+    await readProjection();
+    if (uiState.value === 'starting' || handoff.value?.status === 'pending') await waitForRuntime();
+  })();
+  void routeDirectory?.load();
+});
+onUnmounted(stopPolling);
 </script>
 
 <template>
@@ -132,30 +182,53 @@ onMounted(() => { void readProjection(); });
       <section class="status-panel" :data-state="uiState" aria-live="polite">
         <div class="status-icon" aria-hidden="true">
           <LoaderCircle v-if="uiState === 'checking' || uiState === 'starting'" :size="20" class="spin" />
-          <CheckCircle2 v-else-if="uiState === 'healthy' || uiState === 'ready'" :size="20" />
+          <CheckCircle2 v-else-if="uiState === 'healthy' || uiState === 'runtime-ready' || uiState === 'ready'" :size="20" />
           <TriangleAlert v-else :size="20" />
         </div>
         <div>
           <strong>{{ stateLabel }}</strong>
           <p>{{ stateDescription }}</p>
         </div>
-        <button class="icon-button" type="button" title="Refresh status" aria-label="Refresh status" :disabled="loading || action !== null" @click="readProjection">
+        <button class="icon-button" type="button" title="Refresh status" aria-label="Refresh status" :disabled="loading || action !== null" @click="() => { void readProjection(); }">
           <RefreshCw :size="16" aria-hidden="true" />
         </button>
       </section>
 
       <p v-if="error" class="notice error" role="alert">{{ error }}</p>
 
-      <section v-if="uiState === 'needs-provider-setup'" class="setup-panel" aria-labelledby="provider-title">
+      <section v-if="uiState === 'needs-intelligence-setup'" class="setup-panel" aria-labelledby="provider-title">
         <p class="eyebrow">Intelligence provider</p>
-        <h3 id="provider-title">Choose how the assistant thinks</h3>
-        <p>Provider credentials stay in the User Site secret store. This page only reports readiness; it never asks the browser to handle a secret.</p>
-        <ul v-if="providerReadiness.length" class="provider-list">
-          <li v-for="(provider, index) in providerReadiness" :key="providerKey(provider, index)">
-            <span>{{ String(provider.provider || provider.name || 'Provider') }}</span>
-            <span class="provider-state">{{ String(provider.status || 'check_required') }}</span>
+        <h3 id="provider-title">Complete intelligence setup</h3>
+        <p>Provider credentials stay in the User Site secret store. This page never asks the browser to handle a secret.</p>
+        <ul class="setup-actions">
+          <li v-for="item in setupActions" :key="setupActionKey(item)">
+            <div>
+              <strong>{{ item.label }}</strong>
+              <p>{{ item.description }}</p>
+              <code v-if="item.command">{{ item.command }}</code>
+            </div>
+            <button v-if="item.command" class="icon-button" type="button" :title="`Copy ${item.label}`" :aria-label="`Copy ${item.label}`" @click="copyCommand(item)">
+              <Check v-if="copiedAction === item.id" :size="15" aria-hidden="true" />
+              <Copy v-else :size="15" aria-hidden="true" />
+            </button>
           </li>
         </ul>
+      </section>
+
+      <section v-if="handoff" class="handoff-panel" :data-status="handoff.status" aria-live="polite">
+        <div>
+          <p class="eyebrow">Agent Web UI</p>
+          <h3>{{ handoff.status === 'ready' ? 'Your operator surface is ready' : handoff.status === 'pending' ? 'Waiting for the operator surface' : 'Operator surface unavailable' }}</h3>
+          <p>{{ handoff.message }}</p>
+        </div>
+        <a v-if="handoff.status === 'ready' && handoff.url" class="primary-action" :href="handoff.url" target="_blank" rel="noreferrer">
+          <ArrowRight :size="16" aria-hidden="true" />
+          Open Agent Web UI
+        </a>
+        <button v-else class="secondary-action" type="button" :disabled="loading || action !== null" @click="() => { void readProjection(); }">
+          <RefreshCw :size="16" aria-hidden="true" />
+          Refresh status
+        </button>
       </section>
 
       <section class="actions" aria-label="Onboarding actions">
@@ -168,15 +241,15 @@ onMounted(() => { void readProjection(); });
           <ArrowRight :size="16" aria-hidden="true" />
           Try the no-credential demo
         </button>
-        <a v-if="uiState === 'healthy'" class="primary-action" href="/">
+        <a v-if="uiState === 'healthy' || uiState === 'runtime-ready'" class="primary-action" href="/">
           <ArrowRight :size="16" aria-hidden="true" />
           Open Operator Workspace
         </a>
-        <a v-if="uiState === 'healthy'" class="secondary-action" :href="OPERATOR_CONSOLE_REGISTRY_ADD_PATH">
+        <a v-if="(uiState === 'healthy' || uiState === 'runtime-ready') && canAddSite" class="secondary-action" :href="OPERATOR_CONSOLE_REGISTRY_ADD_PATH">
           <Plus :size="16" aria-hidden="true" />
           Add a Site
         </a>
-        <a v-if="uiState === 'healthy'" class="continue-link" :href="OPERATOR_CONSOLE_SESSIONS_PATH">
+        <a v-if="uiState === 'healthy' || uiState === 'runtime-ready'" class="continue-link" :href="OPERATOR_CONSOLE_SESSIONS_PATH">
           Continue to Agent Sessions <ExternalLink :size="14" aria-hidden="true" />
         </a>
       </section>
@@ -185,6 +258,7 @@ onMounted(() => { void readProjection(); });
         <p class="eyebrow">Next step</p>
         <h3 id="next-title">{{ nextAction }}</h3>
         <p v-if="uiState === 'healthy'">The first-use page is complete. Continue chatting with the resident assistant, or use the Operator Workspace to manage Sites.</p>
+        <p v-else-if="uiState === 'runtime-ready'">The runtime is healthy. Send one useful request through the Agent Web UI to complete first-use setup.</p>
         <p v-else>Advanced Site and role workflows remain available from the Operator Workspace.</p>
       </section>
 
@@ -216,14 +290,23 @@ onMounted(() => { void readProjection(); });
 .subtitle { max-width: 680px; margin: 8px 0 0; color: var(--muted); font-size: 14px; line-height: 1.55; }
 .status-panel { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .status-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--activity-chip-bg); color: var(--operator); }
-.status-panel[data-state="needs-provider-setup"], .status-panel[data-state="blocked"], .status-panel[data-state="failed"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
-.status-panel[data-state="needs-provider-setup"] .status-icon, .status-panel[data-state="blocked"] .status-icon, .status-panel[data-state="failed"] .status-icon { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
+.status-panel[data-state="needs-intelligence-setup"], .status-panel[data-state="blocked"], .status-panel[data-state="failed"] { border-color: color-mix(in srgb, var(--danger) 45%, var(--line)); }
+.status-panel[data-state="needs-intelligence-setup"] .status-icon, .status-panel[data-state="blocked"] .status-icon, .status-panel[data-state="failed"] .status-icon { background: color-mix(in srgb, var(--danger) 12%, var(--surface)); color: var(--danger); }
 .status-panel strong { display: block; font-size: 14px; }
 .status-panel p { margin: 4px 0 0; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.handoff-panel { display: flex; align-items: center; justify-content: space-between; gap: 16px; max-width: 760px; margin: 16px auto 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.handoff-panel[data-status="ready"] { border-color: color-mix(in srgb, var(--operator) 45%, var(--line)); }
+.handoff-panel h3 { margin: 0; font-size: 15px; }
+.handoff-panel p:not(.eyebrow) { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
 .icon-button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--muted); cursor: pointer; }
 .icon-button:hover:not(:disabled) { color: var(--operator); border-color: var(--operator); }
 .icon-button:disabled { cursor: wait; opacity: .55; }
 .setup-panel, .next-panel { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.setup-actions { display: grid; gap: 10px; margin: 14px 0 0; padding: 0; list-style: none; }
+.setup-actions li { display: flex; align-items: start; justify-content: space-between; gap: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.setup-actions li:first-child { padding-top: 0; border-top: 0; }
+.setup-actions strong { display: block; font-size: 13px; }
+.setup-actions p { margin: 3px 0 5px; color: var(--muted); font-size: 12px; }
 .setup-panel h3, .next-panel h3 { margin: 0; font-size: 16px; }
 .setup-panel p, .next-panel p { margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
 .provider-list { display: grid; gap: 7px; margin: 14px 0 0; padding: 0; list-style: none; }

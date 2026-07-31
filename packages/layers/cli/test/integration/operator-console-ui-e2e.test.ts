@@ -224,7 +224,13 @@ function mutationResponse(input, applied) {
   };
 }
 
-async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguous = false } = {}) {
+async function startFixtureServer({
+  agentSessions = [],
+  userSiteResidentAmbiguous = false,
+  intelligenceSetupRequired = false,
+  routeDirectoryUnavailable = false,
+  launchDelayMs = 0,
+} = {}) {
   const requests = [];
   let onboardingStarted = false;
   let siteAgentLaunched = false;
@@ -232,6 +238,10 @@ async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguou
     try {
       const pathname = new URL(req.url || '/', 'http://127.0.0.1').pathname;
       if (req.method === 'GET' && pathname === '/console/routes') {
+        if (routeDirectoryUnavailable) {
+          sendJson(res, 503, { error: 'route_directory_unavailable' });
+          return;
+        }
         const sessionRoutes = agentSessions.map((session) => ({
           id: `router-${session.session_id}`,
           path: `/sessions/${session.session_id}`,
@@ -323,6 +333,7 @@ async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguou
           });
           return;
         }
+        if (launchDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, launchDelayMs));
         siteAgentLaunched = true;
         sendJson(res, 200, {
           schema: 'narada.operator_console.agent_launch.v1',
@@ -338,12 +349,26 @@ async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguou
         sendJson(res, 200, {
           schema: 'narada.operator_console.onboarding.v1',
           status: 'success',
-          ui_state: onboardingStarted ? 'healthy' : 'ready',
-          posture: onboardingStarted ? 'healthy' : 'ready',
+          ui_state: onboardingStarted
+            ? 'healthy'
+            : intelligenceSetupRequired
+              ? 'needs-intelligence-setup'
+              : 'ready',
+          posture: onboardingStarted
+            ? 'healthy'
+            : intelligenceSetupRequired
+              ? 'needs-intelligence-setup'
+              : 'ready',
           doctor: {
             schema: 'narada.doctor.bootstrap.v1',
-            status: 'ready',
-            provider_readiness: [{ provider: 'codex-subscription', status: 'ready' }],
+            status: intelligenceSetupRequired ? 'healthy' : 'ready',
+            intelligence_catalog_readiness: intelligenceSetupRequired
+              ? {
+                  status: 'needs_setup',
+                  next_action: 'Initialize the Site catalog before launching NARS.',
+                }
+              : undefined,
+            provider_readiness: [{ provider: 'codex-subscription', status: intelligenceSetupRequired ? 'check_required' : 'ready' }],
           },
           onboarding: onboardingStarted
             ? {
@@ -361,8 +386,28 @@ async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguou
                 verification: null,
                 next_action: 'Start your assistant.',
               },
+          handoff: onboardingStarted
+            ? {
+                kind: 'browser',
+                status: 'ready',
+                url: '/agent-web-ui/session-user-resident',
+                session_id: 'session-user-resident',
+                message: 'Agent Web UI is ready.',
+              }
+            : null,
+          setup_actions: intelligenceSetupRequired
+            ? [
+                {
+                  id: 'initialize-intelligence-catalog',
+                  kind: 'command',
+                  label: 'Initialize catalog and retry onboarding',
+                  command: 'narada onboarding start --scope user-site',
+                  description: 'Populate the User Site catalog and retry the resident launch.',
+                },
+              ]
+            : [],
           next_action: onboardingStarted ? 'Continue to Agent Sessions.' : 'Start your assistant.',
-          actions: { start: !onboardingStarted, demo: true },
+          actions: { start: !onboardingStarted && !intelligenceSetupRequired, demo: !onboardingStarted },
         });
         return;
       }
@@ -387,7 +432,15 @@ async function startFixtureServer({ agentSessions = [], userSiteResidentAmbiguou
             launch: null,
           },
           next_action: 'Wait for the resident session.',
-          actions: { start: true, demo: true },
+          actions: { start: false, demo: false },
+          handoff: {
+            kind: 'browser',
+            status: 'pending',
+            url: null,
+            session_id: null,
+            message: 'Waiting for the Agent Web UI readiness artifact.',
+          },
+          setup_actions: [],
         });
         return;
       }
@@ -626,6 +679,33 @@ test('[fixture-boundary] Operator Console Sites and Agents groups authority, lau
   }
 });
 
+test('[fixture-boundary] Operator Console scopes transient starting state by Site-qualified agent identity', async () => {
+  const fixture = await startFixtureServer({ launchDelayMs: 750 });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(fixture.url + '/console/agents');
+    const siteResident = page.getByRole('button', { name: 'site-a.resident: stopped, work available' });
+    const userResident = page.getByRole('button', { name: 'user-site.resident: running, work available' });
+    await siteResident.waitFor();
+    await userResident.waitFor();
+
+    const popupPromise = page.waitForEvent('popup');
+    await siteResident.click();
+    const popup = await popupPromise;
+    await page.getByText('Web UI: starting site-a.resident...', { exact: true }).waitFor();
+    assert.match(await siteResident.textContent() ?? '', /starting/);
+    assert.doesNotMatch(await userResident.textContent() ?? '', /starting/);
+    await popup.close();
+
+    await page.getByText('site-a.resident started. Its Web UI opens when the route is ready.', { exact: true }).waitFor();
+    assert.equal(fixture.requests.filter((request) => request.pathname === '/console/agents/api/launch').length, 1);
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
 test('[fixture-boundary] Operator Console reproduces user-site ambiguous resident with empty Agent Sessions inventory', async () => {
   const fixture = await startFixtureServer({ userSiteResidentAmbiguous: true });
   const browser = await chromium.launch();
@@ -698,11 +778,15 @@ test('[fixture-boundary] Operator Console first-use onboarding projects ready, s
     assert.equal(response?.status(), 200);
     await page.getByRole('heading', { level: 2, name: 'Start with one assistant' }).waitFor();
     await page.getByText('Ready to start', { exact: true }).waitFor();
-    await page.getByRole('button', { name: 'Start my assistant' }).click();
+    const startButton = page.getByRole('button', { name: 'Start my assistant' });
+    await startButton.click();
     await page.getByText('Starting your assistant').waitFor();
+    assert.equal(await startButton.isDisabled(), true, 'a live start must remain disabled while it is settling');
+    assert.equal(fixture.requests.filter((request) => request.pathname === '/console/onboarding/api/start').length, 1);
     await page.getByText('Assistant is ready').waitFor({ timeout: 5000 });
     assert.equal(await page.getByRole('link', { name: 'Open Operator Workspace' }).getAttribute('href'), '/');
     assert.equal(await page.getByRole('link', { name: 'Add a Site' }).getAttribute('href'), '/console/registry/add');
+    assert.equal(await page.getByRole('link', { name: 'Open Agent Web UI' }).getAttribute('href'), '/agent-web-ui/session-user-resident');
     await page.getByRole('link', { name: 'Open Operator Workspace' }).waitFor();
     await page.getByRole('link', { name: 'Add a Site' }).waitFor();
     assert.deepEqual(fixture.requests[0], {
@@ -713,6 +797,23 @@ test('[fixture-boundary] Operator Console first-use onboarding projects ready, s
 
     await page.setViewportSize({ width: 390, height: 844 });
     await assertNoHorizontalOverflow(page, 'first-use onboarding mobile');
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
+test('[fixture-boundary] Operator Console onboarding exposes intelligence setup and pauses Site mutation navigation', async () => {
+  const fixture = await startFixtureServer({ intelligenceSetupRequired: true, routeDirectoryUnavailable: true });
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    await page.goto(fixture.url + '/console/onboarding');
+    await page.getByText('Intelligence setup needed', { exact: true }).waitFor();
+    await page.getByText('narada onboarding start --scope user-site', { exact: true }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Start my assistant' }).isDisabled(), true);
+    assert.equal(await page.getByRole('link', { name: 'Add a Site' }).count(), 0);
+    await assertNoHorizontalOverflow(page, 'intelligence setup onboarding');
   } finally {
     await browser.close();
     await fixture.close();

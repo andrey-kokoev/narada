@@ -65,7 +65,7 @@ async function inspectIntelligenceCatalogReadiness(root: string): Promise<Intell
       catalog_record_count: 0,
       resource_count: 0,
       evidence: 'The Site intelligence catalog has not been initialized.',
-      next_action: 'Initialize the Site catalog with narada intelligence migrate or canonical intelligence management commands.',
+      next_action: 'Run narada onboarding start --scope user-site to initialize the Site catalog and retry the resident launch.',
     };
   }
   let store: Awaited<ReturnType<typeof openLocalIntelligenceRegistry>> | undefined;

@@ -269,6 +269,23 @@ describe('console server', () => {
       expect((workspaceRoutes.body as { schema: string; surfaces: unknown[] }).schema)
         .toBe('narada.operator_workspace.route_directory.v3');
       expect(Array.isArray((workspaceRoutes.body as { surfaces: unknown[] }).surfaces)).toBe(true);
+      const parity = (workspaceRoutes.body as {
+        httpRouteParity: {
+          schema: string;
+          status: string;
+          source: string;
+          routes: Array<{ routeId: string; method: string; disposition: string }>;
+        };
+      }).httpRouteParity;
+      expect(parity).toEqual(expect.objectContaining({
+        schema: 'narada.operator_console.http_route_parity.v1',
+        status: 'complete',
+        source: 'local_operator_console_route_table',
+      }));
+      expect(parity.routes).toEqual(expect.arrayContaining([
+        expect.objectContaining({ routeId: 'operator-console.registry-apply', method: 'POST', disposition: 'proxy' }),
+        expect.objectContaining({ routeId: 'operator-console.workspace-route-directory', method: 'GET', disposition: 'proxy' }),
+      ]));
 
       const ingress = await fetch(url, { redirect: 'manual' });
       expect(ingress.status).toBe(302);
@@ -345,6 +362,12 @@ describe('console server', () => {
 
       const directory = await httpGet(`${url}/console/routes`);
       expect(directory.status).toBe(200);
+      expect((directory.body as { httpRouteParity: { routes: Array<{ routeId: string; pattern: string; protocol: string }> } }).httpRouteParity.routes)
+        .toEqual(expect.arrayContaining([
+          expect.objectContaining({ routeId: 'router.site-operations-site-a.http.get', protocol: 'http' }),
+          expect.objectContaining({ routeId: 'router.agent-session-session-a.http.get', protocol: 'http' }),
+          expect.objectContaining({ routeId: 'router.nars-artifact-session-a.http.get', protocol: 'http' }),
+        ]));
       const surfaces = (directory.body as { surfaces: Array<{
         id: string;
         availability: string;
@@ -899,6 +922,65 @@ describe('console server', () => {
       );
 
       await server.stop();
+    });
+
+    it('keeps setup and healthy-unverified states actionable without allowing duplicate starts', async () => {
+      doctorCommandMock.mockResolvedValue({
+        exitCode: 0,
+        result: {
+          schema: 'narada.doctor.bootstrap.v1',
+          status: 'healthy',
+          intelligence_catalog_readiness: {
+            status: 'needs_setup',
+            next_action: 'Initialize the Site catalog before launching NARS.',
+          },
+        },
+      });
+      onboardingStatusCommandMock.mockResolvedValue({
+        exitCode: 0,
+        result: {
+          schema: 'narada.onboarding.status.v1',
+          status: 'not_started',
+           user_site: { root: 'D:/Narada', resident_agent: 'resident' },
+           session: null,
+           verification: null,
+           handoff: { kind: 'browser', status: 'ready', url: 'https://stale.example/session', session_id: 'stale-session', message: 'Old surface.' },
+           next_action: 'Complete intelligence setup.',
+        },
+      });
+      const setupServer = await createConsoleServer({ port: 0, host: '127.0.0.1' });
+      const setupUrl = await setupServer.start();
+      const setup = await httpGet(`${setupUrl}/console/onboarding/api/status`);
+      expect(setup.status).toBe(200);
+      expect((setup.body as { ui_state: string }).ui_state).toBe('needs-intelligence-setup');
+      expect((setup.body as { actions: { start: boolean } }).actions.start).toBe(false);
+      expect((setup.body as { handoff: unknown }).handoff).toBeNull();
+      expect((setup.body as { setup_actions: Array<{ command: string }> }).setup_actions[0]?.command).toBe('narada onboarding start --scope user-site');
+      await setupServer.stop();
+
+      vi.clearAllMocks();
+      onboardingStatusCommandMock.mockResolvedValue({
+        exitCode: 0,
+        result: {
+          schema: 'narada.onboarding.status.v1',
+          status: 'launch_requested',
+          user_site: { root: 'D:/Narada', resident_agent: 'resident' },
+          session: { session_id: 'runtime-session', health_status: 'healthy' },
+          verification: { status: 'pending' },
+          next_action: 'Send the first request.',
+          handoff: { kind: 'browser', status: 'pending', url: null, session_id: 'runtime-session', message: 'Waiting.' },
+        },
+      });
+      const activeServer = await createConsoleServer({ port: 0, host: '127.0.0.1' });
+      const activeUrl = await activeServer.start();
+      const active = await httpGet(`${activeUrl}/console/onboarding/api/status`);
+      expect((active.body as { ui_state: string }).ui_state).toBe('runtime-ready');
+      expect((active.body as { actions: { start: boolean } }).actions.start).toBe(false);
+      const duplicate = await httpPost(`${activeUrl}/console/onboarding/api/start`, { mode: 'live', confirm: true });
+      expect(duplicate.status).toBe(200);
+      expect((duplicate.body as { ui_state: string }).ui_state).toBe('runtime-ready');
+      expect(onboardingStartCommandMock).not.toHaveBeenCalled();
+      await activeServer.stop();
     });
   });
 

@@ -1,6 +1,7 @@
 export const OPERATOR_SURFACE_DESCRIPTOR_SCHEMA = 'narada.operator.surface_descriptor.v3' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA = 'narada.operator_workspace.route_directory.v3' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH = '/console/routes' as const;
+export const OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA = 'narada.operator_console.http_route_parity.v1' as const;
 export const OPERATOR_CONSOLE_PATH = '/console' as const;
 export const OPERATOR_CONSOLE_REGISTRY_PATH = '/console/registry' as const;
 export const OPERATOR_CONSOLE_REGISTRY_API_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/api` as const;
@@ -17,11 +18,78 @@ export const OPERATOR_CONSOLE_AGENTS_STOP_API_PATH = `${OPERATOR_CONSOLE_AGENTS_
 export const OPERATOR_CONSOLE_AGENTS_DELETE_API_PATH = `${OPERATOR_CONSOLE_AGENTS_API_PATH}/delete` as const;
 export const OPERATOR_CONSOLE_ONBOARDING_PATH = `${OPERATOR_CONSOLE_PATH}/onboarding` as const;
 export const OPERATOR_CONSOLE_ONBOARDING_API_PATH = `${OPERATOR_CONSOLE_ONBOARDING_PATH}/api` as const;
+export const OPERATOR_CONSOLE_ONBOARDING_SCHEMA = 'narada.operator_console.onboarding.v1' as const;
 export const OPERATOR_CONSOLE_SESSIONS_PATH = `${OPERATOR_CONSOLE_PATH}/sessions` as const;
 export const OPERATOR_CONSOLE_SESSIONS_API_PATH = `${OPERATOR_CONSOLE_SESSIONS_PATH}/api` as const;
 export const OPERATOR_CONSOLE_ASSET_PATH = '/console/assets' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_TIMEOUT_MS = 10_000;
 export const OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
+
+export type OperatorConsoleOnboardingUiState =
+  | 'checking'
+  | 'ready'
+  | 'starting'
+  | 'runtime-ready'
+  | 'healthy'
+  | 'needs-intelligence-setup'
+  | 'blocked'
+  | 'failed';
+
+export type OperatorConsoleOnboardingHandoffStatus = 'pending' | 'ready' | 'refused';
+
+export interface OperatorConsoleOnboardingHandoff {
+  kind: 'browser';
+  status: OperatorConsoleOnboardingHandoffStatus;
+  url: string | null;
+  session_id: string | null;
+  message: string | null;
+}
+
+export type OperatorConsoleOnboardingSetupActionKind = 'command' | 'demo' | 'refresh';
+
+export interface OperatorConsoleOnboardingSetupAction {
+  id: string;
+  kind: OperatorConsoleOnboardingSetupActionKind;
+  label: string;
+  command: string | null;
+  description: string;
+}
+
+export interface OperatorConsoleOnboardingProjection {
+  schema: typeof OPERATOR_CONSOLE_ONBOARDING_SCHEMA;
+  status: 'success' | 'failed';
+  ui_state: OperatorConsoleOnboardingUiState;
+  posture: OperatorConsoleOnboardingUiState;
+  doctor: Record<string, unknown> | null;
+  onboarding: Record<string, unknown> | null;
+  next_action: string;
+  actions: { start: boolean; demo: boolean };
+  handoff: OperatorConsoleOnboardingHandoff | null;
+  setup_actions: readonly OperatorConsoleOnboardingSetupAction[];
+  error?: string;
+}
+
+export type OperatorConsoleHttpRouteDisposition = 'proxy' | 'local-only';
+export type OperatorConsoleHttpRouteKind = 'document' | 'observation' | 'intent';
+export type OperatorConsoleRouteProtocol = 'http' | 'websocket';
+
+export interface OperatorConsoleHttpRouteParityEntry {
+  routeId: string;
+  method: string;
+  protocol: OperatorConsoleRouteProtocol;
+  pattern: string;
+  disposition: OperatorConsoleHttpRouteDisposition;
+  kind: OperatorConsoleHttpRouteKind;
+  intentKind: string | null;
+}
+
+export interface OperatorConsoleHttpRouteParity {
+  schema: typeof OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA;
+  status: 'complete' | 'incomplete';
+  source: 'local_operator_console_route_table';
+  generatedAt: string;
+  routes: readonly OperatorConsoleHttpRouteParityEntry[];
+}
 
 export type OperatorSurfaceId =
   | 'site-registry'
@@ -831,6 +899,7 @@ export interface OperatorWorkspaceRouteDirectory {
   schema: typeof OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA;
   workspaceHost: OperatorSurfaceHostRef;
   surfaces: readonly OperatorSurfaceProjection[];
+  httpRouteParity?: OperatorConsoleHttpRouteParity;
 }
 
 function authorityForRoute(

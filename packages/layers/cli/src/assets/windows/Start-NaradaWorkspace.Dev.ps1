@@ -1,6 +1,6 @@
 # narada-managed-asset: windows-user-site.v1
 # Source-checkout (development) launcher. Drives `pnpm --dir <narada proper root> exec narada`
-# with dist-freshness and carrier-projection checks. Published installs should use
+# with dist-freshness and operator-surface projection checks. Published installs should use
 # Start-NaradaWorkspace.ps1 (the thin published shim) instead.
 param(
   [string[]]$Agent,

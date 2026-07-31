@@ -34,7 +34,7 @@ export function registerAgentWebUiCommands(program: Command): void {
     .option('--open', 'Open the web UI in the default browser after startup', true)
     .option('--no-open', 'Do not open the web UI in the default browser after startup', false)
     .option('--health-timeout-ms <ms>', 'Health probe timeout before refusing live attach', '500')
-    .option('--wait-for-session-ms <ms>', 'Wait for a matching --agent NARS session to appear when --session is omitted', '0')
+    .option('--wait-for-session-ms <ms>', 'Wait for a matching --agent NARS session to appear when --session is omitted', '60000')
     .option('--ready-file <path>', 'Write a session-bound readiness artifact after the local UI is listening')
     .option('--onboarding', 'Show the first-time User Site onboarding experience', false)
     .option('--cloudflare-api-base-url <url>', 'Default Cloudflare NARS projection Worker URL for local publish controls')

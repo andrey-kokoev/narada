@@ -45,7 +45,7 @@ import {
 
 const siteAgents = useSiteAgents();
 const routeDirectory = useOperatorWorkspaceRouteDirectory();
-const busyAgentId = ref<string | null>(null);
+const busyTarget = ref<{ siteId: string; agentId: string } | null>(null);
 const actionMessage = ref<string | null>(null);
 const settlingStop = ref<{ siteId: string; agentId: string } | null>(null);
 const admissionSiteId = ref<string | null>(null);
@@ -98,8 +98,8 @@ async function waitForStopped(siteId: string, agentId: string): Promise<boolean>
 }
 
 async function stopAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Promise<void> {
-  if (busyAgentId.value) return;
-  busyAgentId.value = agent.agent_id;
+  if (busyTarget.value) return;
+  busyTarget.value = { siteId, agentId: agent.agent_id };
   actionMessage.value = `Stopping ${agent.agent_id} through the NARS control sideband...`;
   try {
     const result = await siteAgents.stop(siteId, agent.agent_id);
@@ -118,13 +118,13 @@ async function stopAgent(siteId: string, agent: OperatorSiteAgentWireRecord): Pr
     settlingStop.value = null;
     actionMessage.value = cause instanceof Error ? cause.message : `Could not stop ${agent.agent_id}.`;
   } finally {
-    busyAgentId.value = null;
+    busyTarget.value = null;
     await siteAgents.load();
   }
 }
 
 function requestDelete(siteId: string, agent: OperatorSiteAgentWireRecord): void {
-  if (busyAgentId.value) return;
+  if (busyTarget.value) return;
   deleteTarget.value = { siteId, agent };
 }
 
@@ -135,7 +135,7 @@ function setDeleteOpen(open: boolean): void {
 async function confirmDelete(): Promise<void> {
   const target = deleteTarget.value;
   if (!target) return;
-  busyAgentId.value = target.agent.agent_id;
+  busyTarget.value = { siteId: target.siteId, agentId: target.agent.agent_id };
   actionMessage.value = `Deleting ${target.agent.agent_id} admission...`;
   try {
     const result = await siteAgents.delete(target.siteId, target.agent.agent_id);
@@ -149,7 +149,7 @@ async function confirmDelete(): Promise<void> {
   } catch (cause) {
     actionMessage.value = cause instanceof Error ? cause.message : `Could not delete ${target.agent.agent_id}.`;
   } finally {
-    busyAgentId.value = null;
+    busyTarget.value = null;
     await siteAgents.load();
   }
 }
@@ -219,7 +219,8 @@ function driveFailureWindow(
 
 function isStarting(siteId: string, agent: OperatorSiteAgentWireRecord): boolean {
   if (agent.runtime.state === 'running') return false;
-  if (busyAgentId.value === agent.agent_id) return true;
+  if (busyTarget.value?.siteId.toLowerCase() === siteId.toLowerCase()
+    && busyTarget.value.agentId.toLowerCase() === agent.agent_id.toLowerCase()) return true;
   return siteAgents.pending.value.some((entry) =>
     entry.site_id.toLowerCase() === siteId.toLowerCase()
     && entry.agent_id.toLowerCase() === agent.agent_id.toLowerCase());
@@ -241,7 +242,7 @@ function hasAgentActions(agent: OperatorSiteAgentWireRecord): boolean {
 }
 
 async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, selectedSurface?: string): Promise<void> {
-  if (busyAgentId.value) return;
+  if (busyTarget.value) return;
   settlingStop.value = null;
   const decision = decideAgentPrimaryAction(agent);
   if (decision.kind === 'unavailable') {
@@ -250,7 +251,7 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, se
   }
   const surface = selectedSurface ?? agent.operator_surfaces.default_kind;
   const target = surface === 'agent-web-ui' ? pendingProjectionWindow(agent.agent_id) : null;
-  busyAgentId.value = agent.agent_id;
+  busyTarget.value = { siteId, agentId: agent.agent_id };
   actionMessage.value = `${surfaceLabel(surface)}: starting ${agent.agent_id}...`;
   try {
     const result = await siteAgents.launch(siteId, agent.agent_id, surface);
@@ -312,7 +313,7 @@ async function startAgent(siteId: string, agent: OperatorSiteAgentWireRecord, se
       actionMessage.value = message;
     }
   } finally {
-    busyAgentId.value = null;
+    busyTarget.value = null;
     await siteAgents.load();
   }
 }
@@ -541,7 +542,7 @@ async function submitAdmission(): Promise<void> {
                     <button
                       class="site-actions-trigger"
                       type="button"
-                      :disabled="busyAgentId !== null || siteAgents.admissionLoading.value"
+                      :disabled="busyTarget !== null || siteAgents.admissionLoading.value"
                       :aria-label="`Actions for ${site.display_name}`"
                       @click.stop
                     >
@@ -551,7 +552,7 @@ async function submitAdmission(): Promise<void> {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" :side-offset="6" class="site-actions-menu" @click.stop>
                     <DropdownMenuItem
-                      :disabled="busyAgentId !== null || siteAgents.admissionLoading.value"
+                      :disabled="busyTarget !== null || siteAgents.admissionLoading.value"
                       @select="openAdmission(site.site_id)"
                     >
                       <span class="menu-item-label">
@@ -576,7 +577,7 @@ async function submitAdmission(): Promise<void> {
                 <button
                   type="button"
                   class="agent-button"
-                  :disabled="busyAgentId !== null"
+                  :disabled="busyTarget !== null"
                   :aria-label="`${agent.agent_id}: ${agent.runtime.state}, work ${agent.work.state}`"
                   @click="startAgent(site.site_id, agent)"
                   @keydown="inspectFromKeyboard($event, site.site_id, agent)"
@@ -595,7 +596,7 @@ async function submitAdmission(): Promise<void> {
                     <button
                       class="agent-actions-trigger"
                       type="button"
-                      :disabled="busyAgentId !== null"
+                      :disabled="busyTarget !== null"
                       :aria-label="`Actions for ${agent.agent_id}`"
                       @click.stop
                     >
@@ -607,7 +608,7 @@ async function submitAdmission(): Promise<void> {
                     <DropdownMenuItem
                       v-for="choice in surfaceChoices(agent)"
                       :key="choice.kind"
-                      :disabled="choice.status !== 'available' || busyAgentId !== null"
+                      :disabled="choice.status !== 'available' || busyTarget !== null"
                       :title="choice.reason ?? `Open in ${choice.label}`"
                       @select="startAgent(site.site_id, agent, choice.kind)"
                     >
@@ -616,7 +617,7 @@ async function submitAdmission(): Promise<void> {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       v-if="agent.runtime.state === 'running' || agent.runtime.state === 'degraded'"
-                      :disabled="busyAgentId !== null"
+                      :disabled="busyTarget !== null"
                       class="menu-item-warning"
                       @select="stopAgent(site.site_id, agent)"
                     >
@@ -627,7 +628,7 @@ async function submitAdmission(): Promise<void> {
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       v-if="agent.runtime.state === 'stopped'"
-                      :disabled="busyAgentId !== null"
+                      :disabled="busyTarget !== null"
                       class="menu-item-danger"
                       @select="requestDelete(site.site_id, agent)"
                     >

@@ -128,7 +128,7 @@ identify the exact NARS session selected by the attachment evidence.
 | 9 | Provider credentials come from User Site Secret Store authority. Environment fallback is explicit and its provenance is recorded. | `agent-start` provider preflight | Provider option/credential contract tests |
 | 10 | Writers emit only the current schema. Readers may migrate bounded legacy records through named version transforms. | Package contracts and migration readers | Schema/registry contract tests |
 | 11 | Explicit selections are validated against admitted registries and current capability context. | Workspace launch admission policy | Admission and provider-choice tests |
-| 12 | `Carrier` is read-side compatibility only. Canonical launcher inputs and new contracts use `operator_surface`; removal waits for downstream consumers to migrate. | Operator-surface runtime contract and launcher boundary | Compatibility tests and migration metadata |
+| 12 | Legacy launch-surface aliases are read-side compatibility only. Canonical launcher inputs and new contracts use `operator_surface`; removal waits for downstream consumers to migrate. | Operator-surface runtime contract and launcher boundary | Compatibility tests and migration metadata |
 | 13 | MCP scope is explicit. Missing scope means `none`; `all` is an explicit policy value, never ambient fallback. | Runtime server, Cloudflare projection, and launch plan | MCP-scope tests |
 | 14 | Persisted registry defaults are not execution values. Resolution records the selected value and its source before execution. | Registry parser and launch application | Plan and admission tests |
 | 15 | Terminal command arrays are projection metadata only. They are not the launch authority for hidden runtime execution. A Web UI-only projection uses a separate owned structured-argv handoff after exact runtime attachment and bounded process-readiness observation; mixed launches may use an explicit visible terminal projection. A visible terminal result is `handed_off`, not `attached`; hidden capture mode is explicitly `not_checked`. | Plan/preflight/terminal contracts and executor | Plan, projection, readiness, and preflight assertions |
@@ -185,9 +185,10 @@ originating refusal supplies them.
 
 Legacy names and schemas remain only where persisted records or unmigrated
 consumers require them. Compatibility fields must be labeled as such and must
-not become new source-of-truth inputs. In particular, `carrier_kind` and related
-aliases are accepted at the migration edge but new launcher code selects
-`operator_surface_kind`.
+not become new source-of-truth inputs. In particular, the legacy
+`carrier_kind`/`launch_carrier` aliases are accepted at the migration edge, but
+new launcher code selects `operator_surface_kind` and presents it as the
+operator surface.
 
 Schema field removal is a contract change. Removing a field from a `v1` schema
 without a version bump is admissible only with recorded evidence that the field

@@ -44,11 +44,18 @@ import {
   OPERATOR_CONSOLE_LAUNCH_PATH,
   OPERATOR_CONSOLE_ONBOARDING_PATH,
   OPERATOR_CONSOLE_ONBOARDING_API_PATH,
+  OPERATOR_CONSOLE_ONBOARDING_SCHEMA,
   OPERATOR_CONSOLE_SESSIONS_PATH,
   formatOperatorSiteAgentInvariantViolation,
   validateOperatorSiteAgentOverviewInvariants,
   type OperatorSiteAgentOverviewWireResponse,
   type OperatorWorkspaceRouteDirectory,
+  type OperatorConsoleHttpRouteDisposition,
+  type OperatorConsoleHttpRouteKind,
+  type OperatorConsoleOnboardingHandoff,
+  type OperatorConsoleOnboardingProjection,
+  type OperatorConsoleOnboardingSetupAction,
+  type OperatorConsoleOnboardingUiState,
 } from '@narada2/operator-console-contract';
 import type { SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
 import {
@@ -61,8 +68,12 @@ import { onboardingStartCommand, onboardingStatusCommand } from './onboarding.js
 import { silentCommandContext } from '../lib/command-wrapper.js';
 
 export interface RouteHandler {
+  route_id: string;
   method: string;
   pattern: RegExp;
+  remote_disposition: OperatorConsoleHttpRouteDisposition;
+  remote_kind: OperatorConsoleHttpRouteKind;
+  remote_intent: string | null;
   handler: (
     req: IncomingMessage,
     res: ServerResponse,
@@ -97,6 +108,7 @@ export interface ConsoleServerRouteContext {
   siteAgentPending?: SiteAgentPendingTracker;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
+  onboardingPlatform?: 'windows' | 'linux';
 }
 
 function jsonResponse(res: ServerResponse, status: number, payload: unknown): void {
@@ -192,15 +204,68 @@ function redactOnboardingResult(value: Record<string, unknown> | null): Record<s
   return { ...value, launch: null };
 }
 
+function onboardingHandoff(
+  onboarding: Record<string, unknown> | null,
+  start: Record<string, unknown> | null,
+): OperatorConsoleOnboardingHandoff | null {
+  for (const candidate of [start?.handoff, onboarding?.handoff]) {
+    if (!isRecord(candidate)) continue;
+    const status = candidate.status;
+    if (status !== 'pending' && status !== 'ready' && status !== 'refused') continue;
+    const url = typeof candidate.url === 'string' && /^https?:\/\//i.test(candidate.url) ? candidate.url : null;
+    return {
+      kind: 'browser',
+      status,
+      url,
+      session_id: typeof candidate.session_id === 'string' ? candidate.session_id : null,
+      message: typeof candidate.message === 'string' ? candidate.message : null,
+    };
+  }
+  return null;
+}
+
+function onboardingSetupActions(
+  doctor: Record<string, unknown> | null,
+  uiState: OperatorConsoleOnboardingUiState,
+): readonly OperatorConsoleOnboardingSetupAction[] {
+  if (uiState !== 'needs-intelligence-setup') return [];
+  const readiness = isRecord(doctor?.intelligence_catalog_readiness)
+    ? doctor.intelligence_catalog_readiness
+    : null;
+  const nextAction = typeof readiness?.next_action === 'string' ? readiness.next_action : null;
+  return [
+    {
+      id: 'initialize-intelligence-catalog',
+      kind: 'command',
+      label: 'Initialize catalog and retry onboarding',
+      command: 'narada onboarding start --scope user-site',
+      description: nextAction ?? 'Populate the User Site catalog and retry the resident launch.',
+    },
+    {
+      id: 'recheck-intelligence-readiness',
+      kind: 'refresh',
+      label: 'Recheck readiness',
+      command: 'narada doctor --bootstrap',
+      description: 'Run the readiness check again after setup completes.',
+    },
+    {
+      id: 'credential-free-demo',
+      kind: 'demo',
+      label: 'Try the no-credential demo',
+      command: 'narada onboarding start --scope user-site --demo',
+      description: 'Explore the first-use flow without configuring a provider.',
+    },
+  ];
+}
+
 function onboardingUiState(
   doctor: Record<string, unknown> | null,
   onboarding: Record<string, unknown> | null,
   start: Record<string, unknown> | null = null,
-): 'checking' | 'ready' | 'starting' | 'healthy' | 'needs-intelligence-setup' | 'blocked' | 'failed' {
+): OperatorConsoleOnboardingUiState {
   const startStatus = optionalString(start?.status);
   const startReason = optionalString(start?.reason_code);
-  if (startStatus === 'launched') return 'starting';
-  if (startReason === 'intelligence_catalog_not_ready') return 'needs-intelligence-setup';
+  if (startReason === 'intelligence_catalog_not_ready' || startReason === 'intelligence_catalog_setup_required') return 'needs-intelligence-setup';
   if (startStatus === 'blocked') return 'blocked';
   if (startStatus === 'error') return 'failed';
 
@@ -208,12 +273,13 @@ function onboardingUiState(
   const session = isRecord(onboarding?.session) ? onboarding.session : null;
   const verification = isRecord(onboarding?.verification) ? onboarding.verification : null;
   if (onboardingStatus === 'first_use_verified' || verification?.status === 'verified') return 'healthy';
-  if (onboardingStatus === 'launch_requested') return 'starting';
+  const sessionHealthy = session?.health_status === 'healthy';
+  if (startStatus === 'launched' || onboardingStatus === 'launch_requested') return sessionHealthy ? 'runtime-ready' : 'starting';
 
   const catalogReadiness = isRecord(doctor?.intelligence_catalog_readiness) ? doctor.intelligence_catalog_readiness : null;
   if (catalogReadiness?.status === 'needs_setup' || catalogReadiness?.status === 'check_required') return 'needs-intelligence-setup';
   if (doctor?.status === 'degraded' || onboardingStatus === 'blocked') return 'blocked';
-  if (session?.health_status === 'healthy') return 'starting';
+  if (sessionHealthy) return 'runtime-ready';
   return 'ready';
 }
 
@@ -221,7 +287,7 @@ function onboardingProjection(
   doctorCommandResult: { result: unknown },
   onboardingCommandResult: { result: unknown },
   startCommandResult?: { result: unknown; exitCode: number },
-): Record<string, unknown> {
+): OperatorConsoleOnboardingProjection {
   const doctor = commandResultRecord(doctorCommandResult);
   const onboarding = commandResultRecord(onboardingCommandResult);
   const start = startCommandResult ? commandResultRecord(startCommandResult) : null;
@@ -229,19 +295,24 @@ function onboardingProjection(
   const projectedOnboarding = redactOnboardingResult(start ?? onboarding);
   const nextAction = optionalString(projectedOnboarding?.next_action)
     ?? 'Refresh the status to continue.';
+  const handoff = ['starting', 'runtime-ready', 'healthy'].includes(uiState)
+    ? onboardingHandoff(onboarding, start)
+    : null;
   return {
-    schema: 'narada.operator_console.onboarding.v1',
-    status: startCommandResult && startCommandResult.exitCode !== 0 ? 'failed' : 'success',
+    schema: OPERATOR_CONSOLE_ONBOARDING_SCHEMA,
+    status: uiState === 'failed' ? 'failed' : 'success',
     ui_state: uiState,
     posture: uiState,
     doctor,
     onboarding: projectedOnboarding,
     next_action: nextAction,
     actions: {
-      start: uiState === 'ready' || uiState === 'starting',
-      demo: true,
+      start: uiState === 'ready',
+      demo: uiState === 'ready' || uiState === 'needs-intelligence-setup',
     },
-    ...(startCommandResult && startCommandResult.exitCode !== 0
+    handoff,
+    setup_actions: onboardingSetupActions(doctor, uiState),
+    ...(startCommandResult && startCommandResult.exitCode !== 0 && uiState === 'failed'
       ? { error: optionalString(start?.message) ?? optionalString(start?.reason_code) ?? 'onboarding_start_failed' }
       : {}),
   };
@@ -315,8 +386,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
   return [
     // ── CORS preflight ──
     {
+      route_id: 'operator-console.cors-preflight',
       method: 'OPTIONS',
       pattern: /^\/console\/.*$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -331,8 +406,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // The bundle has a neutral mount; Sites and Agents is the operational entry.
     {
+      route_id: 'operator-console.root',
       method: 'GET',
       pattern: new RegExp(`^${regexEscape(OPERATOR_CONSOLE_PATH)}/?$`),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (_req, res) => {
         res.writeHead(302, { Location: OPERATOR_CONSOLE_AGENTS_PATH, 'Content-Length': '0' });
         res.end();
@@ -341,8 +420,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // Shared Operator Console bundle assets are independent of any one page route.
     {
+      route_id: 'operator-console.asset',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_ASSET_PATH, '/(.+)$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (_req, res, params) => {
         const asset = readOperatorConsoleUiAsset(`${OPERATOR_CONSOLE_ASSET_PATH}/${params[1]!}`, ctx.operatorConsoleUiRoot);
         if (!asset) {
@@ -356,8 +439,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── CLI-owned first-use onboarding projection ──
     {
+      route_id: 'operator-console.onboarding-page',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_ONBOARDING_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -368,8 +455,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.onboarding-status',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_ONBOARDING_API_PATH, '/status$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -380,14 +471,14 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           const commandContext = silentCommandContext();
           const doctor = await doctorCommand({ bootstrap: true, format: 'json' }, commandContext);
           const onboarding = await onboardingStatusCommand({
-            platform: 'windows',
+            platform: ctx.onboardingPlatform,
             scope: 'user-site',
             format: 'json',
           }, commandContext);
           jsonResponse(res, 200, onboardingProjection(doctor, onboarding));
         } catch (error) {
           jsonResponse(res, 500, {
-            schema: 'narada.operator_console.onboarding.v1',
+            schema: OPERATOR_CONSOLE_ONBOARDING_SCHEMA,
             status: 'failed',
             ui_state: 'failed',
             posture: 'failed',
@@ -395,14 +486,20 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
             onboarding: null,
             next_action: 'Run `narada doctor --bootstrap` and `narada onboarding status` in the terminal.',
             actions: { start: false, demo: true },
+            handoff: null,
+            setup_actions: [],
             error: error instanceof Error ? error.message : String(error),
           });
         }
       },
     },
     {
+      route_id: 'operator-console.onboarding-start',
       method: 'POST',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_ONBOARDING_API_PATH, '/start$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'onboarding.start',
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -413,7 +510,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         const mode = optionalString(payload?.mode) ?? 'live';
         if (!payload || payload.confirm !== true || (mode !== 'live' && mode !== 'demo')) {
           jsonResponse(res, 400, {
-            schema: 'narada.operator_console.onboarding.v1',
+            schema: OPERATOR_CONSOLE_ONBOARDING_SCHEMA,
             status: 'failed',
             ui_state: 'blocked',
             posture: 'blocked',
@@ -421,6 +518,8 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
             onboarding: null,
             next_action: 'Confirm an onboarding action with mode `live` or `demo`.',
             actions: { start: false, demo: true },
+            handoff: null,
+            setup_actions: [],
             error: 'confirmed_onboarding_action_required',
           });
           return;
@@ -428,8 +527,19 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         try {
           const commandContext = silentCommandContext();
           const doctor = await doctorCommand({ bootstrap: true, format: 'json' }, commandContext);
+          const existing = await onboardingStatusCommand({
+            platform: ctx.onboardingPlatform,
+            scope: 'user-site',
+            format: 'json',
+          }, commandContext);
+          const existingRecord = commandResultRecord(existing);
+          const existingStatus = optionalString(existingRecord?.status);
+          if (mode === 'live' && (existingStatus === 'launch_requested' || existingStatus === 'first_use_verified')) {
+            jsonResponse(res, 200, onboardingProjection(doctor, existing));
+            return;
+          }
           const start = await onboardingStartCommand({
-            platform: 'windows',
+            platform: ctx.onboardingPlatform,
             scope: 'user-site',
             demo: mode === 'demo',
             interactive: false,
@@ -437,16 +547,16 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
             format: 'json',
           }, commandContext);
           const onboarding = await onboardingStatusCommand({
-            platform: 'windows',
+            platform: ctx.onboardingPlatform,
             scope: 'user-site',
             format: 'json',
           }, commandContext);
           const projection = onboardingProjection(doctor, onboarding, start);
-          const status = start.exitCode === 0 ? 200 : 422;
+          const status = projection.status === 'failed' ? 500 : 200;
           jsonResponse(res, status, projection);
         } catch (error) {
           jsonResponse(res, 500, {
-            schema: 'narada.operator_console.onboarding.v1',
+            schema: OPERATOR_CONSOLE_ONBOARDING_SCHEMA,
             status: 'failed',
             ui_state: 'failed',
             posture: 'failed',
@@ -454,6 +564,8 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
             onboarding: null,
             next_action: 'Run `narada onboarding start` in the terminal to inspect the refusal.',
             actions: { start: false, demo: true },
+            handoff: null,
+            setup_actions: [],
             error: error instanceof Error ? error.message : String(error),
           });
         }
@@ -462,8 +574,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── CLI-owned launcher routing surface ──
     {
+      route_id: 'operator-console.launch-page',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_LAUNCH_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -474,8 +590,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.sessions-page',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_SESSIONS_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -486,8 +606,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agents-page',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -498,8 +622,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agents-overview',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/overview$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -520,8 +648,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agent-admission-options',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_ADMISSION_OPTIONS_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (req, res, _params, searchParams) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -560,8 +692,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agent-admission',
       method: 'POST',
       pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_ADMISSION_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'agent.admit',
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -618,8 +754,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agent-stop',
       method: 'POST',
       pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_STOP_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'agent.stop',
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -652,8 +792,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agent-delete',
       method: 'POST',
       pattern: exactPathPattern(OPERATOR_CONSOLE_AGENTS_DELETE_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'agent.delete',
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -685,8 +829,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agent-launch',
       method: 'POST',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/launch$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'agent.launch',
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -734,8 +882,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agent-pending',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/pending$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -751,8 +903,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.agent-session-route',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_AGENTS_API_PATH, '/session-route$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (req, res, _params, searchParams) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -832,8 +988,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.sessions-list',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_SESSIONS_PATH, '/api/sessions$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -856,8 +1016,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     // ── Canonical Site Registry management plan/apply boundary ──
     {
+      route_id: 'operator-console.registry-plan',
       method: 'POST',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/operations/plan$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'registry.plan',
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -874,8 +1038,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.registry-apply',
       method: 'POST',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/operations/apply$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'registry.apply',
       handler: async (req, res) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -893,8 +1061,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     // ── Canonical Site Registry browser projection ──
     {
+      route_id: 'operator-console.registry-page',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -905,8 +1077,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.registry-add-page',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_REGISTRY_ADD_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -917,8 +1093,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.registry-manage-page',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -929,8 +1109,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.registry-sites',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/sites$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -941,8 +1125,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.registry-site',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/sites/([^/]+)$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, params) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -954,8 +1142,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     // Per-site launch/ensure action; plan-first (dry-run) unless explicitly told to apply.
     {
+      route_id: 'operator-console.registry-site-launch',
       method: 'POST',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/sites/([^/]+)/launch$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'site.launch',
       handler: async (req, res, params) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -972,8 +1164,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.registry-discover-plan',
       method: 'GET',
       pattern: suffixPathPattern(OPERATOR_CONSOLE_REGISTRY_PATH, '/api/discover-plan$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, _params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -990,8 +1186,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
     // ── Sites ──
     {
+      route_id: 'operator-console.sites-list',
       method: 'GET',
       pattern: /^\/console\/sites$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, _params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1005,8 +1205,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
 
     {
+      route_id: 'operator-console.site-show',
       method: 'GET',
       pattern: /^\/console\/sites\/([^/]+)$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, params) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1027,8 +1231,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── Health ──
     {
+      route_id: 'operator-console.health',
       method: 'GET',
       pattern: /^\/console\/health$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1043,8 +1251,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── Attention ──
     {
+      route_id: 'operator-console.attention',
       method: 'GET',
       pattern: /^\/console\/attention$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1059,8 +1271,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── Logs (registry audit) ──
     {
+      route_id: 'operator-console.logs',
       method: 'GET',
       pattern: /^\/console\/logs$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, _params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1079,8 +1295,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
     },
 
     {
+      route_id: 'operator-console.site-logs',
       method: 'GET',
       pattern: /^\/console\/sites\/([^/]+)\/logs$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1101,8 +1321,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── Traces ──
     {
+      route_id: 'operator-console.site-traces',
       method: 'GET',
       pattern: /^\/console\/sites\/([^/]+)\/traces$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1132,8 +1356,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── Cycles ──
     {
+      route_id: 'operator-console.site-cycles',
       method: 'GET',
       pattern: /^\/console\/sites\/([^/]+)\/cycles$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1158,8 +1386,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── Audit ──
     {
+      route_id: 'operator-console.audit',
       method: 'GET',
       pattern: /^\/console\/audit$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
       handler: async (_req, res, _params, searchParams) => {
         const origin = _req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
@@ -1178,8 +1410,12 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
 
     // ── Control ──
     {
+      route_id: 'operator-console.site-control',
       method: 'POST',
       pattern: /^\/console\/sites\/([^/]+)\/control$/,
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'site.control',
       handler: async (req, res, params) => {
         const origin = req.headers.origin;
         if (!setCorsHeaders(res, origin)) {
