@@ -782,7 +782,7 @@ async function openRegistry(registryDbPath?: string) {
     openRegistryDb,
     SiteRegistry,
   } = await import('@narada2/windows-site');
-  const dbPath = registryDbPath ?? resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' });
+  const dbPath = registryDbPath ?? resolveRegistryDbPathByLocus({ authorityLocus: 'user' });
   const db = await openRegistryDb(dbPath);
   return new SiteRegistry(db);
 }
@@ -4739,11 +4739,102 @@ async function sitesProjectDoctorCommand(
   };
 }
 
+async function sitesLinuxDoctorCommand(
+  siteId: string,
+  options: SitesDoctorOptions,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  const checks: SiteDoctorCheck[] = [];
+  const requestedMode = options.kind === 'linux-system'
+    ? 'system'
+    : options.kind === 'linux-user'
+      ? 'user'
+      : options.authorityLocus === 'system'
+        ? 'system'
+        : options.authorityLocus === 'user'
+          ? 'user'
+          : undefined;
+
+  let mode: 'system' | 'user' | null = requestedMode ?? null;
+  let siteRoot = options.root;
+
+  try {
+    const { checkSite, resolveLinuxSiteMode, resolveSiteRoot } = await import('@narada2/linux-site');
+    mode = mode ?? resolveLinuxSiteMode(siteId);
+
+    if (!mode) {
+      addCheck(
+        checks,
+        'linux_site_discovery',
+        'fail',
+        `Linux Site ${siteId} was not found in system or user scope`,
+        `Run narada sites init ${siteId} --substrate linux-user or linux-system`,
+      );
+    } else {
+      const canonicalRoot = resolveSiteRoot(siteId, mode);
+      siteRoot = canonicalRoot;
+      if (options.root && options.root !== canonicalRoot) {
+        addCheck(
+          checks,
+          'root_override',
+          'warn',
+          `Linux doctor uses the canonical ${mode}-scope root ${canonicalRoot}; --root was ignored`,
+          'Use XDG_DATA_HOME or NARADA_SITE_ROOT to change Linux Site path resolution',
+        );
+      }
+
+      const linuxChecks = await checkSite(siteId, mode);
+      checks.push(...linuxChecks.map((check) => ({
+        name: check.name,
+        status: check.status,
+        message: check.detail,
+        remediation: check.remediation,
+      })));
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    addCheck(checks, 'doctor_runtime', 'fail', `Linux Site doctor failed: ${message}`);
+  }
+
+  const failed = checks.filter((check) => check.status === 'fail');
+  const warned = checks.filter((check) => check.status === 'warn');
+  const health = failed.length > 0 ? 'failed' : warned.length > 0 ? 'warning' : 'passed';
+
+  if (fmt.getFormat() === 'human') {
+    fmt.section(`Linux Site Doctor — ${siteId}`);
+    fmt.kv('Mode', mode ?? '-');
+    fmt.kv('Root', siteRoot ?? '-');
+    fmt.kv('Health', health);
+    for (const check of checks) {
+      fmt.message(`${siteDoctorPrefix(check.status)} ${check.name}: ${check.message}`, siteDoctorMessageKind(check.status));
+      if (check.remediation && options.verbose) {
+        fmt.message(`  remediation: ${check.remediation}`, 'info');
+      }
+    }
+  }
+
+  return {
+    exitCode: failed.length > 0 ? ExitCode.GENERAL_ERROR : ExitCode.SUCCESS,
+    result: {
+      status: health,
+      siteId,
+      site_kind: mode ? `linux-${mode}` : options.kind ?? 'linux',
+      mode,
+      site_root: siteRoot,
+      readiness: null,
+      checks,
+    },
+  };
+}
+
 export async function sitesDoctorCommand(
   siteId: string,
   options: SitesDoctorOptions,
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
+  if (options.kind === 'linux-user' || options.kind === 'linux-system' || options.kind === 'linux') {
+    return sitesLinuxDoctorCommand(siteId, options);
+  }
   if (options.kind === 'client') {
     return sitesClientDoctorCommand(siteId, options);
   }

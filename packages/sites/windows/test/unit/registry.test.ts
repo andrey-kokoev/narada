@@ -26,6 +26,7 @@ describe("resolveRegistryDbPath", () => {
   afterEach(() => {
     process.env.LOCALAPPDATA = originalEnv.LOCALAPPDATA;
     process.env.USERPROFILE = originalEnv.USERPROFILE;
+    process.env.NARADA_USER_SITE_ROOT = originalEnv.NARADA_USER_SITE_ROOT;
   });
 
   it("returns LOCALAPPDATA path on native Windows", () => {
@@ -75,8 +76,23 @@ describe("resolveRegistryDbPath", () => {
   it("returns ~/.narada/registry.db on POSIX", () => {
     const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
     Object.defineProperty(process, "platform", { value: "linux" });
+    delete process.env.NARADA_USER_SITE_ROOT;
 
     expect(resolveRegistryDbPath()).toMatch(/\.narada\/registry\.db$/);
+
+    if (originalPlatform) {
+      Object.defineProperty(process, "platform", originalPlatform);
+    }
+  });
+
+  it("honors the configured User Site root on POSIX", () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "linux" });
+    process.env.NARADA_USER_SITE_ROOT = "/DATA/Documents/narada-user-data/narada/user";
+
+    expect(resolveRegistryDbPath()).toBe(
+      "/DATA/Documents/narada-user-data/narada/user/registry.db",
+    );
 
     if (originalPlatform) {
       Object.defineProperty(process, "platform", originalPlatform);
@@ -96,23 +112,39 @@ describe("resolveRegistryDbPathByLocus", () => {
   });
 
   it("resolves native user-locus registry under the visible user Narada root", () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32" });
     delete process.env.NARADA_USER_SITE_ROOT;
     process.env.USERPROFILE = "C:\\Users\\Andrey";
 
-    expect(resolveRegistryDbPathByLocus({
-      variant: "native",
-      authorityLocus: "user",
-    })).toBe("C:\\Users\\Andrey\\Narada\\registry.db");
+    try {
+      expect(resolveRegistryDbPathByLocus({
+        variant: "native",
+        authorityLocus: "user",
+      })).toBe("C:\\Users\\Andrey\\Narada\\registry.db");
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    }
   });
 
   it("resolves native PC-locus registry under ProgramData", () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    Object.defineProperty(process, "platform", { value: "win32" });
     delete process.env.NARADA_PC_REGISTRY_ROOT;
     process.env.ProgramData = "C:\\ProgramData";
 
-    expect(resolveRegistryDbPathByLocus({
-      variant: "native",
-      authorityLocus: "pc",
-    })).toBe("C:\\ProgramData\\Narada\\registry.db");
+    try {
+      expect(resolveRegistryDbPathByLocus({
+        variant: "native",
+        authorityLocus: "pc",
+      })).toBe("C:\\ProgramData\\Narada\\registry.db");
+    } finally {
+      if (originalPlatform) {
+        Object.defineProperty(process, "platform", originalPlatform);
+      }
+    }
   });
 });
 

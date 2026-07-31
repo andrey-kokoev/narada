@@ -94,7 +94,7 @@ interface OpenRegistryResult {
 }
 
 async function openUserRegistry(): Promise<OpenRegistryResult> {
-  const registryPath = resolveRegistryDbPathByLocus({ authorityLocus: "user", variant: "native" });
+  const registryPath = resolveRegistryDbPathByLocus({ authorityLocus: "user" });
   const db = await openRegistryDb(registryPath);
   const { SiteRegistry } = await import("@narada2/windows-site");
   return { registry: new SiteRegistry(db), registryPath };

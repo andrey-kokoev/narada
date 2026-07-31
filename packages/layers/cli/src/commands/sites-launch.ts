@@ -283,7 +283,7 @@ async function resolveSiteRecord(
 ): Promise<{ record: { siteId: string; siteRoot: string } | null; error?: string }> {
   try {
     const { resolveRegistryDbPathByLocus, openRegistryDb, SiteRegistry } = await import('@narada2/windows-site');
-    const dbPath = resolveRegistryDbPathByLocus({ authorityLocus: 'user', variant: 'native' });
+    const dbPath = resolveRegistryDbPathByLocus({ authorityLocus: 'user' });
     const db = await openRegistryDb(dbPath);
     const registry = new SiteRegistry(db);
     try {

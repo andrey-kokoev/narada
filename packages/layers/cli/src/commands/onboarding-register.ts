@@ -11,7 +11,7 @@ export function registerOnboardingCommands(program: Command): void {
   onboarding
     .command('start')
     .description('Start the User Site resident with native platform defaults')
-    .option('--platform <platform>', 'Onboarding platform', 'windows')
+    .option('--platform <platform>', 'Onboarding platform; defaults to the host platform')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
     .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--registry-path <path>', 'User Site launch registry path')
@@ -38,7 +38,7 @@ export function registerOnboardingCommands(program: Command): void {
   onboarding
     .command('status')
     .description('Verify User Site resident first-use readiness from NARS health and events')
-    .option('--platform <platform>', 'Onboarding platform', 'windows')
+    .option('--platform <platform>', 'Onboarding platform; defaults to the host platform')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
     .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--session <id>', 'Verify one concrete resident session')
@@ -63,7 +63,7 @@ export function registerOnboardingCommands(program: Command): void {
   roles
     .command('approve')
     .description('Approve architect/builder expansion without silently mutating the Site roster')
-    .option('--platform <platform>', 'Onboarding platform', 'windows')
+    .option('--platform <platform>', 'Onboarding platform; defaults to the host platform')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
     .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--roles <role...>', 'Roles to approve; defaults to the stored recommendation')
@@ -86,7 +86,7 @@ export function registerOnboardingCommands(program: Command): void {
   roles
     .command('materialize')
     .description('Write approved roles into the launch registry as quiet background entries')
-    .option('--platform <platform>', 'Onboarding platform', 'windows')
+    .option('--platform <platform>', 'Onboarding platform; defaults to the host platform')
     .option('--scope <scope>', 'Onboarding scope', 'user-site')
     .option('--site-root <path>', 'User Site root; defaults to NARADA_USER_SITE_ROOT or the native user data root')
     .option('--roles <role...>', 'Approved roles to materialize; defaults to all approved roles')

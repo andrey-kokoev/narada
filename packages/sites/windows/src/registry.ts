@@ -292,6 +292,10 @@ export function resolveRegistryDbPath(): string {
     }
     return win32.join(localAppData, "Narada", ".registry", "registry.db");
   }
+  const configuredUserRoot = process.env.NARADA_USER_SITE_ROOT?.trim();
+  if (configuredUserRoot) {
+    return posix.join(configuredUserRoot, "registry.db");
+  }
   return posix.join(homedir(), ".narada", "registry.db");
 }
 
