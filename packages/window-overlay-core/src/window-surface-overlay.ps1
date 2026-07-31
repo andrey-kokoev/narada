@@ -31,23 +31,43 @@ function Read-JsonFile([string]$path, [object]$fallback) {
 function Write-JsonFile([string]$path, [object]$value) {
     $value | ConvertTo-Json -Depth 12 | Set-Content -Path $path -Encoding UTF8
 }
+
+. (Join-Path $PSScriptRoot 'WindowSurfaceOverlayPosition.ps1')
+
 function Get-Preferences {
-    $value = Read-JsonFile $preferencesPath ([pscustomobject]@{ left = $null; top = $null; opacity = 1.0; pinned = $true })
+    $value = Read-JsonFile $preferencesPath ([pscustomobject]@{ position = $null; opacity = 1.0; pinned = $true })
     [pscustomobject]@{
-        left = $value.left
-        top = $value.top
+        position = Read-OverlayPositionPreference $value
         opacity = [double]($value.opacity ?? 1.0)
         pinned = [bool]($value.pinned ?? $true)
     }
 }
 function Save-Preferences([object]$currentWindow) {
-    Write-JsonFile $preferencesPath ([pscustomobject]@{
-        left = [double]$currentWindow.Left
-        top = [double]$currentWindow.Top
+    $position = $script:PositionPreference
+    $monitor = Get-OverlayMonitor
+    if ($null -ne $monitor) {
+        $dimensions = Get-OverlayWindowDimensions $currentWindow
+        $position = Get-NearestOverlayPositionPreference $currentWindow.Left $currentWindow.Top $dimensions.width $dimensions.height $monitor.work_area
+    }
+    if ($null -eq $position -or $position.kind -ne 'anchor') { $position = New-OverlayPositionPreference }
+    $script:PositionPreference = $position
+    Write-JsonFile $preferencesPath ([ordered]@{
+        schema = Get-OverlayPositionPreferencesSchema
+        position = [ordered]@{
+            anchor = $position.anchor
+            inset_x = [double]$position.inset_x
+            inset_y = [double]$position.inset_y
+        }
         opacity = [double]$currentWindow.Opacity
         pinned = [bool]$currentWindow.Topmost
     })
 }
+
+function Drag-OverlayAndPersistPosition {
+    try { [void]$window.DragMove() } catch {}
+    try { Save-Preferences $window } catch {}
+}
+
 function Get-Document {
     Read-JsonFile $documentPath ([pscustomobject]@{ id = $Id; title = $Id; subtitle = $null; rows = @(); actions = @() })
 }
@@ -209,13 +229,138 @@ using System;
 using System.Runtime.InteropServices;
 
 public static class NaradaWindowSurfaceOverlayNative {
+    [StructLayout(LayoutKind.Sequential)]
+    public struct RECT {
+        public int Left;
+        public int Top;
+        public int Right;
+        public int Bottom;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct POINT {
+        public int X;
+        public int Y;
+    }
+
+    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    public struct MONITORINFOEX {
+        public int cbSize;
+        public RECT rcMonitor;
+        public RECT rcWork;
+        public uint dwFlags;
+        [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+        public string szDevice;
+    }
+
+    public sealed class MonitorSnapshot {
+        public string Device;
+        public int WorkLeft;
+        public int WorkTop;
+        public int WorkRight;
+        public int WorkBottom;
+    }
+
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern IntPtr MonitorFromPoint(POINT point, uint flags);
+
+    [DllImport("user32.dll")]
+    public static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFOEX monitorInfo);
+
+    [DllImport("user32.dll")]
+    private static extern uint GetDpiForWindow(IntPtr hWnd);
+
+    [DllImport("shcore.dll")]
+    private static extern int GetDpiForMonitor(IntPtr hMonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+    public static MonitorSnapshot ReadMonitor(IntPtr hMonitor) {
+        if (hMonitor == IntPtr.Zero) return null;
+        var native = new MONITORINFOEX();
+        native.cbSize = Marshal.SizeOf(typeof(MONITORINFOEX));
+        if (!GetMonitorInfo(hMonitor, ref native)) return null;
+        return new MonitorSnapshot {
+            Device = native.szDevice,
+            WorkLeft = native.rcWork.Left,
+            WorkTop = native.rcWork.Top,
+            WorkRight = native.rcWork.Right,
+            WorkBottom = native.rcWork.Bottom,
+        };
+    }
+
+    public static uint GetEffectiveDpi(IntPtr hMonitor, IntPtr hWnd) {
+        try {
+            uint dpiX;
+            uint dpiY;
+            if (GetDpiForMonitor(hMonitor, 0, out dpiX, out dpiY) == 0 && dpiX > 0) return dpiX;
+        } catch {
+        }
+        try {
+            var dpi = GetDpiForWindow(hWnd);
+            if (dpi > 0) return dpi;
+        } catch {
+        }
+        return 96;
+    }
 }
 '@
+
+function Get-OverlayWindowHandle {
+    if ($null -eq $window) { return [IntPtr]::Zero }
+    try { return [System.Windows.Interop.WindowInteropHelper]::new($window).Handle } catch { return [IntPtr]::Zero }
+}
+
+function Get-OverlayWindowDimensions([object]$currentWindow) {
+    $width = [double]$currentWindow.ActualWidth
+    $height = [double]$currentWindow.ActualHeight
+    if ($width -le 0) { $width = [double]$currentWindow.Width }
+    if ($height -le 0) { $height = [double]$currentWindow.Height }
+    [pscustomobject]@{
+        width = [Math]::Max(1, $width)
+        height = [Math]::Max(1, $height)
+    }
+}
+
+function Get-OverlayMonitor([switch]$UseCursor) {
+    $windowHandle = Get-OverlayWindowHandle
+    $monitorHandle = [IntPtr]::Zero
+    $point = New-Object NaradaWindowSurfaceOverlayNative+POINT
+    if ($UseCursor -and [NaradaWindowSurfaceOverlayNative]::GetCursorPos([ref]$point)) {
+        $monitorHandle = [NaradaWindowSurfaceOverlayNative]::MonitorFromPoint($point, 2)
+    }
+    if ($monitorHandle -eq [IntPtr]::Zero -and $windowHandle -ne [IntPtr]::Zero) {
+        $monitorHandle = [NaradaWindowSurfaceOverlayNative]::MonitorFromWindow($windowHandle, 2)
+    }
+    if ($monitorHandle -eq [IntPtr]::Zero -and [NaradaWindowSurfaceOverlayNative]::GetCursorPos([ref]$point)) {
+        $monitorHandle = [NaradaWindowSurfaceOverlayNative]::MonitorFromPoint($point, 2)
+    }
+    if ($monitorHandle -eq [IntPtr]::Zero) { return $null }
+    $native = [NaradaWindowSurfaceOverlayNative]::ReadMonitor($monitorHandle)
+    if ($null -eq $native) { return $null }
+    $dpi = [NaradaWindowSurfaceOverlayNative]::GetEffectiveDpi($monitorHandle, $windowHandle)
+    $scale = [Math]::Max(1, ([double]$dpi / 96.0))
+    [pscustomobject]@{
+        device = [string]$native.Device
+        scale = $scale
+        work_area = [pscustomobject]@{
+            left = [double]$native.WorkLeft / $scale
+            top = [double]$native.WorkTop / $scale
+            right = [double]$native.WorkRight / $scale
+            bottom = [double]$native.WorkBottom / $scale
+        }
+    }
+}
 
 function Test-WindowsTerminalActive {
     $foregroundWindow = [NaradaWindowSurfaceOverlayNative]::GetForegroundWindow()
@@ -244,6 +389,8 @@ function Set-OverlayVisibility {
 }
 
 $preferences = Get-Preferences
+$script:PositionPreference = $preferences.position
+$script:PositionHydrated = $false
 $window = New-Object Windows.Window
 $window.Title = [string]$Id
 $window.Width = 360
@@ -312,7 +459,7 @@ $closeButton.Foreground = New-Brush 170 215 215 225
 $closeButton.Opacity = 0.7
 $titlePanel.Add_MouseLeftButtonDown({
     if ($_.ChangedButton -eq [Windows.Input.MouseButton]::Left) {
-        try { [void]$window.DragMove() } catch {}
+        Drag-OverlayAndPersistPosition
         $_.Handled = $true
     }
 })
@@ -346,7 +493,7 @@ $documentActions = New-Object Windows.Controls.WrapPanel
 $documentActions.Orientation = 'Horizontal'
 $documentActions.HorizontalAlignment = 'Right'
 $footer.Children.Add($documentActions) | Out-Null
-$border.Add_MouseLeftButtonDown({ if ($_.ButtonState -eq [Windows.Input.MouseButtonState]::Pressed) { $window.DragMove() } })
+$border.Add_MouseLeftButtonDown({ if ($_.ButtonState -eq [Windows.Input.MouseButtonState]::Pressed) { Drag-OverlayAndPersistPosition } })
 
 function Render-Document([object]$document) {
     $titleText.Text = [string]($document.title ?? $Id)
@@ -419,17 +566,44 @@ function Render-Document([object]$document) {
     Apply-ActionState
 }
 
+function Restore-OverlayPosition([switch]$UseCursor) {
+    $monitor = Get-OverlayMonitor -UseCursor:$UseCursor
+    if ($null -eq $monitor) { return }
+    $dimensions = Get-OverlayWindowDimensions $window
+    $position = $script:PositionPreference
+    if ($null -eq $position) { $position = New-OverlayPositionPreference }
+    if ($position.kind -eq 'absolute') {
+        $position = Get-NearestOverlayPositionPreference $position.left $position.top $dimensions.width $dimensions.height $monitor.work_area
+    }
+    if ($position.kind -ne 'anchor') { $position = New-OverlayPositionPreference }
+    $resolved = Resolve-OverlayPosition $position $dimensions.width $dimensions.height $monitor.work_area
+    $window.Left = $resolved.left
+    $window.Top = $resolved.top
+    $script:PositionPreference = $position
+}
+
 $window.Add_Closed({
     try { Save-Preferences $window } catch {}
     try { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue } catch {}
 })
-$window.Add_ContentRendered({
-    if ($preferences.left -ne $null -and $preferences.top -ne $null) {
-        $window.Left = [double]$preferences.left
-        $window.Top = [double]$preferences.top
+$window.Add_LocationChanged({
+    if ($script:PositionHydrated) {
+        try {
+            $monitor = Get-OverlayMonitor
+            if ($null -ne $monitor) {
+                $dimensions = Get-OverlayWindowDimensions $window
+                $script:PositionPreference = Get-NearestOverlayPositionPreference $window.Left $window.Top $dimensions.width $dimensions.height $monitor.work_area
+            }
+        } catch {}
     }
+})
+$window.Add_ContentRendered({
     Set-OverlayVisibility
     Render-Document (Get-Document)
+    $window.UpdateLayout()
+    Restore-OverlayPosition -UseCursor
+    Save-Preferences $window
+    $script:PositionHydrated = $true
 })
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds([Math]::Max(1, $RefreshSeconds))
@@ -444,6 +618,8 @@ $timer.Add_Tick({
         $lastDocumentStamp = $documentStamp
         $lastRefreshStamp = $refreshStamp
         Render-Document (Get-Document)
+        $window.UpdateLayout()
+        if ($script:PositionHydrated) { Restore-OverlayPosition }
     }
 })
 $timer.Start()

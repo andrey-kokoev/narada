@@ -1,8 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   OVERLAY_DOCUMENT_SCHEMA,
   createOverlayDocument,
@@ -101,6 +103,7 @@ test('derives the Windows user-local AppData root when carriers omit LOCALAPPDAT
 
 test('PowerShell host owns presentation mechanics, not provider data logic', async () => {
   const source = await readFile(new URL('./window-surface-overlay.ps1', import.meta.url), 'utf8');
+  const positionSource = await readFile(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url), 'utf8');
   assert.match(source, /PresentationFramework/);
   assert.match(source, /ShowInTaskbar/);
   assert.match(source, /DragMove/);
@@ -130,6 +133,21 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /New-Object Windows\.Application/);
   assert.match(source, /\$window\.Show\(\)/);
   assert.match(source, /\$application\.Run\(\)/);
+  assert.match(source, /WindowSurfaceOverlayPosition\.ps1/);
+  assert.match(source, /MonitorFromPoint/);
+  assert.match(source, /GetDpiForMonitor/);
+  assert.match(source, /Get-OverlayMonitor/);
+  assert.match(source, /Get-NearestOverlayPositionPreference/);
+  assert.match(source, /Restore-OverlayPosition/);
+  assert.match(source, /Add_LocationChanged/);
+  assert.match(source, /Drag-OverlayAndPersistPosition/);
+  assert.match(positionSource, /narada\.window_surface_overlay\.preferences\.v2/);
+  assert.match(positionSource, /top-left/);
+  assert.match(positionSource, /top-right/);
+  assert.match(positionSource, /bottom-left/);
+  assert.match(positionSource, /bottom-right/);
+  assert.match(positionSource, /Clamp-OverlayPosition/);
+  assert.match(positionSource, /Read-OverlayPositionPreference/);
   assert.doesNotMatch(source, /\$window\.ShowDialog\(\)/);
   assert.match(source, /Start-RestartCommand/);
   assert.match(source, /Apply-ActionState/);
@@ -139,6 +157,35 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /DateTimeOffset\]::TryParse/);
   assert.match(source, /PositiveInfinity/);
   assert.doesNotMatch(source, /quota|provider|usage|remaining/);
+});
+
+test('PowerShell position helper anchors, clamps, and migrates legacy coordinates', { skip: process.platform !== 'win32' }, () => {
+  const helperPath = fileURLToPath(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url));
+  const escapedPath = helperPath.replaceAll("'", "''");
+  const command = `
+    $ErrorActionPreference = 'Stop'
+    . '${escapedPath}'
+    $work = [pscustomobject]@{ left = 0.0; top = 0.0; right = 1280.0; bottom = 720.0 }
+    $topRight = Resolve-OverlayPosition (New-OverlayPositionPreference 'top-right' 20 20) 360 200 $work
+    $bottomLeft = Resolve-OverlayPosition (New-OverlayPositionPreference 'bottom-left' 30 40) 360 200 $work
+    $clamped = Resolve-OverlayPosition (New-OverlayPositionPreference 'top-left' 9999 9999) 360 200 $work
+    $legacyRaw = Read-OverlayPositionPreference ([pscustomobject]@{ left = 900; top = 20 })
+    $legacy = Get-NearestOverlayPositionPreference $legacyRaw.left $legacyRaw.top 360 200 $work
+    [pscustomobject]@{ schema = Get-OverlayPositionPreferencesSchema; topRight = $topRight; bottomLeft = $bottomLeft; clamped = $clamped; legacy = $legacy } | ConvertTo-Json -Compress -Depth 6
+  `;
+  const output = execFileSync('pwsh', ['-NoLogo', '-NoProfile', '-NonInteractive', '-Command', command], { encoding: 'utf8' });
+  const result = JSON.parse(output.trim()) as {
+    schema: string;
+    topRight: { left: number; top: number };
+    bottomLeft: { left: number; top: number };
+    clamped: { left: number; top: number };
+    legacy: { kind: string; anchor: string; inset_x: number; inset_y: number };
+  };
+  assert.equal(result.schema, 'narada.window_surface_overlay.preferences.v2');
+  assert.deepEqual(result.topRight, { left: 900, top: 20 });
+  assert.deepEqual(result.bottomLeft, { left: 30, top: 480 });
+  assert.deepEqual(result.clamped, { left: 920, top: 520 });
+  assert.deepEqual(result.legacy, { kind: 'anchor', anchor: 'top-right', inset_x: 20, inset_y: 20 });
 });
 
 test('re-render replaces document actions instead of appending duplicates', async () => {
