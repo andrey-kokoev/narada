@@ -810,6 +810,67 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(timers.filter((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_CHECK_MS && !timer.cleared)).toHaveLength(0);
   });
 
+  it('keeps replay reconciliation status separate from the live stream status', async () => {
+    const sockets: FakeSocket[] = [];
+    const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];
+    let nextTimerId = 0;
+    let fetchCount = 0;
+    let resolveReconciliation!: (response: { ok: boolean; status: number; json: () => Promise<Record<string, unknown>> }) => void;
+    const reconciliation = new Promise<{ ok: boolean; status: number; json: () => Promise<Record<string, unknown>> }>((resolve) => {
+      resolveReconciliation = resolve;
+    });
+    const response = { ok: true, status: 200, async json() { return { events: [], has_more: false }; } };
+    const streamStatuses: string[] = [];
+    const replayStatuses: string[] = [];
+    const WebSocketCtor = class extends FakeSocket {
+      static OPEN = 1;
+      constructor(url: string) {
+        super(url);
+        sockets.push(this);
+      }
+    } as unknown as typeof WebSocket;
+    const client = createNarsClient({
+      endpoint: 'https://projection.example/events',
+      WebSocketCtor,
+      fetchFn: vi.fn(async () => {
+        fetchCount += 1;
+        return fetchCount === 1 ? response : reconciliation;
+      }) as unknown as typeof fetch,
+      timers: {
+        setTimeout(handler: TimerHandler, delay?: number) {
+          const timer = { id: ++nextTimerId, delay: delay ?? 0, handler: handler as () => void, cleared: false };
+          timers.push(timer);
+          return timer.id;
+        },
+        clearTimeout(id: number) {
+          const timer = timers.find((candidate: any) => candidate.id === id);
+          if (timer) timer.cleared = true;
+        },
+      },
+      onStatus: (status: string) => streamStatuses.push(status),
+      onReplayStatus: (status: string) => replayStatuses.push(status),
+    });
+
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
+    expect(sockets).toHaveLength(1);
+    sockets[0].open();
+    expect(streamStatuses.at(-1)).toBe('stream connected');
+    const reconcileTimer = timers.find((timer: any) => timer.delay === 5000 && !timer.cleared);
+    expect(reconcileTimer).toBeDefined();
+
+    reconcileTimer!.handler();
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
+    expect(fetchCount).toBe(2);
+    expect(streamStatuses.at(-1)).toBe('stream connected');
+
+    resolveReconciliation(response);
+    await new Promise((resolve: any) => setTimeout(resolve, 0));
+    expect(replayStatuses.at(-1)).toBe('replay connected');
+    expect(streamStatuses.at(-1)).toBe('stream connected');
+    expect(streamStatuses).not.toContain('replay connected');
+    client.close();
+  });
+
   it('times out an unacknowledged operator input without resending and reconciles a late acknowledgment', () => {
     const sockets: FakeSocket[] = [];
     const timers: Array<{ id: number; delay: number; handler: () => void; cleared: boolean }> = [];

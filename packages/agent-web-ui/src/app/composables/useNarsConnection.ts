@@ -28,6 +28,7 @@ export function useNarsConnection(
   onEventsRead?: (event: { event: 'session_events_read'; events: unknown[]; event_count?: number; has_more?: boolean; truncated?: boolean; history_truncated?: boolean }) => void,
 ) {
   const streamText = ref(config.eventEndpoint ? 'starting' : 'event endpoint not configured');
+  const replayText = ref<string | null>(null);
   const streamLive = ref(false);
   const streamPhase = ref<NarsTransportPhase>(config.eventEndpoint ? 'idle' : 'unconfigured');
   const streamReason = ref<string | null>(null);
@@ -59,6 +60,7 @@ export function useNarsConnection(
     maxReplay: config.maxReplay,
     view: transportViewForProjection(config.view?.value ?? 'conversation'),
     onStatus(status: any) { if (!stopped) streamText.value = status; },
+    onReplayStatus(status: string) { if (!stopped) replayText.value = status; },
     onTransportState(phase: NarsTransportPhase, reason: string | null = null) {
       if (stopped) return;
       streamPhase.value = phase;
@@ -121,6 +123,7 @@ export function useNarsConnection(
   return {
     connection,
     streamText,
+    replayText,
     streamLive,
     streamPhase,
     streamReason,

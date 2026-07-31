@@ -22,6 +22,7 @@ export interface NarsClientOptions {
   fetchFn?: typeof fetch;
   timers?: Pick<typeof globalThis, 'setTimeout' | 'clearTimeout'>;
   onStatus?: (status: string) => void;
+  onReplayStatus?: (status: string) => void;
   onTransportState?: (phase: NarsTransportPhase, reason?: string | null) => void;
   onEvent?: (event: unknown) => void;
   onDecodeError?: (message: string) => void;

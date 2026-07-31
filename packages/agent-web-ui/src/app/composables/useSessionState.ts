@@ -56,6 +56,7 @@ export function useSessionState(
     loadingEarlier: connection.loadingEarlier,
     loadEarlier: connection.loadEarlier,
     streamText: connection.streamText,
+    replayText: connection.replayText,
     streamLive: connection.streamLive,
     streamPhase: connection.streamPhase,
     streamReason: connection.streamReason,

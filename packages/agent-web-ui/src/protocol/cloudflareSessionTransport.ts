@@ -63,9 +63,9 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
         view: body.view ?? params?.view ?? state.view,
         cursor,
       }));
-      options.onStatus?.(response.ok ? 'replay connected' : `remote projection ${response.status}`);
+      options.onReplayStatus?.(response.ok ? 'replay connected' : `remote projection ${response.status}`);
     } catch (error) {
-      options.onStatus?.('remote projection unavailable');
+      options.onReplayStatus?.('remote projection unavailable');
       options.onEvent?.({ event: 'projection_stream_unavailable', message: error instanceof Error ? error.message : String(error) });
     } finally {
       if (scheduleContinuation && !isNarsTransportClosed(state.lifecycle) && hasMore && !state.remotePageTimer) {
