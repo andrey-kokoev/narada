@@ -57,8 +57,8 @@ function formatTimestamp(value: string | null): string {
         <a class="clear-scope" href="/console/sessions">Clear scope</a>
       </p>
       <p v-if="sessions.loading.value" class="empty">Reading the session index...</p>
-      <p v-else-if="!sessions.sessions.value.length" class="empty">No NARS sessions are currently discoverable.</p>
       <p v-else-if="scopeInvalid" class="empty">No session attachment is permitted for an invalid scope.</p>
+      <p v-else-if="!sessions.sessions.value.length" class="empty">No NARS sessions are currently discoverable.</p>
       <p v-else-if="scopeActive && !scopedSessions.length" class="empty">No sessions match this canonical Site agent. The agent may still be starting.</p>
 
       <div v-else class="table-wrap">

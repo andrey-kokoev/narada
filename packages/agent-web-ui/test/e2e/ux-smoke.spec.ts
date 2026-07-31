@@ -433,6 +433,7 @@ test('agent-web-ui User Site onboarding makes the first-use path explicit', asyn
     publishEvents();
     await page.waitForSelector('.onboarding-panel[data-phase="complete"]');
     const completeText = await page.locator('.onboarding-panel').textContent();
+    assert.match(completeText ?? '', /Your assistant is ready/);
     assert.match(completeText ?? '', /Resident is enough to begin/);
     assert.match(completeText ?? '', /architect and builder roles/);
     await page.getByRole('button', { name: 'Review optional roles' }).click();
@@ -440,7 +441,7 @@ test('agent-web-ui User Site onboarding makes the first-use path explicit', asyn
   }, { onboarding: true });
 });
 
-test('agent-web-ui User Site onboarding dismissal is scoped to the attached runtime session', async ({ page }: any) => {
+test('agent-web-ui User Site onboarding dismissal is scoped to the workspace', async ({ page }: any) => {
   const healthState = { sessionId: 'ux_onboarding_session_a' };
   await withScenarioServer('thinking', async (url: any, publishEvents: any, _inputFrames: any, eventHub: any) => {
     await page.setViewportSize({ width: 900, height: 560 });
@@ -467,12 +468,12 @@ test('agent-web-ui User Site onboarding dismissal is scoped to the attached runt
     });
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
-    await page.waitForSelector('.onboarding-panel');
-    assert.match(await page.locator('.onboarding-panel').textContent() ?? '', /Your assistant is working|Welcome to your General assistant/);
+    await page.waitForTimeout(100);
+    assert.equal(await page.locator('.onboarding-panel').count(), 0, 'dismissal should survive a carrier change in the same workspace');
   }, { onboarding: true, healthState });
 });
 
-test('agent-web-ui User Site onboarding shows active work and persists dismissal for the session', async ({ page }: any) => {
+test('agent-web-ui User Site onboarding shows active work and persists dismissal for the workspace', async ({ page }: any) => {
   await withScenarioServer('thinking', async (url: any, publishEvents: any) => {
     await page.setViewportSize({ width: 900, height: 560 });
     await page.goto(url);
@@ -491,7 +492,7 @@ test('agent-web-ui User Site onboarding shows active work and persists dismissal
     await page.reload();
     await page.waitForLoadState('domcontentloaded');
     await page.waitForTimeout(100);
-    assert.equal(await page.locator('.onboarding-panel').count(), 0, 'dismissal should survive reload for the same session');
+    assert.equal(await page.locator('.onboarding-panel').count(), 0, 'dismissal should survive reload for the same workspace');
   }, { onboarding: true });
 });
 

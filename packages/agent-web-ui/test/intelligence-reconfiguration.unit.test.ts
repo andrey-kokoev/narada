@@ -1,5 +1,5 @@
-import { nextTick, reactive } from 'vue';
-import { describe, expect, it } from 'vitest';
+import { nextTick, reactive, ref } from 'vue';
+import { describe, expect, it, vi } from 'vitest';
 import {
   IDLE_INTELLIGENCE_RECONFIGURATION_STATE,
   reduceIntelligenceReconfigurationEvent,
@@ -81,5 +81,49 @@ describe('intelligence reconfiguration control', () => {
     });
     expect(unconfirmed.phase).toBe('unconfirmed');
     expect(unconfirmed.reason).toBe('event_stream_closed');
+  });
+
+  it('reconciles an unconfirmed request from a matching health snapshot', async () => {
+    const events = reactive<unknown[]>([]);
+    const health = ref<Record<string, unknown> | null>(null);
+    const sent: any[] = [];
+    let refreshCount = 0;
+    const refreshHealth = vi.fn(async () => {
+      refreshCount += 1;
+      if (refreshCount > 1) {
+        health.value = {
+          intelligence: {
+            reconfiguration: {
+              request_id: sent[0]?.id,
+              terminal_state: 'active',
+            },
+          },
+        };
+      }
+    });
+    const control = useIntelligenceReconfiguration({
+      events,
+      health,
+      send: (frame) => {
+        sent.push(frame);
+        return true;
+      },
+      refreshHealth,
+      supportsProtocolMethod: (method) => method === 'runtime.intelligence.reconfigure',
+    });
+
+    expect(control.request({
+      inferenceProvider: 'codex-subscription',
+      model: 'gpt-5.6-luna',
+      modelRef: 'model:gpt-5.6-luna',
+      thinking: 'xhigh',
+    })).toBe(true);
+    events.push({ event: 'websocket_error', code: 'event_stream_closed' });
+    await nextTick();
+    expect(control.state.value.phase).toBe('unconfirmed');
+
+    expect(await control.refreshState()).toBe(true);
+    expect(refreshHealth).toHaveBeenCalledTimes(2);
+    expect(control.state.value.phase).toBe('applied');
   });
 });

@@ -31,6 +31,7 @@ export interface IntelligenceReconfigurationUiState {
 export interface IntelligenceReconfigurationOptions {
   events: readonly unknown[];
   streamLive?: Readonly<Ref<boolean>>;
+  health?: Readonly<Ref<Record<string, unknown> | null>>;
   send: (frame: any) => boolean;
   refreshHealth?: () => Promise<unknown> | void;
   supportsProtocolMethod: (method: string) => boolean;
@@ -74,7 +75,23 @@ function terminalStateFor(event: Record<string, unknown>): string | null {
   return textField(event, 'reconfiguration_state', 'terminal_state', 'request_state');
 }
 
+function recordField(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function reconfigurationFromHealth(health: Record<string, unknown>): { requestId: string | null; state: string | null; reason: string | null } | null {
+  const intelligence = recordField(health.intelligence);
+  const reconfiguration = recordField(intelligence?.reconfiguration);
+  if (!reconfiguration) return null;
+  return {
+    requestId: textField(reconfiguration, 'request_id'),
+    state: textField(reconfiguration, 'terminal_state', 'reconfiguration_state', 'request_state'),
+    reason: textField(reconfiguration, 'reason', 'error', 'code'),
+  };
+}
+
 function outcomeForState(state: IntelligenceReconfigurationUiState, event: Record<string, unknown>, value: string): IntelligenceReconfigurationUiState {
+  value = value.toLowerCase();
   const reason = textField(event, 'reason', 'error', 'code');
   if (value === 'requested' || value === 'validating' || value === 'admitted' || value === 'running') {
     return { ...state, phase: 'accepted', reason, message: reason };
@@ -138,17 +155,29 @@ function requestIdFor(prefix: string, sequence: number): string {
 
 export function useIntelligenceReconfiguration(options: IntelligenceReconfigurationOptions) {
   const state = ref<IntelligenceReconfigurationUiState>({ ...IDLE_INTELLIGENCE_RECONFIGURATION_STATE });
+  const refreshing = ref(false);
   let sequence = 0;
   let eventFloor = 0;
+
+  function reconcileHealth() {
+    const current = state.value;
+    if (!current.requestId || !PENDING_PHASES.has(current.phase) || !options.health?.value) return;
+    const snapshot = reconfigurationFromHealth(options.health.value);
+    if (!snapshot?.requestId || snapshot.requestId !== current.requestId || !snapshot.state) return;
+    const event = snapshot.reason ? { reason: snapshot.reason } : {};
+    state.value = outcomeForState(current, event, snapshot.state);
+  }
 
   function reconcile() {
     if (!state.value.requestId) return;
     let next = state.value;
     for (const event of options.events.slice(eventFloor)) next = reduceIntelligenceReconfigurationEvent(next, event);
     state.value = next;
+    reconcileHealth();
   }
 
   watch(() => options.events.length, reconcile, { immediate: true });
+  if (options.health) watch(options.health, reconcileHealth, { immediate: true });
   if (options.streamLive) {
     watch(options.streamLive, (live) => {
       if (!live && PENDING_PHASES.has(state.value.phase)) {
@@ -204,10 +233,24 @@ export function useIntelligenceReconfiguration(options: IntelligenceReconfigurat
     return true;
   }
 
+  async function refreshState(): Promise<boolean> {
+    if (state.value.phase !== 'unconfirmed' || refreshing.value) return false;
+    refreshing.value = true;
+    try {
+      await options.refreshHealth?.();
+      reconcileHealth();
+      return true;
+    } finally {
+      refreshing.value = false;
+    }
+  }
+
   return {
     state: computed(() => state.value),
     request,
     cancel,
+    refreshState,
+    isRefreshing: computed(() => refreshing.value),
     isPending: computed(() => PENDING_PHASES.has(state.value.phase)),
     isCancellable: computed(() => CANCELLABLE_PHASES.has(state.value.phase)),
   };

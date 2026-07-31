@@ -75,7 +75,7 @@ function mountPanel(overrides: Partial<{
 
 describe('OnboardingWelcomePanel', () => {
   beforeEach(() => {
-    window.sessionStorage.clear();
+    window.localStorage.clear();
   });
 
   afterEach(() => {
@@ -138,11 +138,11 @@ describe('OnboardingWelcomePanel', () => {
     expect(wrapper.text()).toContain('kimi-k2.7');
   });
 
-  it('persists dismissal per session and keeps working when storage is unavailable', async () => {
+  it('persists dismissal per workspace and keeps working when storage is unavailable', async () => {
     const wrapper = mountPanel();
     await wrapper.get('.onboarding-dismiss').trigger('click');
     expect(wrapper.find('.onboarding-panel').exists()).toBe(false);
-    expect(window.sessionStorage.getItem('narada.user-site-onboarding.dismissed.session-1')).toBe('1');
+    expect(window.localStorage.getItem('narada:agent-web-ui:onboarding-dismissed.v2:narada.ux')).toBe('1');
     wrapper.unmount();
 
     const restored = mountPanel();
@@ -152,10 +152,15 @@ describe('OnboardingWelcomePanel', () => {
 
     const otherSession = mountPanel({ sessionIdentity: makeIdentity({ sessionId: 'session-2' }) });
     await nextTick();
-    expect(otherSession.find('.onboarding-panel').exists()).toBe(true);
+    expect(otherSession.find('.onboarding-panel').exists()).toBe(false);
     otherSession.unmount();
 
-    const noSession = mountPanel({ sessionIdentity: makeIdentity({ sessionId: null }) });
+    const otherWorkspace = mountPanel({ sessionIdentity: makeIdentity({ siteId: 'narada.other', sessionId: 'session-3' }) });
+    await nextTick();
+    expect(otherWorkspace.find('.onboarding-panel').exists()).toBe(true);
+    otherWorkspace.unmount();
+
+    const noSession = mountPanel({ sessionIdentity: makeIdentity({ siteId: null, sessionId: null }) });
     await nextTick();
     await noSession.get('.onboarding-dismiss').trigger('click');
     expect(noSession.find('.onboarding-panel').exists()).toBe(false);
@@ -164,7 +169,7 @@ describe('OnboardingWelcomePanel', () => {
     const setItem = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
       throw new Error('storage quota exceeded');
     });
-    const storageFailure = mountPanel({ sessionIdentity: makeIdentity({ sessionId: 'session-4' }) });
+    const storageFailure = mountPanel({ sessionIdentity: makeIdentity({ siteId: 'narada.storage-failure', sessionId: 'session-4' }) });
     await nextTick();
     await storageFailure.get('.onboarding-dismiss').trigger('click');
     expect(storageFailure.find('.onboarding-panel').exists()).toBe(false);
@@ -174,7 +179,7 @@ describe('OnboardingWelcomePanel', () => {
     const getItem = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
       throw new Error('storage unavailable');
     });
-    const readFailure = mountPanel({ sessionIdentity: makeIdentity({ sessionId: 'session-3' }) });
+    const readFailure = mountPanel({ sessionIdentity: makeIdentity({ siteId: 'narada.read-failure', sessionId: 'session-5' }) });
     await nextTick();
     expect(readFailure.find('.onboarding-panel').exists()).toBe(true);
     expect(getItem).toHaveBeenCalled();

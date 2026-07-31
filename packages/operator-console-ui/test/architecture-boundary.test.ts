@@ -19,6 +19,7 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   const registryTransport = read('site-registry/transport.ts');
   const launchPage = read('pages/OperatorConsoleLaunchPage.vue');
   const siteAgentsPage = read('pages/SiteAgentsPage.vue');
+  const sessionsPage = read('pages/AgentSessionsPage.vue');
   const routes = read('console/routes.ts');
 
   assert.match(app, /resolveOperatorConsoleRoute/);
@@ -38,6 +39,9 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.match(siteAgentsPage, /\.agent-actions-trigger\s*\{[^}]*opacity:\s*\.72;[^}]*pointer-events:\s*auto;/s);
   assert.doesNotMatch(siteAgentsPage, /\.site-actions-trigger\s*\{[^}]*opacity:\s*0;/s);
   assert.doesNotMatch(siteAgentsPage, /\.agent-actions-trigger\s*\{[^}]*opacity:\s*0;/s);
+  const invalidScopeEmptyState = sessionsPage.indexOf('No session attachment is permitted for an invalid scope.');
+  const genericEmptyState = sessionsPage.indexOf('No NARS sessions are currently discoverable.');
+  assert.ok(invalidScopeEmptyState >= 0 && genericEmptyState >= 0 && invalidScopeEmptyState < genericEmptyState);
 });
 
 test('route discovery never gates canonical registry mutation admission', () => {

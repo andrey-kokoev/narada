@@ -33,6 +33,7 @@ const props = defineProps<{
   healthText: string;
   intelligence: HealthIntelligenceSummary;
   intelligenceReconfiguration: IntelligenceReconfigurationUiState;
+  intelligenceReconfigurationRefreshing?: boolean;
   sessionIdentity: SessionIdentitySummary;
   summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
@@ -53,6 +54,7 @@ const emit = defineEmits<{
   'publish-cloudflare': [cloudflareApiBaseUrl: string];
   'request-intelligence-reconfiguration': [change: IntelligenceSelectionDraft];
   'cancel-intelligence-reconfiguration': [];
+  'refresh-intelligence-reconfiguration': [];
   collapse: [];
 }>();
 const cloudflareApiBaseUrl = ref(props.cloudflareProjection.defaultApiBaseUrl.value);
@@ -169,12 +171,9 @@ const canRequestChange = computed(() => props.supportsProtocolMethod(NARS_RUNTIM
   && !remoteOperationPending.value);
 const canCancelRemote = computed(() => props.supportsProtocolMethod('runtime.intelligence.reconfigure.cancel')
   && ['dispatching', 'accepted'].includes(props.intelligenceReconfiguration.phase));
-const showChangeActions = computed(() => draftChanged.value || remoteOperationPending.value);
-const cancelLabel = computed(() => canCancelRemote.value
-  ? 'Cancel request'
-  : remoteOperationPending.value
-    ? 'Cancel unavailable'
-    : 'Discard draft');
+const showDraftActions = computed(() => draftChanged.value && !remoteOperationPending.value);
+const showReconcileAction = computed(() => props.intelligenceReconfiguration.phase === 'unconfirmed');
+const showChangeActions = computed(() => showDraftActions.value || canCancelRemote.value || showReconcileAction.value);
 const intelligenceCapabilityMessage = computed(() => {
   if (!props.supportsProtocolMethod(NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD)) {
     return 'Runtime intelligence reconfiguration is unavailable on this attached surface.';
@@ -195,7 +194,7 @@ const operationMessage = computed(() => {
     case 'cancelled': return 'change request cancelled';
     case 'refused': return 'change request refused';
     case 'failed': return 'change request failed';
-    case 'unconfirmed': return 'runtime result unconfirmed';
+    case 'unconfirmed': return 'runtime result unconfirmed; refresh state to reconcile';
     default: return null;
   }
 });
@@ -370,11 +369,22 @@ function cancelDraftChange() {
               </span>
             </div>
             <div v-if="showChangeActions" class="intelligence-change-actions">
-              <button type="button" :disabled="!canRequestChange" @click.stop="requestDraftChange">
+              <button v-if="showDraftActions" type="button" :disabled="!canRequestChange" @click.stop="requestDraftChange">
                 Request change
               </button>
-              <button type="button" :disabled="canCancelRemote ? false : (!draftChanged || remoteOperationPending)" @click.stop="cancelDraftChange">
-                {{ cancelLabel }}
+              <button v-if="canCancelRemote" type="button" @click.stop="cancelDraftChange">
+                Cancel request
+              </button>
+              <button
+                v-else-if="showReconcileAction"
+                type="button"
+                :disabled="intelligenceReconfigurationRefreshing"
+                @click.stop="emit('refresh-intelligence-reconfiguration')"
+              >
+                {{ intelligenceReconfigurationRefreshing ? 'Refreshing state' : 'Refresh state' }}
+              </button>
+              <button v-else-if="showDraftActions" type="button" @click.stop="cancelDraftChange">
+                Discard draft
               </button>
             </div>
             <span v-if="intelligenceCapabilityMessage" class="retention-note">{{ intelligenceCapabilityMessage }}</span>

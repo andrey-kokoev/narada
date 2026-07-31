@@ -70,6 +70,7 @@ const props = defineProps<{
   healthText: string;
   intelligence: HealthIntelligenceSummary;
   intelligenceReconfiguration: IntelligenceReconfigurationUiState;
+  intelligenceReconfigurationRefreshing?: boolean;
   summarizedStateSampleCount: number;
   verbosity: ProjectionVerbosity;
   viewId: string;
@@ -142,6 +143,7 @@ const emit = defineEmits<{
   'request-affordance-action': [request: { surfaceId: string; actionId: string; args: Record<string, unknown> }];
   'request-intelligence-reconfiguration': [change: IntelligenceSelectionDraft];
   'cancel-intelligence-reconfiguration': [];
+  'refresh-intelligence-reconfiguration': [];
   'confirm-affordance-action': [item: AffordanceConfirmationItem];
   'cancel-affordance-action': [item: AffordanceConfirmationItem];
   'intent-selected': [intent: string];
@@ -149,7 +151,7 @@ const emit = defineEmits<{
 }>();
 const STATUS_ROW_OPEN_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.statusRowOpen;
 const HEADER_ITEM_STORAGE_KEY = AGENT_WEB_UI_PREFERENCE_KEYS.headerItems;
-const HEADER_ITEM_IDS = ['identity', 'snippets', 'surfaces', 'runtime', 'session', 'status_toggle'] as const;
+const HEADER_ITEM_IDS = ['identity', 'snippets', 'surfaces', 'runtime', 'status_toggle'] as const;
 type HeaderItemId = typeof HEADER_ITEM_IDS[number];
 const DEFAULT_VISIBLE_HEADER_ITEM_IDS: readonly HeaderItemId[] = ['identity', 'surfaces', 'runtime', 'status_toggle'];
 const statusRowOpen = ref(loadBooleanPreference(STATUS_ROW_OPEN_STORAGE_KEY, true));
@@ -266,7 +268,6 @@ const headerItemDefinitions: Record<HeaderItemId, Omit<BoxVisibilitySelectorItem
   snippets: { id: 'snippets', label: 'Snippets', description: 'Browser-local reusable operator inputs.' },
   surfaces: { id: 'surfaces', label: 'Navigate', description: 'Navigation drawer for workflow and diagnostic panels.' },
   runtime: { id: 'runtime', label: 'Connection', description: 'Browser attachment, live session, authority, endpoints, and MCP child posture.' },
-  session: { id: 'session', label: 'Session', description: 'Health, agent identity, and session ID chip.' },
   status_toggle: { id: 'status_toggle', label: 'Status Toggle', description: 'Button that expands the status box row after it is collapsed.' },
 };
 const headerItemSelectorItems = computed(() => HEADER_ITEM_IDS.map((id) => ({
@@ -278,7 +279,6 @@ const headerTooltips = {
   snippets: 'Open browser-local reusable operator inputs. Hidden by default to keep the main header quiet.',
   surfaces: 'Open workflow and diagnostic panels attached to this session.',
   runtime: 'Connection status for this browser: input authority, live session, endpoints, and MCP child posture.',
-  session: 'Legacy compact session chip. Connection is the preferred default.',
   status_toggle: 'Expand or collapse the status box row.',
   header_selector: 'Choose which controls appear in the first row.',
 };
@@ -398,27 +398,6 @@ function resetHeaderItems() {
             </TooltipTrigger>
             <TooltipContent side="bottom" align="end">{{ headerTooltips.runtime }}</TooltipContent>
           </Tooltip>
-          <Tooltip v-if="isHeaderItemVisible('session')">
-            <TooltipTrigger as-child>
-              <div class="session-chip" :data-state="healthText.split(' ')[0]">
-                <span class="chip-dot" aria-hidden="true"></span>
-                <span>{{ healthText.split(' · ')[0] }}</span>
-                <template v-if="sessionChipStreamText">
-                  <span class="session-token-separator">·</span>
-                  <span>{{ sessionChipStreamText }}</span>
-                </template>
-                <template v-if="sessionIdentity.agentId">
-                  <span class="session-token-separator">·</span>
-                  <CopyableText :text="sessionIdentity.agentId" class-name="session-chip-copy">{{ sessionIdentity.agentId }}</CopyableText>
-                </template>
-                <template v-if="sessionIdentity.sessionId">
-                  <span class="session-token-separator">·</span>
-                  <CopyableText :text="sessionIdentity.sessionId" class-name="session-chip-copy">{{ sessionIdentity.sessionId }}</CopyableText>
-                </template>
-              </div>
-            </TooltipTrigger>
-            <TooltipContent side="bottom" align="end">{{ headerTooltips.session }}</TooltipContent>
-          </Tooltip>
           <Tooltip v-if="!statusRowOpen && isHeaderItemVisible('status_toggle')">
             <TooltipTrigger as-child>
               <button                type="button"
@@ -494,6 +473,7 @@ function resetHeaderItems() {
         :health-text="healthText"
         :intelligence="intelligence"
         :intelligence-reconfiguration="intelligenceReconfiguration"
+        :intelligence-reconfiguration-refreshing="intelligenceReconfigurationRefreshing"
         :session-identity="sessionIdentity"
         :summarized-state-sample-count="summarizedStateSampleCount"
         :verbosity="verbosity"
@@ -512,6 +492,7 @@ function resetHeaderItems() {
         @publish-cloudflare="emit('publish-cloudflare', $event)"
         @request-intelligence-reconfiguration="emit('request-intelligence-reconfiguration', $event)"
         @cancel-intelligence-reconfiguration="emit('cancel-intelligence-reconfiguration')"
+        @refresh-intelligence-reconfiguration="emit('refresh-intelligence-reconfiguration')"
         @collapse="statusRowOpen = false"
       />
     </section>

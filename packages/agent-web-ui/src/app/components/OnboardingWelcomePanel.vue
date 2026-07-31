@@ -4,6 +4,9 @@ import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { SessionIdentitySummary } from '../composables/useNarsEvents';
 import { isProjectedTurnGroupRow, type ProjectedTranscriptRow } from '../lib/eventProjection';
+import { readStringPreference, writeStringPreference } from '../lib/browserPreferences.ts';
+
+const ONBOARDING_DISMISSED_KEY_PREFIX = 'narada:agent-web-ui:onboarding-dismissed.v2';
 
 const props = defineProps<{
   enabled: boolean;
@@ -19,8 +22,8 @@ const emit = defineEmits<{
 
 const dismissed = ref(false);
 const storageKey = computed(() => {
-  const sessionId = props.sessionIdentity.sessionId;
-  return sessionId ? `narada.user-site-onboarding.dismissed.${sessionId}` : null;
+  const scope = props.sessionIdentity.siteId?.trim() || 'personal';
+  return `${ONBOARDING_DISMISSED_KEY_PREFIX}:${encodeURIComponent(scope)}`;
 });
 
 function containsRowKind(rows: ProjectedTranscriptRow[], kind: string): boolean {
@@ -42,24 +45,12 @@ const siteLabel = computed(() => props.sessionIdentity.siteId ?? 'Personal works
 
 function restoreDismissed() {
   dismissed.value = false;
-  const key = storageKey.value;
-  if (!key) return;
-  try {
-    dismissed.value = window.sessionStorage.getItem(key) === '1';
-  } catch {
-    dismissed.value = false;
-  }
+  dismissed.value = readStringPreference(storageKey.value, '') === '1';
 }
 
 function dismiss() {
   dismissed.value = true;
-  const key = storageKey.value;
-  if (!key) return;
-  try {
-    window.sessionStorage.setItem(key, '1');
-  } catch {
-    // Browser storage is optional; the panel remains dismissible in memory.
-  }
+  writeStringPreference(storageKey.value, '1');
 }
 
 function selectIntent(intent: string) {
@@ -74,11 +65,11 @@ watch(storageKey, restoreDismissed);
   <section v-if="visible" class="onboarding-panel" :data-phase="phase" aria-labelledby="onboarding-panel-title">
     <div class="onboarding-panel-heading">
       <div>
-        <p class="onboarding-eyebrow">Personal workspace</p>
+        <p class="onboarding-eyebrow">{{ siteLabel }}</p>
         <h2 id="onboarding-panel-title">
           <template v-if="phase === 'ready'">Welcome to your General assistant</template>
           <template v-else-if="phase === 'working'">Your assistant is working</template>
-          <template v-else>Your first session is ready</template>
+          <template v-else>Your assistant is ready</template>
         </h2>
       </div>
       <button type="button" class="onboarding-dismiss" aria-label="Dismiss onboarding" @click="dismiss">Dismiss</button>

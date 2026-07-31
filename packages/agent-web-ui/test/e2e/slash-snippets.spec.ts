@@ -60,7 +60,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
     await page.addInitScript(() => {
       localStorage.clear();
       localStorage.setItem('narada:agent-web-ui:status-row-open.v1', 'true');
-      localStorage.setItem('narada:agent-web-ui:header-items.v2', JSON.stringify(['identity', 'runtime', 'session', 'status_toggle']));
+      localStorage.setItem('narada:agent-web-ui:header-items.v2', JSON.stringify(['identity', 'runtime', 'status_toggle']));
       localStorage.setItem('narada:agent-web-ui:status-boxes.v3', JSON.stringify(['events', 'health', 'intelligence', 'view']));
     });
   });
@@ -95,7 +95,7 @@ test.describe('agent-web-ui slash and snippet palette', () => {
         method: 'session.health',
         params: {},
       });
-      await expect(page.locator('.session-chip[data-state="healthy"]')).toBeVisible();
+      await expect(page.locator('.runtime-topology-trigger')).toBeVisible();
 
       const cliFromIndex = runtime.events.length;
       attachInput.write('/health\n');

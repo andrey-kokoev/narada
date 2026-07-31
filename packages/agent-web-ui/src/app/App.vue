@@ -70,6 +70,7 @@ const sessionActions = useSessionActions(session.connection.connection, session.
 const intelligenceReconfiguration = useIntelligenceReconfiguration({
   events: session.events,
   streamLive: session.streamLive,
+  health: session.health.body,
   send: sessionActions.send,
   refreshHealth: () => session.health.refresh(),
   supportsProtocolMethod,
@@ -357,6 +358,10 @@ function cancelIntelligenceReconfiguration() {
   intelligenceReconfiguration.cancel();
 }
 
+function refreshIntelligenceReconfiguration() {
+  void intelligenceReconfiguration.refreshState();
+}
+
 function requestAffordanceAction(request: { surfaceId: string; actionId: string; args: Record<string, unknown> }) {
   const frame = buildAffordanceActionRequestFrame({ surfaceId: request.surfaceId, actionId: request.actionId, args: request.args });
   if (frame) {
@@ -394,6 +399,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     :health-text="session.health.text.value"
     :intelligence="session.health.intelligence.value"
     :intelligence-reconfiguration="intelligenceReconfiguration.state.value"
+    :intelligence-reconfiguration-refreshing="intelligenceReconfiguration.isRefreshing.value"
     :summarized-state-sample-count="session.summarizedStateSampleCount.value"
     :verbosity="projection.verbosity.value"
     :view-id="projection.viewId.value"
@@ -462,6 +468,7 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
     @request-affordance-action="requestAffordanceAction"
     @request-intelligence-reconfiguration="requestIntelligenceReconfiguration"
     @cancel-intelligence-reconfiguration="cancelIntelligenceReconfiguration"
+    @refresh-intelligence-reconfiguration="refreshIntelligenceReconfiguration"
     @load-earlier="session.loadEarlier"
     @confirm-affordance-action="confirmAffordanceAction"
     @cancel-affordance-action="cancelAffordanceAction"

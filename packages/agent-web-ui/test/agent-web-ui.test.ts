@@ -900,6 +900,10 @@ test('Vue layout smoke covers shell, status, event list, composer, and event ton
   assert.doesNotMatch(activity, /reconcileActivityWithHealth/);
   assert.match(shell, /AGENT_WEB_UI_PREFERENCE_KEYS\.headerItems/);
   assert.match(shell, /Connection: \{\{ runtimeTopology\.verdictLabel \}\}/);
+  assert.doesNotMatch(shell, /isHeaderItemVisible\('session'\)/);
+  assert.doesNotMatch(shell, /class="session-chip"/);
+  assert.doesNotMatch(status, /Cancel unavailable/);
+  assert.match(status, /refresh-intelligence-reconfiguration/);
   assert.match(status, /AGENT_WEB_UI_PREFERENCE_KEYS\.statusBoxes/);
   assert.match(status, /Authority Detail/);
   assert.match(composer, /AGENT_WEB_UI_PREFERENCE_KEYS\.operatorFooterItems/);
