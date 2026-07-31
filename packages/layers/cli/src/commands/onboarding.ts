@@ -715,7 +715,10 @@ export async function onboardingStatusCommand(
       next_action: nextAction,
       ...(verification.status === 'failed' ? { reason_code: 'first_use_verification_failed' } : {}),
     };
-    return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, onboardingStatusHuman(result), options.format ?? 'human') };
+    return {
+      exitCode: status === 'blocked' ? ExitCode.GENERAL_ERROR : ExitCode.SUCCESS,
+      result: formattedResult(result, onboardingStatusHuman(result), options.format ?? 'human'),
+    };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     const result: OnboardingStatusResult = {
@@ -767,7 +770,7 @@ export async function onboardingRoleApprovalCommand(
         next_action: nextAction,
         reason_code: reasonCode,
       };
-      return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, onboardingRoleApprovalHuman(result), options.format ?? 'human') };
+      return { exitCode: ExitCode.GENERAL_ERROR, result: formattedResult(result, onboardingRoleApprovalHuman(result), options.format ?? 'human') };
     };
     if (!state) return blocked('onboarding_state_missing', 'Run onboarding start, then verify first use before approving role expansion.');
     if (state.readiness.first_useful_interaction !== 'verified') {
@@ -920,10 +923,12 @@ function onboardingRoleMaterializeHuman(result: OnboardingRoleMaterializeResult)
     'Narada onboarding role materialization',
     `Workspace: ${result.user_site.root}`,
     `Resident: ${result.user_site.resident_agent ?? 'not configured'}`,
+    `Status: ${result.status}`,
     `Materialized: ${result.materialized_roles.join(', ') || 'none'}`,
     `Pending: ${result.pending_roles.join(', ') || 'none'}`,
     result.registry_path ? `Registry: ${result.registry_path}` : '',
     `Next: ${result.next_action}`,
+    result.reason_code ? `Reason: ${result.reason_code}` : '',
   ].filter(Boolean);
 }
 
@@ -952,7 +957,7 @@ export async function onboardingRoleMaterializeCommand(
         next_action: nextAction,
         reason_code: reasonCode,
       };
-      return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, onboardingRoleMaterializeHuman(result), options.format ?? 'human') };
+      return { exitCode: ExitCode.GENERAL_ERROR, result: formattedResult(result, onboardingRoleMaterializeHuman(result), options.format ?? 'human') };
     };
     if (!state) return blocked('onboarding_state_missing', 'Run onboarding start, then verify first use before materializing roles.');
 
@@ -1419,15 +1424,25 @@ function buildFirstUseVerification(
 
 function onboardingStatusHuman(result: OnboardingStatusResult): string[] {
   const verification = result.verification;
+  const failedChecks = verification
+    ? Object.entries(verification.checks)
+      .filter(([, passed]) => passed === false)
+      .map(([name]) => name)
+    : [];
   return [
     'Narada onboarding status',
     `Workspace: ${result.user_site.root}`,
     `Resident: ${result.user_site.resident_agent ?? 'not configured'}`,
     `Session: ${result.session.id ?? 'not found'}`,
     `Health: ${result.session.health_status ?? 'not checked'}`,
-    `Readiness: ${result.status}`,
+    `Status: ${result.status}`,
+    `Readiness: ${result.readiness.status}`,
     `First use: ${verification?.status ?? 'pending'}`,
     `Response: ${verification?.response_kind ?? 'pending'}`,
+    verification?.events_path ? `Events: ${verification.events_path}` : '',
+    failedChecks.length > 0 ? `Failed checks: ${failedChecks.join(', ')}` : '',
+    verification && verification.evidence.length > 0 ? `Evidence: ${verification.evidence.join(', ')}` : '',
+    result.reason_code ? `Reason: ${result.reason_code}` : '',
     result.state_path ? `State: ${result.state_path}` : '',
     `Next: ${result.next_action}`,
   ].filter(Boolean);
@@ -1442,9 +1457,11 @@ function onboardingRoleApprovalHuman(result: OnboardingRoleApprovalResult): stri
     'Narada onboarding role expansion',
     `Workspace: ${result.user_site.root}`,
     `Resident: ${result.user_site.resident_agent ?? 'not configured'}`,
+    `Status: ${result.status}`,
     `Approved: ${result.approved_roles.join(', ') || 'none'}`,
     `Roster changed: ${result.preview.roster_mutation_performed ? 'yes' : 'no'}`,
     result.approval_path ? `Approval: ${result.approval_path}` : '',
+    result.reason_code ? `Reason: ${result.reason_code}` : '',
     `Next: ${result.next_action}`,
   ].filter(Boolean);
 }
@@ -1490,8 +1507,13 @@ function baseResult(
 }
 
 function renderHuman(result: OnboardingResult): string[] {
+  const heading = result.status === 'launched'
+    ? 'Narada onboarding started'
+    : result.status === 'blocked'
+      ? 'Narada onboarding blocked'
+      : 'Narada User Site onboarding';
   const lines = [
-    result.status === 'launched' ? 'Narada onboarding started' : 'Narada User Site onboarding',
+    heading,
     `Workspace: ${result.user_site.root}`,
     `Assistant: ${result.defaults.assistant_label} (${result.defaults.role})`,
     `Surface: ${result.defaults.operator_surface ?? 'not configured'}`,
@@ -1500,9 +1522,65 @@ function renderHuman(result: OnboardingResult): string[] {
     `Readiness: ${result.readiness.status}`,
     `Role expansion: ${result.role_expansion.status}`,
     result.state_path ? `State: ${result.state_path}` : '',
+    ...launchHandoffLines(result.launch, result.user_site.resident_agent),
     `Next: ${result.next_action}`,
   ].filter(Boolean);
   if (result.message) lines.push(`Message: ${result.message}`);
+  return lines;
+}
+
+function launchHandoffLines(value: unknown, residentAgent: string | null): string[] {
+  const body = isRecord(value) && isRecord(value.result) ? value.result : value;
+  if (!isRecord(body)) return [];
+
+  const agents = [
+    ...(Array.isArray(body.launch_agents) ? body.launch_agents : []),
+    ...(Array.isArray(body.selected_agents) ? body.selected_agents : []),
+  ].filter(isRecord);
+  const selectedAgent = agents.find((agent) => agent.agent === residentAgent) ?? agents[0] ?? null;
+  const attachment = isRecord(body.attachment) ? body.attachment : null;
+  const sessions = attachment && Array.isArray(attachment.sessions)
+    ? attachment.sessions.filter(isRecord)
+    : [];
+  const selectedLaunchSessionId = selectedAgent && typeof selectedAgent.launch_session_id === 'string'
+    ? selectedAgent.launch_session_id
+    : null;
+  const projectionBinding = selectedAgent && isRecord(selectedAgent.operator_projection_launch_binding)
+    ? selectedAgent.operator_projection_launch_binding
+    : null;
+  const projectionBindingPath = projectionBinding && typeof projectionBinding.path === 'string'
+    ? projectionBinding.path
+    : null;
+  const projectionReadinessPath = projectionBindingPath ? `${projectionBindingPath}.ready.json` : null;
+  const session = sessions.find((candidate) => candidate.launch_session_id === selectedLaunchSessionId) ?? sessions[0] ?? null;
+  const projectionRequests = [
+    ...(selectedAgent && Array.isArray(selectedAgent.operator_projection_open_requests)
+      ? selectedAgent.operator_projection_open_requests
+      : []),
+    ...(Array.isArray(body.operator_projection_open_requests) ? body.operator_projection_open_requests : []),
+    ...(Array.isArray(body.operator_projection_open_request) ? body.operator_projection_open_request : [body.operator_projection_open_request]),
+  ].filter(isRecord);
+  const projectionUrl = projectionRequests
+    .map((request) => typeof request.url === 'string' ? request.url : request.target_ref)
+    .find((candidate): candidate is string => typeof candidate === 'string' && /^https?:\/\//i.test(candidate));
+  const resultPath = typeof body.result_path === 'string'
+    ? body.result_path
+    : isRecord(body.launch_result_artifact) && typeof body.launch_result_artifact.path === 'string'
+      ? body.launch_result_artifact.path
+      : null;
+  const lines: string[] = [];
+  if (resultPath) lines.push(`Result: ${resultPath}`);
+  if (selectedLaunchSessionId) lines.push(`Launch session: ${selectedLaunchSessionId}`);
+  if (session && typeof session.session_id === 'string') lines.push(`Session: ${session.session_id}`);
+  if (session && typeof session.health_endpoint === 'string') lines.push(`Health: ${session.health_endpoint}`);
+  if (session && typeof session.event_endpoint === 'string') lines.push(`Events: ${session.event_endpoint}`);
+  if (projectionUrl) {
+    lines.push(`Open: ${projectionUrl}`);
+  } else if (projectionRequests.length > 0) {
+    lines.push('Browser: waiting for agent-web-ui attachment and browser URL');
+    lines.push('Projection: exact NARS session binding is resolved before browser open');
+    if (projectionReadinessPath) lines.push(`Projection readiness: ${projectionReadinessPath}`);
+  }
   return lines;
 }
 
@@ -1572,7 +1650,7 @@ export async function onboardingStartCommand(
         message: 'The User Site bootstrap did not produce the required launch authority.',
         next_action: `Inspect ${root} and ${registryPath}, then rerun onboarding.`,
       };
-      return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
+      return { exitCode: ExitCode.GENERAL_ERROR, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
     }
 
     const loaded = await readWorkspaceLaunchRecords({ registryPath });
@@ -1584,7 +1662,7 @@ export async function onboardingStartCommand(
       result.status = 'blocked';
       result.reason_code = 'user_site_resident_missing';
       result.message = 'No resident launch record is admitted for this User Site.';
-      return { exitCode: ExitCode.SUCCESS, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
+      return { exitCode: ExitCode.GENERAL_ERROR, result: formattedResult(result, renderHuman(result), options.format ?? 'auto') };
     }
 
     if (options.interactive) {
@@ -1630,7 +1708,7 @@ export async function onboardingStartCommand(
         ? 'Complete User Site intelligence setup (principal admission, launch context, and provider readiness), then rerun onboarding. Use --demo for a no-credential introduction.'
         : 'Resolve the launch refusal, then rerun onboarding.';
       return {
-        exitCode: intelligenceSetupFailure ? ExitCode.SUCCESS : launch.exitCode,
+        exitCode: intelligenceSetupFailure ? ExitCode.GENERAL_ERROR : launch.exitCode,
         result: formattedResult(result, renderHuman(result), options.format ?? 'auto'),
       };
     }
@@ -1701,7 +1779,7 @@ export async function onboardingStartCommand(
         : 'Run onboarding again after resolving the reported prerequisite.',
     };
     return {
-      exitCode: intelligenceSetupRequired ? ExitCode.SUCCESS : ExitCode.GENERAL_ERROR,
+      exitCode: ExitCode.GENERAL_ERROR,
       result: formattedResult(result, renderHuman(result), options.format ?? 'auto'),
     };
   }

@@ -2,7 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue';
 import type { AgentActivityState } from '../composables/useAgentActivity';
 import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
-import type { SessionIdentitySummary } from '../composables/useNarsEvents';
+import type { OperatorInputDeliveryProjection, SessionIdentitySummary } from '../composables/useNarsEvents';
 import { isProjectedTurnGroupRow, type ProjectedTranscriptRow } from '../lib/eventProjection';
 import { readStringPreference, writeStringPreference } from '../lib/browserPreferences.ts';
 
@@ -12,6 +12,7 @@ const props = defineProps<{
   enabled: boolean;
   rows: ProjectedTranscriptRow[];
   agentActivity: AgentActivityState;
+  operatorDelivery: OperatorInputDeliveryProjection;
   sessionIdentity: SessionIdentitySummary;
   intelligence: HealthIntelligenceSummary;
 }>();
@@ -31,12 +32,30 @@ function containsRowKind(rows: ProjectedTranscriptRow[], kind: string): boolean 
     || (isProjectedTurnGroupRow(row) && containsRowKind(row.children, kind)));
 }
 
-const operatorMessageSeen = computed(() => containsRowKind(props.rows, 'user_message') || containsRowKind(props.rows, 'operator_input_submitted'));
 const assistantMessageSeen = computed(() => containsRowKind(props.rows, 'assistant_message'));
-const phase = computed<'ready' | 'working' | 'complete'>(() => {
-  if (assistantMessageSeen.value) return 'complete';
-  if (operatorMessageSeen.value || props.agentActivity.active) return 'working';
+const phase = computed<'ready' | 'working' | 'complete' | 'error'>(() => {
+  const deliveryPhase = props.operatorDelivery.phase;
+  if (['rejected', 'failed', 'timed_out', 'expired', 'discarded'].includes(deliveryPhase)) return 'error';
+  if (['submitting', 'relay_pending', 'reviewing', 'retried', 'accepted', 'queued', 'steering'].includes(deliveryPhase)) return 'working';
+  if (assistantMessageSeen.value || deliveryPhase === 'completed') return 'complete';
+  if (props.agentActivity.active) return 'working';
   return 'ready';
+});
+const workingCopy = computed(() => {
+  const deliveryPhase = props.operatorDelivery.phase;
+  if (['submitting', 'relay_pending', 'reviewing', 'retried'].includes(deliveryPhase)) {
+    return 'Sending your request to the resident assistant. The runtime will confirm admission.';
+  }
+  if (['accepted', 'queued', 'steering'].includes(deliveryPhase)) {
+    return 'Your request is admitted to the resident assistant. Keep this page open while it prepares the response.';
+  }
+  return 'Your assistant is working.';
+});
+const errorCopy = computed(() => {
+  const detail = props.operatorDelivery.detail?.trim();
+  return detail
+    ? `The resident assistant did not admit this request: ${detail}`
+    : 'The resident assistant did not admit this request. Review the input status and retry.';
 });
 const visible = computed(() => props.enabled && !dismissed.value);
 const providerLabel = computed(() => props.intelligence.provider ?? 'Registry default');
@@ -79,7 +98,10 @@ watch(storageKey, restoreDismissed);
       No project setup is needed. Tell the assistant what you would like to work on in your own words.
     </p>
     <p v-else-if="phase === 'working'" class="onboarding-copy">
-      Your request is admitted to the resident assistant. Keep this page open while it prepares the response.
+      {{ workingCopy }}
+    </p>
+    <p v-else-if="phase === 'error'" class="onboarding-copy">
+      {{ errorCopy }}
     </p>
     <p v-else class="onboarding-copy">
       Resident is enough to begin. When the work calls for structured planning or implementation, ask about the optional architect and builder roles.
@@ -139,6 +161,10 @@ watch(storageKey, restoreDismissed);
 
 .onboarding-panel[data-phase='complete'] {
   border-color: color-mix(in srgb, var(--success, #34d399) 60%, transparent);
+}
+
+.onboarding-panel[data-phase='error'] {
+  border-color: color-mix(in srgb, var(--danger, #f87171) 70%, transparent);
 }
 
 .onboarding-panel-heading,

@@ -39,7 +39,7 @@ vi.mock('@narada2/invokable-intelligence-management', () => ({
   })),
 }));
 
-import { appendAgentsToJsonRegistryText, appendAgentsToPsd1RegistryText, onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
+import { appendAgentsToJsonRegistryText, appendAgentsToPsd1RegistryText, normalizeOnboardingPlatform, onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from '../../src/commands/onboarding.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 
@@ -88,6 +88,70 @@ beforeEach(() => {
 });
 
 describe('User Site onboarding', () => {
+  it('defaults the onboarding platform to the current host', () => {
+    expect(normalizeOnboardingPlatform()).toBe(process.platform === 'win32' ? 'windows' : 'linux');
+  });
+
+  it('renders the concrete launch handoff in human output', async () => {
+    const { root, registry } = await tempUserSite(false);
+    workspaceLaunchMock.mockResolvedValueOnce({
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'launched',
+        result_path: join(root, 'runtime', 'workspace-launch-result.json'),
+        launch_agents: [{
+          agent: 'user-site.resident',
+          launch_session_id: 'launch-onboarding-test',
+          operator_projection_open_requests: [{ target_ref: 'http://127.0.0.1:54321' }],
+        }],
+        attachment: {
+          sessions: [{
+            launch_session_id: 'launch-onboarding-test',
+            session_id: 'session-onboarding-test',
+            health_endpoint: 'http://127.0.0.1:54322/health',
+            event_endpoint: 'ws://127.0.0.1:54323/events',
+          }],
+        },
+      },
+    });
+
+    const result = await onboardingStartCommand({ siteRoot: root, registryPath: registry, format: 'human' }, createMockContext());
+    const human = (result.result as { _formatted: string })._formatted;
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(human).toContain(`Result: ${join(root, 'runtime', 'workspace-launch-result.json')}`);
+    expect(human).toContain('Launch session: launch-onboarding-test');
+    expect(human).toContain('Session: session-onboarding-test');
+    expect(human).toContain('Health: http://127.0.0.1:54322/health');
+    expect(human).toContain('Events: ws://127.0.0.1:54323/events');
+    expect(human).toContain('Open: http://127.0.0.1:54321');
+  });
+
+  it('renders pending browser projection readiness instead of implying a URL is already open', async () => {
+    const { root, registry } = await tempUserSite(false);
+    const bindingPath = join(root, 'runtime', 'operator-projection-launch-bindings', 'launch-onboarding-pending.json');
+    workspaceLaunchMock.mockResolvedValueOnce({
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        status: 'launched',
+        result_path: join(root, 'runtime', 'workspace-launch-result.json'),
+        launch_agents: [{
+          agent: 'user-site.resident',
+          launch_session_id: 'launch-onboarding-pending',
+          operator_projection_launch_binding: { path: bindingPath },
+          operator_projection_open_requests: [{ status: 'planned', target_ref: null }],
+        }],
+      },
+    });
+
+    const result = await onboardingStartCommand({ siteRoot: root, registryPath: registry, format: 'human' }, createMockContext());
+    const human = (result.result as { _formatted: string })._formatted;
+    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(human).toContain('Browser: waiting for agent-web-ui attachment and browser URL');
+    expect(human).toContain('Projection: exact NARS session binding is resolved before browser open');
+    expect(human).toContain(`Projection readiness: ${bindingPath}.ready.json`);
+    expect(human).not.toContain('Open: agent-web-ui browser projection requested');
+  });
+
   it('offers the no-credential demo even when the User Site is absent', async () => {
     const root = join(process.cwd(), '.ai', 'tmp-tests', `onboarding-missing-${Date.now()}`);
     const result = await onboardingStartCommand({ siteRoot: root, demo: true, format: 'json' }, createMockContext());
@@ -117,6 +181,10 @@ describe('User Site onboarding', () => {
       status: 'launched',
       platform: 'linux',
       user_site: { root, registry_path: registry, resident_agent: 'user-site.resident' },
+      defaults: {
+        operator_surface: 'agent-web-ui',
+        runtime_host: 'narada-agent-runtime-server',
+      },
     });
 
     const launchRegistry = JSON.parse(await readFile(registry, 'utf8')) as {
@@ -149,7 +217,7 @@ describe('User Site onboarding', () => {
       format: 'json',
     }, createMockContext());
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result, JSON.stringify(result.result, null, 2)).toMatchObject({
       schema: 'narada.onboarding.start.v1',
       status: 'blocked',
@@ -180,7 +248,7 @@ describe('User Site onboarding', () => {
       format: 'json',
     }, createMockContext());
 
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result).toMatchObject({
       status: 'blocked',
       reason_code: 'intelligence_catalog_setup_required',
@@ -214,7 +282,7 @@ describe('User Site onboarding', () => {
     });
   });
 
-  it('plans one resident with safe defaults and durable role recommendation metadata', async () => {
+  it('preserves the admitted resident surface and durable role recommendation metadata', async () => {
     const { root, registry } = await tempUserSite();
     const result = await onboardingStartCommand({ siteRoot: root, registryPath: registry, noExec: true, format: 'json' }, createMockContext());
     expect(result.exitCode).toBe(ExitCode.SUCCESS);
@@ -327,6 +395,48 @@ describe('User Site onboarding', () => {
         },
       },
     });
+  });
+
+  it('returns a nonzero status and human diagnostics when first-use verification is blocked', async () => {
+    const { root, registry } = await tempUserSite();
+    workspaceLaunchMock.mockResolvedValueOnce({
+      exitCode: ExitCode.SUCCESS,
+      result: { status: 'launched', launch_agents: [{ agent: 'user.resident', launch_session_id: 'launch-failed-verification' }] },
+    });
+    await onboardingStartCommand({ siteRoot: root, registryPath: registry, format: 'json' }, createMockContext());
+    const sessionDir = join(root, '.narada', 'crew', 'nars-sessions', 'session-failed-verification');
+    await mkdir(sessionDir, { recursive: true });
+    await writeFile(join(sessionDir, 'events.jsonl'), [
+      { event_sequence: 1, sequence: 1, event: 'session_started', agent_id: 'user.resident' },
+      { event_sequence: 2, sequence: 2, event: 'session_lifecycle_transition', lifecycle_state: 'ready' },
+      { event_sequence: 3, sequence: 3, event: 'input_event_queued', event_id: 'input-failed-verification', source: 'operator', source_kind: 'operator' },
+      { event_sequence: 4, sequence: 4, event: 'input_admitted_to_turn', input_event_id: 'input-failed-verification' },
+      { event_sequence: 5, sequence: 5, event: 'turn_started', turn_id: 'turn-failed-verification' },
+      { event_sequence: 6, sequence: 6, event: 'turn_failed', turn_id: 'turn-failed-verification', terminal_state: 'failed' },
+      { event_sequence: 7, sequence: 7, event: 'input_completed', input_event_id: 'input-failed-verification', terminal_state: 'failed' },
+    ].map((event) => JSON.stringify(event)).join('\n') + '\n', 'utf8');
+    narsSessionsMock.mockResolvedValue({
+      exitCode: ExitCode.SUCCESS,
+      result: {
+        sessions: [{
+          session_id: 'session-failed-verification',
+          session_dir: sessionDir,
+          agent_id: 'user.resident',
+          launch_session_id: 'launch-failed-verification',
+          display_state: 'active',
+          health_status: 'healthy',
+        }],
+      },
+    });
+
+    const result = await onboardingStatusCommand({ siteRoot: root, format: 'human' }, createMockContext());
+    const human = (result.result as { _formatted: string })._formatted;
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({ status: 'blocked', reason_code: 'first_use_verification_failed' });
+    expect(human).toContain('Status: blocked');
+    expect(human).toContain('Reason: first_use_verification_failed');
+    expect(human).toContain('Failed checks: useful_or_no_work_response');
+    expect(human).toContain('Events: ');
   });
 
   it('reports malformed durable onboarding state instead of treating it as missing', async () => {
@@ -475,7 +585,7 @@ describe('User Site onboarding', () => {
     const approvalPath = join(root, '.narada', 'runtime', 'onboarding', 'role-expansion-approval.json');
 
     const unapprovedRole = await onboardingRoleMaterializeCommand({ siteRoot: root, roles: ['observer'], format: 'json' }, createMockContext());
-    expect(unapprovedRole.exitCode).toBe(ExitCode.SUCCESS);
+    expect(unapprovedRole.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(unapprovedRole.result).toMatchObject({
       schema: 'narada.onboarding.role_expansion_materialization.v1',
       status: 'blocked',
@@ -573,13 +683,23 @@ describe('User Site onboarding', () => {
     expect(await readFile(registry, 'utf8')).toBe(registryTextBeforeRerun);
   });
 
+  it('returns a nonzero status and reason when role approval is blocked', async () => {
+    const { root } = await tempUserSite();
+    const result = await onboardingRoleApprovalCommand({ siteRoot: root, format: 'human' }, createMockContext());
+    const human = (result.result as { _formatted: string })._formatted;
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect(result.result).toMatchObject({ status: 'blocked', reason_code: 'onboarding_state_missing' });
+    expect(human).toContain('Status: blocked');
+    expect(human).toContain('Reason: onboarding_state_missing');
+  });
+
   it('blocks role materialization when no approval was recorded', async () => {
     const { root, registry } = await tempUserSite();
     const started = await onboardingStartCommand({ siteRoot: root, registryPath: registry, format: 'json' }, createMockContext());
     expect(started.exitCode).toBe(ExitCode.SUCCESS);
     const registryBefore = await readFile(registry, 'utf8');
     const result = await onboardingRoleMaterializeCommand({ siteRoot: root, format: 'json' }, createMockContext());
-    expect(result.exitCode).toBe(ExitCode.SUCCESS);
+    expect(result.exitCode).toBe(ExitCode.GENERAL_ERROR);
     expect(result.result).toMatchObject({
       schema: 'narada.onboarding.role_expansion_materialization.v1',
       status: 'blocked',

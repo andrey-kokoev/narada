@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import OnboardingWelcomePanel from '../src/app/components/OnboardingWelcomePanel.vue';
 import type { AgentActivityState } from '../src/app/composables/useAgentActivity';
 import type { HealthIntelligenceSummary } from '../src/app/composables/useHealthStatus';
-import type { SessionIdentitySummary } from '../src/app/composables/useNarsEvents';
+import type { OperatorInputDeliveryProjection, SessionIdentitySummary } from '../src/app/composables/useNarsEvents';
 import type { ProjectedEventRow } from '../src/app/lib/eventProjection';
 
 function makeIdentity(overrides: Partial<SessionIdentitySummary> = {}): SessionIdentitySummary {
@@ -15,6 +15,28 @@ function makeIdentity(overrides: Partial<SessionIdentitySummary> = {}): SessionI
     sessionId: 'session-1',
     title: 'ux.agent',
     subtitle: 'resident',
+    ...overrides,
+  };
+}
+
+function makeDelivery(overrides: Partial<OperatorInputDeliveryProjection> = {}): OperatorInputDeliveryProjection {
+  return {
+    phase: 'draft',
+    requestId: null,
+    content: null,
+    method: null,
+    idempotencyKey: null,
+    source: null,
+    deliveryMode: null,
+    activeTurnId: null,
+    acceptedAtMs: null,
+    startedAtMs: null,
+    terminalAtMs: null,
+    terminalState: null,
+    error: null,
+    history: ['draft'],
+    label: 'Enter a message',
+    detail: null,
     ...overrides,
   };
 }
@@ -58,6 +80,7 @@ function mountPanel(overrides: Partial<{
   enabled: boolean;
   rows: ProjectedEventRow[];
   agentActivity: AgentActivityState;
+  operatorDelivery: OperatorInputDeliveryProjection;
   sessionIdentity: SessionIdentitySummary;
   intelligence: HealthIntelligenceSummary;
 }> = {}) {
@@ -66,6 +89,7 @@ function mountPanel(overrides: Partial<{
       enabled: true,
       rows: [],
       agentActivity: makeActivity(),
+      operatorDelivery: makeDelivery(),
       sessionIdentity: makeIdentity(),
       intelligence: makeIntelligence(),
       ...overrides,
@@ -106,13 +130,19 @@ describe('OnboardingWelcomePanel', () => {
   });
 
   it('shows working while a request is active and complete after an assistant response', async () => {
-    const wrapper = mountPanel({ rows: [makeRow('operator_input_submitted')] });
+    const wrapper = mountPanel({
+      rows: [makeRow('operator_input_submitted')],
+      operatorDelivery: makeDelivery({ phase: 'submitting', requestId: 'request-1' }),
+    });
     expect(wrapper.get('.onboarding-panel').attributes('data-phase')).toBe('working');
     expect(wrapper.text()).toContain('Your assistant is working');
+    expect(wrapper.text()).toContain('The runtime will confirm admission');
+    expect(wrapper.text()).not.toContain('Your request is admitted');
 
     await wrapper.setProps({
       rows: [makeRow('assistant_message')],
       agentActivity: makeActivity({ active: true, state: 'thinking', label: 'Thinking' }),
+      operatorDelivery: makeDelivery({ phase: 'completed', requestId: 'request-1' }),
     });
     expect(wrapper.get('.onboarding-panel').attributes('data-phase')).toBe('complete');
     expect(wrapper.text()).toContain('Resident is enough to begin');
@@ -120,6 +150,25 @@ describe('OnboardingWelcomePanel', () => {
     expect(wrapper.emitted('intent-selected')).toContainEqual([
       'What roles could I add later, and when would architect or builder help?',
     ]);
+  });
+
+  it('uses durable admission and latest-request state instead of historical transcript rows', async () => {
+    const wrapper = mountPanel({
+      rows: [makeRow('assistant_message')],
+      operatorDelivery: makeDelivery({ phase: 'submitting', requestId: 'request-2' }),
+    });
+    expect(wrapper.get('.onboarding-panel').attributes('data-phase')).toBe('working');
+    expect(wrapper.text()).toContain('The runtime will confirm admission');
+
+    await wrapper.setProps({ operatorDelivery: makeDelivery({ phase: 'accepted', requestId: 'request-2' }) });
+    expect(wrapper.get('.onboarding-panel').attributes('data-phase')).toBe('working');
+    expect(wrapper.text()).toContain('Your request is admitted');
+
+    await wrapper.setProps({
+      operatorDelivery: makeDelivery({ phase: 'failed', requestId: 'request-2', detail: 'request dispatch failed' }),
+    });
+    expect(wrapper.get('.onboarding-panel').attributes('data-phase')).toBe('error');
+    expect(wrapper.text()).toContain('request dispatch failed');
   });
 
   it('reacts to session and intelligence changes', async () => {

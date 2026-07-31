@@ -500,6 +500,7 @@ function resetHeaderItems() {
       :enabled="onboarding"
       :rows="rows"
       :agent-activity="agentActivity"
+      :operator-delivery="operatorDelivery"
       :session-identity="sessionIdentity"
       :intelligence="intelligence"
       @intent-selected="emit('intent-selected', $event)"
