@@ -550,13 +550,30 @@ describe('worker boundary service', () => {
     });
     expect(published.status).toBe('published');
 
+    const admissionPublished = service.publishEvent({
+      projection_id: intent.projection_id,
+      bridge_token_fingerprint: access.bridge_credential.token_fingerprint,
+      event: { event: 'operator_input_admitted', event_sequence: 2, event_id: 'input-admitted-1', input_id: 'input-1', method: 'conversation.enqueue' },
+      now,
+    });
+    expect(admissionPublished.status).toBe('published');
+
     const replay = service.readEvents({
       projection_id: intent.projection_id,
       browser_token_fingerprint: access.browser_access_tokens[0].token_fingerprint,
       since_sequence: 0,
+      view: 'conversation',
     });
     expect(replay.status).toBe('ok');
-    expect(replay.events.map((event) => event.event_sequence)).toEqual([1]);
+    expect(replay.events.map((event) => event.event_sequence)).toEqual([1, 2]);
+    expect(replay.events[1]).toMatchObject({ payload: { event: 'operator_input_admitted', input_id: 'input-1' } });
+    const operationsReplay = service.readEvents({
+      projection_id: intent.projection_id,
+      browser_token_fingerprint: access.browser_access_tokens[0].token_fingerprint,
+      since_sequence: 0,
+      view: 'operations',
+    });
+    expect(operationsReplay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'operator_input_admitted', input_id: 'input-1' }) }));
 
     const input = await service.submitInput({
       projection_id: intent.projection_id,
@@ -1176,7 +1193,14 @@ describe('Cloudflare Worker routes', () => {
       method: 'POST',
       headers: { 'x-narada-bridge-token-fingerprint': access.bridge_credential.token_fingerprint },
       body: JSON.stringify({ nars_admission: { status: 'accepted_by_nars' } }),
-    })))).toMatchObject({ status: 'acknowledged', input_id: submitted.input_id });
+    })))).toMatchObject({ status: 'acknowledged', input_id: submitted.input_id, admission_event_published: true });
+
+    const replay = service.readEvents({
+      projection_id: intent.projection_id,
+      browser_token_fingerprint: access.browser_access_tokens[0].token_fingerprint,
+      view: 'conversation',
+    });
+    expect(replay.events).toContainEqual(expect.objectContaining({ payload: expect.objectContaining({ event: 'operator_input_admitted', input_id: submitted.input_id }) }));
   });
 });
 

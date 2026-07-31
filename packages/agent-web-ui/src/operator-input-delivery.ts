@@ -244,7 +244,7 @@ export function reduceOperatorInputDelivery(state: DeliveryState, message: unkno
     return state;
   }
 
-  if (kind=== 'input_event_queued') {
+  if (kind=== 'operator_input_admitted' || kind=== 'input_event_queued') {
     const record = findOrCreateRuntimeRecord(state, requestId, event);
     if (!record || isFinalTerminal(record.phase)) return state;
     absorbRuntimeMetadata(record, event);
@@ -537,7 +537,7 @@ function deliveryLabel(phase: OperatorInputPhase, record: DeliveryRecord | null 
     [OPERATOR_INPUT_DELIVERY_PHASES.ACCEPTED]: 'Input accepted',
     [OPERATOR_INPUT_DELIVERY_PHASES.REJECTED]: 'Input rejected',
     [OPERATOR_INPUT_DELIVERY_PHASES.QUEUED]: 'Queued for the next turn',
-    [OPERATOR_INPUT_DELIVERY_PHASES.STEERING]: 'Steering the active turn',
+    [OPERATOR_INPUT_DELIVERY_PHASES.STEERING]: 'Applying input to the active turn…',
     [OPERATOR_INPUT_DELIVERY_PHASES.COMPLETED]: 'Input delivered',
     [OPERATOR_INPUT_DELIVERY_PHASES.FAILED]: 'Input failed',
     [OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT]: 'Input not acknowledged',
@@ -558,7 +558,7 @@ function deliveryDetail(record: DeliveryRecord, nowMs: number): string | null {
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.TIMED_OUT) return 'No acknowledgment was observed; the input may still have been admitted. Review before retrying manually; no automatic resend was attempted';
   if (record.error) return String(record.error);
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING) return 'Waiting for NARS acknowledgment';
-  if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.RELAY_PENDING) return 'Cloudflare accepted the relay; waiting for NARS acknowledgment';
+  if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.RELAY_PENDING) return 'Remote relay accepted the input; waiting for NARS acknowledgment';
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.REVIEWING) return 'Check the transcript before sending this input again';
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.RETRIED) return 'A new request was submitted manually';
   if (record.phase === OPERATOR_INPUT_DELIVERY_PHASES.LATE_RECONCILED) return `NARS acknowledged this input after recovery${record.terminalState ? ` (${record.terminalState})` : ''}`;

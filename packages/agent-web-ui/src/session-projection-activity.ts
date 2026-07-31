@@ -147,7 +147,7 @@ export function reduceTurnActivity(state: TurnActivityState, message: unknown): 
   if (event.event=== 'session_control_accepted' && event.method === 'session.submit') {
     return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'NARS accepted the input');
   }
-  if (event.event === 'input_event_queued') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'NARS accepted the input');
+  if (event.event === 'operator_input_admitted' || event.event === 'input_event_queued') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'NARS accepted the input');
   if (event.event === 'directive_received' || event.event === 'directive_carrier_accepted_recorded') return transitionTurnActivity(state, TURN_ACTIVITY_PHASES.QUEUED, timestampMs, 'Waiting for agent...', 'directive accepted');
   if (event.event=== 'turn_started' || event.event === 'carrier_turn_started') {
     if (isLateCompletedActivityEvent(state, event)) return state;

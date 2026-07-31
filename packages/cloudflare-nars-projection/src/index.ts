@@ -99,10 +99,42 @@ export function buildCloudflareNarsAuthorityRuntimeSurfaceContract(
   });
 }
 
+const CONVERSATION_LIFECYCLE_EVENT_KINDS = new Set([
+  'operator_input_admitted',
+  'session_control_accepted',
+  'session_control_rejected',
+  'session_control_response',
+  'input_event_queued',
+  'input_event_started',
+  'input_event_deduplicated',
+  'input_admitted_to_turn',
+  'input_event_completed',
+  'input_completed',
+  'turn_started',
+  'turn_complete',
+  'turn_failed',
+  'turn_interrupted',
+  'carrier_turn_started',
+  'carrier_turn_completed',
+  'carrier_turn_failed',
+  'carrier_turn_interrupted',
+]);
+
+function isConversationLifecycleEvent(event: Record<string, unknown>): boolean {
+  return typeof event.event === 'string' && CONVERSATION_LIFECYCLE_EVENT_KINDS.has(event.event);
+}
+
 export function projectedEventMatchesView(event: ProjectedEvent, view: string): boolean {
   if (view === 'raw') return true;
-  if (view === 'conversation') return event.event_class === 'conversation';
-  if (view === 'operations') return event.event_class === 'conversation' || event.event_class === 'operations';
+  if (view === 'conversation') {
+    return event.event_class === 'conversation'
+      || ((event.event_class === 'operations' || event.event_class === 'raw') && isConversationLifecycleEvent(event.payload));
+  }
+  if (view === 'operations') {
+    return event.event_class === 'conversation'
+      || event.event_class === 'operations'
+      || (event.event_class === 'raw' && isConversationLifecycleEvent(event.payload));
+  }
   if (view === 'diagnostics') return event.event_class === 'diagnostics';
   return false;
 }
@@ -838,6 +870,7 @@ export function createCloudflareNarsProjectionWorkerService(options: {
       browser_token_fingerprint: string;
       method: string;
       payload?: Record<string, unknown>;
+      request_id?: string | null;
       now?: string;
     }): Promise<CloudflareNarsProjectionInputRelayResult> {
       const record = accessRecords.get(args.projection_id);
@@ -861,6 +894,7 @@ export function createCloudflareNarsProjectionWorkerService(options: {
         input_id: `input_${now.replace(/[^0-9A-Za-z]+/g, '')}_${Math.random().toString(36).slice(2, 8)}`,
         projection_id: args.projection_id,
         method,
+        ...(args.request_id ? { request_id: args.request_id } : {}),
         payload: args.payload ?? {},
         status: 'pending_bridge_delivery',
         submitted_at: now,
@@ -888,6 +922,7 @@ export function createCloudflareNarsProjectionWorkerService(options: {
       if (!access.ok) return { schema: CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA, status: 'refused', code: access.code, projection_id: args.projection_id, input_id: args.input_id };
       const now = args.now ?? new Date().toISOString();
       const all = pendingInputs.get(args.projection_id) ?? [];
+      const matchedInput = all.find((input) => input.input_id === args.input_id) ?? null;
       let found = false;
       const next = all.map((input) => {
         if (input.input_id !== args.input_id) return input;
@@ -895,9 +930,32 @@ export function createCloudflareNarsProjectionWorkerService(options: {
         return { ...input, status: args.ok === false ? 'refused_by_nars' as const : 'admitted_by_nars' as const, nars_admission: args.nars_admission, updated_at: now };
       });
       pendingInputs.set(args.projection_id, next);
-      return found
-        ? { schema: CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA, status: 'acknowledged', projection_id: args.projection_id, input_id: args.input_id }
-        : { schema: CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA, status: 'refused', code: 'input_not_found', projection_id: args.projection_id, input_id: args.input_id };
+      if (!found || !matchedInput) {
+        return { schema: CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA, status: 'refused', code: 'input_not_found', projection_id: args.projection_id, input_id: args.input_id };
+      }
+
+      const existingAdmission = cache.read(args.projection_id, { view: 'raw', max_events: options.max_events ?? 200 }).events.some((event) => {
+        const payload = event.payload;
+        return isConversationLifecycleEvent(payload)
+          && ['operator_input_admitted', 'input_event_queued', 'input_admitted_to_turn'].includes(String(payload.event))
+          && (payload.input_id === args.input_id || payload.input_event_id === args.input_id);
+      });
+      let admissionEventPublished = false;
+      if (!existingAdmission) {
+        const admissionEvent = projectNarsEventForCloudflare({
+          projection_id: record.projection_id,
+          site_id: record.site_id,
+          nars_session_id: record.nars_session_id,
+          policy: record.event_stream_policy,
+          event: buildCloudflareInputAdmissionEvent(record, matchedInput, args.nars_admission, args.ok !== false),
+          projected_at: now,
+        });
+        if (admissionEvent) {
+          cache.push(admissionEvent);
+          admissionEventPublished = true;
+        }
+      }
+      return { schema: CLOUDFLARE_NARS_INPUT_RELAY_SCHEMA, status: 'acknowledged', projection_id: args.projection_id, input_id: args.input_id, admission_event_published: admissionEventPublished };
     },
     snapshot(): CloudflareNarsProjectionWorkerState {
       const artifactSnapshot = artifactCache.snapshot();
@@ -2566,6 +2624,7 @@ export interface CloudflareNarsPendingInput {
   input_id: string;
   projection_id: string;
   method: CloudflareNarsInputMethod;
+  request_id?: string;
   payload: Record<string, unknown>;
   status: 'pending_bridge_delivery' | 'delivered_to_bridge' | 'admitted_by_nars' | 'refused_by_nars';
   submitted_at: string;
@@ -2961,7 +3020,7 @@ export function projectNarsEventForCloudflare(input: {
 }): ProjectedEvent | null {
   const policy = normalizeEventPolicy(input.policy);
   const eventClass = classifyNarsEvent(input.event);
-  if (!eventClassAllowed(eventClass, policy)) return null;
+  if (!eventClassAllowed(eventClass, policy, input.event)) return null;
   const { payload, redactions } = redactProjectedEventPayload(input.event, policy);
   return {
     schema: CLOUDFLARE_NARS_PROJECTION_EVENT_SCHEMA,
@@ -3220,6 +3279,48 @@ function normalizeInputPolicy(value: CloudflareNarsInputMethod[] | undefined): C
   return [...new Set(source.filter(isCloudflareNarsInputMethod))];
 }
 
+function buildCloudflareInputAdmissionEvent(
+  record: CloudflareNarsRemoteAccessRecord,
+  input: CloudflareNarsPendingInput,
+  narsAdmission: unknown,
+  ok: boolean,
+): Record<string, unknown> {
+  const admission = objectField(narsAdmission) ?? {};
+  const observedEvents = Array.isArray(admission.events)
+    ? admission.events.map(objectField).filter((event): event is Record<string, unknown> => Boolean(event))
+    : [];
+  const observed = observedEvents.find((event) => {
+    const payload = objectField(event.payload) ?? {};
+    return isConversationLifecycleEvent(payload) && ['operator_input_admitted', 'input_event_queued', 'input_admitted_to_turn'].includes(String(payload.event));
+  }) ?? null;
+  const observedPayload = objectField(observed?.payload) ?? {};
+  const inputEventId = stringField(observedPayload.input_event_id)
+    ?? stringField(admission.input_event_id)
+    ?? stringField(objectField(admission.evidence)?.input_event_id)
+    ?? input.input_id;
+  const requestId = stringField(input.request_id)
+    ?? stringField(observedPayload.request_id)
+    ?? stringField(admission.request_id)
+    ?? stringField(objectField(admission.evidence)?.request_id);
+  const status = stringField(admission.status) ?? (ok ? 'admitted' : 'refused');
+  return {
+    ...observedPayload,
+    event: ok ? (stringField(observedPayload.event) ?? 'operator_input_admitted') : 'session_control_rejected',
+    event_id: stringField(observed?.event_id)
+      ?? stringField(admission.event_id)
+      ?? `cf_projection_input_${safeToken(input.input_id)}_${ok ? 'admitted' : 'refused'}`,
+    event_sequence: observed?.event_sequence ?? null,
+    ...(requestId ? { request_id: requestId } : {}),
+    input_id: input.input_id,
+    input_event_id: inputEventId,
+    method: input.method,
+    session_id: record.nars_session_id,
+    status,
+    source: 'cloudflare_projection_bridge_ack',
+    ...(ok ? {} : { reason_code: stringField(admission.code) ?? 'nars_input_refused' }),
+  };
+}
+
 function normalizeEventPolicy(value: unknown): ProjectionEventPolicyMode {
   if (value === 'conversation' || value === 'operator' || value === 'diagnostic' || value === 'raw') return value;
   return DEFAULT_EVENT_POLICY;
@@ -3229,8 +3330,9 @@ function classifyNarsEvent(event: Record<string, unknown>): string {
   return classifyNarsClientEventProjection(projectNarsClientEvent(event) ?? {});
 }
 
-function eventClassAllowed(eventClass: string, policy: ProjectionEventPolicyMode): boolean {
+function eventClassAllowed(eventClass: string, policy: ProjectionEventPolicyMode, event: Record<string, unknown>): boolean {
   if (policy === 'raw') return true;
+  if (isConversationLifecycleEvent(event)) return true;
   if (policy === 'diagnostic') return ['conversation', 'operations', 'diagnostics'].includes(eventClass);
   if (policy === 'operator') return ['conversation', 'operations'].includes(eventClass);
   return eventClass === 'conversation';

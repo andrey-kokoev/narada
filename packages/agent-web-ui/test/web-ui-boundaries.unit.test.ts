@@ -39,7 +39,10 @@ import {
   readJsonPreference,
   writeBooleanPreference,
 } from '../src/app/lib/browserPreferences.ts';
-import { CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS } from '../src/protocol/cloudflareSessionTransport';
+import {
+  CLOUDFLARE_WEBSOCKET_HEARTBEAT_CHECK_MS,
+  CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS,
+} from '../src/protocol/cloudflareSessionTransport';
 import { createNarsClient } from '../src/protocol/narsClient';
 import { createSessionProjection } from '../src/session-projection.ts';
 import { useRuntimeTopology } from '../src/app/composables/useRuntimeTopology';
@@ -797,14 +800,14 @@ describe('agent-web-ui runtime boundaries', () => {
     });
     await new Promise((resolve: any) => setTimeout(resolve, 0));
     sockets[0].open();
-    const heartbeat = timers.find((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS);
+    const heartbeat = timers.find((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_CHECK_MS);
     expect(heartbeat).toBeDefined();
     heartbeat!.cleared = true;
     heartbeat?.handler();
     expect(sockets[0].sentFrames.at(-1)).toBe(JSON.stringify({ event: 'websocket_heartbeat', transport: 'cloudflare_projection_websocket' }));
-    expect(timers.filter((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS && !timer.cleared)).toHaveLength(1);
+    expect(timers.filter((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_CHECK_MS && !timer.cleared)).toHaveLength(1);
     client.close();
-    expect(timers.filter((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS && !timer.cleared)).toHaveLength(0);
+    expect(timers.filter((timer: any) => timer.delay === CLOUDFLARE_WEBSOCKET_HEARTBEAT_CHECK_MS && !timer.cleared)).toHaveLength(0);
   });
 
   it('times out an unacknowledged operator input without resending and reconciles a late acknowledgment', () => {
@@ -1331,12 +1334,17 @@ describe('agent-web-ui runtime boundaries', () => {
     }));
 
     sockets[0].emit('message', { data: JSON.stringify({
-      event: 'input_event_queued',
+      event: 'operator_input_admitted',
       request_id: 'remote-admitted-1',
       event_id: 'input-cloudflare-1',
+      input_id: 'carrier-input-1',
       method: 'conversation.send',
     }) });
     expect(storageValues.has('cloudflare-admission-semantics-test')).toBe(false);
+    expect(events).toContainEqual(expect.objectContaining({
+      event: 'operator_input_admitted',
+      input_id: 'carrier-input-1',
+    }));
     expect(events).not.toContainEqual(expect.objectContaining({
       event: 'web_ui_input_ack_timeout',
       request_id: 'cloudflare-admitted',

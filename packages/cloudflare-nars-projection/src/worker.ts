@@ -352,6 +352,7 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
           browser_token_fingerprint: requireBrowserToken(request),
           method: String(body.method ?? ''),
           payload: objectRecord(body.payload) ?? {},
+          request_id: stringOrUndefined(body.request_id),
           now: now(),
         }));
       }

@@ -285,7 +285,7 @@ export function createNarsClient(options: NarsClientOptions): NarsClientConnecti
       return true;
     }
 
-    if (kind=== 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'input_event_deduplicated' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['completed', 'failed', 'rejected', 'interrupted'].includes(requestState))) {
+    if (kind=== 'operator_input_admitted' || kind === 'session_control_accepted' || kind === 'input_event_queued' || kind === 'input_event_started' || kind === 'input_admitted_to_turn' || kind === 'input_event_deduplicated' || kind === 'session_control_rejected' || kind === 'session_control_response' || (kind === 'runtime_request_state_transition' && ['completed', 'failed', 'rejected', 'interrupted'].includes(requestState))) {
       if (pending) {
         if (pending.phase=== PENDING_OPERATOR_INPUT_PHASES.TIMED_OUT || pending.phase === PENDING_OPERATOR_INPUT_PHASES.REVIEWING || pending.phase === PENDING_OPERATOR_INPUT_PHASES.RETRIED) {
           emitLocalEvent(options.onEvent, pendingLifecycleEvent('operator_input_late_acknowledged', pending, {

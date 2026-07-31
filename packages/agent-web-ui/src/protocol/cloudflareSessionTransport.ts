@@ -7,6 +7,8 @@ import { isNarsTransportClosed, isNarsTransportOpening, transitionNarsTransport,
 
 const REMOTE_RECONCILE_OVERLAP_EVENTS = 1000;
 export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS = 10_000;
+export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_CHECK_MS = 250;
+export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_TIMEOUT_MS = 5_000;
 export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_EVENT = 'websocket_heartbeat';
 export const CLOUDFLARE_WEBSOCKET_HEARTBEAT_ACK_EVENT = 'websocket_heartbeat_ack';
 
@@ -17,6 +19,7 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
   let replaySerial = 0;
   let heartbeatTimer: ReturnType<typeof setTimeout> | null = null;
   let heartbeatSocketGeneration: number | null = null;
+  let heartbeatPendingSince: number | null = null;
   const makeSubscribeFrame = (sinceSequence: number | null = state.lastSequence) => buildAgentWebUiSubscribeFrame({
     maxReplay: options.maxReplay,
     view: state.view,
@@ -127,24 +130,42 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
     if (heartbeatTimer !== null) clearTimeoutFn(heartbeatTimer);
     heartbeatTimer = null;
     heartbeatSocketGeneration = null;
+    heartbeatPendingSince = null;
   };
   const scheduleRemoteHeartbeat = (socket: WebSocket, socketGeneration: number, isCurrent: () => boolean) => {
     stopRemoteHeartbeat();
     heartbeatSocketGeneration = socketGeneration;
+    let nextHeartbeatAt = 0;
     const tick = () => {
       heartbeatTimer = null;
       if (!isCurrent() || isNarsTransportClosed(state.lifecycle)) {
         stopRemoteHeartbeat(socketGeneration);
         return;
       }
+      const openState = WebSocketCtor.OPEN ?? 1;
+      if (socket.readyState !== openState) {
+        stopRemoteHeartbeat(socketGeneration);
+        scheduleRemoteReconnect('remote_websocket_not_open');
+        return;
+      }
+      const now = Date.now();
+      if (heartbeatPendingSince !== null && now - heartbeatPendingSince >= CLOUDFLARE_WEBSOCKET_HEARTBEAT_TIMEOUT_MS) {
+        stopRemoteHeartbeat(socketGeneration);
+        scheduleRemoteReconnect('remote_websocket_heartbeat_timeout');
+        return;
+      }
       try {
-        socket.send(JSON.stringify({ event: CLOUDFLARE_WEBSOCKET_HEARTBEAT_EVENT, transport: 'cloudflare_projection_websocket' }));
+        if (now >= nextHeartbeatAt) {
+          socket.send(JSON.stringify({ event: CLOUDFLARE_WEBSOCKET_HEARTBEAT_EVENT, transport: 'cloudflare_projection_websocket' }));
+          heartbeatPendingSince = now;
+          nextHeartbeatAt = now + CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS;
+        }
       } catch {
         stopRemoteHeartbeat(socketGeneration);
         scheduleRemoteReconnect('remote_websocket_heartbeat_failed');
         return;
       }
-      heartbeatTimer = setTimeoutFn(tick, CLOUDFLARE_WEBSOCKET_HEARTBEAT_MS);
+      heartbeatTimer = setTimeoutFn(tick, CLOUDFLARE_WEBSOCKET_HEARTBEAT_CHECK_MS);
     };
     tick();
   };
@@ -208,7 +229,10 @@ export function startCloudflareSessionTransport(context: NarsClientAdapterContex
             options.onEvent?.(message);
             return;
           }
-          if (message?.event === CLOUDFLARE_WEBSOCKET_HEARTBEAT_ACK_EVENT) return;
+          if (message?.event === CLOUDFLARE_WEBSOCKET_HEARTBEAT_ACK_EVENT) {
+            heartbeatPendingSince = null;
+            return;
+          }
           processRuntimeMessage(message);
           if (isTerminalRuntimeEvent(message)) {
             const terminalEvent = unwrapRuntimeEvent(message)?.event;
