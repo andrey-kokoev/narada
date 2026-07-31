@@ -308,6 +308,65 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(errorSink).not.toHaveBeenCalled();
   });
 
+  it('keeps an ordinary stream reconnect recoverable instead of degrading the attachment', async () => {
+    const streamText = shallowRef('stream connected');
+    const streamLive = shallowRef(true);
+    const streamPhase = shallowRef<NarsTransportPhase>('live');
+    const streamReason = shallowRef<string | null>(null);
+    const healthText = shallowRef('healthy');
+    const healthBody = shallowRef<Record<string, unknown> | null>({ status: 'healthy', session_id: 'session-1' });
+    const sessionIdentity = shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' });
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText,
+      streamLive,
+      streamPhase,
+      streamReason,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      authorityTransition: shallowRef(null),
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    });
+    const stop = vi.fn();
+    const errorSink = vi.fn();
+    useRuntimeTopologyFailFast({
+      topology: topology.topology,
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      activeTurnId: shallowRef<string | boolean | null>(null),
+      stop,
+      errorSink,
+    });
+
+    streamPhase.value = 'reconnecting';
+    streamReason.value = 'remote_websocket_closed';
+    streamLive.value = false;
+    streamText.value = 'reconnecting in 1s';
+    await nextTick();
+
+    expect(topology.topology.value.status).toBe('reconnecting');
+    expect(topology.topology.value.verdictLabel).toBe('attached, reconnecting');
+    expect(topology.topology.value.canSendInput).toBe(true);
+    expect(stop).not.toHaveBeenCalled();
+    expect(errorSink).not.toHaveBeenCalled();
+
+    streamPhase.value = 'live';
+    streamReason.value = null;
+    streamLive.value = true;
+    streamText.value = 'stream connected';
+    await nextTick();
+
+    expect(topology.topology.value.status).toBe('live');
+    expect(stop).not.toHaveBeenCalled();
+    expect(errorSink).not.toHaveBeenCalled();
+  });
+
   it('keeps an expected projection revocation terminal rather than treating it as a transport fault', async () => {
     const streamText = shallowRef('closed');
     const streamLive = shallowRef(false);

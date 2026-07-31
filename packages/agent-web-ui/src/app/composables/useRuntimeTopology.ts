@@ -11,6 +11,10 @@ export interface RuntimeTopologyNode {
   metadata: { label: string; value: string }[];
 }
 
+function isRecoverableStreamReconnect(options: RuntimeTopologyOptions): boolean {
+  return options.streamPhase?.value === 'reconnecting';
+}
+
 function controlInputBridgeNode(bridge: Record<string, unknown> | null): RuntimeTopologyNode {
   const status = stringField(bridge, 'status');
   const lastReadStatus = stringField(bridge, 'last_read_status');
@@ -35,7 +39,7 @@ function controlInputBridgeNode(bridge: Record<string, unknown> | null): Runtime
 }
 
 export interface RuntimeTopologySummary {
-  status: 'live' | 'reconfiguring' | 'closed' | 'degraded' | 'stale' | 'unavailable';
+  status: 'live' | 'reconnecting' | 'reconfiguring' | 'closed' | 'degraded' | 'stale' | 'unavailable';
   statusText: string;
   verdictLabel: string;
   primaryCause: string;
@@ -214,8 +218,10 @@ function fallbackRuntimeTopology(options: RuntimeTopologyOptions): RuntimeTopolo
       ? 'closed'
       : healthUnavailable || !options.healthEndpoint
         ? 'unavailable'
-        : mcpDegraded || (!options.streamLive.value && !plannedViewReconfiguration)
+        : mcpDegraded
           ? 'degraded'
+          : !options.streamLive.value && !plannedViewReconfiguration
+            ? isRecoverableStreamReconnect(options) ? 'reconnecting' : 'degraded'
           : plannedViewReconfiguration
             ? 'reconfiguring'
             : 'live';
@@ -282,7 +288,9 @@ function overlayTransportTopology(topology: RuntimeTopologySummary, options: Run
   if (topology.status !== 'live' || options.streamLive.value) return topology;
   const status: RuntimeTopologySummary['status'] = isPlannedViewReconfiguration(options)
     ? 'reconfiguring'
-    : 'degraded';
+    : isRecoverableStreamReconnect(options)
+      ? 'reconnecting'
+      : 'degraded';
   const posture = runtimePosture({
     status,
     stale: topology.stale,
@@ -465,6 +473,14 @@ function runtimePosture({
       verdictLabel: 'attached with surface issues',
       primaryCause: `${mcpStartupFailures + mcpRuntimeFaults} MCP surface issue${mcpStartupFailures + mcpRuntimeFaults === 1 ? '' : 's'} reported.`,
       operatorHint: 'Inspect MCP children before relying on surface-backed operations.',
+      canSendInput: true,
+    };
+  }
+  if (status === 'reconnecting') {
+    return {
+      verdictLabel: 'attached, reconnecting',
+      primaryCause: 'The event stream is reconnecting; runtime health and authority remain available.',
+      operatorHint: 'Wait for the event stream to recover. Input remains enabled.',
       canSendInput: true,
     };
   }

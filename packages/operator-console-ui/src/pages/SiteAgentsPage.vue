@@ -764,7 +764,7 @@ async function submitAdmission(): Promise<void> {
 .site-header code { display: block; margin-top: 3px; color: var(--muted); font: 11px/1.3 var(--mono); overflow-wrap: anywhere; }
 .site-header-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .site-kind { flex: 0 0 auto; color: var(--muted); font-size: 11px; text-transform: capitalize; }
-.site-actions-trigger { display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+.site-actions-trigger { display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; opacity: .72; pointer-events: auto; transition: opacity 120ms ease; }
 .site-box:hover .site-actions-trigger,
 .site-actions-trigger:focus-visible,
 .site-actions-trigger[data-state="open"] { opacity: 1; pointer-events: auto; }
@@ -788,7 +788,7 @@ async function submitAdmission(): Promise<void> {
 .agent-copy strong, .agent-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agent-copy strong { font-size: 12px; font-weight: 650; }
 .agent-copy span { color: var(--muted); font-size: 10px; }
-.agent-actions-trigger { position: absolute; top: 3px; right: 3px; z-index: 2; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; opacity: 0; pointer-events: none; transition: opacity 120ms ease; }
+.agent-actions-trigger { position: absolute; top: 3px; right: 3px; z-index: 2; display: grid; width: 26px; height: 26px; place-items: center; border: 0; border-radius: 5px; padding: 0; background: transparent; color: var(--muted); cursor: pointer; opacity: .72; pointer-events: auto; transition: opacity 120ms ease; }
 .agent-cell:hover .agent-actions-trigger,
 .agent-actions-trigger:focus-visible,
 .agent-actions-trigger[data-state="open"] { opacity: 1; pointer-events: auto; }

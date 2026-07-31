@@ -18,6 +18,7 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   const registryAdapter = read('site-registry/adapter.ts');
   const registryTransport = read('site-registry/transport.ts');
   const launchPage = read('pages/OperatorConsoleLaunchPage.vue');
+  const siteAgentsPage = read('pages/SiteAgentsPage.vue');
   const routes = read('console/routes.ts');
 
   assert.match(app, /resolveOperatorConsoleRoute/);
@@ -33,6 +34,10 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.match(registryAdapter, /createSiteRegistryAdapter/);
   assert.match(launchPage, /useSiteRegistry/);
   assert.match(mutationPage, /useSiteRegistryWorkflow/);
+  assert.match(siteAgentsPage, /\.site-actions-trigger\s*\{[^}]*opacity:\s*\.72;[^}]*pointer-events:\s*auto;/s);
+  assert.match(siteAgentsPage, /\.agent-actions-trigger\s*\{[^}]*opacity:\s*\.72;[^}]*pointer-events:\s*auto;/s);
+  assert.doesNotMatch(siteAgentsPage, /\.site-actions-trigger\s*\{[^}]*opacity:\s*0;/s);
+  assert.doesNotMatch(siteAgentsPage, /\.agent-actions-trigger\s*\{[^}]*opacity:\s*0;/s);
 });
 
 test('route discovery never gates canonical registry mutation admission', () => {
