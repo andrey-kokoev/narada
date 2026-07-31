@@ -128,7 +128,8 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /function Set-OverlayVisibility/);
   assert.match(source, /visibilityTimer/);
   assert.match(source, /New-Object Windows\.Application/);
-  assert.match(source, /\$application\.Run\(\$window\)/);
+  assert.match(source, /\$window\.Show\(\)/);
+  assert.match(source, /\$application\.Run\(\)/);
   assert.doesNotMatch(source, /\$window\.ShowDialog\(\)/);
   assert.match(source, /Start-RestartCommand/);
   assert.match(source, /Apply-ActionState/);

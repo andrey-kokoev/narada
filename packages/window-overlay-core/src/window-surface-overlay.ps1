@@ -458,7 +458,13 @@ $actionTimer.Start()
 
 Set-Content -Path $pidPath -Value ([string]$PID)
 $application = New-Object Windows.Application
-try { [void]$application.Run($window) } finally {
+try {
+    # Explicitly show the borderless, non-taskbar window before entering the
+    # dispatcher loop. Application.Run(Window) is not reliable for this
+    # configuration when the host is launched as a hidden PowerShell process.
+    $window.Show()
+    [void]$application.Run()
+} finally {
     $timer.Stop()
     $visibilityTimer.Stop()
     $actionTimer.Stop()
