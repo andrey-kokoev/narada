@@ -701,6 +701,10 @@ test('[fixture-boundary] Operator Console first-use onboarding projects ready, s
     await page.getByRole('button', { name: 'Start my assistant' }).click();
     await page.getByText('Starting your assistant').waitFor();
     await page.getByText('Assistant is ready').waitFor({ timeout: 5000 });
+    assert.equal(await page.getByRole('link', { name: 'Open Operator Workspace' }).getAttribute('href'), '/');
+    assert.equal(await page.getByRole('link', { name: 'Add a Site' }).getAttribute('href'), '/console/registry/add');
+    await page.getByRole('link', { name: 'Open Operator Workspace' }).waitFor();
+    await page.getByRole('link', { name: 'Add a Site' }).waitFor();
     assert.deepEqual(fixture.requests[0], {
       pathname: '/console/onboarding/api/start',
       input: { mode: 'live', confirm: true },

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { ArrowRight, CheckCircle2, ExternalLink, LoaderCircle, RefreshCw, Sparkles, TriangleAlert } from 'lucide-vue-next';
-import { OPERATOR_CONSOLE_SESSIONS_PATH } from '@narada2/operator-console-contract';
+import { ArrowRight, CheckCircle2, ExternalLink, LoaderCircle, Plus, RefreshCw, Sparkles, TriangleAlert } from 'lucide-vue-next';
+import { OPERATOR_CONSOLE_REGISTRY_ADD_PATH, OPERATOR_CONSOLE_SESSIONS_PATH } from '@narada2/operator-console-contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 
 type OnboardingUiState = 'checking' | 'ready' | 'starting' | 'healthy' | 'needs-provider-setup' | 'blocked' | 'failed';
@@ -168,6 +168,14 @@ onMounted(() => { void readProjection(); });
           <ArrowRight :size="16" aria-hidden="true" />
           Try the no-credential demo
         </button>
+        <a v-if="uiState === 'healthy'" class="primary-action" href="/">
+          <ArrowRight :size="16" aria-hidden="true" />
+          Open Operator Workspace
+        </a>
+        <a v-if="uiState === 'healthy'" class="secondary-action" :href="OPERATOR_CONSOLE_REGISTRY_ADD_PATH">
+          <Plus :size="16" aria-hidden="true" />
+          Add a Site
+        </a>
         <a v-if="uiState === 'healthy'" class="continue-link" :href="OPERATOR_CONSOLE_SESSIONS_PATH">
           Continue to Agent Sessions <ExternalLink :size="14" aria-hidden="true" />
         </a>
@@ -176,7 +184,7 @@ onMounted(() => { void readProjection(); });
       <section class="next-panel" aria-labelledby="next-title">
         <p class="eyebrow">Next step</p>
         <h3 id="next-title">{{ nextAction }}</h3>
-        <p v-if="uiState === 'healthy'">The first-use page is complete. The resident assistant remains the canonical conversation surface.</p>
+        <p v-if="uiState === 'healthy'">The first-use page is complete. Continue chatting with the resident assistant, or use the Operator Workspace to manage Sites.</p>
         <p v-else>Advanced Site and role workflows remain available from the Operator Workspace.</p>
       </section>
 
@@ -222,7 +230,7 @@ onMounted(() => { void readProjection(); });
 .provider-list li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 12px; }
 .provider-state { color: var(--muted); }
 .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-top: 20px; }
-.primary-action, .secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 13px; border-radius: var(--radius); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; }
+.primary-action, .secondary-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 8px 13px; border-radius: var(--radius); font: inherit; font-size: 13px; font-weight: 650; cursor: pointer; text-decoration: none; }
 .primary-action { border: 1px solid var(--operator); background: var(--operator); color: var(--background); }
 .secondary-action { border: 1px solid var(--line-strong); background: var(--surface); color: var(--text); }
 .primary-action:disabled, .secondary-action:disabled { cursor: wait; opacity: .55; }
