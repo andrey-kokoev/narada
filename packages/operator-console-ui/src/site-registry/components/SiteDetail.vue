@@ -73,11 +73,11 @@ async function ensureNow(siteId: string): Promise<void> {
       <div class="detail-section launch-section" aria-labelledby="site-launch-title">
         <h3 id="site-launch-title">Runtime posture</h3>
         <div class="launch-actions">
-          <button type="button" data-testid="site-detail-check-posture" class="detail-action launch-action" :disabled="siteLaunch.loading.value" @click="checkPosture(site.siteId)">
+          <button type="button" class="detail-action launch-action" :disabled="siteLaunch.loading.value" @click="checkPosture(site.siteId)">
             <SearchCheck :size="14" aria-hidden="true" />
             Check posture
           </button>
-          <button type="button" data-testid="site-detail-ensure-now" class="detail-action launch-action" :disabled="siteLaunch.loading.value" @click="ensureNow(site.siteId)">
+          <button type="button" class="detail-action launch-action" :disabled="siteLaunch.loading.value" @click="ensureNow(site.siteId)">
             <Play :size="14" aria-hidden="true" />
             Ensure now
           </button>

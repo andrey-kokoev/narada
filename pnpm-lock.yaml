@@ -684,9 +684,6 @@ importers:
       '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada-core/host-fleet':
-        specifier: workspace:*
-        version: link:../host-fleet
       '@narada-core/invokable-intelligence-runtime':
         specifier: workspace:*
         version: link:../invokable-intelligence-runtime
@@ -763,22 +760,6 @@ importers:
 
   packages/evidence-confirmation-contract:
     devDependencies:
-      tsx:
-        specifier: ^4.7.0
-        version: 4.21.0
-      typescript:
-        specifier: ^5.3.0
-        version: 5.9.3
-
-  packages/host-fleet:
-    dependencies:
-      '@narada-core/sqlite':
-        specifier: workspace:*
-        version: link:../sqlite
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.19.19
       tsx:
         specifier: ^4.7.0
         version: 4.21.0
@@ -979,9 +960,6 @@ importers:
       '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../control-plane
-      '@narada-core/host-fleet':
-        specifier: workspace:*
-        version: link:../../host-fleet
       '@narada-core/intent-zones':
         specifier: workspace:*
         version: link:../../intent-zones
@@ -1497,9 +1475,6 @@ importers:
 
   packages/operator-console-ui:
     dependencies:
-      '@narada-core/host-fleet':
-        specifier: workspace:*
-        version: link:../host-fleet
       '@narada-core/operator-console-contract':
         specifier: workspace:*
         version: link:../operator-console-contract

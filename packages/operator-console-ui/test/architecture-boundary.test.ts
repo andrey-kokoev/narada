@@ -20,9 +20,6 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   const launchPage = read('pages/OperatorConsoleLaunchPage.vue');
   const siteAgentsPage = read('pages/SiteAgentsPage.vue');
   const sessionsPage = read('pages/AgentSessionsPage.vue');
-  const hostFleetPage = read('pages/HostFleetPage.vue');
-  const hostFleetTransport = read('host-fleet/transport.ts');
-  const hostFleetWorkflows = read('host-fleet/workflows.ts');
   const routes = read('console/routes.ts');
 
   assert.match(app, /resolveOperatorConsoleRoute/);
@@ -42,19 +39,6 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.match(siteAgentsPage, /\.agent-actions-trigger\s*\{[^}]*opacity:\s*\.72;[^}]*pointer-events:\s*auto;/s);
   assert.doesNotMatch(siteAgentsPage, /\.site-actions-trigger\s*\{[^}]*opacity:\s*0;/s);
   assert.doesNotMatch(siteAgentsPage, /\.agent-actions-trigger\s*\{[^}]*opacity:\s*0;/s);
-  assert.match(hostFleetPage, /fleet\.attach\(session\)/);
-  assert.match(hostFleetPage, /fleet\.preflightLifecycle/);
-  assert.match(hostFleetPage, /fleet\.applyLifecycleIntent/);
-  assert.match(hostFleetPage, /fleet\.applyEnrollment/);
-  assert.match(hostFleetPage, /projection-only/);
-  assert.doesNotMatch(hostFleetPage, /fetch\s*\(/);
-  assert.doesNotMatch(hostFleetPage, /gatewaySecret|rawCredential|password\s*:/i);
-  assert.match(hostFleetWorkflows, /credentialRef/);
-  assert.match(hostFleetWorkflows, /dedicated_host_gateway/);
-  assert.doesNotMatch(hostFleetWorkflows, /credentialValue|credentialSecret|rawCredential/i);
-  assert.match(hostFleetTransport, /cloudflare-projection/);
-  assert.match(hostFleetTransport, /host_fleet_authority_local_only/);
-  assert.match(hostFleetTransport, /gateway_health\.v1/);
   const invalidScopeEmptyState = sessionsPage.indexOf('No session attachment is permitted for an invalid scope.');
   const genericEmptyState = sessionsPage.indexOf('No NARS sessions are currently discoverable.');
   assert.ok(invalidScopeEmptyState >= 0 && genericEmptyState >= 0 && invalidScopeEmptyState < genericEmptyState);

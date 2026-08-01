@@ -12,7 +12,7 @@ For kernel and workspace rules, read the parent authorities first:
 It owns:
 
 - Vue rendering of the console pages: Site registry (`/console/registry`), registry add/manage, Site Runtime (`/console/launch`), and the read-only Agent Sessions inventory;
-- per-domain browser plumbing under `src/{site-registry,agent-sessions,launcher,host-fleet}/` (adapter, transport, composables, projections);
+- per-domain browser plumbing under `src/{site-registry,agent-sessions,launcher}/` (adapter, transport, composables, projections);
 - the per-site launch/ensure action on the registry detail panel (`src/site-registry/composables/useSiteLaunch.ts` → `POST /console/registry/api/sites/:id/launch`, plan-first dry-run, apply behind an operator confirm);
 - route-directory consumption and navigation (`src/console/routes.ts`, `src/console/route-directory.ts`).
 
@@ -28,7 +28,6 @@ It does not own:
 - Mutations (registry add/manage, control actions) cross to the server through the contract-bound endpoints only; no direct Site or session writes from UI code.
 - Navigation targets come from the v3 route directory and are same-origin, workspace-relative paths; reject external or protocol-relative URLs rather than following them.
 - The Agent Sessions page renders the redacted `OperatorSessionWireRecord`; session authority stays in the NARS session-authority registry, while the session index is an inventory/projection — no lifecycle control from this UI.
-- The Host Fleet page renders redacted host-qualified inventory and exact attachment projections. It may relay operator input through an already admitted session. Host lifecycle/enrollment controls, when present, must use the typed authority adapter, require an explicit `local-authority` transport capability, and remain unavailable for Cloudflare projection clients; raw gateway credentials never enter browser state.
 
 ## Verification
 

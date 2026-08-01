@@ -49,7 +49,6 @@ function isAuthorityKind(value: unknown): value is OperatorSurfaceAuthorityKind 
 
 function isProjectionKind(value: unknown): value is OperatorSurfaceProjectionKind {
   return value === 'workspace'
-    || value === 'host-fleet'
     || value === 'registry'
     || value === 'site-agent-overview'
     || value === 'launcher'
@@ -62,7 +61,6 @@ function isProjectionKind(value: unknown): value is OperatorSurfaceProjectionKin
 
 function isIntentKind(value: unknown): value is OperatorSurfaceIntentKind {
   return value === 'none'
-    || value === 'host-fleet-control'
     || value === 'registry-workflow'
     || value === 'agent-launch'
     || value === 'launcher-control'
@@ -148,8 +146,7 @@ function isString(value: unknown): value is string {
 }
 
 function isSurfaceId(value: unknown): value is OperatorSurfaceId {
-  return value === 'host-fleet'
-    || value === 'site-agents'
+  return value === 'site-agents'
     || value === 'site-registry'
     || value === 'launcher'
     || value === 'site-operations'
@@ -171,8 +168,7 @@ function isTargetKind(value: unknown): value is OperatorSurfaceRouteTarget['kind
 }
 
 function isNavigationKey(value: unknown): value is OperatorSurfaceNavigationKey {
-  return value === 'hosts'
-    || value === 'agents'
+  return value === 'agents'
     || value === 'sites'
     || value === 'add'
     || value === 'manage'

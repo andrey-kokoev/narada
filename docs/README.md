@@ -29,7 +29,6 @@ Implementation-facing architecture and ownership contracts.
 - [`workspace-launch-enforcement.md`](architecture/workspace-launch-enforcement.md) — Mechanical enforcement map for the workspace launch contract
 - [`nars-session-input-contract.md`](architecture/nars-session-input-contract.md) — NARS session input and operator command boundary
 - [`operator-console-concept-surfaces.md`](architecture/operator-console-concept-surfaces.md) — Operator Console concept-to-surface ownership map
-- [`host-fleet-operator-console-target.md`](architecture/host-fleet-operator-console-target.md) — Multi-host Operator Console, Host Registry, gateway, identity, and routing target
 - [`operator-workspace-target.md`](architecture/operator-workspace-target.md) — Workspace route authority, projection, fallback, recovery, and acceptance target
 - [`operator-router-target.md`](architecture/operator-router-target.md) — Stable local Router projection and route-admission target
 
@@ -38,7 +37,7 @@ Implementation-facing architecture and ownership contracts.
 User-facing product proofs, onboarding, operator loop, and runbooks. These are the documents an operator reads to understand what Narada does and how to use it.
 
 - [`bootstrap-contract.md`](product/bootstrap-contract.md) — Canonical intent-to-operation bootstrap path
-- [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md) — Canonical first-time User Site onboarding across supported hosts plus the advanced operation path
+- [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md) — Canonical first-time Windows/User Site onboarding plus the advanced operation path
 - [`cascading-onboarding.md`](product/cascading-onboarding.md) — Site capability and readiness cascade after structural bootstrap
 - [`inhabited-onboarding.md`](product/inhabited-onboarding.md) — Post-bootstrap proof that a Site can carry representative operations
 - [`agent-reconstruction-specification.md`](product/agent-reconstruction-specification.md) — Agent-readable reconstruction path for blocked/internal environments
@@ -62,7 +61,7 @@ User-facing product proofs, onboarding, operator loop, and runbooks. These are t
 
 These terms describe different crossings and are not interchangeable:
 
-- **Personal User Site onboarding**: the first-time path for starting one `resident` General assistant without creating project infrastructure. Start with [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md#user-first-onboarding-ux); use [`linux-installation.md`](deployment/linux-installation.md) for native Linux installation and substrate details.
+- **Personal User Site onboarding**: the first-time Windows path for starting one `resident` General assistant without creating project infrastructure. Start with [`first-time-operator-success-path.md`](product/first-time-operator-success-path.md#user-first-windows-onboarding-ux).
 - **Operation bootstrap**: declaring and preparing governed work in an ops repo. Start with [`bootstrap-contract.md`](product/bootstrap-contract.md).
 - **Site bootstrap**: creating an explicit runtime Site boundary for a project, client, PC, or other earned locus. Start with [`site-bootstrap-contract.md`](product/site-bootstrap-contract.md).
 - **Cascading onboarding**: recording progressively stronger Site capability and readiness layers. See [`cascading-onboarding.md`](product/cascading-onboarding.md).
@@ -73,7 +72,6 @@ These terms describe different crossings and are not interchangeable:
 Site materialization and deployment target docs.
 
 - [`cloudflare-site-materialization.md`](deployment/cloudflare-site-materialization.md) — Cloudflare Site materialization design
-- [`linux-installation.md`](deployment/linux-installation.md) — Native Linux installation, User Site first use, and Linux Site supervision
 - [`systemd/`](deployment/systemd/) — systemd unit files and service configuration
 
 ## `testing/`

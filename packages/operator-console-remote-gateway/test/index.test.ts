@@ -49,15 +49,6 @@ const routePolicy: readonly OperatorConsoleHttpRouteParityEntry[] = [
 test('admits observation paths but only declared mutation intents', () => {
   assert.deepEqual(operatorConsoleRemoteGatewayPathDisposition('GET', '/console/agents', routePolicy), { admitted: true });
   assert.deepEqual(operatorConsoleRemoteGatewayPathDisposition('POST', '/console/registry/api/operations/plan', routePolicy), { admitted: true });
-  assert.equal(operatorConsoleRemoteGatewayPathDisposition('POST', '/console/hosts/api/lifecycle', [...routePolicy, {
-    routeId: 'operator-console.host-fleet-lifecycle',
-    method: 'POST',
-    protocol: 'http',
-    pattern: '^\\/console\\/hosts\\/api\\/lifecycle$',
-    disposition: 'local-only',
-    kind: 'intent',
-    intentKind: 'host_fleet.lifecycle',
-  }]).admitted, false);
   assert.equal(operatorConsoleRemoteGatewayPathDisposition('GET', '/console/unknown', routePolicy).admitted, false);
   assert.equal(operatorConsoleRemoteGatewayPathDisposition('DELETE', '/console/agents', routePolicy).admitted, false);
   assert.equal(operatorConsoleRemoteGatewayPathDisposition('GET', '/console/../secret', routePolicy).admitted, false);
@@ -107,66 +98,6 @@ test('requires the bridge credential and forwards admitted requests to the loopb
       headers: { 'x-narada-operator-console-bridge-token': bridgeToken },
     });
     assert.equal(unknown.status, 404);
-  } finally {
-    await gateway.stop();
-    await new Promise<void>((resolve, reject) => router.close((error) => error ? reject(error) : resolve()));
-  }
-});
-
-test('requires the dedicated credential for host-qualified requests when configured', async () => {
-  const hostGatewayToken = 'host-gateway-token-0123456789';
-  const router = createServer((req, res) => {
-    if (req.url === '/console/routes') {
-      res.writeHead(200, { 'content-type': 'application/json' });
-      res.end(JSON.stringify({
-        httpRouteParity: {
-          schema: OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA,
-          status: 'complete',
-          source: 'local_operator_console_route_table',
-          generatedAt: new Date().toISOString(),
-          routes: routePolicy,
-        },
-      }));
-      return;
-    }
-    res.writeHead(200, { 'content-type': 'application/json' });
-    res.end(JSON.stringify({ path: req.url, method: req.method }));
-  });
-  await new Promise<void>((resolve) => router.listen(0, '127.0.0.1', resolve));
-  const address = router.address();
-  assert.equal(typeof address, 'object');
-  const gateway = createOperatorConsoleRemoteGateway({
-    router_url: `http://127.0.0.1:${(address as { port: number }).port}`,
-    router_token: routerToken,
-    bridge_token: bridgeToken,
-    host_gateway_token: hostGatewayToken,
-    port: 0,
-  });
-  const gatewayUrl = await gateway.start();
-  try {
-    const bridge = await fetch(`${gatewayUrl}/console/agents`, {
-      headers: {
-        'x-narada-operator-console-bridge-token': bridgeToken,
-        'x-narada-host-id': 'zima-board-2',
-        'x-narada-host-instance-id': 'zima-instance',
-      },
-    });
-    assert.equal(bridge.status, 401);
-    await bridge.arrayBuffer();
-
-    const dedicated = await fetch(`${gatewayUrl}/console/agents`, {
-      headers: {
-        'x-narada-host-gateway-token': hostGatewayToken,
-        'x-narada-host-id': 'zima-board-2',
-        'x-narada-host-instance-id': 'zima-instance',
-      },
-    });
-    assert.equal(dedicated.status, 200);
-
-    const ordinary = await fetch(`${gatewayUrl}/console/agents`, {
-      headers: { 'x-narada-operator-console-bridge-token': bridgeToken },
-    });
-    assert.equal(ordinary.status, 200);
   } finally {
     await gateway.stop();
     await new Promise<void>((resolve, reject) => router.close((error) => error ? reject(error) : resolve()));

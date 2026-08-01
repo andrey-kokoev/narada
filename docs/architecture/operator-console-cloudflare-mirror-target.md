@@ -6,28 +6,32 @@ This document defines the implementation target for a complete Cloudflare-hosted
 projection of the host-local Narada Operator Console.
 
 The local crossing gateway, Cloudflare Worker proxy, Access JWT admission,
-route-parity inventory, leased workspace proxying, session WebSocket bridging,
-and governed local tunnel lifecycle are implemented. The committed live-E2E
-contract covers the primary browser journey, complete route parity, disposable
-Site Registry mutation, live session delivery, artifact digest validation, and
-explicit stale-lease and tunnel-loss profiles. This document does not treat a
-successful page render or a single dry-run as proof of those properties.
+  route-parity inventory, leased workspace proxying, session WebSocket bridging,
+  and governed local tunnel lifecycle are implemented. The protected Worker is
+  deployed at the configured Cloudflare origin, and the primary browser journey,
+  route-parity acceptance, a full disposable Site Registry mutation journey,
+  and a disposable live session lease with WebSocket delivery, revocation, and
+  restoration have been verified against the live deployment. Artifact content
+  acceptance has also been verified with a disposable HTML artifact. Disposable
+  stale-lease and tunnel-loss acceptance have also been verified, including
+  recovery after the local mirror was restarted. This document does not treat a
+  successful page render or a single dry-run as proof of those properties.
 
-The committed live acceptance contract covers:
+The current live verification covers:
 
 - Access admission: unauthenticated requests are redirected to the configured
   Access application;
 - local mirror status: gateway healthy and named tunnel connected;
 - exact shared Operator Console artifact for the entry, agent, registry,
   registry add/manage, launch, onboarding, and session pages;
-- complete route-directory equality with the local Console, ignoring only the
-  generated timestamp and recording matching contract digests;
+- route-directory schema and HTTP parity equality with the local Console;
 - authenticated registry plan forwarding with `mutation_performed: false`;
 - an authenticated disposable Site Registry add, edit, retire, and purge
-  journey driven through the browser UI, with plan/apply separation, revision
-  checks, exact purge confirmation, readback, and final absence verification;
-- an authenticated session artifact whose browser metadata page is readable and
-  whose content response matches the supplied fixture SHA-256;
+  journey, with plan/apply separation, revision checks, exact purge
+  confirmation, readback, and final absence verification;
+- an authenticated disposable session artifact whose metadata and HTML content
+  are readable through the Worker, followed by lifecycle archival that preserves
+  metadata while withdrawing content with a typed not-found response;
 - an authenticated disposable session page and WebSocket event through the
   Worker, including typed refusal after route revocation and successful exact
   route restoration;
@@ -259,44 +263,18 @@ Service, and VPC Network must already be ready before the local mirror
 lifecycle is started.
 
 After deployment, the authenticated remote gate can be run with a Cloudflare
-Access service token or an exported CF_Authorization cookie. The credential
-value is supplied only through a bounded stdin handoff; it is not accepted in
-argv, an environment variable, or a persisted secret file:
+Access service token or an exported CF_Authorization cookie:
 
-    Get-Secret -Name <temporary-access-secret> -AsPlainText | pnpm --filter @narada-core/cloudflare-nars-projection test:operator-console-mirror-live -- --url https://<worker-host> --access-client-id <client-id> --access-client-secret-stdin --turn-content LIVE_E2E_OK --artifact-id <artifact-id> --artifact-sha256 <artifact-content-sha256>
+    pnpm --filter @narada-core/cloudflare-nars-projection smoke:operator-console-mirror-live -- --live --url https://<worker-host> --access-client-id <client-id> --access-client-secret-file <secret-file>
 
-The gate proves Access admission, complete route-directory parity, mirror health, and
-browser rendering of the principal Console pages. When the route directory
-offers a concrete session, `--turn-content` is required and the gate submits
-that sentinel through the public input endpoint, then requires durable input
-admission, turn start, assistant output, turn completion, input completion,
-and a completed control response. It also requires the corresponding
-operator/user and assistant rows to render in the session event list. Thus a
-replay-only or static-browser result cannot pass as session coverage. The gate
-refuses without an explicit stdin credential and writes only redacted per-run
-evidence. It is a necessary live gate, not a substitute for the full
-route-by-route journey and failure-injection acceptance required below.
+The gate proves Access admission, route-directory parity, mirror health, and
+browser rendering of the principal Console pages. It refuses without an
+explicit Access credential and writes only redacted evidence. It is a
+necessary live gate, not a substitute for the full route-by-route journey and
+failure-injection acceptance required below.
 By default it also reads `http://127.0.0.1:61729/console/routes` and compares
-the complete local route-directory document with the remote response, ignoring
-only `generatedAt` and recording SHA-256 contract digests;
+the local `surfaces` and `httpRouteParity` documents with the remote response;
 `--local-route-directory-url` may select another loopback Console Router.
-
-The runner commands have distinct meanings:
-
-- `pnpm test` runs offline Vitest tests and does not claim live acceptance;
-- `pnpm --filter @narada-core/cloudflare-nars-projection plan:operator-console-mirror-live`
-  records an explicit plan without contacting the Worker;
-- `pnpm --filter @narada-core/cloudflare-nars-projection test:operator-console-mirror-live`
-  runs the full browser/UI profile and fails rather than silently skipping
-  required journeys;
-- `test:operator-console-mirror-live:tunnel-loss`,
-  `test:operator-console-mirror-live:route-revocation`, and
-  `test:operator-console-mirror-live:stale-lease` are separate explicit
-  failure-injection profiles that use the same live Access credential path and
-  persist their own redacted evidence;
-- `--mutation-mode none --allow-skipped-journeys` is an explicit reachability
-  diagnostic; `--mutation-mode api-disposable` is explicit backend-only
-  mutation coverage and is not a substitute for the UI journey.
 
 The live Registry mutation acceptance uses a unique disposable Site id and a
 nonexistent temporary root. It applies only after a successful plan, carries
@@ -304,15 +282,13 @@ the observed revision through each edit/state transition, retires before
 purging, supplies the exact purge confirmation, and verifies that the record is
 absent afterward. It never mutates an existing Site.
 
-The browser portion of the gate has two explicit postures. The default full
-profile fails when Site Operations, a concrete session input/events route, a
-turn sentinel, or a concrete artifact plus expected SHA-256 is unavailable. It
-also performs real launch-to-registry navigation, a dry-run posture action,
-onboarding refresh, and the disposable registry mutation form journey. The
-explicit `--allow-skipped-journeys --mutation-mode none` profile is for
-reachability diagnostics only and is never a full acceptance pass; skipped
-journeys are recorded as skips. The gate never invents a Site, session, or
-artifact identity.
+The browser portion of the gate is availability-aware. It always exercises the
+currently available primary Console routes; it records Site Operations,
+session, and artifact journeys as explicitly skipped when the authoritative
+route directory reports a planned surface or no concrete lease, and it never
+invents a Site, session, or artifact identity. The route-revocation and
+stale-lease modes remain strict: without a concrete session route they refuse
+with a typed prerequisite error instead of reporting a false pass.
 
 The same gate exposes explicit, opt-in failure checks. They must be run only
 against a disposable or maintenance-window projection because they interrupt
@@ -332,15 +308,6 @@ they revoke or shorten one concrete session-route lease, assert that the real
 Worker returns a typed unavailable/not-admitted response, restore the exact
 route, and assert that the route returns successfully. Failure-mode evidence
 contains only statuses, route identifiers, and typed codes.
-
-Live evidence is append-only by run. Each invocation writes a unique JSON
-record below `.narada/evidence/operator-console-mirror-live/` and appends a
-redacted summary to that directory's `index.jsonl`; one failure mode cannot
-overwrite another run's record. The generated Wrangler binding declaration
-`packages/cloudflare-nars-projection/worker-configuration.d.ts` is ignored by
-Git and must be recreated with:
-
-    pnpm --filter @narada-core/cloudflare-nars-projection generate:types
 
 ## Authority
 

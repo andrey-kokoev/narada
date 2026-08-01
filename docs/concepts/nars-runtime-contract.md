@@ -348,11 +348,8 @@ turns use the new one.
 
 The runtime health projection includes the active qualified selection,
 capability choices, redacted binding metadata, and the latest reconfiguration
-outcome. When a reconfiguration reaches `active`, `latest_plan` is replaced
-with the exact admitted invocation plan used for that switch before the
-terminal result is projected; the kernel binding and plan projection
-therefore cannot describe different model/options selections. Transition
-events include the request id and terminal state, but never raw credentials.
+outcome. Transition events include the request id and terminal state, but
+never raw credentials.
 Provider continuation state, including Codex thread continuation, is scoped
 to the provider-call instance rather than process-global state.
 

@@ -123,10 +123,10 @@ onUnmounted(() => {
           Live route directory unavailable. Navigation and discovery may be limited, but this page remains governed by the canonical registry authority.
         </p>
 
-        <form class="mutation-form" data-testid="site-registry-mutation-form" novalidate @submit.prevent="preview">
+        <form class="mutation-form" novalidate @submit.prevent="preview">
           <label v-if="props.mode === 'manage'" class="field">
             <span>Operation</span>
-            <select v-model="operation" data-testid="site-registry-operation" :disabled="busy" @change="onOperationChange">
+            <select v-model="operation" :disabled="busy" @change="onOperationChange">
               <option v-for="option in operationOptions" :key="option.value" :value="option.value" :disabled="!option.enabled">{{ option.label }}</option>
             </select>
             <small>Unavailable lifecycle operations remain visible so the state rule is clear.</small>
@@ -142,7 +142,7 @@ onUnmounted(() => {
               </label>
               <label class="field">
                 <span>Site record</span>
-                <select v-model="selectedReference" data-testid="site-registry-existing-site" :disabled="busy" @change="chooseExisting">
+                <select v-model="selectedReference" :disabled="busy" @change="chooseExisting">
                   <option value="">Choose an existing Site...</option>
                   <option v-for="site in filteredSites" :key="site.siteId" :value="site.siteId">{{ site.siteId }} - {{ site.siteRoot }}</option>
                 </select>
@@ -158,13 +158,13 @@ onUnmounted(() => {
             <div class="field-grid">
               <label class="field">
                 <span>Canonical Site ID</span>
-                <input v-model="draft.siteId" data-testid="site-registry-site-id" :readonly="isEdit" autocomplete="off" placeholder="smart-scheduling" @input="markDirty" />
+                <input v-model="draft.siteId" :readonly="isEdit" autocomplete="off" placeholder="smart-scheduling" @input="markDirty" />
                 <small>Stable name used by Narada. Use letters, numbers, dots, underscores, or hyphens.</small>
                 <span v-if="validationErrors.siteId" class="field-error">{{ validationErrors.siteId }}</span>
               </label>
               <label class="field field-span-2">
                 <span>Site root folder</span>
-                <input v-model="draft.root" data-testid="site-registry-root" autocomplete="off" :placeholder="draft.variant === 'wsl' ? '/mnt/d/code/my-site' : 'D:/code/my-site'" @input="markDirty" />
+                <input v-model="draft.root" autocomplete="off" :placeholder="draft.variant === 'wsl' ? '/mnt/d/code/my-site' : 'D:/code/my-site'" @input="markDirty" />
                 <small>Use an absolute Windows, WSL, Linux, or Site URL root.</small>
                 <span v-if="validationErrors.root" class="field-error">{{ validationErrors.root }}</span>
               </label>
@@ -185,7 +185,7 @@ onUnmounted(() => {
               </label>
               <label class="field">
                 <span>Runtime environment</span>
-                <input v-model="draft.substrate" data-testid="site-registry-substrate" list="substrate-kinds" autocomplete="off" placeholder="windows" @input="markDirty" />
+                <input v-model="draft.substrate" list="substrate-kinds" autocomplete="off" placeholder="windows" @input="markDirty" />
                 <datalist id="substrate-kinds"><option value="windows" /><option value="wsl" /><option value="linux" /><option value="cloudflare" /></datalist>
               </label>
               <label class="field">
@@ -195,11 +195,11 @@ onUnmounted(() => {
               </label>
               <label class="field">
                 <span>Source reference</span>
-                <input v-model="draft.sourceRef" data-testid="site-registry-source-ref" autocomplete="off" placeholder="registry entry or file path" @input="markDirty" />
+                <input v-model="draft.sourceRef" autocomplete="off" placeholder="registry entry or file path" @input="markDirty" />
               </label>
               <label class="field field-span-2">
                 <span>Reason</span>
-                <input v-model="draft.reason" data-testid="site-registry-reason" autocomplete="off" placeholder="e.g. moved to a new folder" @input="markDirty" />
+                <input v-model="draft.reason" autocomplete="off" placeholder="e.g. moved to a new folder" @input="markDirty" />
                 <small>Short operator-facing reason recorded with the change.</small>
                 <span v-if="validationErrors.reason" class="field-error">{{ validationErrors.reason }}</span>
               </label>
@@ -211,7 +211,7 @@ onUnmounted(() => {
               </label>
               <label class="field field-span-2">
                 <span>Other names</span>
-                <input v-model="draft.aliases" data-testid="site-registry-aliases" autocomplete="off" placeholder="staccato, scheduling" :disabled="draft.clearAliases" @input="markDirty" />
+                <input v-model="draft.aliases" autocomplete="off" placeholder="staccato, scheduling" :disabled="draft.clearAliases" @input="markDirty" />
                 <small>Separate aliases with commas.</small>
                 <label v-if="isEdit" class="clear-toggle"><input v-model="draft.clearAliases" type="checkbox" @change="markDirty" /> Clear all stored aliases</label>
               </label>
@@ -230,7 +230,7 @@ onUnmounted(() => {
 
           <label v-if="!isMetadataOperation" class="field lifecycle-reason">
             <span>Reason</span>
-            <input v-model="draft.reason" data-testid="site-registry-reason" autocomplete="off" placeholder="e.g. duplicate registry record" @input="markDirty" />
+            <input v-model="draft.reason" autocomplete="off" placeholder="e.g. duplicate registry record" @input="markDirty" />
             <small>Short operator-facing reason recorded with the lifecycle change.</small>
             <span v-if="validationErrors.reason" class="field-error">{{ validationErrors.reason }}</span>
           </label>
@@ -244,19 +244,19 @@ onUnmounted(() => {
           </div>
 
           <div class="actions">
-            <button class="button-primary" data-testid="site-registry-preview" type="submit" :disabled="!canPlan"><Eye :size="16" aria-hidden="true" />{{ busy && mutationState === 'planning' ? 'Planning...' : 'Preview change' }}</button>
+            <button class="button-primary" type="submit" :disabled="!canPlan"><Eye :size="16" aria-hidden="true" />{{ busy && mutationState === 'planning' ? 'Planning...' : 'Preview change' }}</button>
             <button class="button-secondary" type="button" :disabled="busy || !draftDirty" @click="discardDraft"><RotateCcw :size="16" aria-hidden="true" />Discard draft</button>
           </div>
 
           <div v-if="plannedRequest && planResult?.status === 'planned'" class="apply-strip">
-            <label class="confirm-label"><input v-model="confirmApply" data-testid="site-registry-confirm-apply" type="checkbox" :disabled="busy" /> <span>I reviewed this preview and want to apply it.</span></label>
+            <label class="confirm-label"><input v-model="confirmApply" type="checkbox" :disabled="busy" /> <span>I reviewed this preview and want to apply it.</span></label>
             <label v-if="operation === 'purge'" class="field purge-confirm">
               <span>Type {{ confirmationRequired }} to confirm purge</span>
-              <input v-model="purgeConfirmation" data-testid="site-registry-purge-confirmation" autocomplete="off" :placeholder="confirmationRequired" @input="validationErrors.purgeConfirmation = ''" />
+              <input v-model="purgeConfirmation" autocomplete="off" :placeholder="confirmationRequired" @input="validationErrors.purgeConfirmation = ''" />
               <small>Purge removes registry metadata permanently. It does not delete the Site folder.</small>
               <span v-if="validationErrors.purgeConfirmation" class="field-error">{{ validationErrors.purgeConfirmation }}</span>
             </label>
-            <button class="button-primary" data-testid="site-registry-apply" type="button" :disabled="!canApply || busy" @click="apply"><Save :size="16" aria-hidden="true" />{{ busy && mutationState === 'applying' ? 'Applying...' : 'Apply change' }}</button>
+            <button class="button-primary" type="button" :disabled="!canApply || busy" @click="apply"><Save :size="16" aria-hidden="true" />{{ busy && mutationState === 'applying' ? 'Applying...' : 'Apply change' }}</button>
           </div>
         </form>
       </section>
@@ -267,7 +267,7 @@ onUnmounted(() => {
             <p class="eyebrow">No mutation before confirmation</p>
             <h2 id="preview-title">Preview</h2>
           </div>
-          <span class="status-badge" data-testid="site-registry-status" :data-status="planResult?.status || 'idle'">{{ statusText }}</span>
+          <span class="status-badge" :data-status="planResult?.status || 'idle'">{{ statusText }}</span>
         </header>
         <p v-if="registry.error" class="inline-error" role="alert">{{ registry.error }}</p>
         <p v-if="mutation.error" class="inline-error" role="alert">{{ mutation.error }}</p>

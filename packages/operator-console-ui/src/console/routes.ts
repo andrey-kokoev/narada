@@ -9,7 +9,6 @@ import {
 import type { OperatorSurfaceNavItem } from '@narada-core/ui-vue';
 
 export type OperatorConsoleRouteKind =
-  | 'host-fleet'
   | 'site-registry'
   | 'site-registry-add'
   | 'site-registry-manage'
@@ -133,9 +132,6 @@ export function resolveOperatorConsoleRoute(
     })();
   if (matched?.surfaceId === 'site-agents') {
     return { kind: 'site-agents', path };
-  }
-  if (matched?.surfaceId === 'host-fleet') {
-    return { kind: 'host-fleet', path };
   }
   if (matched?.surfaceId === 'site-registry') {
     if (matched.routeId === 'sites') {

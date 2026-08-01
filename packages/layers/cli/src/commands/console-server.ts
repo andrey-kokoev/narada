@@ -9,7 +9,6 @@
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'http';
-import type { Duplex } from 'node:stream';
 import { createRequire } from 'node:module';
 import { dirname, resolve, sep } from 'node:path';
 import { openRegistry, createObservationFactory, createControlClientFactory } from '../lib/console-core.js';
@@ -45,15 +44,6 @@ import {
   type OperatorConsoleHttpRouteParity,
   type OperatorConsoleHttpRouteParityEntry,
 } from '@narada-core/operator-console-contract';
-import {
-  createHostGatewayClient,
-  relayHostGatewayWebSocket,
-  resolveHostGatewayCredential,
-  resolveHostGatewayEnvironmentCredential,
-  resolveRuntimeTarget,
-  openHostFleetRegistry,
-  type HostFleetRegistry,
-} from '@narada-core/host-fleet';
 
 export const DEFAULT_OPERATOR_CONSOLE_PORT = DEFAULT_OPERATOR_ROUTER_PORT;
 export const OPERATOR_CONSOLE_IDENTITY = 'narada.operator-console';
@@ -278,10 +268,6 @@ export interface ConsoleServerConfig {
   siteAgentPending?: SiteAgentPendingTracker;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
-  hostFleetRegistry?: HostFleetRegistry;
-  hostFleetCredentialResolver?: (credentialRef: string) => string | Promise<string | null> | null;
-  hostFleetFetch?: typeof fetch;
-  hostFleetAuthorityToken?: string | null;
 }
 
 export interface ConsoleServer {
@@ -290,96 +276,6 @@ export interface ConsoleServer {
   isRunning(): boolean;
   getUrl(): string | null;
   getOwnership(): 'started' | 'attached' | 'diagnostic';
-}
-
-const HOST_FLEET_SESSION_WEBSOCKET_PATTERN = /^\/console\/hosts\/api\/sessions\/([^/]+)\/([^/]+)\/([^/]+)\/events\/?$/u;
-
-function writeUpgradeRefusal(socket: Duplex, status: number, reason: string): void {
-  if (socket.destroyed) return;
-  const phrase = status === 400 ? 'Bad Request' : status === 404 ? 'Not Found' : status === 409 ? 'Conflict' : 'Service Unavailable';
-  const body = JSON.stringify({ schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason });
-  socket.write(`HTTP/1.1 ${status} ${phrase}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`);
-  socket.destroy();
-}
-
-function decodePathSegment(value: string): string | null {
-  try {
-    const decoded = decodeURIComponent(value);
-    return decoded && !decoded.includes('/') && !decoded.includes('\\') && !decoded.includes('..') ? decoded : null;
-  } catch {
-    return null;
-  }
-}
-
-async function handleHostFleetSessionUpgrade(args: {
-  request: IncomingMessage;
-  socket: Duplex;
-  head: Buffer;
-  registry: HostFleetRegistry;
-  credentialResolver?: (credentialRef: string) => string | Promise<string | null> | null;
-  fetchFn?: typeof fetch;
-}): Promise<boolean> {
-  const requestUrl = new URL(args.request.url ?? '/', `http://${args.request.headers.host ?? '127.0.0.1'}`);
-  const match = HOST_FLEET_SESSION_WEBSOCKET_PATTERN.exec(requestUrl.pathname);
-  if (!match) return false;
-  if (args.request.method !== 'GET' || args.request.headers.upgrade?.toLowerCase() !== 'websocket') {
-    writeUpgradeRefusal(args.socket, 400, 'host_fleet_websocket_upgrade_required');
-    return true;
-  }
-  const hostId = decodePathSegment(match[1]!);
-  const instanceId = decodePathSegment(match[2]!);
-  const sessionId = decodePathSegment(match[3]!);
-  const siteId = requestUrl.searchParams.get('site_id')?.trim() ?? '';
-  const agentId = requestUrl.searchParams.get('agent_id')?.trim() ?? '';
-  if (!hostId || !instanceId || !sessionId || !siteId || !agentId) {
-    writeUpgradeRefusal(args.socket, 400, 'host_fleet_websocket_target_required');
-    return true;
-  }
-  const host = args.registry.getHost({ host_id: hostId, host_instance_id: instanceId });
-  if (!host) {
-    writeUpgradeRefusal(args.socket, 404, 'host_not_registered');
-    return true;
-  }
-  if (host.lifecycle_state === 'revoked' || host.lifecycle_state === 'retired') {
-    writeUpgradeRefusal(args.socket, 409, `host_${host.lifecycle_state}`);
-    return true;
-  }
-  if (!host.admitted_sites.includes(siteId)) {
-    writeUpgradeRefusal(args.socket, 409, 'host_site_not_admitted');
-    return true;
-  }
-  try {
-    const client = createHostGatewayClient(host, {
-      fetch_fn: args.fetchFn,
-      credential_resolver: args.credentialResolver ?? resolveHostGatewayEnvironmentCredential,
-      observe_request: (observation) => args.registry.recordGatewayObservation(observation),
-    });
-    const discovery = await client.sessions();
-    const resolution = resolveRuntimeTarget(discovery.sessions, {
-      host_id: host.host_id,
-      host_instance_id: host.host_instance_id,
-      site_id: siteId,
-      agent_id: agentId,
-      runtime_session_id: sessionId,
-    });
-    if (resolution.status !== 'resolved') {
-      writeUpgradeRefusal(args.socket, 409, resolution.refusal.reason);
-      return true;
-    }
-    const credential = await resolveHostGatewayCredential(host, args.credentialResolver ?? resolveHostGatewayEnvironmentCredential);
-    relayHostGatewayWebSocket({
-      record: host,
-      host,
-      session_id: resolution.target.runtime_session_id,
-      credential,
-      client: args.socket,
-      request: args.request,
-      head: args.head,
-    });
-  } catch (error) {
-    writeUpgradeRefusal(args.socket, 503, error instanceof Error ? error.message : String(error));
-  }
-  return true;
 }
 
 export interface EnsureConsoleServerResult {
@@ -447,8 +343,6 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       resolveOperatorConsoleArtifactOptions(),
     ).artifact_root;
   const registry = await openRegistry();
-  const hostFleetRegistry = config.hostFleetRegistry ?? openHostFleetRegistry();
-  const ownsHostFleetRegistry = config.hostFleetRegistry === undefined;
 
   const observationFactory = createObservationFactory();
   const controlClientFactory = createControlClientFactory(registry);
@@ -474,10 +368,6 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     siteAgentAdmission,
     siteAgentLifecycle,
     siteAgentPending: config.siteAgentPending ?? createSiteAgentPendingTracker(),
-    hostFleetRegistry,
-    hostFleetCredentialResolver: config.hostFleetCredentialResolver,
-    hostFleetFetch: config.hostFleetFetch,
-    hostFleetAuthorityToken: config.hostFleetAuthorityToken ?? process.env.NARADA_HOST_FLEET_AUTHORITY_TOKEN ?? null,
     workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,
     onboardingPlatform: config.onboardingPlatform ?? (process.platform === 'win32' ? 'windows' : 'linux'),
@@ -528,7 +418,6 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
   }
 
   let server: Server | null = null;
-  const activeHostFleetSockets = new Set<Duplex>();
   let isRunning = false;
   let serverUrl: string | null = null;
 
@@ -661,23 +550,6 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
             });
           });
 
-          server.on('upgrade', (req, socket, head) => {
-            activeHostFleetSockets.add(socket);
-            socket.once('close', () => activeHostFleetSockets.delete(socket));
-            handleHostFleetSessionUpgrade({
-              request: req,
-              socket,
-              head,
-              registry: hostFleetRegistry,
-              credentialResolver: config.hostFleetCredentialResolver,
-              fetchFn: config.hostFleetFetch,
-            }).then((handled) => {
-              if (!handled && !socket.destroyed) socket.destroy();
-            }).catch(() => {
-              if (!socket.destroyed) writeUpgradeRefusal(socket, 503, 'host_fleet_websocket_internal_error');
-            });
-          });
-
           server.on('error', (error) => {
             reject(error);
           });
@@ -704,10 +576,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
       try {
         await siteAgentLaunch.close?.();
       } finally {
-        for (const socket of activeHostFleetSockets) socket.destroy();
-        activeHostFleetSockets.clear();
         registry.close();
-        if (ownsHostFleetRegistry) hostFleetRegistry.close();
         if (server) {
           await new Promise<void>((resolve) => {
             server!.close(() => {

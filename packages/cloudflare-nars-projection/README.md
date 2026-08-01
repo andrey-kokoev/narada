@@ -13,15 +13,6 @@ consumer entry point directly:
 
     pnpm --filter @narada-core/cloudflare-nars-projection build
 
-Wrangler binding types are generated and intentionally ignored because they
-are derived from `wrangler.toml`. Regenerate them after changing Worker
-bindings or when setting up a clean checkout:
-
-    pnpm --filter @narada-core/cloudflare-nars-projection generate:types
-
-Do not commit `worker-configuration.d.ts`; the checked-in Wrangler
-configuration and this command are the source of truth.
-
 ## Cloudflare-native runtime
 
 The provider-capable lane uses the shared
@@ -57,33 +48,3 @@ principal, and the browser credential. It creates and revokes one session, so
 it must be run only against an operator-approved production deployment:
 
     pnpm --filter @narada-core/cloudflare-nars-projection smoke:provider-capable-live -- --live --cloudflare-api-base-url https://<nars-worker> --principal-id principal:<operator> --browser-token fingerprint:<operator-browser>
-
-The operator-console mirror live E2E uses an explicit, ephemeral Narada-owned
-shared-secret handoff. Pass the same secret configured as the Worker
-`NARADA_OPERATOR_CONSOLE_SHARED_SECRET` Wrangler secret on stdin; do not put
-it in an argument, environment variable, or evidence file. The Worker also
-accepts this secret through its browser login page and stores only an HttpOnly
-session cookie.
-The full profile also requires `--turn-content <sentinel>`, a concrete
-`--artifact-id`, and the expected `--artifact-sha256`. It proves input
-admission, turn start, assistant output, terminal completion, rendered event
-rows, real launch/onboarding UI actions, and the disposable registry form
-journey in addition to route replay:
-
-    Get-Secret -Name <narada-operator-console-secret> -AsPlainText | pnpm --filter @narada-core/cloudflare-nars-projection test:operator-console-mirror-live -- --url https://<worker-host> --operator-secret-stdin --turn-content LIVE_E2E_OK --artifact-id <artifact-id> --artifact-sha256 <artifact-content-sha256>
-
-Use `plan:operator-console-mirror-live` for an explicit offline plan. Use
-`--mutation-mode none --allow-skipped-journeys` only for a reachability
-diagnostic; that result is reported as `passed_with_skips`. The explicit
-`--mutation-mode api-disposable` profile covers backend mutation transport and
-does not replace the browser UI journey.
-The failure-injection commands are separate and explicit:
-`test:operator-console-mirror-live:tunnel-loss`,
-`test:operator-console-mirror-live:route-revocation`, and
-`test:operator-console-mirror-live:stale-lease`.
-
-Each run writes a unique JSON evidence file under
-`.narada/evidence/operator-console-mirror-live/` and appends a redacted
-summary to `index.jsonl`; a later run cannot overwrite an earlier run's
-evidence. Wrangler remains the deployment/configuration authority, while the
-stdin handoff is only for the live acceptance process.

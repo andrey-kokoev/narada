@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH,
-  OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH,
   firstAvailableConcreteProjectedOperatorSurfaceRoute,
   findOperatorSurfaceRoute,
   operatorSurfaceDescriptors,
@@ -20,18 +18,16 @@ import {
 } from '../src/index.ts';
 
 test('operator surface catalog describes canonical registry and launcher routes', () => {
-  assert.equal(operatorSurfaceDescriptors.length, 8);
+  assert.equal(operatorSurfaceDescriptors.length, 7);
   assert.equal(findOperatorSurfaceRoute('/console/agents')?.surface.id, 'site-agents');
   assert.equal(findOperatorSurfaceRoute('/console/registry/')?.surface.id, 'site-registry');
   assert.equal(findOperatorSurfaceRoute('/console/registry/add')?.route.kind, 'workflow');
   assert.equal(findOperatorSurfaceRoute('/console/launch')?.surface.id, 'launcher');
   assert.equal(findOperatorSurfaceRoute('/console/onboarding')?.surface.id, 'onboarding');
-  assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors.find((surface) => surface.id === 'site-agents')!)?.path, '/console/agents');
+  assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors[0])?.path, '/console/agents');
   assert.equal(operatorSurfaceRoutePath('agent-sessions', 'sessions'), '/console/sessions');
   assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.authority.kind, 'operator-console');
   assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.projection.kind, 'launcher');
-  assert.equal(OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH, '/console/hosts/api/lifecycle');
-  assert.equal(OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH, '/console/hosts/api/enrollment');
 });
 
 test('workspace route directory maps concrete session routes to session authority', () => {
@@ -70,7 +66,6 @@ test('live route binding derives scoped authority without changing surface owner
 
 test('navigation projection follows descriptor availability and labels', () => {
   assert.deepEqual(projectOperatorSurfaceNavigation().map((item) => item.label), [
-    'Hosts',
     'Agents',
     'Sites',
     'Add Site',
@@ -80,7 +75,6 @@ test('navigation projection follows descriptor availability and labels', () => {
     'Sessions',
   ]);
   assert.deepEqual(projectOperatorSurfaceNavigation({ availability: { launcher: 'unavailable' } }).map((item) => item.key), [
-    'hosts',
     'agents',
     'sites',
     'add',
@@ -99,7 +93,7 @@ test('launcher descriptor projection is owned by the console UI, not the groupin
 test('navigation projection excludes routes that are unavailable within an available surface', () => {
   assert.deepEqual(projectOperatorSurfaceNavigation({
     routeAvailability: { 'site-registry': { add: 'unavailable', manage: 'unavailable' } },
-  }).map((item) => item.key), ['hosts', 'agents', 'sites', 'launcher', 'onboarding', 'sessions']);
+  }).map((item) => item.key), ['agents', 'sites', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('availability projection preserves planned and unavailable states', () => {
@@ -135,7 +129,7 @@ test('workspace route directory preserves concrete and template route availabili
   assert.deepEqual(projectOperatorSurfaceNavigation({
     availability: { artifacts: 'available' },
     routeAvailability: { artifacts: { artifact: 'available' } },
-  }).map((item) => item.key), ['hosts', 'agents', 'sites', 'add', 'manage', 'launcher', 'onboarding', 'sessions']);
+  }).map((item) => item.key), ['agents', 'sites', 'add', 'manage', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('workspace route directory admits live concrete routes without replacing templates', () => {

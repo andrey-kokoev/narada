@@ -45,7 +45,6 @@ export interface ConsoleGatewayOptions extends ConsoleOptions {
   router_state_root?: string;
   router_token?: string;
   bridge_token?: string;
-  host_gateway_token?: string;
 }
 
 export interface ConsoleGatewayStartResult {
@@ -67,13 +66,10 @@ export async function consoleGatewayCommand(
   const bridgeToken = options.bridge_token?.trim()
     || process.env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN?.trim();
   if (!bridgeToken) throw new Error('operator_console_gateway_bridge_token_required');
-  const hostGatewayToken = options.host_gateway_token?.trim()
-    || process.env.NARADA_HOST_GATEWAY_TOKEN?.trim();
   const gateway = createOperatorConsoleRemoteGateway({
     router_url: routerUrl,
     router_token: routerToken,
     bridge_token: bridgeToken,
-    ...(hostGatewayToken ? { host_gateway_token: hostGatewayToken } : {}),
     host: options.host,
     port: options.port,
   });

@@ -21,19 +21,6 @@ export const OPERATOR_CONSOLE_ONBOARDING_API_PATH = `${OPERATOR_CONSOLE_ONBOARDI
 export const OPERATOR_CONSOLE_ONBOARDING_SCHEMA = 'narada.operator_console.onboarding.v1' as const;
 export const OPERATOR_CONSOLE_SESSIONS_PATH = `${OPERATOR_CONSOLE_PATH}/sessions` as const;
 export const OPERATOR_CONSOLE_SESSIONS_API_PATH = `${OPERATOR_CONSOLE_SESSIONS_PATH}/api` as const;
-export const OPERATOR_CONSOLE_HOSTS_PATH = `${OPERATOR_CONSOLE_PATH}/hosts` as const;
-export const OPERATOR_CONSOLE_HOSTS_API_PATH = `${OPERATOR_CONSOLE_HOSTS_PATH}/api` as const;
-export const OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/observations` as const;
-export const OPERATOR_CONSOLE_HOSTS_LIFECYCLE_PREFLIGHT_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/lifecycle/preflight` as const;
-export const OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/lifecycle` as const;
-export const OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/enrollment` as const;
-export const OPERATOR_CONSOLE_HOSTS_LAUNCH_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/launch` as const;
-export const OPERATOR_CONSOLE_HOSTS_LAUNCH_PREFLIGHT_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/launch/preflight` as const;
-export const OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/credentials/rotate` as const;
-export const OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_PREFLIGHT_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/credentials/rotate/preflight` as const;
-export const OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROLLBACK_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/credentials/rollback` as const;
-export const OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROLLBACK_PREFLIGHT_API_PATH = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/credentials/rollback/preflight` as const;
-export const OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_SCHEMA = 'narada.operator_console.host_fleet_observations.v1' as const;
 export const OPERATOR_CONSOLE_ASSET_PATH = '/console/assets' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_TIMEOUT_MS = 10_000;
 export const OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
@@ -105,7 +92,6 @@ export interface OperatorConsoleHttpRouteParity {
 }
 
 export type OperatorSurfaceId =
-  | 'host-fleet'
   | 'site-registry'
   | 'site-agents'
   | 'launcher'
@@ -154,7 +140,6 @@ export interface OperatorSurfaceHostRef {
 
 export type OperatorSurfaceProjectionKind =
   | 'workspace'
-  | 'host-fleet'
   | 'registry'
   | 'site-agent-overview'
   | 'launcher'
@@ -171,7 +156,6 @@ export interface OperatorSurfaceProjectionBinding {
 
 export type OperatorSurfaceIntentKind =
   | 'none'
-  | 'host-fleet-control'
   | 'registry-workflow'
   | 'agent-launch'
   | 'launcher-control'
@@ -195,7 +179,7 @@ export type OperatorSurfaceAvailability = 'available' | 'unavailable' | 'planned
 
 export type OperatorSurfaceRouteKind = 'page' | 'workflow';
 
-export type OperatorSurfaceNavigationKey = 'hosts' | 'agents' | 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
+export type OperatorSurfaceNavigationKey = 'agents' | 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
 
 export interface OperatorSurfaceNavigationItem {
   key: OperatorSurfaceNavigationKey;
@@ -455,42 +439,6 @@ export interface OperatorSiteAgentLaunchDiagnosticSummary {
     reclaim_eligible: boolean | null;
     reclaim_blockers: string[];
   } | null;
-}
-
-export type OperatorHostFleetHealthStatus = 'unknown' | 'online' | 'degraded' | 'offline' | 'stale' | 'unauthenticated' | 'revoked';
-
-export interface OperatorHostFleetWireRecord {
-  host_id: string;
-  host_instance_id: string;
-  display_name: string;
-  platform: string;
-  narada_version: string | null;
-  gateway: {
-    transport: string;
-    admitted_path_count: number;
-  };
-  capabilities: string[];
-  admitted_sites: string[];
-  lifecycle_state: 'pending' | 'active' | 'revoked' | 'retired';
-  health: {
-    status: OperatorHostFleetHealthStatus;
-    observed_at: string | null;
-    detail: string | null;
-    gateway_schema: string | null;
-  };
-  created_at: string;
-  updated_at: string;
-  last_seen_at: string | null;
-  revision: number;
-}
-
-export interface OperatorHostFleetOverviewWireResponse {
-  schema: 'narada.operator_console.host_fleet.v1';
-  status: 'success' | 'refused';
-  generated_at: string;
-  count: number;
-  hosts: OperatorHostFleetWireRecord[];
-  refusals: string[];
 }
 
 export interface OperatorSiteAgentLaunchFailureWireRecord {
@@ -985,27 +933,6 @@ export function projectOperatorSurfaceRouteBinding(
 }
 
 export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = [
-  {
-    schema: OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
-    id: 'host-fleet',
-    name: 'Hosts',
-    scope: 'user-site',
-    owner: 'User Site Host Registry',
-    authority: { kind: 'user-site', id: null },
-    authorityHost: { kind: 'local', id: 'user-site', origin: null },
-    projection: { kind: 'host-fleet', owner: '@narada-core/operator-console-ui' },
-    intent: { kind: 'host-fleet-control', endpoint: OPERATOR_CONSOLE_HOSTS_API_PATH, endpointBase: 'workspace', protocols: ['http'] },
-    diagnosticOnly: false,
-    routes: [
-      { id: 'hosts', path: OPERATOR_CONSOLE_HOSTS_PATH, kind: 'page', label: 'Hosts', navigationKey: 'hosts' },
-    ],
-    defaultAvailability: 'available',
-    detail: {
-      available: 'Inspect enrolled Narada hosts, host instances, gateway health, and host-qualified identity.',
-      unavailable: 'The User Site Host Registry is not available from this operator console.',
-      planned: 'The Host Registry projection is not yet available from this operator console.',
-    },
-  },
   {
     schema: OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
     id: 'site-agents',

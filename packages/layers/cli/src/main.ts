@@ -60,7 +60,6 @@ import { registerSiteRegistryCommands } from './commands/site-registry-register.
 import { registerOnboardingCommands } from './commands/onboarding-register.js';
 import { registerInstallCommands } from './commands/install-register.js';
 import { registerHistoryCommands } from './commands/history-register.js';
-import { registerFleetCommands } from './commands/fleet.js';
 
 loadEnvFile('./.env');
 
@@ -155,6 +154,5 @@ registerOutboundActionCommands(program);
 registerCrossingCommands(program);
 registerOpsKitCommands(program);
 registerHistoryCommands(program);
-registerFleetCommands(program);
 
 program.parse();

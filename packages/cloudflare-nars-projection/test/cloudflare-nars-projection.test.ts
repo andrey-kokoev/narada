@@ -963,6 +963,7 @@ describe('Cloudflare Worker routes', () => {
           return new Response('<!doctype html><div id="app"></div>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
         },
       },
+      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
     });
     expect(response.status).toBe(200);
     expect(await response.text()).toContain('<div id="app"></div>');
@@ -977,6 +978,7 @@ describe('Cloudflare Worker routes', () => {
     const legacyUrl = `${apiBaseUrl}/sessions/?cloudflare_projection_id=${encodeURIComponent(projectionId)}&cloudflare_api_base_url=${encodeURIComponent(apiBaseUrl)}&cloudflare_browser_token=${encodeURIComponent(browserToken)}`;
     const legacyResponse = await worker.fetch(new Request(legacyUrl), {
       ASSETS: { fetch: () => new Response('unexpected asset request') },
+      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
     });
     expect(legacyResponse.status).toBe(307);
     expect(legacyResponse.headers.get('cache-control')).toBe('no-store');
@@ -996,6 +998,7 @@ describe('Cloudflare Worker routes', () => {
           return new Response('<script id="nars-config">__NARADA_AGENT_WEB_UI_CONFIG__</script><script src="./assets/app.js"></script>', { headers: { 'content-type': 'text/html; charset=utf-8' } });
         },
       },
+      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
     });
     expect(rootResponse.status).toBe(200);
     const rootContent = await rootResponse.text();

@@ -9,7 +9,7 @@ const classes = computed(() => ({ selected: props.selected, compact: props.compa
 </script>
 
 <template>
-  <button type="button" class="site-tile" :data-site-id="site.siteId" :class="classes" :aria-pressed="selected" @click="emit('select', site.siteId)">
+  <button type="button" class="site-tile" :class="classes" :aria-pressed="selected" @click="emit('select', site.siteId)">
     <span class="site-tile__topline">
       <span class="site-tile__name">{{ site.label }}</span>
       <ArrowUpRight :size="16" aria-hidden="true" />

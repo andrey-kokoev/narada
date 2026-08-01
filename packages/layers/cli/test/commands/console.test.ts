@@ -3,7 +3,6 @@ import {
   consoleStatusCommand,
   consoleAttentionCommand,
   consoleControlCommand,
-  consoleGatewayCommand,
 } from '../../src/commands/console.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -26,19 +25,6 @@ function createMockContext(overrides?: Partial<CommandContext>): CommandContext 
     ...overrides,
   };
 }
-
-const { createOperatorConsoleRemoteGatewayMock, remoteGateway } = vi.hoisted(() => ({
-  createOperatorConsoleRemoteGatewayMock: vi.fn(),
-  remoteGateway: {
-    start: vi.fn(async () => 'http://127.0.0.1:61730'),
-    stop: vi.fn(async () => undefined),
-    getUrl: vi.fn(() => 'http://127.0.0.1:61730'),
-  },
-}));
-
-vi.mock('@narada-core/operator-console-remote-gateway', () => ({
-  createOperatorConsoleRemoteGateway: createOperatorConsoleRemoteGatewayMock,
-}));
 
 const mockDb = {
   exec: vi.fn(),
@@ -142,35 +128,10 @@ describe('console commands', () => {
     vi.clearAllMocks();
     mockControlClient.executeControlRequest.mockReset();
     mockCloudflareControlClient.executeControlRequest.mockReset();
-    createOperatorConsoleRemoteGatewayMock.mockReset().mockReturnValue(remoteGateway);
     mockDb.prepare.mockReturnValue({
       all: vi.fn(() => []),
       get: vi.fn(() => null),
       run: vi.fn(() => ({ changes: 0 })),
-    });
-  });
-
-  describe('consoleGatewayCommand', () => {
-    it('wires the dedicated Host Gateway credential from the environment', async () => {
-      const previous = process.env.NARADA_HOST_GATEWAY_TOKEN;
-      process.env.NARADA_HOST_GATEWAY_TOKEN = 'host-gateway-token';
-      try {
-        const result = await consoleGatewayCommand({
-          router_url: 'http://127.0.0.1:61729',
-          router_token: 'router-token',
-          bridge_token: 'bridge-token',
-          port: 0,
-        }, createMockContext());
-
-        expect(result.url).toBe('http://127.0.0.1:61730');
-        expect(createOperatorConsoleRemoteGatewayMock).toHaveBeenCalledWith(expect.objectContaining({
-          bridge_token: 'bridge-token',
-          host_gateway_token: 'host-gateway-token',
-        }));
-      } finally {
-        if (previous === undefined) delete process.env.NARADA_HOST_GATEWAY_TOKEN;
-        else process.env.NARADA_HOST_GATEWAY_TOKEN = previous;
-      }
     });
   });
 
