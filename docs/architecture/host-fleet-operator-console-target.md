@@ -62,10 +62,11 @@ client-only controls. A redacted Cloudflare registry example is checked in at
 `packages/cloudflare-nars-projection/config/host-fleet.registry.example.json`.
 They do not claim that a production host has been enrolled or that the
 physical two-host live test has passed; that test is opt-in through
-`NARADA_HOST_FLEET_LIVE_E2E_JSON`. Its host entries can additionally carry
-`local_port` and `expected_session_id`; when supplied, the test mechanically
-proves that every physical host uses the same local port number and that the
-expected session remains qualified to its declared HostKey.
+`NARADA_HOST_FLEET_LIVE_E2E_JSON`. Its host entries carry `local_port` and an
+`expected_session_id`; the test mechanically verifies that each endpoint's
+effective port matches the declared port and that the expected session remains
+qualified to its declared HostKey. The port is a transport assertion only; the
+HostKey remains the identity boundary.
 
 ## Objective
 
@@ -593,7 +594,7 @@ must not be smuggled into the fleet console as convenience behavior.
    context. **The Host Fleet page, local-authority enrollment/lifecycle
    controls, Cloudflare static-page configuration, and host-local console
    linking/projection are implemented; live physical-host acceptance remains.**
-7. Add Cloudflare fleet projection only after local two-host parity is proven. **Synthetic projection, per-host session fan-out, native browser route configuration, correlation diagnostics, and deployment preflight are implemented; production deployment parity remains.**
+7. Add Cloudflare fleet projection only after local two-host parity is proven. **Synthetic projection, per-host session fan-out, native browser route configuration, correlation diagnostics, authenticated audit readback, and deployment preflight are implemented; production deployment parity remains.**
 8. Run the two-host E2E matrix with a Windows desktop and a ZimaBoard.
 
 ## Acceptance Target
@@ -629,7 +630,7 @@ is not mistaken for a deployed fleet:
 | Remote lifecycle controls | The User Site authority and Host Fleet page now expose confirmed, revision-checked, idempotent lifecycle execution with audit correlation; Cloudflare fails closed for mutation while exposing non-mutating preflight. | Separately add an authenticated Cloudflare-to-User-Site authority binding before exposing remote controls; do not infer authority from the projection. |
 | Host Gateway credential class | Explicit bridge-compatibility and dedicated-host-gateway classes, migration-safe defaults, expiry checks, HTTP/WebSocket header selection, and remote admission tests exist. | Provision dedicated secrets in the deployed gateways and run live rotation, expiry, revocation, and rollback acceptance. |
 | Multi-host event aggregation | The Host Fleet page now offers an explicit read-only aggregate observation mode. It opens one exact-target subscription per active session, keeps cursors keyed by HostKey plus runtime session, preserves source identity on every event, and performs bounded observable reconnect/resume after transport loss. Target refusal is terminal for that subscription rather than a hidden retry loop. | Run physical and Cloudflare browser acceptance for reconnect/resume; never synthesize a global event sequence. |
-| Full fleet audit/observability | Registry mutations/refusals and bounded local request observations are retained and exportable; Cloudflare preserves correlation IDs and can emit opt-in secret-free relay observations to Worker diagnostics. | Add durable Cloudflare relay metrics plus a retention/export policy if Cloudflare-side historical audit is required; the current log mode is diagnostic, not a canonical ledger. |
+| Full fleet audit/observability | Registry mutations/refusals and bounded local request observations are retained and exportable; Cloudflare now writes redacted relay observations to the dedicated `HOST_FLEET_AUDIT` Durable Object with a 10,000-entry bound and exposes authenticated readback at `/api/narada/fleet/observations`. | Deploy the Durable Object migration, verify retention/export in production, and document the operator retention window. The Cloudflare audit remains an observation ledger, not canonical host authority. |
 
 ## Related Documents
 

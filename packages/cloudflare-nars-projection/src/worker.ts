@@ -29,12 +29,19 @@ import type {
 } from '@narada-core/operator-console-contract';
 import { renderCloudflareWorkspacePage } from './cloudflare-workspace-page.js';
 import { handleCloudflareHostFleetRequest, isCloudflareHostFleetPath } from './cloudflare-host-fleet.js';
+import {
+  appendCloudflareHostFleetObservations,
+  CloudflareHostFleetAuditState,
+  readCloudflareHostFleetObservations,
+  type CloudflareHostFleetAuditNamespace,
+} from './cloudflare-host-fleet-audit.js';
 
 export interface CloudflareNarsProjectionWorkerEnv {
   [binding: string]: unknown;
   ASSETS?: { fetch(request: Request): Promise<Response> | Response };
   NARS_PROJECTION_STATE?: DurableObjectNamespaceLike;
   NARS_WORKSPACE_DIRECTORY?: DurableObjectNamespaceLike;
+  HOST_FLEET_AUDIT?: CloudflareHostFleetAuditNamespace;
   INTELLIGENCE_REGISTRY_DB?: CloudflareNarsRuntimeEnvironment['INTELLIGENCE_REGISTRY_DB'];
   AI?: CloudflareNarsRuntimeEnvironment['AI'];
   NARS_OUTBOUND_PROVIDER_ENABLED?: CloudflareNarsRuntimeEnvironment['NARS_OUTBOUND_PROVIDER_ENABLED'];
@@ -248,13 +255,24 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       if (isCloudflareHostFleetPath(url.pathname)) {
         const secretFailure = await authorizeOperatorConsoleSecret(request, env, options);
         if (secretFailure) return secretFailure;
+        const observations: import('./cloudflare-host-fleet.js').CloudflareHostFleetRequestObservation[] = [];
         const response = await handleCloudflareHostFleetRequest(request, env, now, fetchFn, {
+          allow_observation_read: true,
+          read_observations: (limit) => readCloudflareHostFleetObservations(env.HOST_FLEET_AUDIT, limit),
           observe_request: options.host_fleet_observation_sink
-            ?? (env.NARADA_HOST_FLEET_OBSERVABILITY === 'log'
-              ? (observation) => console.log(JSON.stringify({ event: 'host_fleet_gateway_observation', ...observation }))
-              : undefined),
+            ? (observation) => {
+              observations.push(observation);
+              options.host_fleet_observation_sink?.(observation);
+            }
+            : (observation) => {
+              observations.push(observation);
+              if (env.NARADA_HOST_FLEET_OBSERVABILITY === 'log') console.log(JSON.stringify({ event: 'host_fleet_gateway_observation', ...observation }));
+            },
         });
-        if (response) return response;
+        if (response) {
+          await appendCloudflareHostFleetObservations(env.HOST_FLEET_AUDIT, observations);
+          return response;
+        }
       }
       if (isOperatorConsolePath(url.pathname) || (url.pathname === '/' && !directProjectionEntry && (operatorConsoleGatewayConfigured(env) || operatorConsoleSharedSecretRequired(env, options)))) {
         const secretFailure = await authorizeOperatorConsoleSecret(request, env, options);
@@ -956,6 +974,8 @@ export class NarsProjectionState {
     }
   }
 }
+
+export { CloudflareHostFleetAuditState };
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

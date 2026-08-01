@@ -53,6 +53,7 @@ import {
   OPERATOR_CONSOLE_HOSTS_LIFECYCLE_PREFLIGHT_API_PATH,
   OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH,
   OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_LAUNCH_PREFLIGHT_API_PATH,
   OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_API_PATH,
   OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_SCHEMA,
   formatOperatorSiteAgentInvariantViolation,
@@ -81,6 +82,7 @@ import {
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_RESULT_SCHEMA,
   preflightHostFleetLifecycleIntent,
+  preflightHostFleetLaunchIntent,
   resolveHostGatewayCredential,
   resolveHostGatewayEnvironmentCredential,
   resolveRuntimeTarget,
@@ -867,7 +869,9 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
             },
           };
           if (host.lifecycle_state === 'revoked' || host.lifecycle_state === 'retired') {
-            projections.push({ ...hostProjection, status: 'refused', sessions: [], refusals: [`host_${host.lifecycle_state}`] });
+            const reason = `host_${host.lifecycle_state}`;
+            projections.push({ ...hostProjection, status: 'refused', sessions: [], refusals: [reason] });
+            refusals.push(reason);
             continue;
           }
           try {
@@ -877,24 +881,28 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
               observe_request: (observation) => ctx.hostFleetRegistry?.recordGatewayObservation(observation),
             });
             const discovery = await client.sessions();
+            const hostRefusals = discovery.refusals.map((refusal) => refusal.reason);
             projections.push({
               ...hostProjection,
               status: discovery.status,
               sessions: discovery.sessions,
-              refusals: discovery.refusals.map((refusal) => refusal.reason),
+              refusals: hostRefusals,
             });
+            refusals.push(...hostRefusals);
           } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
             projections.push({
               ...hostProjection,
               status: 'refused',
               sessions: [],
-              refusals: [error instanceof Error ? error.message : String(error)],
+              refusals: [reason],
             });
+            refusals.push(reason);
           }
         }
         jsonResponse(res, 200, {
           ...base,
-          status: projections.some((projection) => projection.status === 'success') ? 'success' : 'refused',
+          status: projections.length === 0 || projections.some((projection) => projection.status === 'success') ? 'success' : 'refused',
           count: projections.reduce((total, projection) => total + (Array.isArray(projection.sessions) ? projection.sessions.length : 0), 0),
           hosts: projections,
           refusals,
@@ -977,6 +985,39 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         const result = ctx.hostFleetRegistry.applyLifecycleIntent(intent, { actor });
         jsonResponse(res, result.status === 'refused' ? 409 : 200, result);
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-launch-preflight',
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_LAUNCH_PREFLIGHT_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
+      handler: async (_req, res, _params, searchParams) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: 'narada.host_fleet.launch_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, refusals: ['origin_not_allowed'] });
+          return;
+        }
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: 'narada.host_fleet.launch_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, refusals: ['host_fleet_registry_unavailable'] });
+          return;
+        }
+        const hostId = searchParams.get('host_id')?.trim() ?? '';
+        const instanceId = searchParams.get('host_instance_id')?.trim() ?? '';
+        const host = hostId && instanceId ? ctx.hostFleetRegistry.getHost({ host_id: hostId, host_instance_id: instanceId }) : null;
+        const preflight = preflightHostFleetLaunchIntent({
+          schema: 'narada.host_fleet.launch_intent.v1',
+          request_id: searchParams.get('request_id')?.trim() ?? '',
+          host: { host_id: hostId, host_instance_id: instanceId },
+          expected_revision: Number(searchParams.get('expected_revision') ?? Number.NaN),
+          site_id: searchParams.get('site_id')?.trim() ?? '',
+          agent_id: searchParams.get('agent_id')?.trim() ?? '',
+          operator_surface: searchParams.get('operator_surface')?.trim() || null,
+          confirmation: searchParams.get('confirmation') ?? '',
+        }, host);
+        jsonResponse(res, preflight.status === 'ready' ? 200 : 409, preflight);
       },
     },
     {

@@ -1,7 +1,7 @@
 import {
   OPERATOR_CONSOLE_HOSTS_API_PATH,
 } from '@narada-core/operator-console-contract';
-import type { HostFleetEnrollmentIntent, HostFleetLifecycleIntent } from '@narada-core/host-fleet/contract';
+import type { HostFleetEnrollmentIntent, HostFleetLaunchIntent, HostFleetLifecycleIntent } from '@narada-core/host-fleet/contract';
 import type { HostFleetEventConnection, HostFleetEventHandlers, HostFleetTarget } from './adapter';
 
 export type HostFleetFetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -22,6 +22,7 @@ export interface HostFleetTransport {
   resolveTarget?(target: HostFleetTarget): Promise<unknown>;
   openEvents?(target: HostFleetTarget, handlers: HostFleetEventHandlers): HostFleetEventConnection;
   preflightLifecycle?(intent: HostFleetLifecycleIntent): Promise<unknown>;
+  preflightLaunch?(intent: HostFleetLaunchIntent): Promise<unknown>;
   applyLifecycle?(intent: HostFleetLifecycleIntent, actor: string): Promise<unknown>;
   applyEnrollment?(intent: HostFleetEnrollmentIntent, actor: string): Promise<unknown>;
 }
@@ -125,6 +126,21 @@ export function createHostFleetTransport(
       expected_revision: String(intent.expected_revision),
       confirmation: intent.confirmation,
       ...(intent.reason === null ? {} : { reason: intent.reason }),
+    });
+    return `${path}?${query.toString()}`;
+  }
+
+  function launchPreflightPath(intent: HostFleetLaunchIntent): string {
+    const path = `${basePath}/launch/preflight`;
+    const query = new URLSearchParams({
+      request_id: intent.request_id,
+      host_id: intent.host.host_id,
+      host_instance_id: intent.host.host_instance_id,
+      expected_revision: String(intent.expected_revision),
+      site_id: intent.site_id,
+      agent_id: intent.agent_id,
+      confirmation: intent.confirmation,
+      ...(intent.operator_surface ? { operator_surface: intent.operator_surface } : {}),
     });
     return `${path}?${query.toString()}`;
   }
@@ -268,6 +284,9 @@ export function createHostFleetTransport(
     },
     async preflightLifecycle(intent: HostFleetLifecycleIntent): Promise<unknown> {
       return jsonRequest(lifecyclePreflightPath(intent));
+    },
+    async preflightLaunch(intent: HostFleetLaunchIntent): Promise<unknown> {
+      return jsonRequest(launchPreflightPath(intent));
     },
     async applyLifecycle(intent: HostFleetLifecycleIntent, actor: string): Promise<unknown> {
       return routeShape === 'local-console'

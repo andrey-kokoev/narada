@@ -1,5 +1,6 @@
 import type {
   HostFleetEnrollmentIntent,
+  HostFleetLaunchIntent,
   HostFleetLifecycleIntent,
   HostFleetLifecycleOperation,
   HostGatewayTransport,
@@ -21,6 +22,12 @@ export interface HostFleetEnrollmentDraft {
   capabilities: string;
   admittedSites: string;
   allowReenrollment: boolean;
+}
+
+export interface HostFleetLaunchDraft {
+  siteId: string;
+  agentId: string;
+  operatorSurface: string;
 }
 
 function requestId(prefix: string): string {
@@ -68,6 +75,25 @@ export function createHostFleetLifecycleIntent(
     expected_revision: host.revision,
     confirmation: `${host.hostId}@${host.hostInstanceId}`,
     reason: reason.trim() || null,
+  };
+}
+
+export function createHostFleetLaunchIntent(
+  host: HostFleetRecord,
+  draft: HostFleetLaunchDraft,
+): HostFleetLaunchIntent {
+  const siteId = required(draft.siteId, 'host_launch_site_id_required');
+  const agentId = required(draft.agentId, 'host_launch_agent_id_required');
+  const surface = draft.operatorSurface.trim();
+  return {
+    schema: 'narada.host_fleet.launch_intent.v1',
+    request_id: requestId('host-launch'),
+    host: { host_id: host.hostId, host_instance_id: host.hostInstanceId },
+    expected_revision: host.revision,
+    site_id: siteId,
+    agent_id: agentId,
+    operator_surface: surface || null,
+    confirmation: `${host.hostId}@${host.hostInstanceId}`,
   };
 }
 

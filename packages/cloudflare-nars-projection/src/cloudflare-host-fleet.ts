@@ -1,5 +1,7 @@
 import {
+  HOST_FLEET_LAUNCH_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
+  preflightHostFleetLaunchIntent,
   preflightHostFleetLifecycleIntent,
   type HostFleetLifecycleCurrent,
 } from '@narada-core/host-fleet/contract';
@@ -82,6 +84,8 @@ export interface CloudflareHostFleetRequestObservation {
 
 export interface CloudflareHostFleetRequestOptions {
   observe_request?: (observation: CloudflareHostFleetRequestObservation) => void;
+  allow_observation_read?: boolean;
+  read_observations?: (limit: number) => Promise<unknown | null>;
 }
 
 const HOST_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -552,7 +556,9 @@ async function openFleetWebSocket(
 }
 
 export function isCloudflareHostFleetPath(pathname: string): boolean {
-  return pathname === '/api/narada/fleet/hosts' || pathname.startsWith('/api/narada/fleet/hosts/');
+  return pathname === '/api/narada/fleet/hosts'
+    || pathname.startsWith('/api/narada/fleet/hosts/')
+    || pathname === '/api/narada/fleet/observations';
 }
 
 export function projectCloudflareHostFleetOverview(raw: unknown, generatedAt: string): CloudflareHostFleetOverview {
@@ -588,6 +594,14 @@ export async function handleCloudflareHostFleetRequest(
   if (!isCloudflareHostFleetPath(url.pathname)) return null;
   const correlationId = requestId(request);
   const refuse = (code: string, status = 409): Response => refusal(code, status, correlationId);
+  if (url.pathname === '/api/narada/fleet/observations' && request.method === 'GET') {
+    if (options.allow_observation_read !== true) return refuse('host_fleet_audit_authorization_required', 403);
+    const rawLimit = Number(url.searchParams.get('limit') ?? '100');
+    const limit = Number.isInteger(rawLimit) && rawLimit > 0 && rawLimit <= 1_000 ? rawLimit : 100;
+    const stored = await options.read_observations?.(limit);
+    if (!stored) return refuse('host_fleet_audit_unavailable', 503);
+    return json(stored, 200, { 'x-request-id': correlationId });
+  }
   if (url.pathname === '/api/narada/fleet/hosts' && request.method === 'GET') {
     return json(projectCloudflareHostFleetOverview(env.NARADA_HOST_FLEET_REGISTRY ?? null, now()), 200, { 'x-request-id': correlationId });
   }
@@ -618,6 +632,24 @@ export async function handleCloudflareHostFleetRequest(
       confirmation: url.searchParams.get('confirmation') ?? '',
       reason: url.searchParams.get('reason'),
     }, entry ? lifecycleCurrent(entry) : null);
+    return json(preflight, preflight.status === 'ready' ? 200 : 409, { 'x-request-id': correlationId });
+  }
+  if (url.pathname === '/api/narada/fleet/hosts/launch/preflight' && request.method === 'GET') {
+    const parsed = readRegistry(env.NARADA_HOST_FLEET_REGISTRY ?? null);
+    if (parsed.status === 'refused') return json({ schema: 'narada.host_fleet.launch_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, refusals: parsed.refusals }, 503, { 'x-request-id': correlationId });
+    const hostId = url.searchParams.get('host_id')?.trim() ?? '';
+    const instanceId = url.searchParams.get('host_instance_id')?.trim() ?? '';
+    const entry = parsed.registry.hosts.find((candidate) => candidate.host_id === hostId && candidate.host_instance_id === instanceId);
+    const preflight = preflightHostFleetLaunchIntent({
+      schema: HOST_FLEET_LAUNCH_INTENT_SCHEMA,
+      request_id: url.searchParams.get('request_id')?.trim() ?? '',
+      host: { host_id: hostId, host_instance_id: instanceId },
+      expected_revision: Number(url.searchParams.get('expected_revision') ?? Number.NaN),
+      site_id: url.searchParams.get('site_id')?.trim() ?? '',
+      agent_id: url.searchParams.get('agent_id')?.trim() ?? '',
+      operator_surface: url.searchParams.get('operator_surface')?.trim() || null,
+      confirmation: url.searchParams.get('confirmation') ?? '',
+    }, entry ?? null);
     return json(preflight, preflight.status === 'ready' ? 200 : 409, { 'x-request-id': correlationId });
   }
   if (request.method === 'POST'

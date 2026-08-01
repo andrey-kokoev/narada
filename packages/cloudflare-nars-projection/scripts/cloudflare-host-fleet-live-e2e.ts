@@ -15,6 +15,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '
 
 type LiveArgs = {
   live: boolean;
+  plan: boolean;
   quiet: boolean;
   help: boolean;
   url: string | null;
@@ -32,7 +33,7 @@ if (args.help) {
     'Cloudflare Host Fleet read-only live browser smoke',
     '',
     'Planning mode (default):',
-    '  pnpm --filter @narada-core/cloudflare-nars-projection smoke:host-fleet-live',
+    '  pnpm --filter @narada-core/cloudflare-nars-projection plan:host-fleet-live',
     '',
     'Live mode with a Cloudflare Access service token:',
     '  Get-Secret -Name <temporary-access-secret> -AsPlainText | pnpm --filter @narada-core/cloudflare-nars-projection smoke:host-fleet-live -- --live --url <worker-url> --access-client-id <id> --access-client-secret-stdin',
@@ -66,7 +67,7 @@ async function run(): Promise<AnyRecord> {
   const evidencePath = args.evidencePath
     ? resolve(args.evidencePath)
     : resolve(REPO_ROOT, '.narada/evidence/cloudflare-host-fleet-live-e2e.json');
-  if (!args.live) {
+  if (args.plan || !args.live) {
     return persist({
       schema: 'narada.cloudflare.host_fleet.live_e2e.v1',
       status: 'planned',
@@ -114,6 +115,20 @@ async function run(): Promise<AnyRecord> {
       host_count: overview.body.hosts.length,
       active_host_count: activeHosts.length,
       host_keys: activeHosts.map((host: AnyRecord) => `${host.host_id}@${host.host_instance_id}`),
+      passed: true,
+    };
+
+    const audit = await requestJson(boundary.origin, '/api/narada/fleet/observations?limit=25', headers);
+    assert.equal(audit.response.status, 200, compact(audit));
+    assert.equal(audit.body?.schema, 'narada.cloudflare.host_fleet_audit.v1', compact(audit));
+    assert.equal(audit.body?.status, 'success', compact(audit));
+    assert.ok(Array.isArray(audit.body?.observations), compact(audit));
+    assert.equal(JSON.stringify(audit.body).includes('desktop-secret'), false);
+    assert.equal(JSON.stringify(audit.body).includes('zima-secret'), false);
+    evidence.checks.audit = {
+      observation_count: audit.body.observations.length,
+      retention_read_limit: 25,
+      raw_credentials_exposed: false,
       passed: true,
     };
 
@@ -347,6 +362,7 @@ function persistRefusal(code: string, evidencePath: string): AnyRecord {
 function parseArgs(values: string[]): LiveArgs {
   const parsed: LiveArgs = {
     live: false,
+    plan: false,
     quiet: false,
     help: false,
     url: process.env.NARADA_HOST_FLEET_LIVE_E2E_URL ?? null,
@@ -359,6 +375,7 @@ function parseArgs(values: string[]): LiveArgs {
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (value === '--live') parsed.live = true;
+    else if (value === '--plan') parsed.plan = true;
     else if (value === '--quiet') parsed.quiet = true;
     else if (value === '--help' || value === '-h') parsed.help = true;
     else if (value === '--url') parsed.url = values[++index] ?? null;
@@ -372,6 +389,7 @@ function parseArgs(values: string[]): LiveArgs {
     else if (value === '--evidence-path') parsed.evidencePath = values[++index] ?? null;
     else if (value === '--timeout-ms') parsed.timeoutMs = Number(values[++index] ?? '30000');
   }
+  if (parsed.live && parsed.plan) throw new Error('live_and_plan_modes_conflict');
   if (!Number.isFinite(parsed.timeoutMs) || parsed.timeoutMs < 1000) throw new Error('timeout_ms_invalid');
   return parsed;
 }

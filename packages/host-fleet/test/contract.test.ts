@@ -4,11 +4,15 @@ import {
   HOST_GATEWAY_CREDENTIAL_SCHEMA,
   HOST_FLEET_ENROLLMENT_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
+  HOST_FLEET_LAUNCH_INTENT_SCHEMA,
+  HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
   HOST_RECORD_SCHEMA,
   createHostRecord,
   hostKey,
   preflightHostFleetEnrollmentIntent,
   preflightHostFleetLifecycleIntent,
+  preflightHostFleetLaunchIntent,
+  preflightHostFleetCredentialRotationIntent,
   qualifyEvent,
   validateRuntimeTarget,
 } from '../src/index.ts';
@@ -148,6 +152,60 @@ test('preflights enrollment with explicit reenrollment and revision fencing', ()
     confirmation: hostKey(record),
   }, record);
   assert.deepEqual(stale.refusals, ['host_revision_conflict']);
+});
+
+test('preflights exact-host launch without crossing a gateway or mutating the record', () => {
+  const record = createHostRecord({ ...input, admitted_sites: ['sonar'] });
+  const preflight = preflightHostFleetLaunchIntent({
+    schema: HOST_FLEET_LAUNCH_INTENT_SCHEMA,
+    request_id: 'request-launch-desktop-1',
+    host: { host_id: record.host_id, host_instance_id: record.host_instance_id },
+    expected_revision: record.revision,
+    site_id: 'sonar',
+    agent_id: 'resident',
+    operator_surface: 'agent-web-ui',
+    confirmation: hostKey(record),
+  }, record);
+  assert.equal(preflight.status, 'ready');
+  assert.equal(preflight.mutation_performed, false);
+  assert.equal(record.revision, 1);
+
+  const stale = preflightHostFleetLaunchIntent({
+    schema: HOST_FLEET_LAUNCH_INTENT_SCHEMA,
+    request_id: 'request-launch-desktop-stale',
+    host: { host_id: record.host_id, host_instance_id: record.host_instance_id },
+    expected_revision: 2,
+    site_id: 'sonar',
+    agent_id: 'resident',
+    operator_surface: null,
+    confirmation: hostKey(record),
+  }, record);
+  assert.deepEqual(stale.refusals, ['host_revision_conflict']);
+});
+
+test('preflights credential rotation lifetime and revision without changing the record', () => {
+  const record = createHostRecord({ ...input, admitted_sites: ['sonar'] });
+  const intent = {
+    schema: HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
+    request_id: 'request-credential-rotate-1',
+    host: { host_id: record.host_id, host_instance_id: record.host_instance_id },
+    expected_revision: record.revision,
+    credential_ref: 'env://NARADA_DESKTOP_GATEWAY_TOKEN_NEXT',
+    credential: {
+      schema: HOST_GATEWAY_CREDENTIAL_SCHEMA,
+      class: 'dedicated_host_gateway',
+      not_before: '2026-08-01T12:00:00.000Z',
+      expires_at: '2026-09-01T12:00:00.000Z',
+    },
+    confirmation: hostKey(record),
+  } as const;
+  const preflight = preflightHostFleetCredentialRotationIntent(intent, record, new Date('2026-08-01T12:00:00.000Z'));
+  assert.equal(preflight.status, 'ready');
+  assert.equal(preflight.mutation_performed, false);
+  assert.equal(record.credential_ref, 'secret://narada/desktop-gateway');
+
+  const expired = preflightHostFleetCredentialRotationIntent(intent, record, new Date('2026-09-01T12:00:00.000Z'));
+  assert.deepEqual(expired.refusals, ['host_gateway_credential_expired']);
 });
 
 test('qualifies events and runtime targets with the host instance', () => {

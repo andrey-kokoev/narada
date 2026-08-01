@@ -5,6 +5,7 @@ import {
   validateCloudflareHostFleetRegistry,
 } from '../src/cloudflare-host-fleet.ts';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.ts';
+import { CloudflareHostFleetAuditState } from '../src/cloudflare-host-fleet-audit.ts';
 
 const registry = JSON.stringify({
   schema: 'narada.cloudflare.host_fleet_registry.v1',
@@ -80,6 +81,21 @@ function environment() {
     ZIMA_TOKEN: 'zima-secret',
     DESKTOP_GATEWAY: gateway('desktop-sunroom-2', 'desktop-secret', 'desktop-session'),
     ZIMA_GATEWAY: gateway('zima-board-2', 'zima-secret', 'zima-session'),
+  };
+}
+
+class MemoryDurableObjectState {
+  readonly values = new Map<string, unknown>();
+  readonly storage = {
+    get: async <T>(key: string): Promise<T | undefined> => this.values.get(key) as T | undefined,
+    put: async (key: string, value: unknown): Promise<void> => { this.values.set(key, value); },
+  };
+}
+
+function auditNamespace(state: CloudflareHostFleetAuditState) {
+  return {
+    idFromName: (name: string) => name,
+    get: () => ({ fetch: (request: Request) => state.fetch(request) }),
   };
 }
 
@@ -211,6 +227,40 @@ describe('Cloudflare Host Fleet projection', () => {
       status: 'success',
       count: 2,
     });
+  });
+
+  it('requires the authenticated Worker capability for audit reads and persists redacted observations', async () => {
+    const direct = await handleCloudflareHostFleetRequest(
+      new Request('https://fleet.example/api/narada/fleet/observations?limit=25'),
+      environment(),
+      now,
+    );
+    expect(direct?.status).toBe(403);
+    expect(await direct!.json()).toMatchObject({ status: 'refused', reason: 'host_fleet_audit_authorization_required' });
+
+    const state = new CloudflareHostFleetAuditState(new MemoryDurableObjectState());
+    const env = { ...environment(), HOST_FLEET_AUDIT: auditNamespace(state) };
+    const worker = createCloudflareNarsProjectionWorker({ now });
+    const relayed = await worker.fetch(
+      new Request('https://fleet.example/api/narada/fleet/hosts/zima-board-2/zima-instance/sessions', { headers: { 'x-request-id': 'audit-relay-1' } }),
+      env,
+    );
+    expect(relayed.status).toBe(200);
+    const audit = await worker.fetch(
+      new Request('https://fleet.example/api/narada/fleet/observations?limit=25'),
+      env,
+    );
+    expect(audit.status).toBe(200);
+    const auditBody = await audit.json();
+    expect(auditBody).toMatchObject({
+      schema: 'narada.cloudflare.host_fleet_audit.v1',
+      status: 'success',
+      count: 1,
+      retention_limit: 10_000,
+      metrics: { total: 1, by_host: { 'zima-board-2@zima-instance': 1 }, by_outcome: { success: 1 } },
+      observations: [{ request_id: 'audit-relay-1', host: { host_id: 'zima-board-2' }, path: '/console/sessions/api/sessions' }],
+    });
+    expect(JSON.stringify(auditBody)).not.toContain('zima-secret');
   });
 
   it('keeps session discovery and target resolution host-qualified', async () => {

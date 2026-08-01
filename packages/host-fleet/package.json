@@ -41,7 +41,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:live": "pnpm run build && node --import tsx --import ./test/enable-live-e2e.ts --test test/host-fleet-live-e2e.test.ts"
   },
   "dependencies": {
     "@narada-core/sqlite": "workspace:*"

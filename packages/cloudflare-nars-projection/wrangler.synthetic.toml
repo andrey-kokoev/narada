@@ -19,6 +19,10 @@ class_name = "NarsProjectionState"
 name = "NARS_WORKSPACE_DIRECTORY"
 class_name = "NarsWorkspaceDirectory"
 
+[[durable_objects.bindings]]
+name = "HOST_FLEET_AUDIT"
+class_name = "CloudflareHostFleetAuditState"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["NarsProjectionState"]
@@ -26,6 +30,10 @@ new_sqlite_classes = ["NarsProjectionState"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["NarsWorkspaceDirectory"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["CloudflareHostFleetAuditState"]
 
 [assets]
 directory = "public"

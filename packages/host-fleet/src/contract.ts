@@ -12,6 +12,12 @@ export const HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA = 'narada.host_fleet.lifecycl
 export const HOST_FLEET_ENROLLMENT_INTENT_SCHEMA = 'narada.host_fleet.enrollment_intent.v1' as const;
 export const HOST_FLEET_ENROLLMENT_RESULT_SCHEMA = 'narada.host_fleet.enrollment_result.v1' as const;
 export const HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA = 'narada.host_fleet.enrollment_preflight.v1' as const;
+export const HOST_FLEET_LAUNCH_INTENT_SCHEMA = 'narada.host_fleet.launch_intent.v1' as const;
+export const HOST_FLEET_LAUNCH_RESULT_SCHEMA = 'narada.host_fleet.launch_result.v1' as const;
+export const HOST_FLEET_LAUNCH_PREFLIGHT_SCHEMA = 'narada.host_fleet.launch_preflight.v1' as const;
+export const HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA = 'narada.host_fleet.credential_rotation_intent.v1' as const;
+export const HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA = 'narada.host_fleet.credential_rotation_result.v1' as const;
+export const HOST_FLEET_CREDENTIAL_ROTATION_PREFLIGHT_SCHEMA = 'narada.host_fleet.credential_rotation_preflight.v1' as const;
 
 export type HostPlatform = 'windows' | 'linux' | 'macos' | 'cloudflare' | 'unknown';
 export type HostGatewayTransport = 'loopback' | 'ssh-tunnel' | 'https' | 'cloudflare';
@@ -89,6 +95,14 @@ export interface HostFleetLifecycleCurrent {
   revision: number;
 }
 
+export interface HostFleetLaunchCurrent {
+  host_id: string;
+  host_instance_id: string;
+  lifecycle_state: HostLifecycleState;
+  revision: number;
+  admitted_sites: readonly string[];
+}
+
 export interface HostRecordInput {
   host_id: string;
   host_instance_id: string;
@@ -119,6 +133,71 @@ export interface HostFleetEnrollmentIntent {
   expected_revision: number | null;
   allow_reenrollment: boolean;
   confirmation: string;
+}
+
+export interface HostFleetLaunchIntent {
+  schema: typeof HOST_FLEET_LAUNCH_INTENT_SCHEMA;
+  request_id: string;
+  host: HostKey;
+  expected_revision: number;
+  site_id: string;
+  agent_id: string;
+  operator_surface: string | null;
+  confirmation: string;
+}
+
+export interface HostFleetLaunchResult {
+  schema: typeof HOST_FLEET_LAUNCH_RESULT_SCHEMA;
+  status: 'launched' | 'reused' | 'refused';
+  mutation_performed: boolean;
+  request_id: string;
+  host: HostKey | null;
+  site_id: string | null;
+  agent_id: string | null;
+  operator_surface: string | null;
+  session_id: string | null;
+  reason: string | null;
+}
+
+export interface HostFleetLaunchPreflight {
+  schema: typeof HOST_FLEET_LAUNCH_PREFLIGHT_SCHEMA;
+  status: 'ready' | 'refused';
+  mutation_performed: false;
+  intent: HostFleetLaunchIntent | null;
+  current_revision: number | null;
+  current_lifecycle_state: HostLifecycleState | null;
+  refusals: readonly string[];
+}
+
+export interface HostFleetCredentialRotationIntent {
+  schema: typeof HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA;
+  request_id: string;
+  host: HostKey;
+  expected_revision: number;
+  credential_ref: string;
+  credential: HostGatewayCredentialPolicy;
+  confirmation: string;
+}
+
+export interface HostFleetCredentialRotationResult {
+  schema: typeof HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA;
+  status: 'applied' | 'replayed' | 'unchanged' | 'refused';
+  mutation_performed: boolean;
+  request_id: string;
+  host: HostKey | null;
+  revision: number | null;
+  credential_class: HostGatewayCredentialClass | null;
+  reason: string | null;
+}
+
+export interface HostFleetCredentialRotationPreflight {
+  schema: typeof HOST_FLEET_CREDENTIAL_ROTATION_PREFLIGHT_SCHEMA;
+  status: 'ready' | 'refused';
+  mutation_performed: false;
+  intent: HostFleetCredentialRotationIntent | null;
+  current_revision: number | null;
+  current_lifecycle_state: HostLifecycleState | null;
+  refusals: readonly string[];
 }
 
 export interface HostFleetLifecycleResult {
@@ -324,6 +403,146 @@ export function validateHostKey(value: unknown): HostKey {
     host_id: identifier(value.host_id, 'host_id_invalid'),
     host_instance_id: instanceIdentifier(value.host_instance_id, 'host_instance_id_invalid'),
   };
+}
+
+function requestId(value: unknown, requiredCode: string, invalidCode: string): string {
+  const normalized = requiredString(value, requiredCode, 128);
+  if (!/^[A-Za-z0-9._:-]{1,128}$/u.test(normalized)) throw new Error(invalidCode);
+  return normalized;
+}
+
+export function validateHostFleetLaunchIntent(value: unknown): HostFleetLaunchIntent {
+  if (!isRecord(value) || value.schema !== HOST_FLEET_LAUNCH_INTENT_SCHEMA) {
+    throw new Error('host_launch_intent_schema_invalid');
+  }
+  const host = validateHostKey(value.host);
+  const request_id = requestId(value.request_id, 'host_launch_request_id_required', 'host_launch_request_id_invalid');
+  if (!Number.isInteger(value.expected_revision) || Number(value.expected_revision) < 1) {
+    throw new Error('host_launch_expected_revision_invalid');
+  }
+  const site_id = requiredString(value.site_id, 'host_launch_site_id_required', 256);
+  const agent_id = requiredString(value.agent_id, 'host_launch_agent_id_required', 256);
+  const operator_surface = value.operator_surface == null
+    ? null
+    : requiredString(value.operator_surface, 'host_launch_operator_surface_invalid', 128);
+  if (value.confirmation !== hostKey(host)) throw new Error('host_launch_confirmation_invalid');
+  return {
+    schema: HOST_FLEET_LAUNCH_INTENT_SCHEMA,
+    request_id,
+    host,
+    expected_revision: Number(value.expected_revision),
+    site_id,
+    agent_id,
+    operator_surface,
+    confirmation: hostKey(host),
+  };
+}
+
+export function validateHostFleetCredentialRotationIntent(value: unknown): HostFleetCredentialRotationIntent {
+  if (!isRecord(value) || value.schema !== HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA) {
+    throw new Error('host_credential_rotation_intent_schema_invalid');
+  }
+  const host = validateHostKey(value.host);
+  const request_id = requestId(value.request_id, 'host_credential_rotation_request_id_required', 'host_credential_rotation_request_id_invalid');
+  if (!Number.isInteger(value.expected_revision) || Number(value.expected_revision) < 1) {
+    throw new Error('host_credential_rotation_expected_revision_invalid');
+  }
+  if (value.confirmation !== hostKey(host)) throw new Error('host_credential_rotation_confirmation_invalid');
+  return {
+    schema: HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
+    request_id,
+    host,
+    expected_revision: Number(value.expected_revision),
+    credential_ref: normalizeCredentialRef(value.credential_ref),
+    credential: normalizeCredentialPolicy(value.credential),
+    confirmation: hostKey(host),
+  };
+}
+
+export function preflightHostFleetLaunchIntent(
+  value: unknown,
+  current: HostFleetLaunchCurrent | null,
+): HostFleetLaunchPreflight {
+  try {
+    const intent = validateHostFleetLaunchIntent(value);
+    if (!current) return {
+      schema: HOST_FLEET_LAUNCH_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent,
+      current_revision: null,
+      current_lifecycle_state: null,
+      refusals: ['host_not_registered'],
+    };
+    const refusals: string[] = [];
+    if (!hostKeysEqual(intent.host, current)) refusals.push('host_key_mismatch');
+    if (intent.expected_revision !== current.revision) refusals.push('host_revision_conflict');
+    if (current.lifecycle_state === 'revoked' || current.lifecycle_state === 'retired') refusals.push(`host_${current.lifecycle_state}`);
+    if (!current.admitted_sites.includes(intent.site_id)) refusals.push('host_site_not_admitted');
+    return {
+      schema: HOST_FLEET_LAUNCH_PREFLIGHT_SCHEMA,
+      status: refusals.length === 0 ? 'ready' : 'refused',
+      mutation_performed: false,
+      intent,
+      current_revision: current.revision,
+      current_lifecycle_state: current.lifecycle_state,
+      refusals,
+    };
+  } catch (error) {
+    return {
+      schema: HOST_FLEET_LAUNCH_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent: null,
+      current_revision: current?.revision ?? null,
+      current_lifecycle_state: current?.lifecycle_state ?? null,
+      refusals: [error instanceof Error ? error.message : String(error)],
+    };
+  }
+}
+
+export function preflightHostFleetCredentialRotationIntent(
+  value: unknown,
+  current: HostRecord | null,
+  now = new Date(),
+): HostFleetCredentialRotationPreflight {
+  try {
+    const intent = validateHostFleetCredentialRotationIntent(value);
+    if (!current) return {
+      schema: HOST_FLEET_CREDENTIAL_ROTATION_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent,
+      current_revision: null,
+      current_lifecycle_state: null,
+      refusals: ['host_not_registered'],
+    };
+    const refusals: string[] = [];
+    if (!hostKeysEqual(intent.host, current)) refusals.push('host_key_mismatch');
+    if (intent.expected_revision !== current.revision) refusals.push('host_revision_conflict');
+    if (current.lifecycle_state === 'revoked' || current.lifecycle_state === 'retired') refusals.push(`host_${current.lifecycle_state}`);
+    if (intent.credential.expires_at && now.getTime() >= Date.parse(intent.credential.expires_at)) refusals.push('host_gateway_credential_expired');
+    if (intent.credential.not_before && now.getTime() < Date.parse(intent.credential.not_before)) refusals.push('host_gateway_credential_not_yet_valid');
+    return {
+      schema: HOST_FLEET_CREDENTIAL_ROTATION_PREFLIGHT_SCHEMA,
+      status: refusals.length === 0 ? 'ready' : 'refused',
+      mutation_performed: false,
+      intent,
+      current_revision: current.revision,
+      current_lifecycle_state: current.lifecycle_state,
+      refusals,
+    };
+  } catch (error) {
+    return {
+      schema: HOST_FLEET_CREDENTIAL_ROTATION_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent: null,
+      current_revision: current?.revision ?? null,
+      current_lifecycle_state: current?.lifecycle_state ?? null,
+      refusals: [error instanceof Error ? error.message : String(error)],
+    };
+  }
 }
 
 export function validateHostFleetLifecycleIntent(value: unknown): HostFleetLifecycleIntent {

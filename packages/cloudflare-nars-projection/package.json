@@ -46,7 +46,9 @@
     "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live",
     "build:scripts": "tsc -p tsconfig.scripts.json",
     "host-fleet:preflight": "pnpm run build && pnpm run build:scripts && node scripts-dist/host-fleet-deploy-preflight.js",
-    "smoke:host-fleet-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-host-fleet-live-e2e.js",
+    "plan:host-fleet-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-host-fleet-live-e2e.js --plan",
+    "smoke:host-fleet-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-host-fleet-live-e2e.js --live",
+    "test:host-fleet-live": "pnpm run smoke:host-fleet-live",
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json"
   },
   "dependencies": {

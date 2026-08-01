@@ -63,13 +63,13 @@ Run the opt-in physical harness only after the two exact sessions are already
 running:
 
 ```text
-pnpm --filter @narada-core/host-fleet exec node --import tsx --test --test-concurrency=1 test/host-fleet-live-e2e.test.ts
+pnpm --filter @narada-core/host-fleet test:live
 ```
 
 The harness proves:
 
 1. both HostKeys are distinct;
-2. the same local port is valid on both hosts;
+2. both endpoints use the declared local port;
 3. both gateways authenticate and report health;
 4. session discovery is Site-qualified;
 5. each expected session is discoverable under its own HostKey; and
@@ -93,6 +93,23 @@ Then perform the browser/operator checks through the Host Fleet page:
 Record the exact HostKeys, runtime session IDs, timestamps, refusal codes, and
 the operator surface used. Do not record credentials or event payloads that are
 not needed to prove the boundary.
+
+## Local Authority Browser Proof
+
+The repository also has a bounded live lane for the local authority journey.
+It starts real loopback gateway servers, a file-backed SQLite Host Registry,
+the actual Operator Console HTTP server, and a real headless browser. It proves
+the empty state, enrollment review and apply, exact session attachment and
+replay, revoke readback, two-host aggregate observation, and reconnect after a
+gateway drops its first event stream:
+
+```text
+pnpm --filter @narada-core/cli test:host-fleet-live
+```
+
+This lane is live and performative against disposable local fixtures; it does
+not claim that a production host is enrolled or that a Cloudflare deployment
+is reachable.
 
 ## Cloudflare Registry Preflight
 
@@ -126,15 +143,16 @@ Get-Secret -Name <temporary-access-secret> -AsPlainText | pnpm --filter @narada-
 ```
 
 It refuses local or private origins, requires Cloudflare Access credentials,
-checks unauthenticated refusal, inventory, the non-mutating lifecycle
+checks unauthenticated refusal, inventory, authenticated redacted audit
+readback at `/api/narada/fleet/observations`, the non-mutating lifecycle
 preflight, gateway health, session discovery, exact target resolution, and the
 `/console/hosts` browser projection, then opens one exact event subscription
 and verifies replay without submitting operator input. It writes redacted evidence under
 `.narada/evidence/cloudflare-host-fleet-live-e2e.json` by default. Planning
-mode is the default and performs no network request:
+is explicit and performs no network request:
 
 ```text
-pnpm --filter @narada-core/cloudflare-nars-projection smoke:host-fleet-live
+pnpm --filter @narada-core/cloudflare-nars-projection plan:host-fleet-live
 ```
 
 This lane is acceptance evidence only. It does not deploy, enroll, revoke,

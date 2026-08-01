@@ -36,6 +36,9 @@ OPERATOR_CONSOLE_GATEWAY_TCP_PORT = "61730"
 # Set to "log" only when structured, secret-free gateway relay observations
 # are desired in Worker diagnostics. This does not persist payloads.
 # NARADA_HOST_FLEET_OBSERVABILITY = "log"
+# HOST_FLEET_AUDIT is a separate Durable Object binding. It stores only
+# bounded, secret-free relay observations and is readable through the
+# authenticated fleet route /api/narada/fleet/observations.
 
 [ai]
 binding = "AI"
@@ -53,6 +56,10 @@ class_name = "NarsProjectionState"
 name = "NARS_WORKSPACE_DIRECTORY"
 class_name = "NarsWorkspaceDirectory"
 
+[[durable_objects.bindings]]
+name = "HOST_FLEET_AUDIT"
+class_name = "CloudflareHostFleetAuditState"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["NarsProjectionState"]
@@ -60,6 +67,10 @@ new_sqlite_classes = ["NarsProjectionState"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["NarsWorkspaceDirectory"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["CloudflareHostFleetAuditState"]
 
 [assets]
 directory = "public"

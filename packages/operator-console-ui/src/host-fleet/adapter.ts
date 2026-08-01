@@ -5,6 +5,7 @@ import type {
 } from '@narada-core/operator-console-contract';
 import type {
   HostFleetEnrollmentIntent,
+  HostFleetLaunchIntent,
   HostFleetLifecycleIntent,
   HostFleetLifecycleOperation,
 } from '@narada-core/host-fleet/contract';
@@ -89,6 +90,7 @@ export interface HostFleetClient {
   resolveTarget(target: HostFleetTarget): Promise<HostFleetTargetResolution>;
   openEvents(target: HostFleetTarget, handlers: HostFleetEventHandlers): HostFleetEventConnection;
   preflightLifecycle?(intent: HostFleetLifecycleIntent): Promise<HostFleetLifecyclePreflight>;
+  preflightLaunch?(intent: HostFleetLaunchIntent): Promise<HostFleetLaunchPreflight>;
   applyLifecycle?(intent: HostFleetLifecycleIntent, actor: string): Promise<HostFleetMutationResult>;
   applyEnrollment?(intent: HostFleetEnrollmentIntent, actor: string): Promise<HostFleetMutationResult>;
 }
@@ -107,6 +109,15 @@ export interface HostFleetMutationResult {
 
 export interface HostFleetLifecyclePreflight {
   schema: 'narada.host_fleet.lifecycle_preflight.v1';
+  status: 'ready' | 'refused';
+  mutationPerformed: false;
+  currentRevision: number | null;
+  currentLifecycleState: HostFleetRecord['lifecycleState'] | null;
+  refusals: string[];
+}
+
+export interface HostFleetLaunchPreflight {
+  schema: 'narada.host_fleet.launch_preflight.v1';
   status: 'ready' | 'refused';
   mutationPerformed: false;
   currentRevision: number | null;
@@ -316,12 +327,14 @@ function parseTargetResolution(value: unknown): HostFleetTargetResolution | null
 }
 
 function parseMutationResult(value: unknown): HostFleetMutationResult | null {
+  const lifecycleResult = record(value) && value.schema === 'narada.host_fleet.lifecycle_result.v1';
   if (!record(value)
     || (value.schema !== 'narada.host_fleet.lifecycle_result.v1' && value.schema !== 'narada.host_fleet.enrollment_result.v1')
     || (value.status !== 'applied' && value.status !== 'replayed' && value.status !== 'unchanged' && value.status !== 'refused')
     || typeof value.mutation_performed !== 'boolean'
     || typeof value.request_id !== 'string'
-    || (value.operation !== null && value.operation !== 'revoke' && value.operation !== 'retire')
+    || (lifecycleResult && value.operation !== 'revoke' && value.operation !== 'retire' && value.operation !== null)
+    || (!lifecycleResult && value.operation !== undefined && value.operation !== null)
     || (value.host !== null && !record(value.host))
     || (value.host !== null && (typeof value.host.host_id !== 'string' || typeof value.host.host_instance_id !== 'string'))
     || (value.lifecycle_state !== null && value.lifecycle_state !== 'pending' && value.lifecycle_state !== 'active' && value.lifecycle_state !== 'revoked' && value.lifecycle_state !== 'retired')
@@ -332,7 +345,7 @@ function parseMutationResult(value: unknown): HostFleetMutationResult | null {
     status: value.status,
     mutationPerformed: value.mutation_performed,
     requestId: value.request_id,
-    operation: value.operation,
+    operation: lifecycleResult ? value.operation as HostFleetLifecycleOperation : null,
     host: value.host === null ? null : { hostId: value.host.host_id as string, hostInstanceId: value.host.host_instance_id as string },
     lifecycleState: value.lifecycle_state,
     revision: value.revision as number | null,
@@ -351,6 +364,25 @@ function parseLifecyclePreflight(value: unknown): HostFleetLifecyclePreflight | 
     || !value.refusals.every((item) => typeof item === 'string')) return null;
   return {
     schema: 'narada.host_fleet.lifecycle_preflight.v1',
+    status: value.status,
+    mutationPerformed: false,
+    currentRevision: value.current_revision as number | null,
+    currentLifecycleState: value.current_lifecycle_state,
+    refusals: [...value.refusals],
+  };
+}
+
+function parseLaunchPreflight(value: unknown): HostFleetLaunchPreflight | null {
+  if (!record(value)
+    || value.schema !== 'narada.host_fleet.launch_preflight.v1'
+    || (value.status !== 'ready' && value.status !== 'refused')
+    || value.mutation_performed !== false
+    || (value.current_revision !== null && (!Number.isInteger(value.current_revision) || Number(value.current_revision) < 1))
+    || (value.current_lifecycle_state !== null && value.current_lifecycle_state !== 'pending' && value.current_lifecycle_state !== 'active' && value.current_lifecycle_state !== 'revoked' && value.current_lifecycle_state !== 'retired')
+    || !Array.isArray(value.refusals)
+    || !value.refusals.every((item) => typeof item === 'string')) return null;
+  return {
+    schema: 'narada.host_fleet.launch_preflight.v1',
     status: value.status,
     mutationPerformed: false,
     currentRevision: value.current_revision as number | null,
@@ -507,6 +539,11 @@ export function createHostFleetAdapter(
     async preflightLifecycle(intent: HostFleetLifecycleIntent): Promise<HostFleetLifecyclePreflight> {
       const response = parseLifecyclePreflight(await requiredTransportMethod(transport, 'preflightLifecycle').call(transport, intent));
       if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet lifecycle preflight did not match its contract.');
+      return response;
+    },
+    async preflightLaunch(intent: HostFleetLaunchIntent): Promise<HostFleetLaunchPreflight> {
+      const response = parseLaunchPreflight(await requiredTransportMethod(transport, 'preflightLaunch').call(transport, intent));
+      if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet launch preflight did not match its contract.');
       return response;
     },
     async applyLifecycle(intent: HostFleetLifecycleIntent, actor: string): Promise<HostFleetMutationResult> {

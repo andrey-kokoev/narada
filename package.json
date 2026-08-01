@@ -44,6 +44,7 @@
     "agent-tui:live-turn-acceptance:test": "node --import tsx --test --test-reporter=dot tools/agent-start/agent-tui-live-turn-acceptance.test.ts",
     "agent-start:test:verbose": "node --import tsx --test tools/agent-start/start-agent.test.ts",
     "test:agent-web-ui:live:delegated-task": "pnpm --filter @narada-core/agent-web-ui test:live:delegated-task",
+    "test:host-fleet:live": "pnpm --filter @narada-core/cli test:host-fleet-live",
     "test:agent-pi-tui:live": "pnpm --filter @narada-core/agent-pi-tui test:live:e2e && pnpm --filter @narada-core/agent-runtime-server test:live:pi-client-kernel",
     "test:agent-pi-tui:live:fixture": "pnpm --filter @narada-core/agent-pi-tui test:live:guard && pnpm --filter @narada-core/agent-pi-tui test:live:local && pnpm --filter @narada-core/agent-runtime-server test:live:pi-client-kernel",
     "test:agent-pi-tui:live:production-binding": "pnpm --filter @narada-core/agent-pi-tui test:live:production-binding && pnpm --filter @narada-core/agent-runtime-server test:live:pi-client-kernel",
