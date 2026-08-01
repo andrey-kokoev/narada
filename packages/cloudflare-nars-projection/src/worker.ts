@@ -60,6 +60,8 @@ export interface CloudflareNarsProjectionWorkerEnv {
   NARADA_HOST_FLEET_UI_API_BASE_PATH?: string;
   NARADA_HOST_FLEET_UI_ROUTE_SHAPE?: string;
   NARADA_HOST_FLEET_OBSERVABILITY?: string;
+  NARADA_HOST_FLEET_AUTHORITY_URL?: string;
+  NARADA_HOST_FLEET_AUTHORITY_TOKEN?: string;
 }
 
 export interface CloudflareNarsOperatorConsoleGatewayBinding {
@@ -1601,20 +1603,24 @@ function rewriteOperatorConsoleSessionDocument(request: Request, body: string): 
   eventEndpoint.protocol = sourceUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   eventEndpoint.pathname = `${sessionPath}/events`;
   eventEndpoint.search = '';
-  const inputEndpoint = new URL(sourceUrl.origin);
-  inputEndpoint.pathname = `${sessionPath}/input`;
-  inputEndpoint.search = '';
   const healthEndpoint = new URL(sourceUrl.origin);
   healthEndpoint.pathname = `${sessionPath}/api/health`;
   healthEndpoint.search = '';
+  const sourceHasHttpInputEndpoint = (typeof config.inputEndpoint === 'string' && config.inputEndpoint.trim().length > 0)
+    || (typeof config.input_endpoint === 'string' && config.input_endpoint.trim().length > 0);
   const rewrittenConfig: Record<string, unknown> = {
     ...config,
     eventEndpoint: eventEndpoint.toString(),
-    inputEndpoint: inputEndpoint.toString(),
     healthEndpoint: healthEndpoint.toString(),
   };
   if ('event_endpoint' in config) rewrittenConfig.event_endpoint = eventEndpoint.toString();
-  if ('input_endpoint' in config) rewrittenConfig.input_endpoint = inputEndpoint.toString();
+  if (sourceHasHttpInputEndpoint) {
+    const inputEndpoint = new URL(sourceUrl.origin);
+    inputEndpoint.pathname = `${sessionPath}/input`;
+    inputEndpoint.search = '';
+    rewrittenConfig.inputEndpoint = inputEndpoint.toString();
+    if ('input_endpoint' in config) rewrittenConfig.input_endpoint = inputEndpoint.toString();
+  }
   if ('health_endpoint' in config) rewrittenConfig.health_endpoint = healthEndpoint.toString();
   return {
     ok: true,
@@ -2352,14 +2358,19 @@ async function serveStaticAsset(
   });
 }
 
-function operatorConsoleHostFleetUiConfig(env: CloudflareNarsProjectionWorkerEnv): Record<string, string> | null {
+function operatorConsoleHostFleetUiConfig(env: CloudflareNarsProjectionWorkerEnv): Record<string, string | boolean> | null {
   const configuredPath = env.NARADA_HOST_FLEET_UI_API_BASE_PATH?.trim();
   const apiBasePath = configuredPath || (env.NARADA_HOST_FLEET_REGISTRY ? '/api/narada/fleet/hosts' : '');
   if (!apiBasePath || !apiBasePath.startsWith('/') || apiBasePath.includes('//') || apiBasePath.includes('..') || apiBasePath.includes('\\') || apiBasePath.includes('?') || apiBasePath.includes('#')) return null;
   const routeShape = env.NARADA_HOST_FLEET_UI_ROUTE_SHAPE?.trim()
     || (apiBasePath === '/api/narada/fleet/hosts' ? 'cloudflare-projection' : 'local-console');
   if (routeShape !== 'cloudflare-projection' && routeShape !== 'local-console') return null;
-  return { apiBasePath, routeShape };
+  return {
+    apiBasePath,
+    routeShape,
+    authorityForwarding: routeShape === 'cloudflare-projection'
+      && Boolean(env.NARADA_HOST_FLEET_AUTHORITY_URL?.trim() && env.NARADA_HOST_FLEET_AUTHORITY_TOKEN?.trim()),
+  };
 }
 
 function isDocumentPath(pathname: string, prefix: string): boolean {

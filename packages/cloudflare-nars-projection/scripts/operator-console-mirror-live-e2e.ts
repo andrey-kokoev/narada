@@ -364,7 +364,9 @@ async function run(): Promise<AnyRecord> {
         const sessionConfigReady = await waitForPageValue(
           page,
           '(() => { try { return JSON.parse(document.querySelector("#nars-config")?.textContent ?? "{}"); } catch { return {}; } })()',
-          (value) => Boolean(value && typeof value === 'object' && typeof (value as AnyRecord).eventEndpoint === 'string' && typeof (value as AnyRecord).inputEndpoint === 'string'),
+          (value) => Boolean(value && typeof value === 'object'
+            && typeof (value as AnyRecord).eventEndpoint === 'string'
+            && typeof (value as AnyRecord).healthEndpoint === 'string'),
           args.timeoutMs,
         );
         assert.equal(sessionConfigReady.found, true, JSON.stringify({ session_config: sessionConfigReady }));
@@ -373,7 +375,15 @@ async function run(): Promise<AnyRecord> {
         expectedEventEndpoint.protocol = expectedEventEndpoint.protocol === 'https:' ? 'wss:' : 'ws:';
         const expectedInputEndpoint = new URL(sessionJourney.inputPath, baseUrl).toString();
         assert.equal(String(sessionConfig.eventEndpoint ?? ''), expectedEventEndpoint.toString(), JSON.stringify({ session_config: sessionConfig }));
-        assert.equal(String(sessionConfig.inputEndpoint ?? ''), expectedInputEndpoint, JSON.stringify({ session_config: sessionConfig }));
+        const configuredInputEndpoint = typeof sessionConfig.inputEndpoint === 'string'
+          ? sessionConfig.inputEndpoint
+          : typeof sessionConfig.input_endpoint === 'string'
+            ? sessionConfig.input_endpoint
+            : null;
+        const inputTransport = configuredInputEndpoint ? 'http' : 'websocket';
+        if (inputTransport === 'http') {
+          assert.equal(configuredInputEndpoint, expectedInputEndpoint, JSON.stringify({ session_config: sessionConfig }));
+        }
         const sessionControls = await waitForPageValue(
           page,
           'Boolean(document.querySelector("#operator-form") && document.querySelector("#operator-input") && document.querySelector(".composer-submit"))',
@@ -440,6 +450,7 @@ async function run(): Promise<AnyRecord> {
           request_id: requestId,
           turn_id: turnId,
           turn_content_length: turnContent.length,
+          input_transport: inputTransport,
           event_kinds: [queued, started, turnStarted, assistant, turnCompleted, inputCompleted, controlResponse].map((entry) => entry.event.event),
           terminal_state: inputCompleted.event.terminal_state,
           rendered: rendered.value,
@@ -535,7 +546,8 @@ async function run(): Promise<AnyRecord> {
           ? { found: Boolean(sessionEvents.found), waited_ms: sessionEvents.waited_ms ?? null }
           : null,
         session_event_endpoint: sessionConfig.eventEndpoint ?? null,
-        session_input_endpoint: sessionConfig.inputEndpoint ?? null,
+        session_input_endpoint: sessionConfig.inputEndpoint ?? sessionConfig.input_endpoint ?? null,
+        session_input_transport: sessionConfig.inputEndpoint || sessionConfig.input_endpoint ? 'http' : 'websocket',
         session_turn: sessionTurn,
         websocket_records: websocketRecords.slice(0, 8),
         artifact_path: artifactPath,
@@ -1349,6 +1361,10 @@ function parseWebSocketEvent(entry: AnyRecord): AnyRecord | null {
   const unwrap = (candidate: unknown): AnyRecord | null => {
     if (!candidate || typeof candidate !== 'object') return null;
     const record = candidate as AnyRecord;
+    if (record.event === 'session_event' && record.payload) {
+      const nested = unwrap(record.payload);
+      if (nested) return nested;
+    }
     if (typeof record.event === 'string') return record;
     if (record.event && typeof record.event === 'object') return unwrap(record.event);
     for (const key of ['payload', 'data', 'message', 'result']) {

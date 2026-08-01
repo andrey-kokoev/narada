@@ -281,6 +281,7 @@ export interface ConsoleServerConfig {
   hostFleetRegistry?: HostFleetRegistry;
   hostFleetCredentialResolver?: (credentialRef: string) => string | Promise<string | null> | null;
   hostFleetFetch?: typeof fetch;
+  hostFleetAuthorityToken?: string | null;
 }
 
 export interface ConsoleServer {
@@ -476,6 +477,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     hostFleetRegistry,
     hostFleetCredentialResolver: config.hostFleetCredentialResolver,
     hostFleetFetch: config.hostFleetFetch,
+    hostFleetAuthorityToken: config.hostFleetAuthorityToken ?? process.env.NARADA_HOST_FLEET_AUTHORITY_TOKEN ?? null,
     workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,
     onboardingPlatform: config.onboardingPlatform ?? (process.platform === 'win32' ? 'windows' : 'linux'),

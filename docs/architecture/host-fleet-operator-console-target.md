@@ -11,9 +11,8 @@ bidirectional event/input relay, `narada fleet` inventory/audit commands, and
 the local and Cloudflare fleet HTTP boundaries now exist. The browser Host
 Fleet page now consumes both route shapes: the local console boundary and the
 Cloudflare projection boundary. The remaining acceptance work is physical
-two-host deployment, production enrollment/configuration, the host-local
-console document projection, and the governed control-plane slices that are
-intentionally not browser-only actions.
+hosts and a deployed Cloudflare authority bridge; those are
+environment gates, not unimplemented local contracts.
 
 The existing Operator Console remains a host-local console. It may observe and
 route across Sites known to that host's User Site, but it is not a distributed
@@ -35,9 +34,11 @@ provide the full fleet runtime:
   credential reference and admitted gateway paths; raw credential values are
   never stored in the registry.
 - The local Operator Console exposes `/console/hosts` and
-  `/console/hosts/api` as a read-only inventory projection. The browser
-  projection omits endpoint and credential-reference fields and preserves
-  `host_id@host_instance_id` identity.
+  `/console/hosts/api` as a host-qualified projection. The browser projection
+  omits endpoint and credential-reference fields and preserves
+  `host_id@host_instance_id` identity. Governed enrollment, exact-host launch,
+  lifecycle, credential rotation, and credential rollback remain explicit
+  authority workflows with revision preflight and operator confirmation.
 - Registry registration, explicit re-enrollment, health updates, revocation,
   retirement, and refusal outcomes are audited.
 - `narada fleet observations` exports the bounded, redacted gateway request
@@ -57,10 +58,10 @@ declared registry hosts and returns a canonical host-qualified projection; it
 does not select a host implicitly. The page exposes inventory, exact
 attachment, replay/live observation, explicit read-only aggregate observation
 with per-HostKey cursors, and operator input only. It also presents a
-revision-checked exact-host launch preflight, but does not execute a host launch
-from the projection. Launch, stop, refresh-health, enrollment, and
-revoke/retire remain governed server operations rather than client-only
-controls. A redacted Cloudflare registry example is checked in at
+revision-checked exact-host launch and credential-operation workflow. The local
+authority executes those confirmed intents; Cloudflare forwards them only when
+its separately authenticated User Site authority binding is configured, and
+otherwise fails closed. A redacted Cloudflare registry example is checked in at
 `packages/cloudflare-nars-projection/config/host-fleet.registry.example.json`.
 They do not claim that a production host has been enrolled or that the
 physical two-host live test has passed; that test is opt-in through
@@ -341,14 +342,18 @@ The Cloudflare projection composes the same boundary with these routes:
 | `GET` | `/api/narada/fleet/hosts/:host_id/:host_instance_id/target?...` | Exact host/session target resolution. |
 | `GET` | `/api/narada/fleet/hosts/lifecycle/preflight?...` | Validate a typed, revision-checked lifecycle intent without mutating the Cloudflare registry; the response always reports `mutation_performed: false`. |
 | `GET` | `/api/narada/fleet/hosts/credentials/rotate/preflight?...` | Validate a typed credential reference/class/lifetime and revision without mutating the Cloudflare registry; the response always reports `mutation_performed: false`. |
+| `GET` | `/api/narada/fleet/hosts/credentials/rollback/preflight?...` | Ask the User Site authority to validate a revision-aware rollback; Cloudflare does not materialize credential history. |
+| `POST` | `/api/narada/fleet/hosts/launch` | Forward one confirmed exact-host launch to the User Site authority when the authority bridge is configured; otherwise refuse. |
+| `POST` | `/api/narada/fleet/hosts/credentials/rotate` | Forward one confirmed credential rotation to the User Site authority when the authority bridge is configured; otherwise refuse. |
+| `POST` | `/api/narada/fleet/hosts/credentials/rollback` | Forward one confirmed revision-aware credential rollback to the User Site authority when the authority bridge is configured; otherwise refuse. |
 | `GET` + WebSocket upgrade | `/api/narada/fleet/hosts/:host_id/:host_instance_id/sessions/:runtime_session_id/events?...` | Exact-target WebSocket relay with server-side service binding/HTTPS credential injection. |
 
-Cloudflare remains projection-only for this slice. It may expose the
-non-mutating preflight and route read/stream requests, but it must not apply a
-local registry mutation against `NARADA_HOST_FLEET_REGISTRY`. Cloudflare
-enrollment or lifecycle controls require a separately authenticated authority
-binding that forwards the typed intent to the User Site route above and
-returns its result unchanged.
+Cloudflare remains non-canonical for this slice. It may expose the materialized
+read/stream projection and non-mutating local preflights, but it must not apply
+a local registry mutation against `NARADA_HOST_FLEET_REGISTRY`. Revision-
+sensitive credential rollback preflight and every mutation use a separately
+authenticated authority binding that forwards the typed request to the User
+Site route above and returns its result unchanged.
 
 Cloudflare access authorization runs before these routes. The Cloudflare
 worker is a projection and crossing; it does not become the session authority
@@ -592,14 +597,14 @@ must not be smuggled into the fleet console as convenience behavior.
    authentication, route admission, health, and bounded diagnostics.
 4. Add fleet-console host inventory and host-qualified session discovery. **Implemented.**
 5. Add exact-host attach, event replay/live subscription, and operator input
-   routing. **Local and Cloudflare browser route shapes, adapter contracts, and
-   server-side relay are implemented; governed launch and physical-host E2E
-   remain.**
+   routing. **Local and Cloudflare browser route shapes, adapter contracts,
+   server-side relay, and governed exact-host launch are implemented; physical
+   host E2E remains.**
 6. Add host-local and fleet overlay/browser entry points with persistent host
    context. **The Host Fleet page, local-authority enrollment/lifecycle
    controls, Cloudflare static-page configuration, and host-local console
    linking/projection are implemented; live physical-host acceptance remains.**
-7. Add Cloudflare fleet projection only after local two-host parity is proven. **Synthetic projection, per-host session fan-out, native browser route configuration, correlation diagnostics, authenticated audit readback, and deployment preflight are implemented; production deployment parity remains.**
+7. Add Cloudflare fleet projection only after local two-host parity is proven. **Synthetic projection, per-host session fan-out, native browser route configuration, correlation diagnostics, authenticated audit readback, deployment preflight, and optional authenticated authority forwarding are implemented; production deployment parity remains.**
 8. Run the two-host E2E matrix with a Windows desktop and a ZimaBoard.
 
 ## Acceptance Target
@@ -629,11 +634,11 @@ is not mistaken for a deployed fleet:
 | Item | Current state | Required next boundary |
 | --- | --- | --- |
 | Physical Windows plus Linux acceptance | The opt-in harness and [`host-fleet-operator-console-acceptance.md`](../deployment/host-fleet-operator-console-acceptance.md) prove the required inputs and acceptance observations; the harness remains skipped without operator-supplied host data. | Run the two-host matrix, including restart, offline, stale, revoked, and re-enrollment cases. |
-| Production Cloudflare fleet | Worker routes, native browser configuration, redacted registry example, synthetic service-binding tests, fail-closed deployment preflight, lifecycle preflight, acceptance runbook, and an opt-in read-only live browser smoke lane exist. | Materialize a deployment-owned registry, bind each gateway and secret, deploy, then run `smoke:host-fleet-live -- --live ...`; the live result still requires real active hosts and sessions. |
+| Production Cloudflare fleet | Worker routes, native browser configuration, redacted registry example, synthetic service-binding tests, fail-closed deployment preflight, lifecycle/launch/credential preflights, optional authenticated authority forwarding, acceptance runbook, and an opt-in read-only live browser smoke lane exist. | Materialize a deployment-owned registry, bind each gateway, authority URL, authority token, and secret, deploy, then run `smoke:host-fleet-live -- --live ...`; the live result still requires real active hosts and sessions. A separate disposable mutation exercise must prove the forwarded launch/rotation/rollback/revocation path before production controls are enabled. |
 | Host-local console entry | The fleet page now links each local-authority HostKey to a GET-only, host-qualified gateway-mediated console projection; the proxy enforces admitted paths, rewrites the console mount for assets, bounds content, and never exposes loopback endpoints or credentials. | Run physical-host acceptance for HTML, asset, unavailable, retired, and path-admission refusal cases. |
 | Browser enrollment | `narada fleet register`, `reenroll`, `revoke`, and `retire` remain governed CLI operations; the User Site authority and Host Fleet page now expose a reviewed, idempotent enrollment workflow that carries only a credential reference. | Run live enrollment and re-enrollment acceptance with provisioned gateway references; never accept a raw gateway credential in browser state. |
-| Remote lifecycle controls | The User Site authority and Host Fleet page now expose confirmed, revision-checked, idempotent lifecycle execution with audit correlation; Cloudflare fails closed for mutation while exposing non-mutating preflight. | Separately add an authenticated Cloudflare-to-User-Site authority binding before exposing remote controls; do not infer authority from the projection. |
-| Host Gateway credential class | Explicit bridge-compatibility and dedicated-host-gateway classes, migration-safe defaults, expiry checks, HTTP/WebSocket header selection, and remote admission tests exist. | Provision dedicated secrets in the deployed gateways and run live rotation, expiry, revocation, and rollback acceptance. |
+| Remote lifecycle controls | The User Site authority and Host Fleet page expose confirmed, revision-checked, idempotent lifecycle execution with audit correlation; Cloudflare has an optional authenticated forwarding boundary and still fails closed when it is absent. | Configure and verify the Cloudflare-to-User-Site authority binding in a disposable deployment before enabling remote controls; do not infer authority from the projection. |
+| Host Gateway credential class | Explicit bridge-compatibility and dedicated-host-gateway classes, migration-safe defaults, expiry checks, HTTP/WebSocket header selection, revision-aware rotation and rollback, and remote admission tests exist. | Provision dedicated secrets in the deployed gateways and run live rotation, expiry, revocation, and rollback acceptance against disposable hosts. |
 | Multi-host event aggregation | The Host Fleet page now offers an explicit read-only aggregate observation mode. It opens one exact-target subscription per active session, keeps cursors keyed by HostKey plus runtime session, preserves source identity on every event, and performs bounded observable reconnect/resume after transport loss. Target refusal is terminal for that subscription rather than a hidden retry loop. | Run physical and Cloudflare browser acceptance for reconnect/resume; never synthesize a global event sequence. |
 | Full fleet audit/observability | Registry mutations/refusals and bounded local request observations are retained and exportable; Cloudflare now writes redacted relay observations to the dedicated `HOST_FLEET_AUDIT` Durable Object with a 10,000-entry bound and exposes authenticated readback at `/api/narada/fleet/observations`. | Deploy the Durable Object migration, verify retention/export in production, and document the operator retention window. The Cloudflare audit remains an observation ledger, not canonical host authority. |
 

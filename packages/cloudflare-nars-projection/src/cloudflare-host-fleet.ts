@@ -1,12 +1,15 @@
 import {
+  HOST_FLEET_CREDENTIAL_ROLLBACK_INTENT_SCHEMA,
   HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
   HOST_FLEET_LAUNCH_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
+  preflightHostFleetCredentialRollbackIntent,
   preflightHostFleetCredentialRotationIntent,
   preflightHostFleetLaunchIntent,
   preflightHostFleetLifecycleIntent,
   type HostFleetLifecycleCurrent,
 } from '@narada-core/host-fleet/contract';
+import { HOST_FLEET_AUTHORITY_TOKEN_HEADER } from '@narada-core/host-fleet/gateway';
 
 export const CLOUDFLARE_HOST_FLEET_REGISTRY_SCHEMA = 'narada.cloudflare.host_fleet_registry.v1' as const;
 export const CLOUDFLARE_HOST_FLEET_OVERVIEW_SCHEMA = 'narada.cloudflare.host_fleet.overview.v1' as const;
@@ -59,6 +62,8 @@ declare const WebSocketPair: { new(): WorkerWebSocketPair };
 export interface CloudflareHostFleetEnvironment {
   [binding: string]: unknown;
   NARADA_HOST_FLEET_REGISTRY?: string;
+  NARADA_HOST_FLEET_AUTHORITY_URL?: string;
+  NARADA_HOST_FLEET_AUTHORITY_TOKEN?: string;
 }
 
 export interface CloudflareHostFleetOverview {
@@ -88,6 +93,10 @@ export interface CloudflareHostFleetRequestOptions {
   observe_request?: (observation: CloudflareHostFleetRequestObservation) => void;
   allow_observation_read?: boolean;
   read_observations?: (limit: number) => Promise<unknown | null>;
+  /** Synthetic/local injection point; production uses the configured authority URL. */
+  forward_authority?: (path: string, body: unknown, requestId: string) => Promise<Response>;
+  /** Synthetic/local injection point for revision-sensitive authority preflights. */
+  forward_authority_preflight?: (path: string, query: string, requestId: string) => Promise<Response>;
 }
 
 const HOST_ID = /^[a-z0-9][a-z0-9._-]{0,63}$/;
@@ -435,6 +444,105 @@ async function boundedJson(response: Response): Promise<unknown> {
   try { return JSON.parse(text) as unknown; } catch { throw new Error('host_gateway_response_invalid_json'); }
 }
 
+async function boundedRequestJson(request: Request): Promise<Record<string, unknown> | null> {
+  const length = Number(request.headers.get('content-length') ?? '0');
+  if (Number.isFinite(length) && length > MAX_RESPONSE_BYTES) throw new Error('host_fleet_authority_request_too_large');
+  const text = await request.text();
+  if (text.length > MAX_RESPONSE_BYTES) throw new Error('host_fleet_authority_request_too_large');
+  try {
+    const value = JSON.parse(text) as unknown;
+    return record(value);
+  } catch {
+    throw new Error('host_fleet_authority_request_invalid_json');
+  }
+}
+
+function authorityUrl(env: CloudflareHostFleetEnvironment): URL | null {
+  const raw = env.NARADA_HOST_FLEET_AUTHORITY_URL?.trim();
+  if (!raw) return null;
+  try {
+    const parsed = new URL(raw);
+    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.search || parsed.hash) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function forwardAuthorityMutation(
+  request: Request,
+  env: CloudflareHostFleetEnvironment,
+  path: string,
+  fetchFn: typeof fetch,
+  options: CloudflareHostFleetRequestOptions,
+  correlationId: string,
+): Promise<Response> {
+  const body = await boundedRequestJson(request);
+  if (!body || body.operator_confirmed !== true || !record(body.intent)) {
+    return refusal('host_fleet_authority_intent_invalid', 400, correlationId);
+  }
+  const token = env.NARADA_HOST_FLEET_AUTHORITY_TOKEN?.trim();
+  if (!token) return refusal('host_fleet_authority_forwarding_unavailable', 503, correlationId);
+  let upstream: Response;
+  if (options.forward_authority) {
+    upstream = await options.forward_authority(path, body, correlationId);
+  } else {
+    const base = authorityUrl(env);
+    if (!base) return refusal('host_fleet_authority_forwarding_unavailable', 503, correlationId);
+    const target = new URL(path, base);
+    const headers = new Headers({
+      accept: 'application/json',
+      'content-type': 'application/json',
+      'x-request-id': correlationId,
+      [HOST_FLEET_AUTHORITY_TOKEN_HEADER]: token,
+      'x-narada-host-fleet-authority-source': 'cloudflare-projection',
+    });
+    upstream = await fetchFn(new Request(target, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      redirect: 'manual',
+    }));
+  }
+  let payload: unknown;
+  try { payload = await boundedJson(upstream); }
+  catch (error) { return refusal(error instanceof Error ? error.message : 'host_fleet_authority_response_invalid', 502, correlationId); }
+  return json(payload, upstream.status, { 'x-request-id': correlationId });
+}
+
+async function forwardAuthorityPreflight(
+  request: Request,
+  env: CloudflareHostFleetEnvironment,
+  path: string,
+  fetchFn: typeof fetch,
+  options: CloudflareHostFleetRequestOptions,
+  correlationId: string,
+): Promise<Response> {
+  const token = env.NARADA_HOST_FLEET_AUTHORITY_TOKEN?.trim();
+  if (!token) return refusal('host_fleet_authority_forwarding_unavailable', 503, correlationId);
+  const requestUrl = new URL(request.url);
+  let upstream: Response;
+  if (options.forward_authority_preflight) {
+    upstream = await options.forward_authority_preflight(path, requestUrl.search, correlationId);
+  } else {
+    const base = authorityUrl(env);
+    if (!base) return refusal('host_fleet_authority_forwarding_unavailable', 503, correlationId);
+    const target = new URL(path, base);
+    target.search = requestUrl.search;
+    const headers = new Headers({
+      accept: 'application/json',
+      'x-request-id': correlationId,
+      [HOST_FLEET_AUTHORITY_TOKEN_HEADER]: token,
+      'x-narada-host-fleet-authority-source': 'cloudflare-projection',
+    });
+    upstream = await fetchFn(new Request(target, { method: 'GET', headers, redirect: 'manual' }));
+  }
+  let payload: unknown;
+  try { payload = await boundedJson(upstream); }
+  catch (error) { return refusal(error instanceof Error ? error.message : 'host_fleet_authority_response_invalid', 502, correlationId); }
+  return json(payload, upstream.status, { 'x-request-id': correlationId });
+}
+
 function projectSessions(payload: unknown, entry: CloudflareHostFleetRecord): Array<Record<string, unknown>> {
   const value = record(payload);
   if (!value || value.schema !== 'narada.operator_console.agent_sessions.v1' || !Array.isArray(value.sessions)) throw new Error('host_session_discovery_contract_invalid');
@@ -676,9 +784,39 @@ export async function handleCloudflareHostFleetRequest(
     }, entry ?? null, new Date(now()));
     return json(preflight, preflight.status === 'ready' ? 200 : 409, { 'x-request-id': correlationId });
   }
-  if (request.method === 'POST'
-    && (url.pathname === '/api/narada/fleet/hosts/lifecycle' || url.pathname === '/api/narada/fleet/hosts/enrollment')) {
-    return refuse('host_fleet_authority_forwarding_required', 503);
+  if (url.pathname === '/api/narada/fleet/hosts/credentials/rollback/preflight' && request.method === 'GET') {
+    try {
+      return await forwardAuthorityPreflight(
+        request,
+        env,
+        '/console/hosts/api/credentials/rollback/preflight',
+        fetchFn,
+        options,
+        correlationId,
+      );
+    } catch (error) {
+      return refuse(error instanceof Error ? error.message.slice(0, 256) : 'host_fleet_authority_forwarding_failed', 503);
+    }
+  }
+  if (request.method === 'POST') {
+    const authorityPath = url.pathname === '/api/narada/fleet/hosts/lifecycle'
+      ? '/console/hosts/api/lifecycle'
+      : url.pathname === '/api/narada/fleet/hosts/enrollment'
+        ? '/console/hosts/api/enrollment'
+        : url.pathname === '/api/narada/fleet/hosts/launch'
+          ? '/console/hosts/api/launch'
+          : url.pathname === '/api/narada/fleet/hosts/credentials/rotate'
+            ? '/console/hosts/api/credentials/rotate'
+            : url.pathname === '/api/narada/fleet/hosts/credentials/rollback'
+              ? '/console/hosts/api/credentials/rollback'
+            : null;
+    if (authorityPath) {
+      try {
+        return await forwardAuthorityMutation(request, env, authorityPath, fetchFn, options, correlationId);
+      } catch (error) {
+        return refuse(error instanceof Error ? error.message.slice(0, 256) : 'host_fleet_authority_forwarding_failed', 503);
+      }
+    }
   }
   const parts = routeParts(url.pathname);
   const parsed = readRegistry(env.NARADA_HOST_FLEET_REGISTRY ?? null);

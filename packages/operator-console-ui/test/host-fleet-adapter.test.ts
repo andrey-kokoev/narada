@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHostFleetAdapter } from '../src/host-fleet/adapter.ts';
-import type { HostFleetEnrollmentIntent } from '@narada-core/host-fleet/contract';
+import type { HostFleetEnrollmentIntent, HostFleetLaunchIntent } from '@narada-core/host-fleet/contract';
 
 test('host fleet adapter preserves qualified host identity and bounded health state', async () => {
   const client = createHostFleetAdapter({
@@ -146,4 +146,35 @@ test('host fleet adapter accepts enrollment results without lifecycle-only opera
   const result = await client.applyEnrollment?.(intent, 'operator-console.test');
   assert.equal(result?.status, 'applied');
   assert.equal(result?.operation, null);
+});
+
+test('host fleet adapter preserves launch-specific success statuses', async () => {
+  const intent: HostFleetLaunchIntent = {
+    schema: 'narada.host_fleet.launch_intent.v1',
+    request_id: 'host-launch:adapter',
+    host: { host_id: 'zima-board-2', host_instance_id: 'instance-z' },
+    expected_revision: 2,
+    site_id: 'sonar',
+    agent_id: 'resident',
+    operator_surface: 'agent-web-ui',
+    confirmation: 'zima-board-2@instance-z',
+  };
+  const client = createHostFleetAdapter({
+    list: async () => ({ schema: 'narada.operator_console.host_fleet.v1', status: 'success', generated_at: '2026-07-31T12:00:00.000Z', count: 0, hosts: [], refusals: [] }),
+    applyLaunch: async () => ({
+      schema: 'narada.host_fleet.launch_result.v1',
+      status: 'launched',
+      mutation_performed: true,
+      request_id: intent.request_id,
+      host: intent.host,
+      site_id: intent.site_id,
+      agent_id: intent.agent_id,
+      operator_surface: intent.operator_surface,
+      session_id: 'session-z',
+      reason: null,
+    }),
+  });
+  const result = await client.applyLaunch?.(intent, 'operator-console.test');
+  assert.equal(result?.status, 'launched');
+  assert.equal(result?.sessionId, 'session-z');
 });

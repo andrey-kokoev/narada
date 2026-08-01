@@ -4,7 +4,10 @@ import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
 import Database from '@narada-core/sqlite';
 import {
+  HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA,
+  HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA,
   HOST_FLEET_ENROLLMENT_RESULT_SCHEMA,
+  HOST_FLEET_LAUNCH_RESULT_SCHEMA,
   HOST_FLEET_LIFECYCLE_RESULT_SCHEMA,
   createHostRecord,
   hostKey,
@@ -17,12 +20,24 @@ import {
   type HostRecord,
   type HostRecordInput,
   type HostHealthStatus,
+  preflightHostFleetCredentialRotationIntent,
+  preflightHostFleetCredentialRollbackIntent,
+  preflightHostFleetLaunchIntent,
   preflightHostFleetEnrollmentIntent,
   preflightHostFleetLifecycleIntent,
+  validateHostFleetCredentialRotationIntent,
+  validateHostFleetCredentialRollbackIntent,
+  validateHostFleetLaunchIntent,
   validateHostFleetEnrollmentIntent,
   validateHostFleetLifecycleIntent,
+  type HostFleetCredentialRotationIntent,
+  type HostFleetCredentialRotationResult,
+  type HostFleetCredentialRollbackIntent,
+  type HostFleetCredentialRollbackResult,
   type HostFleetEnrollmentIntent,
   type HostFleetEnrollmentResult,
+  type HostFleetLaunchIntent,
+  type HostFleetLaunchResult,
   type HostFleetLifecycleIntent,
   type HostFleetLifecycleResult,
 } from './contract.js';
@@ -40,13 +55,23 @@ export interface HostFleetRegistryResult {
 export interface HostFleetAuditEntry {
   schema: 'narada.host_fleet.audit.v1';
   audit_id: string;
-  operation: 'register' | 'reenrollment_retire' | 'health_update' | 'revoke' | 'retire';
+  operation: 'register' | 'reenrollment_retire' | 'health_update' | 'revoke' | 'retire' | 'launch' | 'credential_rotate' | 'credential_rollback';
   status: 'applied' | 'unchanged' | 'refused';
   host: HostKey;
   revision: number | null;
   request_id: string | null;
   actor: string | null;
   reason: string | null;
+  recorded_at: string;
+}
+
+export interface HostFleetCredentialHistoryEntry {
+  schema: 'narada.host_fleet.credential_history.v1';
+  host: HostKey;
+  revision: number;
+  credential_ref: string;
+  credential: HostRecord['gateway']['credential'];
+  request_id: string | null;
   recorded_at: string;
 }
 
@@ -210,11 +235,44 @@ export class HostFleetRegistry {
         result_json TEXT NOT NULL,
         recorded_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS host_fleet_credential_history (
+        host_id TEXT NOT NULL,
+        host_instance_id TEXT NOT NULL,
+        revision INTEGER NOT NULL,
+        credential_ref TEXT NOT NULL,
+        credential_json TEXT NOT NULL,
+        request_id TEXT,
+        recorded_at TEXT NOT NULL,
+        PRIMARY KEY (host_id, host_instance_id, revision)
+      );
+      CREATE INDEX IF NOT EXISTS idx_host_fleet_credential_history_host
+        ON host_fleet_credential_history(host_id, host_instance_id, revision);
     `);
     // Existing User Site registries predate actor/request correlation. Keep
     // those databases readable while making new audit rows fully attributable.
     for (const column of ['request_id TEXT', 'actor TEXT']) {
       try { this.db.exec(`ALTER TABLE host_fleet_audit ADD COLUMN ${column}`); } catch { /* already migrated */ }
+    }
+    this.seedCredentialHistory();
+  }
+
+  private seedCredentialHistory(): void {
+    const rows = this.db.prepare('SELECT host_id, host_instance_id, record_json FROM host_registry').all() as HostRow[];
+    const insert = this.db.prepare(`
+      INSERT OR IGNORE INTO host_fleet_credential_history
+        (host_id, host_instance_id, revision, credential_ref, credential_json, request_id, recorded_at)
+      VALUES (?, ?, ?, ?, ?, NULL, ?)
+    `);
+    for (const row of rows) {
+      const host = parseHostRow(row);
+      insert.run(
+        host.host_id,
+        host.host_instance_id,
+        host.revision,
+        host.credential_ref,
+        JSON.stringify(host.gateway.credential),
+        host.updated_at,
+      );
     }
   }
 
@@ -388,6 +446,7 @@ export class HostFleetRegistry {
 
       if (!exact) {
         this.writeHost(candidate);
+        this.recordCredentialHistory(candidate, options.request_id ?? null, now);
         this.writeAudit({
           operation: 'register',
           status: 'applied',
@@ -440,6 +499,7 @@ export class HostFleetRegistry {
         revision: exact.revision,
       }, exact.revision + 1, now);
       this.writeHost(updated);
+      this.recordCredentialHistory(updated, options.request_id ?? null, now);
       this.writeAudit({
         operation: 'register',
         status: 'applied',
@@ -647,6 +707,267 @@ export class HostFleetRegistry {
     })();
   }
 
+  applyCredentialRotationIntent(value: unknown, options: HostFleetMutationOptions = {}): HostFleetCredentialRotationResult {
+    let intent: HostFleetCredentialRotationIntent;
+    try {
+      intent = validateHostFleetCredentialRotationIntent(value);
+    } catch (error) {
+      return {
+        schema: HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        request_id: '',
+        host: null,
+        revision: null,
+        credential_class: null,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+    const actor = actorName(options.actor);
+    return this.db.transaction(() => {
+      const hash = intentHash(intent);
+      const prior = this.readIntentResult(intent.request_id);
+      if (prior) {
+        if (prior.intent_hash !== hash) return this.credentialRotationResult(intent, 'refused', false, null, null, 'intent_request_id_conflict');
+        const replayed = this.parseStoredResult<HostFleetCredentialRotationResult>(prior.result_json);
+        return { ...replayed, status: 'replayed' as const, mutation_performed: false };
+      }
+      const current = this.getHost(intent.host);
+      const preflight = preflightHostFleetCredentialRotationIntent(intent, current);
+      if (preflight.status !== 'ready' || !preflight.intent) {
+        const result = this.credentialRotationResult(
+          intent,
+          'refused',
+          false,
+          current,
+          current?.revision ?? null,
+          preflight.refusals.join(',') || 'host_credential_rotation_refused',
+        );
+        this.storeIntentResult(intent.request_id, hash, result);
+        this.writeAudit({
+          operation: 'credential_rotate',
+          status: 'refused',
+          host: current ?? intent.host,
+          revision: current?.revision ?? null,
+          requestId: intent.request_id,
+          actor,
+          reason: result.reason,
+          recordedAt: new Date(),
+        });
+        return result;
+      }
+      if (!current) {
+        const result = this.credentialRotationResult(intent, 'refused', false, null, null, 'host_not_registered');
+        this.storeIntentResult(intent.request_id, hash, result);
+        return result;
+      }
+      if (current.credential_ref === intent.credential_ref
+        && JSON.stringify(current.gateway.credential) === JSON.stringify(intent.credential)) {
+        const result = this.credentialRotationResult(intent, 'unchanged', false, current, current.revision, null);
+        this.storeIntentResult(intent.request_id, hash, result);
+        this.writeAudit({
+          operation: 'credential_rotate',
+          status: 'unchanged',
+          host: current,
+          revision: current.revision,
+          requestId: intent.request_id,
+          actor,
+          reason: null,
+          recordedAt: new Date(),
+        });
+        return result;
+      }
+      const now = new Date();
+      const updated = withRevision({
+        ...current,
+        credential_ref: intent.credential_ref,
+        gateway: { ...current.gateway, credential: intent.credential },
+      }, current.revision + 1, now);
+      this.writeHost(updated);
+      this.recordCredentialHistory(updated, intent.request_id, now);
+      this.writeAudit({
+        operation: 'credential_rotate',
+        status: 'applied',
+        host: updated,
+        revision: updated.revision,
+        requestId: intent.request_id,
+        actor,
+        reason: null,
+        recordedAt: now,
+      });
+      const result = this.credentialRotationResult(intent, 'applied', true, updated, updated.revision, null);
+      this.storeIntentResult(intent.request_id, hash, result);
+      return result;
+    })();
+  }
+
+  listCredentialHistory(key: HostKey): HostFleetCredentialHistoryEntry[] {
+    const host = validateHostKey(key);
+    const rows = this.db.prepare(`
+      SELECT host_id, host_instance_id, revision, credential_ref, credential_json, request_id, recorded_at
+      FROM host_fleet_credential_history
+      WHERE host_id = ? AND host_instance_id = ?
+      ORDER BY revision DESC
+    `).all(host.host_id, host.host_instance_id) as Array<Record<string, unknown>>;
+    return rows.map((row) => {
+      let credential: unknown;
+      try { credential = JSON.parse(String(row.credential_json)); } catch { throw new Error('host_credential_history_corrupt'); }
+      return {
+        schema: 'narada.host_fleet.credential_history.v1' as const,
+        host: validateHostKey({ host_id: row.host_id, host_instance_id: row.host_instance_id }),
+        revision: Number(row.revision),
+        credential_ref: String(row.credential_ref),
+        credential: credential as HostRecord['gateway']['credential'],
+        request_id: row.request_id == null ? null : String(row.request_id),
+        recorded_at: String(row.recorded_at),
+      };
+    });
+  }
+
+  applyCredentialRollbackIntent(value: unknown, options: HostFleetMutationOptions = {}): HostFleetCredentialRollbackResult {
+    let intent: HostFleetCredentialRollbackIntent;
+    try {
+      intent = validateHostFleetCredentialRollbackIntent(value);
+    } catch (error) {
+      return {
+        schema: HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        request_id: '',
+        host: null,
+        revision: null,
+        restored_from_revision: null,
+        credential_class: null,
+        reason: error instanceof Error ? error.message : String(error),
+      };
+    }
+    const actor = actorName(options.actor);
+    return this.db.transaction(() => {
+      const hash = intentHash(intent);
+      const prior = this.readIntentResult(intent.request_id);
+      if (prior) {
+        if (prior.intent_hash !== hash) return this.credentialRollbackResult(intent, 'refused', false, null, null, null, 'intent_request_id_conflict');
+        const replayed = this.parseStoredResult<HostFleetCredentialRollbackResult>(prior.result_json);
+        return { ...replayed, status: 'replayed' as const, mutation_performed: false };
+      }
+      const current = this.getHost(intent.host);
+      const history = this.listCredentialHistory(intent.host);
+      const preflight = preflightHostFleetCredentialRollbackIntent(intent, current, history.map((entry) => entry.revision));
+      const target = history.find((entry) => entry.revision === intent.rollback_to_revision) ?? null;
+      if (preflight.status !== 'ready' || !current || !target) {
+        const result = this.credentialRollbackResult(
+          intent,
+          'refused',
+          false,
+          current,
+          null,
+          target?.revision ?? null,
+          preflight.refusals.join(',') || 'host_credential_rollback_refused',
+        );
+        this.storeIntentResult(intent.request_id, hash, result);
+        this.writeAudit({
+          operation: 'credential_rollback',
+          status: 'refused',
+          host: current ?? intent.host,
+          revision: current?.revision ?? null,
+          requestId: intent.request_id,
+          actor,
+          reason: result.reason,
+          recordedAt: new Date(),
+        });
+        return result;
+      }
+      const now = new Date();
+      const updated = withRevision({
+        ...current,
+        credential_ref: target.credential_ref,
+        gateway: { ...current.gateway, credential: target.credential },
+      }, current.revision + 1, now);
+      this.writeHost(updated);
+      this.recordCredentialHistory(updated, intent.request_id, now);
+      this.writeAudit({
+        operation: 'credential_rollback',
+        status: 'applied',
+        host: updated,
+        revision: updated.revision,
+        requestId: intent.request_id,
+        actor,
+        reason: `restored_credential_revision_${target.revision}`,
+        recordedAt: now,
+      });
+      const result = this.credentialRollbackResult(intent, 'applied', true, updated, updated.revision, target.revision, null);
+      this.storeIntentResult(intent.request_id, hash, result);
+      return result;
+    })();
+  }
+
+  /** Return a durable launch result before contacting the Host Gateway. */
+  getLaunchIntentResult(value: unknown): HostFleetLaunchResult | null {
+    let intent: HostFleetLaunchIntent;
+    try { intent = validateHostFleetLaunchIntent(value); } catch { return null; }
+    const prior = this.readIntentResult(intent.request_id);
+    if (!prior) return null;
+    if (prior.intent_hash !== intentHash(intent)) return this.launchResult(intent, 'refused', false, null, 'intent_request_id_conflict');
+    const replayed = this.parseStoredResult<HostFleetLaunchResult>(prior.result_json);
+    return { ...replayed, status: 'replayed', mutation_performed: false };
+  }
+
+  /** Persist the Host Gateway result and make it part of the User Site audit. */
+  recordLaunchIntentResult(value: unknown, result: HostFleetLaunchResult, options: HostFleetMutationOptions = {}): HostFleetLaunchResult {
+    const intent = validateHostFleetLaunchIntent(value);
+    const actor = actorName(options.actor);
+    return this.db.transaction(() => {
+      const hash = intentHash(intent);
+      const prior = this.readIntentResult(intent.request_id);
+      if (prior) {
+        if (prior.intent_hash !== hash) return this.launchResult(intent, 'refused', false, null, 'intent_request_id_conflict');
+        const replayed = this.parseStoredResult<HostFleetLaunchResult>(prior.result_json);
+        return { ...replayed, status: 'replayed' as const, mutation_performed: false };
+      }
+      const current = this.getHost(intent.host);
+      const preflight = preflightHostFleetLaunchIntent(intent, current);
+      if (preflight.status !== 'ready' || !preflight.intent || !current) {
+        const refused = this.launchResult(intent, 'refused', false, null, preflight.refusals.join(',') || 'host_launch_refused');
+        this.storeIntentResult(intent.request_id, hash, refused);
+        this.writeAudit({
+          operation: 'launch',
+          status: 'refused',
+          host: current ?? intent.host,
+          revision: current?.revision ?? null,
+          requestId: intent.request_id,
+          actor,
+          reason: refused.reason,
+          recordedAt: new Date(),
+        });
+        return refused;
+      }
+      const normalized: HostFleetLaunchResult = {
+        schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA,
+        status: result.status,
+        mutation_performed: result.mutation_performed,
+        request_id: intent.request_id,
+        host: result.host ?? intent.host,
+        site_id: result.site_id ?? intent.site_id,
+        agent_id: result.agent_id ?? intent.agent_id,
+        operator_surface: result.operator_surface ?? intent.operator_surface,
+        session_id: result.session_id ?? null,
+        reason: result.reason ?? null,
+      };
+      this.storeIntentResult(intent.request_id, hash, normalized);
+      this.writeAudit({
+        operation: 'launch',
+        status: normalized.status === 'refused' ? 'refused' : normalized.status === 'reused' ? 'unchanged' : 'applied',
+        host: current,
+        revision: current.revision,
+        requestId: intent.request_id,
+        actor,
+        reason: normalized.reason,
+        recordedAt: new Date(),
+      });
+      return normalized;
+    })();
+  }
+
   revokeHost(key: HostKey, reason = 'operator_revoked'): HostFleetRegistryResult {
     return this.transitionHost(key, 'revoked', 'revoked', reason);
   }
@@ -757,6 +1078,70 @@ export class HostFleetRegistry {
     };
   }
 
+  private credentialRotationResult(
+    intent: HostFleetCredentialRotationIntent,
+    status: HostFleetCredentialRotationResult['status'],
+    mutationPerformed: boolean,
+    host: HostRecord | null,
+    revision: number | null,
+    reason: string | null,
+  ): HostFleetCredentialRotationResult {
+    return {
+      schema: HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA,
+      status,
+      mutation_performed: mutationPerformed,
+      request_id: intent.request_id,
+      host: host ? { host_id: host.host_id, host_instance_id: host.host_instance_id } : intent.host,
+      revision: host?.revision ?? revision,
+      credential_class: intent.credential.class,
+      reason,
+    };
+  }
+
+  private credentialRollbackResult(
+    intent: HostFleetCredentialRollbackIntent,
+    status: HostFleetCredentialRollbackResult['status'],
+    mutationPerformed: boolean,
+    host: HostRecord | null,
+    revision: number | null,
+    restoredFromRevision: number | null,
+    reason: string | null,
+  ): HostFleetCredentialRollbackResult {
+    return {
+      schema: HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA,
+      status,
+      mutation_performed: mutationPerformed,
+      request_id: intent.request_id,
+      host: host ? { host_id: host.host_id, host_instance_id: host.host_instance_id } : intent.host,
+      revision: host?.revision ?? revision,
+      restored_from_revision: restoredFromRevision,
+      credential_class: host?.gateway.credential.class ?? null,
+      reason,
+    };
+  }
+
+  private launchResult(
+    intent: HostFleetLaunchIntent,
+    status: HostFleetLaunchResult['status'],
+    mutationPerformed: boolean,
+    sessionId: string | null,
+    reason: string | null,
+    host: HostKey | null = intent.host,
+  ): HostFleetLaunchResult {
+    return {
+      schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA,
+      status,
+      mutation_performed: mutationPerformed,
+      request_id: intent.request_id,
+      host,
+      site_id: intent.site_id,
+      agent_id: intent.agent_id,
+      operator_surface: intent.operator_surface,
+      session_id: sessionId,
+      reason,
+    };
+  }
+
   private writeAudit(input: {
     operation: HostFleetAuditEntry['operation'];
     status: HostFleetAuditEntry['status'];
@@ -783,6 +1168,22 @@ export class HostFleetRegistry {
       input.actor ?? null,
       input.reason,
       input.recordedAt.toISOString(),
+    );
+  }
+
+  private recordCredentialHistory(host: HostRecord, requestId: string | null, recordedAt: Date): void {
+    this.db.prepare(`
+      INSERT OR REPLACE INTO host_fleet_credential_history
+        (host_id, host_instance_id, revision, credential_ref, credential_json, request_id, recorded_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      host.host_id,
+      host.host_instance_id,
+      host.revision,
+      host.credential_ref,
+      JSON.stringify(host.gateway.credential),
+      requestId,
+      recordedAt.toISOString(),
     );
   }
 

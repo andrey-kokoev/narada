@@ -18,6 +18,9 @@ export const HOST_FLEET_LAUNCH_PREFLIGHT_SCHEMA = 'narada.host_fleet.launch_pref
 export const HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA = 'narada.host_fleet.credential_rotation_intent.v1' as const;
 export const HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA = 'narada.host_fleet.credential_rotation_result.v1' as const;
 export const HOST_FLEET_CREDENTIAL_ROTATION_PREFLIGHT_SCHEMA = 'narada.host_fleet.credential_rotation_preflight.v1' as const;
+export const HOST_FLEET_CREDENTIAL_ROLLBACK_INTENT_SCHEMA = 'narada.host_fleet.credential_rollback_intent.v1' as const;
+export const HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA = 'narada.host_fleet.credential_rollback_result.v1' as const;
+export const HOST_FLEET_CREDENTIAL_ROLLBACK_PREFLIGHT_SCHEMA = 'narada.host_fleet.credential_rollback_preflight.v1' as const;
 
 export type HostPlatform = 'windows' | 'linux' | 'macos' | 'cloudflare' | 'unknown';
 export type HostGatewayTransport = 'loopback' | 'ssh-tunnel' | 'https' | 'cloudflare';
@@ -148,7 +151,7 @@ export interface HostFleetLaunchIntent {
 
 export interface HostFleetLaunchResult {
   schema: typeof HOST_FLEET_LAUNCH_RESULT_SCHEMA;
-  status: 'launched' | 'reused' | 'refused';
+  status: 'launched' | 'reused' | 'replayed' | 'refused';
   mutation_performed: boolean;
   request_id: string;
   host: HostKey | null;
@@ -199,6 +202,38 @@ export interface HostFleetCredentialRotationPreflight {
   intent: HostFleetCredentialRotationIntent | null;
   current_revision: number | null;
   current_lifecycle_state: HostLifecycleState | null;
+  refusals: readonly string[];
+}
+
+export interface HostFleetCredentialRollbackIntent {
+  schema: typeof HOST_FLEET_CREDENTIAL_ROLLBACK_INTENT_SCHEMA;
+  request_id: string;
+  host: HostKey;
+  expected_revision: number;
+  rollback_to_revision: number;
+  confirmation: string;
+}
+
+export interface HostFleetCredentialRollbackResult {
+  schema: typeof HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA;
+  status: 'applied' | 'replayed' | 'refused';
+  mutation_performed: boolean;
+  request_id: string;
+  host: HostKey | null;
+  revision: number | null;
+  restored_from_revision: number | null;
+  credential_class: HostGatewayCredentialClass | null;
+  reason: string | null;
+}
+
+export interface HostFleetCredentialRollbackPreflight {
+  schema: typeof HOST_FLEET_CREDENTIAL_ROLLBACK_PREFLIGHT_SCHEMA;
+  status: 'ready' | 'refused';
+  mutation_performed: false;
+  intent: HostFleetCredentialRollbackIntent | null;
+  current_revision: number | null;
+  current_lifecycle_state: HostLifecycleState | null;
+  available_revisions: readonly number[];
   refusals: readonly string[];
 }
 
@@ -461,6 +496,29 @@ export function validateHostFleetCredentialRotationIntent(value: unknown): HostF
   };
 }
 
+export function validateHostFleetCredentialRollbackIntent(value: unknown): HostFleetCredentialRollbackIntent {
+  if (!isRecord(value) || value.schema !== HOST_FLEET_CREDENTIAL_ROLLBACK_INTENT_SCHEMA) {
+    throw new Error('host_credential_rollback_intent_schema_invalid');
+  }
+  const host = validateHostKey(value.host);
+  const request_id = requestId(value.request_id, 'host_credential_rollback_request_id_required', 'host_credential_rollback_request_id_invalid');
+  if (!Number.isInteger(value.expected_revision) || Number(value.expected_revision) < 1) {
+    throw new Error('host_credential_rollback_expected_revision_invalid');
+  }
+  if (!Number.isInteger(value.rollback_to_revision) || Number(value.rollback_to_revision) < 1) {
+    throw new Error('host_credential_rollback_target_revision_invalid');
+  }
+  if (value.confirmation !== hostKey(host)) throw new Error('host_credential_rollback_confirmation_invalid');
+  return {
+    schema: HOST_FLEET_CREDENTIAL_ROLLBACK_INTENT_SCHEMA,
+    request_id,
+    host,
+    expected_revision: Number(value.expected_revision),
+    rollback_to_revision: Number(value.rollback_to_revision),
+    confirmation: hostKey(host),
+  };
+}
+
 export function preflightHostFleetLaunchIntent(
   value: unknown,
   current: HostFleetLaunchCurrent | null,
@@ -542,6 +600,53 @@ export function preflightHostFleetCredentialRotationIntent(
       intent: null,
       current_revision: current?.revision ?? null,
       current_lifecycle_state: current?.lifecycle_state ?? null,
+      refusals: [error instanceof Error ? error.message : String(error)],
+    };
+  }
+}
+
+export function preflightHostFleetCredentialRollbackIntent(
+  value: unknown,
+  current: HostFleetCredentialRotationCurrent | null,
+  availableRevisions: readonly number[],
+): HostFleetCredentialRollbackPreflight {
+  try {
+    const intent = validateHostFleetCredentialRollbackIntent(value);
+    if (!current) return {
+      schema: HOST_FLEET_CREDENTIAL_ROLLBACK_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent,
+      current_revision: null,
+      current_lifecycle_state: null,
+      available_revisions: [...availableRevisions],
+      refusals: ['host_not_registered'],
+    };
+    const refusals: string[] = [];
+    if (!hostKeysEqual(intent.host, current)) refusals.push('host_key_mismatch');
+    if (intent.expected_revision !== current.revision) refusals.push('host_revision_conflict');
+    if (current.lifecycle_state === 'revoked' || current.lifecycle_state === 'retired') refusals.push(`host_${current.lifecycle_state}`);
+    if (intent.rollback_to_revision >= current.revision) refusals.push('host_credential_rollback_target_not_prior');
+    if (!availableRevisions.includes(intent.rollback_to_revision)) refusals.push('host_credential_rollback_revision_unavailable');
+    return {
+      schema: HOST_FLEET_CREDENTIAL_ROLLBACK_PREFLIGHT_SCHEMA,
+      status: refusals.length === 0 ? 'ready' : 'refused',
+      mutation_performed: false,
+      intent,
+      current_revision: current.revision,
+      current_lifecycle_state: current.lifecycle_state,
+      available_revisions: [...availableRevisions],
+      refusals,
+    };
+  } catch (error) {
+    return {
+      schema: HOST_FLEET_CREDENTIAL_ROLLBACK_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent: null,
+      current_revision: current?.revision ?? null,
+      current_lifecycle_state: current?.lifecycle_state ?? null,
+      available_revisions: [...availableRevisions],
       refusals: [error instanceof Error ? error.message : String(error)],
     };
   }

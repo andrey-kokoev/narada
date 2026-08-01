@@ -15,7 +15,7 @@ import { createConsoleServer } from '../../dist/commands/console-server.js';
 type JsonObject = Record<string, unknown>;
 
 const liveEnabled = process.env.NARADA_ENABLE_LIVE_E2E === '1';
-const HOST_PATHS = ['/health', '/console/sessions/api/sessions', '/sessions/*'];
+const HOST_PATHS = ['/health', '/console/sessions/api/sessions', '/console/agents/api/launch', '/sessions/*'];
 
 interface GatewayOptions {
   hostId: string;
@@ -111,6 +111,16 @@ async function startGateway(options: GatewayOptions): Promise<GatewayFixture> {
       });
       return;
     }
+    if (url.pathname === '/console/agents/api/launch' && request.method === 'POST') {
+      jsonResponse(response, 200, {
+        status: 'launched',
+        site_id: 'live-site',
+        agent_id: 'resident',
+        operator_surface: 'agent-web-ui',
+        session_id: options.sessionId,
+      });
+      return;
+    }
     response.writeHead(404);
     response.end();
   });
@@ -196,8 +206,15 @@ async function waitFor(condition: () => boolean | Promise<boolean>, label: strin
   throw new Error(`live_wait_timeout:${label}`);
 }
 
-async function waitForMutationFeedback(page: Page): Promise<void> {
-  await page.getByRole('status').filter({ hasText: /Host Fleet mutation (applied|replayed|unchanged)\./ }).waitFor({ timeout: 10_000 });
+async function waitForMutationFeedback(page: Page, responseDiagnostics: string[] = []): Promise<void> {
+  try {
+    await page.getByRole('status').filter({ hasText: /Host Fleet mutation (applied|launched|replayed|reused|unchanged)\./ }).waitFor({ timeout: 10_000 });
+  } catch (error) {
+    const statuses = await page.getByRole('status').allTextContents();
+    const alerts = await page.getByRole('alert').allTextContents();
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${message}; statuses=${JSON.stringify(statuses)}; alerts=${JSON.stringify(alerts)}; responses=${JSON.stringify(responseDiagnostics)}`);
+  }
   const mutationRefusals = await page.getByRole('alert').filter({ hasText: /Host Fleet mutation/ }).allTextContents();
   assert.deepEqual(mutationRefusals, [], `Host Fleet mutation was refused: ${mutationRefusals.join(' | ')}`);
 }
@@ -224,7 +241,7 @@ test('live local authority journey performs enrollment, browser attachment, and 
     port: 0,
     host: '127.0.0.1',
     hostFleetRegistry: registry,
-    hostFleetCredentialResolver: (reference) => reference === 'secret://live-host-1' ? 'live-host-1-token' : null,
+    hostFleetCredentialResolver: (reference) => ['secret://live-host-1', 'secret://live-host-1-v2'].includes(reference) ? 'live-host-1-token' : null,
   });
   let pageHandle: Awaited<ReturnType<typeof openPage>> | null = null;
   try {
@@ -235,20 +252,26 @@ test('live local authority journey performs enrollment, browser attachment, and 
 
     pageHandle = await openPage(`${consoleUrl}/console/hosts`);
     const { page } = pageHandle;
+    const launchResponses: string[] = [];
+    page.on('response', async (response) => {
+      if (!response.url().includes('/console/hosts/api/launch')) return;
+      try { launchResponses.push(await response.text()); } catch { /* response may already be closed */ }
+    });
     await page.getByText(/No hosts are enrolled yet/).waitFor();
-    await page.getByText('Enroll or re-enroll a host', { exact: true }).click();
-    await page.getByLabel('Host ID', { exact: true }).fill('live-host-1');
-    await page.getByLabel('Host instance ID', { exact: true }).fill('live-instance-1');
-    await page.getByLabel('Display name', { exact: true }).fill('Live Host 1');
-    await page.getByLabel('Gateway endpoint', { exact: true }).fill(gateway.url);
-    await page.getByLabel('Credential reference', { exact: true }).fill('secret://live-host-1');
-    await page.getByLabel('Admitted paths', { exact: true }).fill(HOST_PATHS.join('\n'));
-    await page.getByLabel('Capabilities', { exact: true }).fill('sessions\nevents');
-    await page.getByLabel('Admitted Sites', { exact: true }).fill('live-site');
-    await page.getByRole('button', { name: 'Review enrollment', exact: true }).click();
-    await page.getByText('intent ready', { exact: true }).waitFor();
-    await page.getByLabel(/I reviewed this enrollment intent/).check();
-    await page.getByRole('button', { name: 'Apply enrollment', exact: true }).click();
+    const enrollmentSection = page.locator('details').filter({ hasText: 'Enroll or re-enroll a host' });
+    await enrollmentSection.getByText('Enroll or re-enroll a host', { exact: true }).click();
+    await enrollmentSection.getByLabel('Host ID', { exact: true }).fill('live-host-1');
+    await enrollmentSection.getByLabel('Host instance ID', { exact: true }).fill('live-instance-1');
+    await enrollmentSection.getByLabel('Display name', { exact: true }).fill('Live Host 1');
+    await enrollmentSection.getByLabel('Gateway endpoint', { exact: true }).fill(gateway.url);
+    await enrollmentSection.getByLabel('Credential reference', { exact: true }).fill('secret://live-host-1');
+    await enrollmentSection.getByLabel('Admitted paths', { exact: true }).fill(HOST_PATHS.join('\n'));
+    await enrollmentSection.getByLabel('Capabilities', { exact: true }).fill('sessions\nevents');
+    await enrollmentSection.getByLabel('Admitted Sites', { exact: true }).fill('live-site');
+    await enrollmentSection.getByRole('button', { name: 'Review enrollment', exact: true }).click();
+    await enrollmentSection.getByText('intent ready', { exact: true }).waitFor();
+    await enrollmentSection.getByLabel(/I reviewed this enrollment intent/).check();
+    await enrollmentSection.getByRole('button', { name: 'Apply enrollment', exact: true }).click();
     await waitForMutationFeedback(page);
 
     const enrolled = registry.getHost({ host_id: 'live-host-1', host_instance_id: 'live-instance-1' });
@@ -264,8 +287,32 @@ test('live local authority journey performs enrollment, browser attachment, and 
     await page.getByLabel('Operator surface', { exact: true }).fill('agent-web-ui');
     await page.getByRole('button', { name: 'Plan exact launch', exact: true }).click();
     await page.getByText('preflight ready', { exact: true }).waitFor();
+    await page.getByLabel(/I reviewed this exact-host launch/).check();
+    await page.getByRole('button', { name: 'Launch on exact HostKey', exact: true }).click();
+    await waitForMutationFeedback(page, launchResponses);
     await page.getByRole('button', { name: 'Attach', exact: true }).click();
     await page.getByText(/session_events_replay_completed/).waitFor();
+
+    const rotationSection = page.locator('details').filter({ hasText: 'Rotate Host Gateway credential policy' });
+    await rotationSection.locator('summary').click();
+    const credentialClassControl = rotationSection.locator('label').filter({ hasText: 'Credential class' }).locator('select');
+    await credentialClassControl.waitFor({ state: 'visible' });
+    await rotationSection.getByLabel('Credential reference', { exact: true }).fill('secret://live-host-1-v2');
+    await credentialClassControl.selectOption('dedicated_host_gateway');
+    await rotationSection.getByRole('button', { name: 'Review credential rotation', exact: true }).click();
+    await rotationSection.getByText('intent ready', { exact: true }).waitFor();
+    await rotationSection.getByLabel(/I reviewed this revision-checked credential policy/).check();
+    await rotationSection.getByRole('button', { name: 'Apply credential rotation', exact: true }).click();
+    await waitForMutationFeedback(page);
+
+    const rollbackSection = page.locator('details').filter({ hasText: 'Rollback Host Gateway credential policy' });
+    await rollbackSection.locator('summary').click();
+    await rollbackSection.getByLabel('Restore revision', { exact: true }).fill('1');
+    await rollbackSection.getByRole('button', { name: 'Review credential rollback', exact: true }).click();
+    await rollbackSection.getByText('intent ready', { exact: true }).waitFor();
+    await rollbackSection.getByLabel(/I reviewed this revision-checked rollback/).check();
+    await rollbackSection.getByRole('button', { name: 'Apply credential rollback', exact: true }).click();
+    await waitForMutationFeedback(page);
 
     await page.getByLabel('Reason', { exact: true }).fill('live authority lifecycle test');
     await page.getByRole('button', { name: 'Plan revoke', exact: true }).click();
@@ -277,8 +324,8 @@ test('live local authority journey performs enrollment, browser attachment, and 
 
     const revoked = registry.getHost({ host_id: 'live-host-1', host_instance_id: 'live-instance-1' });
     assert.equal(revoked?.lifecycle_state, 'revoked');
-    assert.equal(revoked?.revision, 2);
-    assert.ok(registry.listAudit({ host: { host_id: 'live-host-1', host_instance_id: 'live-instance-1' } }).length >= 2);
+    assert.equal(revoked?.revision, 4);
+    assert.ok(registry.listAudit({ host: { host_id: 'live-host-1', host_instance_id: 'live-instance-1' } }).length >= 4);
     assert.deepEqual(pageHandle.errors, []);
   } finally {
     if (pageHandle) await pageHandle.close();

@@ -15,6 +15,11 @@ export interface HostFleetDeployPreflightResult {
   active_host_count: number;
   required_service_bindings: string[];
   required_secret_bindings: string[];
+  authority_forwarding: {
+    mode: 'disabled' | 'configured';
+    authority_url_configured: boolean;
+    required_token_binding: string | null;
+  };
   hosts: Array<Record<string, unknown>>;
   refusals: string[];
   next_steps: string[];
@@ -34,6 +39,18 @@ function requiredPath(host: CloudflareHostFleetRegistryValidationHost, path: str
   return host.gateway.admitted_paths.some((candidate) => candidate.endsWith('/*')
     ? path.startsWith(candidate.slice(0, -1))
     : candidate === path);
+}
+
+function authorityForwarding(env: NodeJS.ProcessEnv): { mode: 'disabled' | 'configured'; authority_url_configured: boolean; required_token_binding: string | null; refusal: string | null } {
+  const raw = env.NARADA_HOST_FLEET_AUTHORITY_URL?.trim();
+  if (!raw) return { mode: 'disabled', authority_url_configured: false, required_token_binding: null, refusal: null };
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) throw new Error('host_fleet_authority_url_invalid');
+  } catch {
+    return { mode: 'configured', authority_url_configured: true, required_token_binding: 'NARADA_HOST_FLEET_AUTHORITY_TOKEN', refusal: 'host_fleet_authority_url_invalid' };
+  }
+  return { mode: 'configured', authority_url_configured: true, required_token_binding: 'NARADA_HOST_FLEET_AUTHORITY_TOKEN', refusal: null };
 }
 
 function publicHost(host: CloudflareHostFleetRegistryValidationHost): Record<string, unknown> {
@@ -72,6 +89,7 @@ export async function buildHostFleetDeployPreflight(
       active_host_count: 0,
       required_service_bindings: [],
       required_secret_bindings: [],
+      authority_forwarding: { mode: 'disabled', authority_url_configured: false, required_token_binding: null },
       hosts: [],
       refusals: ['host_fleet_registry_source_required'],
       next_steps: ['Set NARADA_HOST_FLEET_REGISTRY or NARADA_HOST_FLEET_REGISTRY_FILE.'],
@@ -91,6 +109,7 @@ export async function buildHostFleetDeployPreflight(
       active_host_count: 0,
       required_service_bindings: [],
       required_secret_bindings: [],
+      authority_forwarding: { mode: 'disabled', authority_url_configured: false, required_token_binding: null },
       hosts: [],
       refusals: ['host_fleet_registry_file_invalid'],
       next_steps: [`Check registry file: ${path}`],
@@ -99,9 +118,12 @@ export async function buildHostFleetDeployPreflight(
 
   const validation = validateCloudflareHostFleetRegistry(raw);
   const refusals = [...validation.refusals];
+  const authority = authorityForwarding(env);
+  if (authority.refusal) refusals.push(authority.refusal);
   const activeHosts = validation.hosts.filter((host) => host.lifecycle_state === 'active');
   const serviceBindings = new Set<string>();
   const secretBindings = new Set<string>();
+  if (authority.required_token_binding) secretBindings.add(authority.required_token_binding);
   for (const host of activeHosts) {
     if (host.gateway.transport === 'service-binding' && host.gateway.binding) serviceBindings.add(host.gateway.binding);
     secretBindings.add(host.gateway.credential_binding);
@@ -123,11 +145,17 @@ export async function buildHostFleetDeployPreflight(
     active_host_count: activeHosts.length,
     required_service_bindings: [...serviceBindings].sort(),
     required_secret_bindings: [...secretBindings].sort(),
+    authority_forwarding: {
+      mode: authority.mode,
+      authority_url_configured: authority.authority_url_configured,
+      required_token_binding: authority.required_token_binding,
+    },
     hosts: validation.hosts.map(publicHost),
     refusals,
     next_steps: preflightReady
       ? [
         'Bind every required service binding and secret binding in Wrangler.',
+        ...(authority.mode === 'configured' ? ['Bind NARADA_HOST_FLEET_AUTHORITY_TOKEN and verify the User Site authority URL before enabling remote controls.'] : []),
         'Set NARADA_HOST_FLEET_OBSERVABILITY=log if structured relay diagnostics are desired.',
         'Deploy the Worker and run the live browser smoke test against the deployed URL.',
       ]

@@ -446,8 +446,170 @@ describe('Cloudflare Host Fleet projection', () => {
       now,
     );
     expect(response?.status).toBe(503);
-    expect(await response!.json()).toMatchObject({ status: 'refused', reason: 'host_fleet_authority_forwarding_required' });
+    expect(await response!.json()).toMatchObject({ status: 'refused', reason: 'host_fleet_authority_forwarding_unavailable' });
     expect(gatewayCalls).toBe(0);
+  });
+
+  it('forwards confirmed fleet mutations through the authenticated User Site authority bridge', async () => {
+    const forwarded: Array<{ path: string; body: unknown; requestId: string }> = [];
+    const env = {
+      ...environment(),
+      NARADA_HOST_FLEET_AUTHORITY_URL: 'https://user-site.example',
+      NARADA_HOST_FLEET_AUTHORITY_TOKEN: 'authority-secret',
+    };
+    const response = await handleCloudflareHostFleetRequest(
+      new Request('https://fleet.example/api/narada/fleet/hosts/launch', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'x-request-id': 'cf-launch-forward-1' },
+        body: JSON.stringify({
+          operator_confirmed: true,
+          actor: 'operator-console.host-fleet',
+          intent: {
+            schema: 'narada.host_fleet.launch_intent.v1',
+            request_id: 'host-launch-forward-1',
+            host: { host_id: 'desktop-sunroom-2', host_instance_id: 'desktop-instance' },
+            expected_revision: 4,
+            site_id: 'sonar',
+            agent_id: 'resident',
+            operator_surface: 'agent-web-ui',
+            confirmation: 'desktop-sunroom-2@desktop-instance',
+          },
+        }),
+      }),
+      env,
+      now,
+      fetch,
+      {
+        forward_authority: async (path, body, requestId) => {
+          forwarded.push({ path, body, requestId });
+          const responseBody = {
+            schema: 'narada.host_fleet.launch_result.v1',
+            status: 'launched',
+            mutation_performed: true,
+            request_id: 'host-launch-forward-1',
+            host: { host_id: 'desktop-sunroom-2', host_instance_id: 'desktop-instance' },
+            site_id: 'sonar',
+            agent_id: 'resident',
+            operator_surface: 'agent-web-ui',
+            session_id: 'carrier-forwarded-1',
+            reason: null,
+          };
+          return new Response(JSON.stringify(responseBody), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+      },
+    );
+    expect(response?.status).toBe(200);
+    expect(await response!.json()).toMatchObject({ status: 'launched', session_id: 'carrier-forwarded-1' });
+    expect(forwarded).toHaveLength(1);
+    expect(forwarded[0]).toMatchObject({ path: '/console/hosts/api/launch', requestId: 'cf-launch-forward-1' });
+    expect(JSON.stringify(forwarded)).not.toContain('authority-secret');
+  });
+
+  it('forwards credential rollback preflight to the User Site authority because history is not materialized in Cloudflare', async () => {
+    const env = {
+      ...environment(),
+      NARADA_HOST_FLEET_AUTHORITY_URL: 'https://user-site.example',
+      NARADA_HOST_FLEET_AUTHORITY_TOKEN: 'authority-secret',
+    };
+    const response = await handleCloudflareHostFleetRequest(
+      new Request('https://fleet.example/api/narada/fleet/hosts/credentials/rollback/preflight?host_id=desktop-sunroom-2&host_instance_id=desktop-instance&expected_revision=5&rollback_to_revision=4&request_id=cf-rollback-preflight-1&confirmation=desktop-sunroom-2%40desktop-instance', { headers: { 'x-request-id': 'cf-rollback-preflight-1' } }),
+      env,
+      now,
+      fetch,
+      {
+        forward_authority_preflight: async (path, query, requestId) => {
+          expect(path).toBe('/console/hosts/api/credentials/rollback/preflight');
+          expect(query).toContain('rollback_to_revision=4');
+          expect(requestId).toBe('cf-rollback-preflight-1');
+          return new Response(JSON.stringify({
+            schema: 'narada.host_fleet.credential_rollback_preflight.v1',
+            status: 'ready',
+            mutation_performed: false,
+            intent: null,
+            current_revision: 5,
+            current_lifecycle_state: 'active',
+            available_revisions: [1, 4],
+            refusals: [],
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+      },
+    );
+    expect(response?.status).toBe(200);
+    expect(await response!.json()).toMatchObject({
+      schema: 'narada.host_fleet.credential_rollback_preflight.v1',
+      status: 'ready',
+      current_revision: 5,
+      available_revisions: [1, 4],
+    });
+  });
+
+  it('forwards rotation and rollback mutations without exposing the authority token', async () => {
+    const forwarded: Array<{ path: string; body: unknown; requestId: string }> = [];
+    const env = {
+      ...environment(),
+      NARADA_HOST_FLEET_AUTHORITY_URL: 'https://user-site.example',
+      NARADA_HOST_FLEET_AUTHORITY_TOKEN: 'authority-secret',
+    };
+    const common = {
+      host: { host_id: 'desktop-sunroom-2', host_instance_id: 'desktop-instance' },
+      expected_revision: 4,
+      confirmation: 'desktop-sunroom-2@desktop-instance',
+    };
+    const operations = [
+      {
+        path: '/credentials/rotate',
+        requestPath: '/api/narada/fleet/hosts/credentials/rotate',
+        requestId: 'cf-rotation-forward-1',
+        intent: {
+          schema: 'narada.host_fleet.credential_rotation_intent.v1',
+          request_id: 'host-rotation-forward-1',
+          ...common,
+          credential_ref: 'secret://desktop-v2',
+          credential: { schema: 'narada.host_fleet.gateway_credential.v1', class: 'dedicated_host_gateway', not_before: null, expires_at: null },
+        },
+        result: {
+          schema: 'narada.host_fleet.credential_rotation_result.v1',
+          status: 'applied', mutation_performed: true, request_id: 'host-rotation-forward-1', host: common.host, revision: 5, credential_class: 'dedicated_host_gateway', reason: null,
+        },
+      },
+      {
+        path: '/credentials/rollback',
+        requestPath: '/api/narada/fleet/hosts/credentials/rollback',
+        requestId: 'cf-rollback-forward-1',
+        intent: {
+          schema: 'narada.host_fleet.credential_rollback_intent.v1',
+          request_id: 'host-rollback-forward-1',
+          ...common,
+          rollback_to_revision: 3,
+        },
+        result: {
+          schema: 'narada.host_fleet.credential_rollback_result.v1',
+          status: 'applied', mutation_performed: true, request_id: 'host-rollback-forward-1', host: common.host, revision: 5, restored_from_revision: 3, credential_class: 'dedicated_host_gateway', reason: null,
+        },
+      },
+    ];
+    for (const operation of operations) {
+      const response = await handleCloudflareHostFleetRequest(
+        new Request(`https://fleet.example${operation.requestPath}`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', 'x-request-id': operation.requestId },
+          body: JSON.stringify({ operator_confirmed: true, actor: 'operator-console.host-fleet', intent: operation.intent }),
+        }),
+        env,
+        now,
+        fetch,
+        {
+          forward_authority: async (path, body, requestId) => {
+            forwarded.push({ path, body, requestId });
+            return new Response(JSON.stringify(operation.result), { status: 200, headers: { 'content-type': 'application/json' } });
+          },
+        },
+      );
+      expect(response?.status).toBe(200);
+      expect(await response!.json()).toMatchObject(operation.result);
+    }
+    expect(forwarded.map((item) => item.path)).toEqual(['/console/hosts/api/credentials/rotate', '/console/hosts/api/credentials/rollback']);
+    expect(JSON.stringify(forwarded)).not.toContain('authority-secret');
   });
 
   it('emits bounded Cloudflare relay observations without payloads or credentials', async () => {

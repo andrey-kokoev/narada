@@ -4,6 +4,8 @@ import type {
   OperatorHostFleetWireRecord,
 } from '@narada-core/operator-console-contract';
 import type {
+  HostFleetCredentialRollbackIntent,
+  HostFleetCredentialRotationIntent,
   HostFleetEnrollmentIntent,
   HostFleetLaunchIntent,
   HostFleetLifecycleIntent,
@@ -91,13 +93,18 @@ export interface HostFleetClient {
   openEvents(target: HostFleetTarget, handlers: HostFleetEventHandlers): HostFleetEventConnection;
   preflightLifecycle?(intent: HostFleetLifecycleIntent): Promise<HostFleetLifecyclePreflight>;
   preflightLaunch?(intent: HostFleetLaunchIntent): Promise<HostFleetLaunchPreflight>;
+  preflightCredentialRotation?(intent: HostFleetCredentialRotationIntent): Promise<HostFleetCredentialRotationPreflight>;
+  preflightCredentialRollback?(intent: HostFleetCredentialRollbackIntent): Promise<HostFleetCredentialRollbackPreflight>;
   applyLifecycle?(intent: HostFleetLifecycleIntent, actor: string): Promise<HostFleetMutationResult>;
   applyEnrollment?(intent: HostFleetEnrollmentIntent, actor: string): Promise<HostFleetMutationResult>;
+  applyLaunch?(intent: HostFleetLaunchIntent, actor: string): Promise<HostFleetMutationResult>;
+  applyCredentialRotation?(intent: HostFleetCredentialRotationIntent, actor: string): Promise<HostFleetMutationResult>;
+  applyCredentialRollback?(intent: HostFleetCredentialRollbackIntent, actor: string): Promise<HostFleetMutationResult>;
 }
 
 export interface HostFleetMutationResult {
-  schema: 'narada.host_fleet.lifecycle_result.v1' | 'narada.host_fleet.enrollment_result.v1';
-  status: 'applied' | 'replayed' | 'unchanged' | 'refused';
+  schema: 'narada.host_fleet.lifecycle_result.v1' | 'narada.host_fleet.enrollment_result.v1' | 'narada.host_fleet.launch_result.v1' | 'narada.host_fleet.credential_rotation_result.v1' | 'narada.host_fleet.credential_rollback_result.v1';
+  status: 'applied' | 'launched' | 'replayed' | 'reused' | 'unchanged' | 'refused';
   mutationPerformed: boolean;
   requestId: string;
   operation: HostFleetLifecycleOperation | null;
@@ -105,6 +112,12 @@ export interface HostFleetMutationResult {
   lifecycleState: HostFleetRecord['lifecycleState'] | null;
   revision: number | null;
   reason: string | null;
+  siteId: string | null;
+  agentId: string | null;
+  operatorSurface: string | null;
+  sessionId: string | null;
+  credentialClass: 'bridge_compatibility' | 'dedicated_host_gateway' | null;
+  restoredFromRevision: number | null;
 }
 
 export interface HostFleetLifecyclePreflight {
@@ -122,6 +135,25 @@ export interface HostFleetLaunchPreflight {
   mutationPerformed: false;
   currentRevision: number | null;
   currentLifecycleState: HostFleetRecord['lifecycleState'] | null;
+  refusals: string[];
+}
+
+export interface HostFleetCredentialRotationPreflight {
+  schema: 'narada.host_fleet.credential_rotation_preflight.v1';
+  status: 'ready' | 'refused';
+  mutationPerformed: false;
+  currentRevision: number | null;
+  currentLifecycleState: HostFleetRecord['lifecycleState'] | null;
+  refusals: string[];
+}
+
+export interface HostFleetCredentialRollbackPreflight {
+  schema: 'narada.host_fleet.credential_rollback_preflight.v1';
+  status: 'ready' | 'refused';
+  mutationPerformed: false;
+  currentRevision: number | null;
+  currentLifecycleState: HostFleetRecord['lifecycleState'] | null;
+  availableRevisions: number[];
   refusals: string[];
 }
 
@@ -327,19 +359,29 @@ function parseTargetResolution(value: unknown): HostFleetTargetResolution | null
 }
 
 function parseMutationResult(value: unknown): HostFleetMutationResult | null {
+  const launchResult = record(value) && value.schema === 'narada.host_fleet.launch_result.v1';
+  const rotationResult = record(value) && value.schema === 'narada.host_fleet.credential_rotation_result.v1';
+  const rollbackResult = record(value) && value.schema === 'narada.host_fleet.credential_rollback_result.v1';
   const lifecycleResult = record(value) && value.schema === 'narada.host_fleet.lifecycle_result.v1';
   if (!record(value)
-    || (value.schema !== 'narada.host_fleet.lifecycle_result.v1' && value.schema !== 'narada.host_fleet.enrollment_result.v1')
-    || (value.status !== 'applied' && value.status !== 'replayed' && value.status !== 'unchanged' && value.status !== 'refused')
+    || (value.schema !== 'narada.host_fleet.lifecycle_result.v1'
+      && value.schema !== 'narada.host_fleet.enrollment_result.v1'
+      && value.schema !== 'narada.host_fleet.launch_result.v1'
+      && value.schema !== 'narada.host_fleet.credential_rotation_result.v1'
+      && value.schema !== 'narada.host_fleet.credential_rollback_result.v1')
+    || (value.status !== 'applied' && value.status !== 'launched' && value.status !== 'replayed' && value.status !== 'reused' && value.status !== 'unchanged' && value.status !== 'refused')
     || typeof value.mutation_performed !== 'boolean'
     || typeof value.request_id !== 'string'
     || (lifecycleResult && value.operation !== 'revoke' && value.operation !== 'retire' && value.operation !== null)
-    || (!lifecycleResult && value.operation !== undefined && value.operation !== null)
+    || (!lifecycleResult && !launchResult && value.operation !== undefined && value.operation !== null)
     || (value.host !== null && !record(value.host))
     || (value.host !== null && (typeof value.host.host_id !== 'string' || typeof value.host.host_instance_id !== 'string'))
-    || (value.lifecycle_state !== null && value.lifecycle_state !== 'pending' && value.lifecycle_state !== 'active' && value.lifecycle_state !== 'revoked' && value.lifecycle_state !== 'retired')
-    || (value.revision !== null && (!Number.isInteger(value.revision) || Number(value.revision) < 1))
-    || (value.reason !== null && typeof value.reason !== 'string')) return null;
+    || (!launchResult && !rotationResult && !rollbackResult && value.lifecycle_state !== null && value.lifecycle_state !== 'pending' && value.lifecycle_state !== 'active' && value.lifecycle_state !== 'revoked' && value.lifecycle_state !== 'retired')
+    || (!launchResult && (value.revision !== null && (!Number.isInteger(value.revision) || Number(value.revision) < 1)))
+    || (value.reason !== null && typeof value.reason !== 'string')
+    || (launchResult && (value.site_id !== null && typeof value.site_id !== 'string' || value.agent_id !== null && typeof value.agent_id !== 'string' || value.operator_surface !== null && typeof value.operator_surface !== 'string' || value.session_id !== null && typeof value.session_id !== 'string'))
+    || ((rotationResult || rollbackResult) && value.credential_class !== null && value.credential_class !== 'bridge_compatibility' && value.credential_class !== 'dedicated_host_gateway')
+    || (rollbackResult && value.restored_from_revision !== null && (!Number.isInteger(value.restored_from_revision) || Number(value.restored_from_revision) < 1))) return null;
   return {
     schema: value.schema,
     status: value.status,
@@ -347,9 +389,15 @@ function parseMutationResult(value: unknown): HostFleetMutationResult | null {
     requestId: value.request_id,
     operation: lifecycleResult ? value.operation as HostFleetLifecycleOperation : null,
     host: value.host === null ? null : { hostId: value.host.host_id as string, hostInstanceId: value.host.host_instance_id as string },
-    lifecycleState: value.lifecycle_state,
-    revision: value.revision as number | null,
-    reason: value.reason,
+    lifecycleState: launchResult || rotationResult || rollbackResult ? null : value.lifecycle_state as HostFleetRecord['lifecycleState'] | null,
+    revision: launchResult ? null : value.revision as number | null,
+    reason: value.reason as string | null,
+    siteId: launchResult && typeof value.site_id === 'string' ? value.site_id : null,
+    agentId: launchResult && typeof value.agent_id === 'string' ? value.agent_id : null,
+    operatorSurface: launchResult && typeof value.operator_surface === 'string' ? value.operator_surface : null,
+    sessionId: launchResult && typeof value.session_id === 'string' ? value.session_id : null,
+    credentialClass: (rotationResult || rollbackResult) && (value.credential_class === 'bridge_compatibility' || value.credential_class === 'dedicated_host_gateway') ? value.credential_class : null,
+    restoredFromRevision: rollbackResult && typeof value.restored_from_revision === 'number' ? value.restored_from_revision : null,
   };
 }
 
@@ -387,6 +435,47 @@ function parseLaunchPreflight(value: unknown): HostFleetLaunchPreflight | null {
     mutationPerformed: false,
     currentRevision: value.current_revision as number | null,
     currentLifecycleState: value.current_lifecycle_state,
+    refusals: [...value.refusals],
+  };
+}
+
+function parseCredentialRotationPreflight(value: unknown): HostFleetCredentialRotationPreflight | null {
+  if (!record(value)
+    || value.schema !== 'narada.host_fleet.credential_rotation_preflight.v1'
+    || (value.status !== 'ready' && value.status !== 'refused')
+    || value.mutation_performed !== false
+    || (value.current_revision !== null && (!Number.isInteger(value.current_revision) || Number(value.current_revision) < 1))
+    || (value.current_lifecycle_state !== null && value.current_lifecycle_state !== 'pending' && value.current_lifecycle_state !== 'active' && value.current_lifecycle_state !== 'revoked' && value.current_lifecycle_state !== 'retired')
+    || !Array.isArray(value.refusals)
+    || !value.refusals.every((item) => typeof item === 'string')) return null;
+  return {
+    schema: 'narada.host_fleet.credential_rotation_preflight.v1',
+    status: value.status,
+    mutationPerformed: false,
+    currentRevision: value.current_revision as number | null,
+    currentLifecycleState: value.current_lifecycle_state,
+    refusals: [...value.refusals],
+  };
+}
+
+function parseCredentialRollbackPreflight(value: unknown): HostFleetCredentialRollbackPreflight | null {
+  if (!record(value)
+    || value.schema !== 'narada.host_fleet.credential_rollback_preflight.v1'
+    || (value.status !== 'ready' && value.status !== 'refused')
+    || value.mutation_performed !== false
+    || (value.current_revision !== null && (!Number.isInteger(value.current_revision) || Number(value.current_revision) < 1))
+    || (value.current_lifecycle_state !== null && value.current_lifecycle_state !== 'pending' && value.current_lifecycle_state !== 'active' && value.current_lifecycle_state !== 'revoked' && value.current_lifecycle_state !== 'retired')
+    || !Array.isArray(value.available_revisions)
+    || !value.available_revisions.every((item) => Number.isInteger(item) && Number(item) >= 1)
+    || !Array.isArray(value.refusals)
+    || !value.refusals.every((item) => typeof item === 'string')) return null;
+  return {
+    schema: 'narada.host_fleet.credential_rollback_preflight.v1',
+    status: value.status,
+    mutationPerformed: false,
+    currentRevision: value.current_revision as number | null,
+    currentLifecycleState: value.current_lifecycle_state,
+    availableRevisions: [...value.available_revisions] as number[],
     refusals: [...value.refusals],
   };
 }
@@ -546,6 +635,16 @@ export function createHostFleetAdapter(
       if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet launch preflight did not match its contract.');
       return response;
     },
+    async preflightCredentialRotation(intent: HostFleetCredentialRotationIntent): Promise<HostFleetCredentialRotationPreflight> {
+      const response = parseCredentialRotationPreflight(await requiredTransportMethod(transport, 'preflightCredentialRotation').call(transport, intent));
+      if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet credential rotation preflight did not match its contract.');
+      return response;
+    },
+    async preflightCredentialRollback(intent: HostFleetCredentialRollbackIntent): Promise<HostFleetCredentialRollbackPreflight> {
+      const response = parseCredentialRollbackPreflight(await requiredTransportMethod(transport, 'preflightCredentialRollback').call(transport, intent));
+      if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet credential rollback preflight did not match its contract.');
+      return response;
+    },
     async applyLifecycle(intent: HostFleetLifecycleIntent, actor: string): Promise<HostFleetMutationResult> {
       const response = parseMutationResult(await requiredTransportMethod(transport, 'applyLifecycle').call(transport, intent, actor));
       if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet lifecycle response did not match its contract.');
@@ -554,6 +653,21 @@ export function createHostFleetAdapter(
     async applyEnrollment(intent: HostFleetEnrollmentIntent, actor: string): Promise<HostFleetMutationResult> {
       const response = parseMutationResult(await requiredTransportMethod(transport, 'applyEnrollment').call(transport, intent, actor));
       if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet enrollment response did not match its contract.');
+      return response;
+    },
+    async applyLaunch(intent: HostFleetLaunchIntent, actor: string): Promise<HostFleetMutationResult> {
+      const response = parseMutationResult(await requiredTransportMethod(transport, 'applyLaunch').call(transport, intent, actor));
+      if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet launch response did not match its contract.');
+      return response;
+    },
+    async applyCredentialRotation(intent: HostFleetCredentialRotationIntent, actor: string): Promise<HostFleetMutationResult> {
+      const response = parseMutationResult(await requiredTransportMethod(transport, 'applyCredentialRotation').call(transport, intent, actor));
+      if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet credential rotation response did not match its contract.');
+      return response;
+    },
+    async applyCredentialRollback(intent: HostFleetCredentialRollbackIntent, actor: string): Promise<HostFleetMutationResult> {
+      const response = parseMutationResult(await requiredTransportMethod(transport, 'applyCredentialRollback').call(transport, intent, actor));
+      if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet credential rollback response did not match its contract.');
       return response;
     },
     openEvents(target: HostFleetTarget, handlers: HostFleetEventHandlers): HostFleetEventConnection {

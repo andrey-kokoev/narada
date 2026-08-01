@@ -1,17 +1,24 @@
 import {
   OPERATOR_CONSOLE_HOSTS_API_PATH,
 } from '@narada-core/operator-console-contract';
-import type { HostFleetEnrollmentIntent, HostFleetLaunchIntent, HostFleetLifecycleIntent } from '@narada-core/host-fleet/contract';
+import type {
+  HostFleetCredentialRollbackIntent,
+  HostFleetCredentialRotationIntent,
+  HostFleetEnrollmentIntent,
+  HostFleetLaunchIntent,
+  HostFleetLifecycleIntent,
+} from '@narada-core/host-fleet/contract';
 import type { HostFleetEventConnection, HostFleetEventHandlers, HostFleetTarget } from './adapter';
 
 export type HostFleetFetch = (input: string, init?: RequestInit) => Promise<Response>;
 
 export type HostFleetRouteShape = 'local-console' | 'cloudflare-projection';
-export type HostFleetMutationScope = 'local-authority' | 'projection-only';
+export type HostFleetMutationScope = 'local-authority' | 'authority-forwarding' | 'projection-only';
 
 export interface HostFleetTransportOptions {
   basePath?: string;
   routeShape?: HostFleetRouteShape;
+  authorityForwarding?: boolean;
 }
 
 export interface HostFleetTransport {
@@ -23,8 +30,13 @@ export interface HostFleetTransport {
   openEvents?(target: HostFleetTarget, handlers: HostFleetEventHandlers): HostFleetEventConnection;
   preflightLifecycle?(intent: HostFleetLifecycleIntent): Promise<unknown>;
   preflightLaunch?(intent: HostFleetLaunchIntent): Promise<unknown>;
+  preflightCredentialRotation?(intent: HostFleetCredentialRotationIntent): Promise<unknown>;
+  preflightCredentialRollback?(intent: HostFleetCredentialRollbackIntent): Promise<unknown>;
   applyLifecycle?(intent: HostFleetLifecycleIntent, actor: string): Promise<unknown>;
   applyEnrollment?(intent: HostFleetEnrollmentIntent, actor: string): Promise<unknown>;
+  applyLaunch?(intent: HostFleetLaunchIntent, actor: string): Promise<unknown>;
+  applyCredentialRotation?(intent: HostFleetCredentialRotationIntent, actor: string): Promise<unknown>;
+  applyCredentialRollback?(intent: HostFleetCredentialRollbackIntent, actor: string): Promise<unknown>;
 }
 
 export class HostFleetTransportError extends Error {
@@ -49,6 +61,7 @@ export function createHostFleetTransport(
     : { ...runtimeOptions, ...optionsOrBasePath };
   const basePath = normalizeBasePath(options.basePath ?? OPERATOR_CONSOLE_HOSTS_API_PATH);
   const routeShape = options.routeShape ?? 'local-console';
+  const authorityForwarding = routeShape === 'local-console' || options.authorityForwarding === true;
 
   async function jsonRequest(path: string, init?: RequestInit): Promise<unknown> {
     const response = await fetchLike(path, { headers: { Accept: 'application/json', ...(init?.headers ?? {}) }, ...init });
@@ -141,6 +154,35 @@ export function createHostFleetTransport(
       agent_id: intent.agent_id,
       confirmation: intent.confirmation,
       ...(intent.operator_surface ? { operator_surface: intent.operator_surface } : {}),
+    });
+    return `${path}?${query.toString()}`;
+  }
+
+  function credentialRotationPreflightPath(intent: HostFleetCredentialRotationIntent): string {
+    const path = `${basePath}/credentials/rotate/preflight`;
+    const query = new URLSearchParams({
+      request_id: intent.request_id,
+      host_id: intent.host.host_id,
+      host_instance_id: intent.host.host_instance_id,
+      expected_revision: String(intent.expected_revision),
+      credential_ref: intent.credential_ref,
+      credential_class: intent.credential.class,
+      confirmation: intent.confirmation,
+      ...(intent.credential.not_before ? { not_before: intent.credential.not_before } : {}),
+      ...(intent.credential.expires_at ? { expires_at: intent.credential.expires_at } : {}),
+    });
+    return `${path}?${query.toString()}`;
+  }
+
+  function credentialRollbackPreflightPath(intent: HostFleetCredentialRollbackIntent): string {
+    const path = `${basePath}/credentials/rollback/preflight`;
+    const query = new URLSearchParams({
+      request_id: intent.request_id,
+      host_id: intent.host.host_id,
+      host_instance_id: intent.host.host_instance_id,
+      expected_revision: String(intent.expected_revision),
+      rollback_to_revision: String(intent.rollback_to_revision),
+      confirmation: intent.confirmation,
     });
     return `${path}?${query.toString()}`;
   }
@@ -266,7 +308,9 @@ export function createHostFleetTransport(
   }
 
   return {
-    mutationScope: routeShape === 'local-console' ? 'local-authority' : 'projection-only',
+    mutationScope: routeShape === 'local-console'
+      ? 'local-authority'
+      : authorityForwarding ? 'authority-forwarding' : 'projection-only',
     hostConsolePath(host: Pick<HostFleetTarget, 'hostId' | 'hostInstanceId'>): string | null {
       if (routeShape !== 'local-console') return null;
       return `${basePath}/${encodeURIComponent(host.hostId)}/${encodeURIComponent(host.hostInstanceId)}/console/`;
@@ -288,15 +332,66 @@ export function createHostFleetTransport(
     async preflightLaunch(intent: HostFleetLaunchIntent): Promise<unknown> {
       return jsonRequest(launchPreflightPath(intent));
     },
+    async preflightCredentialRotation(intent: HostFleetCredentialRotationIntent): Promise<unknown> {
+      return jsonRequest(credentialRotationPreflightPath(intent));
+    },
+    async preflightCredentialRollback(intent: HostFleetCredentialRollbackIntent): Promise<unknown> {
+      return jsonRequest(credentialRollbackPreflightPath(intent));
+    },
     async applyLifecycle(intent: HostFleetLifecycleIntent, actor: string): Promise<unknown> {
-      return routeShape === 'local-console'
+      return authorityForwarding
         ? postMutation(`${basePath}/lifecycle`, intent, actor)
         : localOnlyRefusal('lifecycle', intent);
     },
     async applyEnrollment(intent: HostFleetEnrollmentIntent, actor: string): Promise<unknown> {
-      return routeShape === 'local-console'
+      return authorityForwarding
         ? postMutation(`${basePath}/enrollment`, intent, actor)
         : localOnlyRefusal('enrollment', intent);
+    },
+    async applyLaunch(intent: HostFleetLaunchIntent, actor: string): Promise<unknown> {
+      return authorityForwarding
+        ? postMutation(`${basePath}/launch`, intent, actor)
+        : {
+          schema: 'narada.host_fleet.launch_result.v1',
+          status: 'refused',
+          mutation_performed: false,
+          request_id: intent.request_id,
+          host: intent.host,
+          site_id: intent.site_id,
+          agent_id: intent.agent_id,
+          operator_surface: intent.operator_surface,
+          session_id: null,
+          reason: 'host_fleet_authority_projection_only',
+        };
+    },
+    async applyCredentialRotation(intent: HostFleetCredentialRotationIntent, actor: string): Promise<unknown> {
+      return authorityForwarding
+        ? postMutation(`${basePath}/credentials/rotate`, intent, actor)
+        : {
+          schema: 'narada.host_fleet.credential_rotation_result.v1',
+          status: 'refused',
+          mutation_performed: false,
+          request_id: intent.request_id,
+          host: intent.host,
+          revision: null,
+          credential_class: intent.credential.class,
+          reason: 'host_fleet_authority_projection_only',
+        };
+    },
+    async applyCredentialRollback(intent: HostFleetCredentialRollbackIntent, actor: string): Promise<unknown> {
+      return authorityForwarding
+        ? postMutation(`${basePath}/credentials/rollback`, intent, actor)
+        : {
+          schema: 'narada.host_fleet.credential_rollback_result.v1',
+          status: 'refused',
+          mutation_performed: false,
+          request_id: intent.request_id,
+          host: intent.host,
+          revision: null,
+          restored_from_revision: null,
+          credential_class: null,
+          reason: 'host_fleet_authority_projection_only',
+        };
     },
     openEvents(target: HostFleetTarget, handlers: HostFleetEventHandlers): HostFleetEventConnection {
       const WebSocketCtor = globalThis.WebSocket;
@@ -334,12 +429,13 @@ function readRuntimeOptions(): HostFleetTransportOptions {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const hostFleet = (parsed as { hostFleet?: unknown }).hostFleet;
     if (!hostFleet || typeof hostFleet !== 'object' || Array.isArray(hostFleet)) return {};
-    const config = hostFleet as { apiBasePath?: unknown; routeShape?: unknown };
+    const config = hostFleet as { apiBasePath?: unknown; routeShape?: unknown; authorityForwarding?: unknown };
     return {
       ...(typeof config.apiBasePath === 'string' ? { basePath: config.apiBasePath } : {}),
       ...(config.routeShape === 'cloudflare-projection' || config.routeShape === 'local-console'
         ? { routeShape: config.routeShape }
         : {}),
+      ...(typeof config.authorityForwarding === 'boolean' ? { authorityForwarding: config.authorityForwarding } : {}),
     };
   } catch {
     return {};

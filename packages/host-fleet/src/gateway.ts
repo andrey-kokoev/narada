@@ -19,6 +19,7 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9._:-]{1,128}$/u;
 export const HOST_GATEWAY_REQUEST_OBSERVATION_SCHEMA = 'narada.host_fleet.gateway_request_observation.v1' as const;
 export const HOST_GATEWAY_TOKEN_HEADER = 'x-narada-host-gateway-token' as const;
 export const HOST_GATEWAY_BRIDGE_TOKEN_HEADER = 'x-narada-operator-console-bridge-token' as const;
+export const HOST_FLEET_AUTHORITY_TOKEN_HEADER = 'x-narada-host-fleet-authority-token' as const;
 
 export interface HostGatewayClientOptions {
   fetch_fn?: typeof fetch;

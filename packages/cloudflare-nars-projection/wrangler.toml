@@ -28,6 +28,12 @@ OPERATOR_CONSOLE_GATEWAY_TCP_PORT = "61730"
 # into this variable by deployment tooling; keep gateway bindings and tokens
 # out of the browser and out of this JSON. See config/host-fleet.registry.example.json.
 # NARADA_HOST_FLEET_REGISTRY = "..."
+# Optional authority bridge for confirmed fleet mutations. The URL is a
+# non-secret HTTPS origin; NARADA_HOST_FLEET_AUTHORITY_TOKEN must be provisioned
+# with `wrangler secret put` and is never placed in [vars]. Without both values
+# Cloudflare remains a read/stream projection and refuses mutations.
+# NARADA_HOST_FLEET_AUTHORITY_URL = "https://user-site.example"
+# Secret binding: NARADA_HOST_FLEET_AUTHORITY_TOKEN
 # When NARADA_HOST_FLEET_REGISTRY is set, the Operator Console asset is
 # injected with the native Cloudflare fleet API and route shape. Override
 # these only when the deployment intentionally fronts the fleet API elsewhere.

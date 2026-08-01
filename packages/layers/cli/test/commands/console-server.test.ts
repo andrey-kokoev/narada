@@ -1613,6 +1613,129 @@ describe('console server', () => {
       }
     });
 
+    it('executes and replays exact-host launch, rotates credentials, and rolls back by revision', async () => {
+      const hostRegistry = new HostFleetRegistry(new Database(':memory:'));
+      const host = {
+        host_id: 'zima-board-2',
+        host_instance_id: 'zima-instance',
+        display_name: 'ZimaBoard 2',
+        platform: 'linux' as const,
+        gateway: {
+          endpoint: 'http://127.0.0.1:61730',
+          transport: 'ssh-tunnel' as const,
+          admitted_paths: ['/console/agents/api/launch'],
+        },
+        credential_ref: 'env://ZIMA_GATEWAY_TOKEN',
+        admitted_sites: ['sonar'],
+      };
+      hostRegistry.registerHost(host);
+      let launchRequests = 0;
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        hostFleetRegistry: hostRegistry,
+        hostFleetCredentialResolver: () => 'zima-token',
+        hostFleetFetch: async (input, init) => {
+          const request = new Request(String(input), init);
+          expect(request.headers.get('x-narada-host-id')).toBe('zima-board-2');
+          expect(request.headers.get('x-narada-host-instance-id')).toBe('zima-instance');
+          expect(request.headers.get('x-narada-operator-console-bridge-token')).toBe('zima-token');
+          expect(new URL(request.url).pathname).toBe('/console/agents/api/launch');
+          launchRequests += 1;
+          return new Response(JSON.stringify({
+            status: 'launched',
+            site_id: 'sonar',
+            agent_id: 'resident',
+            operator_surface: 'agent-web-ui',
+            session_id: 'zima-session-launched',
+          }), { status: 200, headers: { 'content-type': 'application/json' } });
+        },
+      });
+      try {
+        const url = await server.start();
+        const launchIntent = {
+          schema: 'narada.host_fleet.launch_intent.v1',
+          request_id: 'host-launch-route-1',
+          host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' },
+          expected_revision: 1,
+          site_id: 'sonar',
+          agent_id: 'resident',
+          operator_surface: 'agent-web-ui',
+          confirmation: 'zima-board-2@zima-instance',
+        };
+        const launch = await httpPost(`${url}/console/hosts/api/launch`, {
+          intent: launchIntent,
+          operator_confirmed: true,
+          actor: 'browser-operator',
+        });
+        expect(launch.status).toBe(200);
+        expect(launch.body).toMatchObject({ status: 'launched', mutation_performed: true, session_id: 'zima-session-launched' });
+        const replay = await httpPost(`${url}/console/hosts/api/launch`, {
+          intent: launchIntent,
+          operator_confirmed: true,
+          actor: 'different-browser-operator',
+        });
+        expect(replay.status).toBe(200);
+        expect(replay.body).toMatchObject({ status: 'replayed', mutation_performed: false, session_id: 'zima-session-launched' });
+        expect(launchRequests).toBe(1);
+
+        const rotationIntent = {
+          schema: 'narada.host_fleet.credential_rotation_intent.v1',
+          request_id: 'host-credential-route-1',
+          host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' },
+          expected_revision: 1,
+          credential_ref: 'env://ZIMA_GATEWAY_TOKEN_V2',
+          credential: {
+            schema: 'narada.host_fleet.gateway_credential.v1',
+            class: 'dedicated_host_gateway',
+            not_before: null,
+            expires_at: '2026-12-31T00:00:00.000Z',
+          },
+          confirmation: 'zima-board-2@zima-instance',
+        };
+        const rotation = await httpPost(`${url}/console/hosts/api/credentials/rotate`, {
+          intent: rotationIntent,
+          operator_confirmed: true,
+          actor: 'browser-operator',
+        });
+        expect(rotation.status).toBe(200);
+        expect(rotation.body).toMatchObject({ status: 'applied', mutation_performed: true, revision: 2, credential_class: 'dedicated_host_gateway' });
+        expect(JSON.stringify(rotation.body)).not.toContain('ZIMA_GATEWAY_TOKEN_V2');
+
+        const rollbackQuery = new URLSearchParams({
+          host_id: 'zima-board-2',
+          host_instance_id: 'zima-instance',
+          expected_revision: '2',
+          rollback_to_revision: '1',
+          request_id: 'host-credential-rollback-preflight-1',
+          confirmation: 'zima-board-2@zima-instance',
+        });
+        const rollbackPreflight = await fetch(`${url}/console/hosts/api/credentials/rollback/preflight?${rollbackQuery}`);
+        expect(rollbackPreflight.status).toBe(200);
+        expect(await rollbackPreflight.json()).toMatchObject({ status: 'ready', mutation_performed: false, available_revisions: [2, 1] });
+        const rollbackIntent = {
+          schema: 'narada.host_fleet.credential_rollback_intent.v1',
+          request_id: 'host-credential-rollback-1',
+          host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' },
+          expected_revision: 2,
+          rollback_to_revision: 1,
+          confirmation: 'zima-board-2@zima-instance',
+        };
+        const rollback = await httpPost(`${url}/console/hosts/api/credentials/rollback`, {
+          intent: rollbackIntent,
+          operator_confirmed: true,
+          actor: 'browser-operator',
+        });
+        expect(rollback.status).toBe(200);
+        expect(rollback.body).toMatchObject({ status: 'applied', mutation_performed: true, revision: 3, restored_from_revision: 1 });
+        expect(hostRegistry.getHost({ host_id: 'zima-board-2', host_instance_id: 'zima-instance' })?.credential_ref).toBe('env://ZIMA_GATEWAY_TOKEN');
+        expect(hostRegistry.listAudit({ host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' } }).some((entry) => entry.operation === 'credential_rollback')).toBe(true);
+      } finally {
+        await server.stop();
+        hostRegistry.close();
+      }
+    });
+
     it('relays the exact host session WebSocket in both directions', async () => {
       const upstream = createServer() as HttpServer;
       let upstreamSocket: Socket | null = null;

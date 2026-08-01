@@ -1,4 +1,6 @@
 import type {
+  HostFleetCredentialRollbackIntent,
+  HostFleetCredentialRotationIntent,
   HostFleetEnrollmentIntent,
   HostFleetLaunchIntent,
   HostFleetLifecycleIntent,
@@ -6,6 +8,7 @@ import type {
   HostGatewayTransport,
   HostPlatform,
   HostRecordInput,
+  HostGatewayCredentialClass,
 } from '@narada-core/host-fleet/contract';
 import type { HostFleetRecord } from './adapter';
 
@@ -28,6 +31,17 @@ export interface HostFleetLaunchDraft {
   siteId: string;
   agentId: string;
   operatorSurface: string;
+}
+
+export interface HostFleetCredentialRotationDraft {
+  credentialRef: string;
+  credentialClass: HostGatewayCredentialClass;
+  notBefore: string;
+  expiresAt: string;
+}
+
+export interface HostFleetCredentialRollbackDraft {
+  rollbackToRevision: number | string;
 }
 
 function requestId(prefix: string): string {
@@ -93,6 +107,53 @@ export function createHostFleetLaunchIntent(
     site_id: siteId,
     agent_id: agentId,
     operator_surface: surface || null,
+    confirmation: `${host.hostId}@${host.hostInstanceId}`,
+  };
+}
+
+export function hostFleetCredentialRotationDraftFingerprint(draft: HostFleetCredentialRotationDraft): string {
+  return JSON.stringify({
+    credential_ref: draft.credentialRef.trim(),
+    credential_class: draft.credentialClass,
+    not_before: draft.notBefore.trim() || null,
+    expires_at: draft.expiresAt.trim() || null,
+  });
+}
+
+export function createHostFleetCredentialRotationIntent(
+  host: HostFleetRecord,
+  draft: HostFleetCredentialRotationDraft,
+): HostFleetCredentialRotationIntent {
+  return {
+    schema: 'narada.host_fleet.credential_rotation_intent.v1',
+    request_id: requestId('host-credential-rotate'),
+    host: { host_id: host.hostId, host_instance_id: host.hostInstanceId },
+    expected_revision: host.revision,
+    credential_ref: required(draft.credentialRef, 'host_credential_ref_required'),
+    credential: {
+      schema: 'narada.host_fleet.gateway_credential.v1',
+      class: draft.credentialClass,
+      not_before: draft.notBefore.trim() || null,
+      expires_at: draft.expiresAt.trim() || null,
+    },
+    confirmation: `${host.hostId}@${host.hostInstanceId}`,
+  };
+}
+
+export function createHostFleetCredentialRollbackIntent(
+  host: HostFleetRecord,
+  draft: HostFleetCredentialRollbackDraft,
+): HostFleetCredentialRollbackIntent {
+  const rollbackToRevision = typeof draft.rollbackToRevision === 'string'
+    ? Number(draft.rollbackToRevision.trim())
+    : draft.rollbackToRevision;
+  if (!Number.isInteger(rollbackToRevision) || rollbackToRevision < 1) throw new Error('host_credential_rollback_target_revision_invalid');
+  return {
+    schema: 'narada.host_fleet.credential_rollback_intent.v1',
+    request_id: requestId('host-credential-rollback'),
+    host: { host_id: host.hostId, host_instance_id: host.hostInstanceId },
+    expected_revision: host.revision,
+    rollback_to_revision: rollbackToRevision,
     confirmation: `${host.hostId}@${host.hostInstanceId}`,
   };
 }

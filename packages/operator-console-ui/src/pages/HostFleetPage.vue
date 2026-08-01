@@ -8,9 +8,13 @@ import type {
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import { useHostFleet } from '../host-fleet/composables/useHostFleet';
 import {
+  hostFleetCredentialRotationDraftFingerprint,
+  createHostFleetCredentialRollbackIntent,
   createHostFleetEnrollmentIntent,
   hostFleetEnrollmentDraftFingerprint,
   type HostFleetEnrollmentDraft,
+  type HostFleetCredentialRotationDraft,
+  type HostFleetCredentialRollbackDraft,
 } from '../host-fleet/workflows';
 
 const fleet = useHostFleet();
@@ -32,12 +36,14 @@ function targetLabel(target: { hostId: string; hostInstanceId: string; siteId: s
 const selectedHost = computed(() => fleet.sessionsByHost.value.find((host) => hostKey(host) === fleet.selectedHostKey.value) ?? null);
 const selectedHostRecord = computed(() => fleet.hosts.value.find((host) => hostKey(host) === fleet.selectedHostKey.value) ?? null);
 const localAuthority = computed(() => fleet.mutationScope.value === 'local-authority');
+const authorityAvailable = computed(() => fleet.mutationScope.value !== 'projection-only');
 const lifecycleReason = ref('');
 const lifecyclePlan = ref<ReturnType<typeof fleet.createLifecycleIntent> | null>(null);
 const lifecycleConfirmed = ref(false);
 const lifecyclePlanError = ref<string | null>(null);
 const launchPlan = ref<HostFleetLaunchIntent | null>(null);
 const launchPlanError = ref<string | null>(null);
+const launchConfirmed = ref(false);
 const launchDraft = reactive({
   siteId: '',
   agentId: 'resident',
@@ -61,6 +67,20 @@ const enrollmentDraft = reactive<HostFleetEnrollmentDraft>({
   admittedSites: '',
   allowReenrollment: false,
 });
+const credentialRotationPlan = ref<ReturnType<typeof fleet.createCredentialRotationIntent> | null>(null);
+const credentialRotationConfirmed = ref(false);
+const credentialRotationError = ref<string | null>(null);
+const credentialRotationPlanFingerprint = ref<string | null>(null);
+const credentialRotationDraft = reactive<HostFleetCredentialRotationDraft>({
+  credentialRef: 'env://NARADA_HOST_GATEWAY_TOKEN',
+  credentialClass: 'dedicated_host_gateway',
+  notBefore: '',
+  expiresAt: '',
+});
+const credentialRollbackPlan = ref<ReturnType<typeof fleet.createCredentialRollbackIntent> | null>(null);
+const credentialRollbackConfirmed = ref(false);
+const credentialRollbackError = ref<string | null>(null);
+const credentialRollbackDraft = reactive<HostFleetCredentialRollbackDraft>({ rollbackToRevision: '' });
 
 const enrollmentExpectedRevision = computed(() => {
   const host = fleet.hosts.value.find((candidate) => hostKey(candidate) === `${enrollmentDraft.hostId.trim()}@${enrollmentDraft.hostInstanceId.trim()}`);
@@ -85,9 +105,35 @@ const enrollmentPlanCurrent = computed(() => Boolean(
     && enrollmentPlanFingerprint.value === hostFleetEnrollmentDraftFingerprint(enrollmentDraft)
     && enrollmentPlan.value.expected_revision === enrollmentExpectedRevision.value
 ));
+const launchPlanCurrent = computed(() => Boolean(
+  launchPlan.value
+    && selectedHostRecord.value
+    && launchPlan.value.host.host_id === selectedHostRecord.value.hostId
+    && launchPlan.value.host.host_instance_id === selectedHostRecord.value.hostInstanceId
+    && launchPlan.value.expected_revision === selectedHostRecord.value.revision
+    && launchPlan.value.site_id === launchDraft.siteId.trim()
+    && launchPlan.value.agent_id === launchDraft.agentId.trim()
+    && launchPlan.value.operator_surface === (launchDraft.operatorSurface.trim() || null)
+));
+const credentialRotationPlanCurrent = computed(() => Boolean(
+  credentialRotationPlan.value
+    && selectedHostRecord.value
+    && credentialRotationPlan.value.host.host_id === selectedHostRecord.value.hostId
+    && credentialRotationPlan.value.host.host_instance_id === selectedHostRecord.value.hostInstanceId
+    && credentialRotationPlan.value.expected_revision === selectedHostRecord.value.revision
+    && credentialRotationPlanFingerprint.value === hostFleetCredentialRotationDraftFingerprint(credentialRotationDraft)
+));
+const credentialRollbackPlanCurrent = computed(() => Boolean(
+  credentialRollbackPlan.value
+    && selectedHostRecord.value
+    && credentialRollbackPlan.value.host.host_id === selectedHostRecord.value.hostId
+    && credentialRollbackPlan.value.host.host_instance_id === selectedHostRecord.value.hostInstanceId
+    && credentialRollbackPlan.value.expected_revision === selectedHostRecord.value.revision
+    && credentialRollbackPlan.value.rollback_to_revision === Number(credentialRollbackDraft.rollbackToRevision),
+));
 
 function mutationSucceeded(status: string | undefined): boolean {
-  return status === 'applied' || status === 'replayed' || status === 'unchanged';
+  return status === 'applied' || status === 'launched' || status === 'replayed' || status === 'reused' || status === 'unchanged';
 }
 
 function selectHost(hostId: string, hostInstanceId: string): void {
@@ -100,6 +146,16 @@ function selectHost(hostId: string, hostInstanceId: string): void {
   fleet.clearLaunchPreflight();
   launchPlan.value = null;
   launchPlanError.value = null;
+  launchConfirmed.value = false;
+  credentialRotationPlan.value = null;
+  credentialRotationConfirmed.value = false;
+  credentialRotationError.value = null;
+  credentialRotationPlanFingerprint.value = null;
+  fleet.clearCredentialRotationPreflight();
+  credentialRollbackPlan.value = null;
+  credentialRollbackConfirmed.value = false;
+  credentialRollbackError.value = null;
+  fleet.clearCredentialRollbackPreflight();
   fleet.clearMutationFeedback();
 }
 
@@ -107,6 +163,7 @@ async function planLaunch(): Promise<void> {
   const host = selectedHostRecord.value;
   launchPlan.value = null;
   launchPlanError.value = null;
+  launchConfirmed.value = false;
   fleet.clearLaunchPreflight();
   if (!host) return;
   try {
@@ -115,6 +172,21 @@ async function planLaunch(): Promise<void> {
     if (result?.status === 'ready') launchPlan.value = intent;
   } catch (cause) {
     launchPlanError.value = cause instanceof Error ? cause.message : 'Launch plan is incomplete.';
+  }
+}
+
+async function applyLaunchPlan(): Promise<void> {
+  if (!launchPlan.value || !launchConfirmed.value) return;
+  if (!launchPlanCurrent.value) {
+    launchConfirmed.value = false;
+    launchPlanError.value = 'The selected host, revision, or launch fields changed. Review the launch plan again.';
+    return;
+  }
+  await fleet.applyLaunchIntent(launchPlan.value);
+  launchConfirmed.value = false;
+  if (mutationSucceeded(fleet.mutationResult.value?.status)) {
+    launchPlan.value = null;
+    fleet.clearLaunchPreflight();
   }
 }
 
@@ -180,8 +252,80 @@ async function applyEnrollmentPlan(): Promise<void> {
   }
 }
 
+async function planCredentialRotation(): Promise<void> {
+  credentialRotationError.value = null;
+  credentialRotationPlan.value = null;
+  credentialRotationPlanFingerprint.value = null;
+  credentialRotationConfirmed.value = false;
+  fleet.clearMutationFeedback();
+  const host = selectedHostRecord.value;
+  if (!host) return;
+  try {
+    const intent = fleet.createCredentialRotationIntent(host, credentialRotationDraft);
+    const result = await fleet.preflightCredentialRotation(intent);
+    if (result?.status === 'ready') {
+      credentialRotationPlan.value = intent;
+      credentialRotationPlanFingerprint.value = hostFleetCredentialRotationDraftFingerprint(credentialRotationDraft);
+    }
+  } catch (cause) {
+    credentialRotationError.value = cause instanceof Error ? cause.message : 'Credential rotation form is incomplete.';
+  }
+}
+
+async function applyCredentialRotationPlan(): Promise<void> {
+  if (!credentialRotationPlan.value || !credentialRotationConfirmed.value) return;
+  if (!credentialRotationPlanCurrent.value) {
+    credentialRotationConfirmed.value = false;
+    credentialRotationError.value = 'The selected host, revision, or credential policy changed. Review the rotation intent again.';
+    return;
+  }
+  await fleet.applyCredentialRotation(credentialRotationPlan.value);
+  credentialRotationConfirmed.value = false;
+  if (mutationSucceeded(fleet.mutationResult.value?.status)) {
+    credentialRotationPlan.value = null;
+    credentialRotationPlanFingerprint.value = null;
+    fleet.clearCredentialRotationPreflight();
+  }
+}
+
+async function planCredentialRollback(): Promise<void> {
+  credentialRollbackError.value = null;
+  credentialRollbackPlan.value = null;
+  credentialRollbackConfirmed.value = false;
+  fleet.clearMutationFeedback();
+  const host = selectedHostRecord.value;
+  if (!host) return;
+  try {
+    const intent = createHostFleetCredentialRollbackIntent(host, credentialRollbackDraft);
+    const result = await fleet.preflightCredentialRollback(intent);
+    if (result?.status === 'ready') credentialRollbackPlan.value = intent;
+  } catch (cause) {
+    credentialRollbackError.value = cause instanceof Error ? cause.message : 'Credential rollback form is incomplete.';
+  }
+}
+
+async function applyCredentialRollbackPlan(): Promise<void> {
+  if (!credentialRollbackPlan.value || !credentialRollbackConfirmed.value) return;
+  if (!credentialRollbackPlanCurrent.value) {
+    credentialRollbackConfirmed.value = false;
+    credentialRollbackError.value = 'The selected host, revision, or rollback target changed. Review the rollback intent again.';
+    return;
+  }
+  await fleet.applyCredentialRollback(credentialRollbackPlan.value);
+  credentialRollbackConfirmed.value = false;
+  if (mutationSucceeded(fleet.mutationResult.value?.status)) {
+    credentialRollbackPlan.value = null;
+    fleet.clearCredentialRollbackPreflight();
+  }
+}
+
 watch(enrollmentDraft, () => {
   if (enrollmentPlan.value) enrollmentConfirmed.value = false;
+}, { deep: true });
+watch([launchDraft, credentialRotationDraft, credentialRollbackDraft], () => {
+  launchConfirmed.value = false;
+  credentialRotationConfirmed.value = false;
+  credentialRollbackConfirmed.value = false;
 }, { deep: true });
 
 function submitOnEnter(event: KeyboardEvent): void {
@@ -243,10 +387,10 @@ function submitOnEnter(event: KeyboardEvent): void {
         </div>
         <p v-else class="empty">No hosts are enrolled yet. Use the enrollment form below to add the first Host instance.</p>
 
-        <section v-if="localAuthority" class="authority-panel" aria-label="Host authority controls">
+        <section v-if="authorityAvailable" class="authority-panel" aria-label="Host authority controls">
           <div class="panel-heading">
-            <div><span class="eyebrow">Local User Site authority</span><h3>Host lifecycle and enrollment</h3><small>These controls write the canonical registry. Cloudflare never receives these mutations.</small></div>
-            <span class="status" data-status="online">local-authority</span>
+            <div><span class="eyebrow">{{ localAuthority ? 'Local User Site authority' : 'Cloudflare authority forwarding' }}</span><h3>Host lifecycle and enrollment</h3><small>{{ localAuthority ? 'These controls write the canonical registry.' : 'These controls are authenticated and forwarded to the canonical User Site authority.' }}</small></div>
+            <span class="status" data-status="online">{{ fleet.mutationScope.value }}</span>
           </div>
 
           <div v-if="selectedHostRecord" class="workflow-block">
@@ -301,6 +445,46 @@ function submitOnEnter(event: KeyboardEvent): void {
               <button class="action" type="button" :disabled="!enrollmentConfirmed || fleet.mutationBusy.value || !enrollmentPlanCurrent" @click="applyEnrollmentPlan">Apply enrollment</button>
             </div>
           </details>
+          <details class="workflow-details">
+            <summary>Rotate Host Gateway credential policy</summary>
+            <p class="workflow-help">Only the credential reference and validity policy are stored here. The secret remains in the host-side secret store.</p>
+            <form class="enrollment-form" @submit.prevent="planCredentialRotation">
+              <div class="field-grid">
+                <label class="field field-wide"><span>Credential reference</span><input v-model="credentialRotationDraft.credentialRef" required autocomplete="off" placeholder="env://NARADA_HOST_GATEWAY_TOKEN" /></label>
+                <label class="field"><span>Credential class</span><select v-model="credentialRotationDraft.credentialClass"><option value="dedicated_host_gateway">Dedicated Host Gateway</option><option value="bridge_compatibility">Bridge compatibility</option></select></label>
+                <label class="field"><span>Not before</span><input v-model="credentialRotationDraft.notBefore" type="datetime-local" /></label>
+                <label class="field"><span>Expires at</span><input v-model="credentialRotationDraft.expiresAt" type="datetime-local" /></label>
+              </div>
+              <div class="workflow-actions"><button class="action" type="submit" :disabled="!selectedHostRecord || fleet.preflightBusy.value">Review credential rotation</button></div>
+            </form>
+            <p v-if="credentialRotationError || fleet.credentialRotationPreflightError.value" class="notice error" role="alert">{{ credentialRotationError ?? fleet.credentialRotationPreflightError.value }}</p>
+            <p v-if="fleet.credentialRotationPreflight.value" class="notice workflow-check" :class="{ error: fleet.credentialRotationPreflight.value.status === 'refused' }" role="status">Credential authority preflight: {{ fleet.credentialRotationPreflight.value.status }}<span v-if="fleet.credentialRotationPreflight.value.currentRevision !== null"> · current revision {{ fleet.credentialRotationPreflight.value.currentRevision }}</span><span v-if="fleet.credentialRotationPreflight.value.refusals.length"> · {{ fleet.credentialRotationPreflight.value.refusals.join(', ') }}</span></p>
+            <p v-if="credentialRotationPlan && !credentialRotationPlanCurrent" class="notice warning" role="alert">The host, revision, or credential policy changed after review. Review the rotation intent again.</p>
+            <div v-if="credentialRotationPlan" class="plan-card" :data-stale="!credentialRotationPlanCurrent">
+              <div><span class="status" data-status="success">intent ready</span><strong>{{ credentialRotationPlan.host.host_id }}@{{ credentialRotationPlan.host.host_instance_id }}</strong><small>Revision {{ credentialRotationPlan.expected_revision }} · {{ credentialRotationPlan.credential.class }} · request {{ credentialRotationPlan.request_id }}</small></div>
+              <dl class="plan-details"><div><dt>Credential ref</dt><dd>{{ credentialRotationPlan.credential_ref }}</dd></div><div><dt>Validity</dt><dd>{{ credentialRotationPlan.credential.not_before ?? 'immediate' }} → {{ credentialRotationPlan.credential.expires_at ?? 'no expiry' }}</dd></div></dl>
+              <label class="confirm-label"><input v-model="credentialRotationConfirmed" type="checkbox" :disabled="fleet.mutationBusy.value || !credentialRotationPlanCurrent" /> <span>I reviewed this revision-checked credential policy and want to apply it.</span></label>
+              <button class="action" type="button" :disabled="!credentialRotationConfirmed || fleet.mutationBusy.value || !credentialRotationPlanCurrent" @click="applyCredentialRotationPlan">Apply credential rotation</button>
+            </div>
+          </details>
+          <details class="workflow-details">
+            <summary>Rollback Host Gateway credential policy</summary>
+            <p class="workflow-help">Rollback restores a previously recorded credential policy by revision. The authority never returns the secret value to the browser.</p>
+            <form class="enrollment-form" @submit.prevent="planCredentialRollback">
+              <div class="field-grid">
+                <label class="field"><span>Restore revision</span><input v-model="credentialRollbackDraft.rollbackToRevision" required type="number" min="1" step="1" placeholder="1" /></label>
+              </div>
+              <div class="workflow-actions"><button class="action" type="submit" :disabled="!selectedHostRecord || !authorityAvailable || fleet.preflightBusy.value">Review credential rollback</button></div>
+            </form>
+            <p v-if="credentialRollbackError || fleet.credentialRollbackPreflightError.value" class="notice error" role="alert">{{ credentialRollbackError ?? fleet.credentialRollbackPreflightError.value }}</p>
+            <p v-if="fleet.credentialRollbackPreflight.value" class="notice workflow-check" :class="{ error: fleet.credentialRollbackPreflight.value.status === 'refused' }" role="status">Credential rollback authority preflight: {{ fleet.credentialRollbackPreflight.value.status }}<span v-if="fleet.credentialRollbackPreflight.value.currentRevision !== null"> · current revision {{ fleet.credentialRollbackPreflight.value.currentRevision }}</span><span v-if="fleet.credentialRollbackPreflight.value.availableRevisions.length"> · available revisions {{ fleet.credentialRollbackPreflight.value.availableRevisions.join(', ') }}</span><span v-if="fleet.credentialRollbackPreflight.value.refusals.length"> · {{ fleet.credentialRollbackPreflight.value.refusals.join(', ') }}</span></p>
+            <p v-if="credentialRollbackPlan && !credentialRollbackPlanCurrent" class="notice warning" role="alert">The host, revision, or rollback target changed after review. Review the rollback intent again.</p>
+            <div v-if="credentialRollbackPlan" class="plan-card" :data-stale="!credentialRollbackPlanCurrent">
+              <div><span class="status" data-status="success">intent ready</span><strong>{{ credentialRollbackPlan.host.host_id }}@{{ credentialRollbackPlan.host.host_instance_id }}</strong><small>Revision {{ credentialRollbackPlan.expected_revision }} · restore {{ credentialRollbackPlan.rollback_to_revision }} · request {{ credentialRollbackPlan.request_id }}</small></div>
+              <label class="confirm-label"><input v-model="credentialRollbackConfirmed" type="checkbox" :disabled="fleet.mutationBusy.value || !credentialRollbackPlanCurrent" /> <span>I reviewed this revision-checked rollback and want to restore the selected policy.</span></label>
+              <button class="action danger-action" type="button" :disabled="!credentialRollbackConfirmed || fleet.mutationBusy.value || !credentialRollbackPlanCurrent" @click="applyCredentialRollbackPlan">Apply credential rollback</button>
+            </div>
+          </details>
         </section>
         <section v-else class="authority-panel projection-notice" aria-label="Projection scope notice">
           <div class="panel-heading"><div><span class="eyebrow">Cloudflare projection</span><h3>Read-only Host Fleet view</h3><small>Host enrollment and lifecycle mutations belong to the local User Site authority.</small></div><span class="status" data-status="connected">projection-only</span></div>
@@ -309,8 +493,8 @@ function submitOnEnter(event: KeyboardEvent): void {
 
         <section v-if="selectedHostRecord" class="workflow-panel launch-planning" aria-label="Exact host launch planning">
           <div class="panel-heading">
-            <div><span class="eyebrow">Exact HostKey planning</span><h3>Plan a runtime launch</h3><small>This is a non-mutating revision and Site-admission check. Host launch execution remains an explicit authority capability.</small></div>
-            <span class="status" data-status="connected">preflight only</span>
+            <div><span class="eyebrow">Exact HostKey launch</span><h3>Launch a runtime on this host</h3><small>The authority rechecks the HostKey revision and Site admission immediately before forwarding the launch to the selected Host Gateway.</small></div>
+            <span class="status" data-status="connected">{{ authorityAvailable ? 'preflight + execute' : 'preflight only' }}</span>
           </div>
           <form class="inline-form" @submit.prevent="planLaunch">
             <label class="field"><span>Site ID</span><input v-model="launchDraft.siteId" required autocomplete="off" :placeholder="selectedHostRecord.admittedSites[0] ?? 'sonar'" /></label>
@@ -322,9 +506,14 @@ function submitOnEnter(event: KeyboardEvent): void {
           <p v-if="fleet.launchPreflight.value" class="notice workflow-check" :class="{ error: fleet.launchPreflight.value.status === 'refused' }" role="status">
             Launch authority preflight: {{ fleet.launchPreflight.value.status }}<span v-if="fleet.launchPreflight.value.currentRevision !== null"> · current revision {{ fleet.launchPreflight.value.currentRevision }}</span><span v-if="fleet.launchPreflight.value.currentLifecycleState"> · {{ fleet.launchPreflight.value.currentLifecycleState }}</span><span v-if="fleet.launchPreflight.value.refusals.length"> · {{ fleet.launchPreflight.value.refusals.join(', ') }}</span>
           </p>
-          <div v-if="launchPlan" class="plan-card">
+          <div v-if="launchPlan" class="plan-card" :data-stale="!launchPlanCurrent">
             <div><span class="status" data-status="success">preflight ready</span><strong>{{ launchPlan.site_id }} / {{ launchPlan.agent_id }} on {{ launchPlan.host.host_id }}@{{ launchPlan.host.host_instance_id }}</strong><small>Surface {{ launchPlan.operator_surface ?? 'registry default' }} · revision {{ launchPlan.expected_revision }} · request {{ launchPlan.request_id }}</small></div>
-            <p class="workflow-help">The exact-host launch route is intentionally not enabled in this projection yet. Use this plan as the reviewed input for the future host-authority execution step.</p>
+            <p v-if="!launchPlanCurrent" class="notice warning">The host, revision, or launch fields changed after planning. Review the launch plan again.</p>
+            <template v-if="authorityAvailable">
+              <label class="confirm-label"><input v-model="launchConfirmed" type="checkbox" :disabled="fleet.mutationBusy.value || !launchPlanCurrent" /> <span>I reviewed this exact-host launch and want the authority to forward it.</span></label>
+              <button class="action" type="button" :disabled="!launchConfirmed || fleet.mutationBusy.value || !launchPlanCurrent" @click="applyLaunchPlan">Launch on exact HostKey</button>
+            </template>
+            <p v-else class="workflow-help">This projection can preflight the launch but has no configured authority-forwarding route.</p>
           </div>
         </section>
 

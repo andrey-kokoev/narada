@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createHostFleetEnrollmentIntent,
+  createHostFleetCredentialRollbackIntent,
   createHostFleetLaunchIntent,
   createHostFleetLifecycleIntent,
   hostFleetEnrollmentDraftFingerprint,
@@ -57,6 +58,31 @@ test('host fleet launch planning preserves exact HostKey and revision fencing', 
   assert.equal(intent.site_id, 'sonar');
   assert.equal(intent.operator_surface, 'agent-web-ui');
   assert.equal(intent.confirmation, 'desktop-sunroom-2@desktop-instance-2026-07');
+});
+
+test('host fleet credential rollback planning preserves the exact prior revision', () => {
+  const intent = createHostFleetCredentialRollbackIntent({
+    hostId: 'zima-board-2',
+    hostInstanceId: 'instance-z',
+    displayName: 'ZimaBoard 2',
+    platform: 'linux',
+    naradaVersion: '0.1.0',
+    transport: 'ssh-tunnel',
+    admittedPathCount: 3,
+    capabilities: ['sessions'],
+    admittedSites: ['sonar'],
+    lifecycleState: 'active',
+    healthStatus: 'online',
+    healthObservedAt: null,
+    healthDetail: null,
+    lastSeenAt: null,
+    revision: 12,
+  }, { rollbackToRevision: '7' });
+
+  assert.equal(intent.rollback_to_revision, 7);
+  assert.equal(intent.expected_revision, 12);
+  assert.deepEqual(intent.host, { host_id: 'zima-board-2', host_instance_id: 'instance-z' });
+  assert.equal(intent.confirmation, 'zima-board-2@instance-z');
 });
 
 test('host fleet enrollment workflow carries a credential reference, never a secret', () => {

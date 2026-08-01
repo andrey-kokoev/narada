@@ -102,9 +102,10 @@ not needed to prove the boundary.
 The repository also has a bounded live lane for the local authority journey.
 It starts real loopback gateway servers, a file-backed SQLite Host Registry,
 the actual Operator Console HTTP server, and a real headless browser. It proves
-the empty state, enrollment review and apply, exact session attachment and
-replay, revoke readback, two-host aggregate observation, and reconnect after a
-gateway drops its first event stream:
+the empty state, enrollment review and apply, exact-host launch, exact session
+attachment and replay, credential rotation, revision-aware credential rollback,
+revoke readback, two-host aggregate observation, and reconnect after a gateway
+drops its first event stream:
 
 ```text
 pnpm --filter @narada-core/cli test:host-fleet-live
@@ -158,8 +159,20 @@ is explicit and performs no network request:
 pnpm --filter @narada-core/cloudflare-nars-projection plan:host-fleet-live
 ```
 
-This lane is acceptance evidence only. It does not deploy, enroll, revoke,
-retire, launch, stop, or otherwise mutate a host or runtime.
+This lane is acceptance evidence only. It does not deploy or mutate a
+production host or runtime. The local browser lane above mutates only
+disposable in-process fixtures. The Cloudflare lane intentionally remains
+read-only because its materialized registry is not canonical and its mutation
+routes require a separately configured User Site authority bridge.
+
+Before enabling that bridge in a deployment, run a separately provisioned,
+disposable mutation exercise covering the same ordered path as the local lane:
+authority preflight, exact-host launch, credential rotation, rollback to a
+recorded prior revision, and final host revocation. Record the Cloudflare
+request IDs and the User Site result envelopes, and verify that the projection
+registry did not become the source of truth. No production mutation command is
+provided by the read-only smoke script; this exercise must be owned by the
+deployment operator with disposable host identities and explicit cleanup.
 
 ## Evidence and Disposition
 

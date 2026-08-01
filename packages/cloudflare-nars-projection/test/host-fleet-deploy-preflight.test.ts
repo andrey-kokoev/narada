@@ -48,4 +48,32 @@ describe('host fleet deployment preflight', () => {
       refusals: ['host_fleet_registry_source_required'],
     });
   });
+
+  it('surfaces the optional authority bridge as a required secret binding without reading the secret', async () => {
+    const result = await buildHostFleetDeployPreflight({
+      NARADA_HOST_FLEET_REGISTRY: JSON.stringify(registry()),
+      NARADA_HOST_FLEET_AUTHORITY_URL: 'https://user-site.example',
+      NARADA_HOST_FLEET_AUTHORITY_TOKEN: 'test-secret-must-not-be-returned',
+    });
+
+    expect(result).toMatchObject({
+      status: 'ready',
+      authority_forwarding: {
+        mode: 'configured',
+        authority_url_configured: true,
+        required_token_binding: 'NARADA_HOST_FLEET_AUTHORITY_TOKEN',
+      },
+      required_secret_bindings: ['NARADA_HOST_FLEET_AUTHORITY_TOKEN', 'ZIMA_TOKEN'],
+    });
+    expect(JSON.stringify(result)).not.toContain('test-secret-must-not-be-returned');
+  });
+
+  it('refuses an authority bridge URL that cannot be used as an HTTPS origin', async () => {
+    const result = await buildHostFleetDeployPreflight({
+      NARADA_HOST_FLEET_REGISTRY: JSON.stringify(registry()),
+      NARADA_HOST_FLEET_AUTHORITY_URL: 'http://user-site.example',
+    });
+    expect(result.status).toBe('refused');
+    expect(result.refusals).toContain('host_fleet_authority_url_invalid');
+  });
 });

@@ -316,3 +316,60 @@ test('lifecycle preflight stays a non-mutating qualified GET on both route shape
   assert.equal(requests[0]?.includes('expected_revision=4'), true);
   assert.equal(requests[1]?.includes('operation=retire'), true);
 });
+
+test('credential rollback transport preserves the authority-only history preflight and mutation routes', async () => {
+  const requests: Array<{ input: string; method: string; body?: string }> = [];
+  const fetchLike = async (input: string, init?: RequestInit) => {
+    requests.push({ input, method: init?.method ?? 'GET', body: init?.body ? String(init.body) : undefined });
+    const body = input.includes('/preflight')
+      ? {
+        schema: 'narada.host_fleet.credential_rollback_preflight.v1',
+        status: 'ready',
+        mutation_performed: false,
+        intent: null,
+        current_revision: 5,
+        current_lifecycle_state: 'active',
+        available_revisions: [1, 4],
+        refusals: [],
+      }
+      : {
+        schema: 'narada.host_fleet.credential_rollback_result.v1',
+        status: 'applied',
+        mutation_performed: true,
+        request_id: 'host-rollback:transport',
+        host: { host_id: target.hostId, host_instance_id: target.hostInstanceId },
+        revision: 6,
+        restored_from_revision: 1,
+        credential_class: 'dedicated_host_gateway',
+        reason: null,
+      };
+    return new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const transport = createHostFleetTransport({ basePath: '/console/hosts/api', routeShape: 'local-console' }, fetchLike);
+  const intent = {
+    schema: 'narada.host_fleet.credential_rollback_intent.v1' as const,
+    request_id: 'host-rollback:transport',
+    host: { host_id: target.hostId, host_instance_id: target.hostInstanceId },
+    expected_revision: 5,
+    rollback_to_revision: 1,
+    confirmation: `${target.hostId}@${target.hostInstanceId}`,
+  };
+  const preflight = await transport.preflightCredentialRollback?.(intent);
+  assert.deepEqual(preflight, {
+    schema: 'narada.host_fleet.credential_rollback_preflight.v1',
+    status: 'ready',
+    mutation_performed: false,
+    intent: null,
+    current_revision: 5,
+    current_lifecycle_state: 'active',
+    available_revisions: [1, 4],
+    refusals: [],
+  });
+  await transport.applyCredentialRollback?.(intent, 'operator-console.test');
+  assert.match(requests[0]!.input, /^\/console\/hosts\/api\/credentials\/rollback\/preflight\?/);
+  assert.equal(requests[0]!.method, 'GET');
+  assert.equal(requests[0]!.input.includes('rollback_to_revision=1'), true);
+  assert.equal(requests[1]!.input, '/console/hosts/api/credentials/rollback');
+  assert.equal(requests[1]!.method, 'POST');
+  assert.equal(JSON.parse(requests[1]!.body!).operator_confirmed, true);
+});

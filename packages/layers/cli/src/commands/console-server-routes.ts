@@ -53,8 +53,12 @@ import {
   OPERATOR_CONSOLE_HOSTS_LIFECYCLE_PREFLIGHT_API_PATH,
   OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH,
   OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_LAUNCH_API_PATH,
   OPERATOR_CONSOLE_HOSTS_LAUNCH_PREFLIGHT_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_API_PATH,
   OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_PREFLIGHT_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROLLBACK_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROLLBACK_PREFLIGHT_API_PATH,
   OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_API_PATH,
   OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_SCHEMA,
   formatOperatorSiteAgentInvariantViolation,
@@ -79,17 +83,25 @@ import { onboardingStartCommand, onboardingStatusCommand } from './onboarding.js
 import { silentCommandContext } from '../lib/command-wrapper.js';
 import {
   createHostGatewayClient,
+  HOST_FLEET_AUTHORITY_TOKEN_HEADER,
+  HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA,
   HOST_FLEET_ENROLLMENT_RESULT_SCHEMA,
   HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
+  HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA,
+  HOST_FLEET_CREDENTIAL_ROLLBACK_INTENT_SCHEMA,
+  HOST_FLEET_LAUNCH_RESULT_SCHEMA,
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_RESULT_SCHEMA,
   preflightHostFleetCredentialRotationIntent,
+  preflightHostFleetCredentialRollbackIntent,
   preflightHostFleetLifecycleIntent,
   preflightHostFleetLaunchIntent,
+  validateHostFleetLaunchIntent,
   resolveHostGatewayCredential,
   resolveHostGatewayEnvironmentCredential,
   resolveRuntimeTarget,
   type HostFleetRegistry,
+  type HostFleetLaunchResult,
   type HostRuntimeSession,
 } from '@narada-core/host-fleet';
 
@@ -135,6 +147,7 @@ export interface ConsoleServerRouteContext {
   hostFleetRegistry?: HostFleetRegistry;
   hostFleetCredentialResolver?: (credentialRef: string) => string | Promise<string | null> | null;
   hostFleetFetch?: typeof fetch;
+  hostFleetAuthorityToken?: string | null;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
   onboardingPlatform?: 'windows' | 'linux';
@@ -481,12 +494,21 @@ function setCorsHeaders(res: ServerResponse, origin: string | undefined): boolea
   }
   res.setHeader('Access-Control-Allow-Origin', origin ?? '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Request-Id, X-Narada-Host-Fleet-Authority-Token');
   return true;
 }
 
-function hostFleetMutationActor(req: IncomingMessage, payload: Record<string, unknown>): string | null {
+function hostFleetMutationActor(req: IncomingMessage, payload: Record<string, unknown>, authorityToken?: string | null): string | null {
   if (payload.operator_confirmed !== true) return null;
+  const suppliedAuthorityToken = typeof req.headers[HOST_FLEET_AUTHORITY_TOKEN_HEADER] === 'string'
+    ? req.headers[HOST_FLEET_AUTHORITY_TOKEN_HEADER]
+    : null;
+  if (suppliedAuthorityToken !== null) {
+    if (!authorityToken || suppliedAuthorityToken !== authorityToken) return null;
+    const bridgedActor = optionalString(payload.actor);
+    if (bridgedActor && bridgedActor.trim().length > 128) return null;
+    return bridgedActor?.trim() || 'cloudflare-host-fleet-bridge';
+  }
   const origin = req.headers.origin;
   if (!isLocalOrigin(origin)) return null;
   const address = req.socket.remoteAddress?.replace(/^::ffff:/u, '') ?? '';
@@ -494,6 +516,30 @@ function hostFleetMutationActor(req: IncomingMessage, payload: Record<string, un
   const actor = optionalString(payload.actor);
   if (actor && actor.trim().length > 128) return null;
   return actor?.trim() || 'operator-console';
+}
+
+function hostFleetLaunchResultFromGateway(
+  intent: { request_id: string; host: { host_id: string; host_instance_id: string }; site_id: string; agent_id: string; operator_surface: string | null },
+  payload: unknown,
+): HostFleetLaunchResult {
+  const value = isRecord(payload) ? payload : {};
+  const status = value.status === 'launched' || value.status === 'reused' ? value.status : 'refused';
+  const sessionId = typeof value.session_id === 'string' && value.session_id.trim().length > 0 ? value.session_id : null;
+  const reason = typeof value.reason === 'string' && value.reason.trim().length > 0
+    ? value.reason.slice(0, 512)
+    : status === 'refused' ? 'host_launch_gateway_refused' : null;
+  return {
+    schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA,
+    status,
+    mutation_performed: status === 'launched',
+    request_id: intent.request_id,
+    host: intent.host,
+    site_id: typeof value.site_id === 'string' ? value.site_id : intent.site_id,
+    agent_id: typeof value.agent_id === 'string' ? value.agent_id : intent.agent_id,
+    operator_surface: typeof value.operator_surface === 'string' ? value.operator_surface : intent.operator_surface,
+    session_id: sessionId,
+    reason,
+  };
 }
 
 export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): RouteHandler[] {
@@ -977,7 +1023,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         const payload = await requestJson(req);
         const intent = payload && isRecord(payload.intent) ? payload.intent : null;
-        const actor = payload ? hostFleetMutationActor(req, payload) : null;
+        const actor = payload ? hostFleetMutationActor(req, payload, ctx.hostFleetAuthorityToken) : null;
         if (!ctx.hostFleetRegistry) {
           jsonResponse(res, 503, { schema: HOST_FLEET_LIFECYCLE_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: 'host_fleet_registry_unavailable' });
           return;
@@ -1024,6 +1070,96 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.host-fleet-launch',
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_LAUNCH_API_PATH),
+      remote_disposition: 'local-only',
+      remote_kind: 'intent',
+      remote_intent: 'host_fleet.launch',
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, site_id: null, agent_id: null, operator_surface: null, session_id: null, reason: 'origin_not_allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const rawIntent = payload && isRecord(payload.intent) ? payload.intent : null;
+        const actor = payload ? hostFleetMutationActor(req, payload, ctx.hostFleetAuthorityToken) : null;
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, site_id: null, agent_id: null, operator_surface: null, session_id: null, reason: 'host_fleet_registry_unavailable' });
+          return;
+        }
+        if (!rawIntent || !actor) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, site_id: null, agent_id: null, operator_surface: null, session_id: null, reason: !actor ? 'operator_confirmation_required' : 'host_launch_intent_required' });
+          return;
+        }
+        let intent;
+        try {
+          intent = validateHostFleetLaunchIntent(rawIntent);
+        } catch (error) {
+          jsonResponse(res, 400, { schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, site_id: null, agent_id: null, operator_surface: null, session_id: null, reason: error instanceof Error ? error.message : String(error) });
+          return;
+        }
+        const prior = ctx.hostFleetRegistry.getLaunchIntentResult(intent);
+        if (prior) {
+          jsonResponse(res, prior.status === 'refused' ? 409 : 200, prior);
+          return;
+        }
+        const host = ctx.hostFleetRegistry.getHost(intent.host);
+        const preflight = preflightHostFleetLaunchIntent(intent, host);
+        if (preflight.status !== 'ready' || !host) {
+          const refused: HostFleetLaunchResult = {
+            schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA,
+            status: 'refused',
+            mutation_performed: false,
+            request_id: intent.request_id,
+            host: intent.host,
+            site_id: intent.site_id,
+            agent_id: intent.agent_id,
+            operator_surface: intent.operator_surface,
+            session_id: null,
+            reason: preflight.refusals.join(',') || 'host_launch_preflight_refused',
+          };
+          ctx.hostFleetRegistry.recordLaunchIntentResult(intent, refused, { actor });
+          jsonResponse(res, 409, refused);
+          return;
+        }
+        try {
+          const client = createHostGatewayClient(host, {
+            fetch_fn: ctx.hostFleetFetch,
+            credential_resolver: ctx.hostFleetCredentialResolver ?? resolveHostGatewayEnvironmentCredential,
+            observe_request: (observation) => ctx.hostFleetRegistry?.recordGatewayObservation(observation),
+          });
+          const gatewayPayload = await client.requestJson('/console/agents/api/launch', {
+            method: 'POST',
+            request_id: intent.request_id,
+            body: JSON.stringify({
+              site_id: intent.site_id,
+              agent_id: intent.agent_id,
+              ...(intent.operator_surface ? { operator_surface: intent.operator_surface } : {}),
+            }),
+          });
+          const result = ctx.hostFleetRegistry.recordLaunchIntentResult(intent, hostFleetLaunchResultFromGateway(intent, gatewayPayload), { actor });
+          jsonResponse(res, result.status === 'refused' ? 409 : 200, result);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message.slice(0, 512) : String(error).slice(0, 512);
+          const result = ctx.hostFleetRegistry.recordLaunchIntentResult(intent, {
+            schema: HOST_FLEET_LAUNCH_RESULT_SCHEMA,
+            status: 'refused',
+            mutation_performed: false,
+            request_id: intent.request_id,
+            host: intent.host,
+            site_id: intent.site_id,
+            agent_id: intent.agent_id,
+            operator_surface: intent.operator_surface,
+            session_id: null,
+            reason,
+          }, { actor });
+          jsonResponse(res, 502, result);
+        }
+      },
+    },
+    {
       route_id: 'operator-console.host-fleet-credential-rotation-preflight',
       method: 'GET',
       pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_PREFLIGHT_API_PATH),
@@ -1062,6 +1198,97 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
       },
     },
     {
+      route_id: 'operator-console.host-fleet-credential-rotation',
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_API_PATH),
+      remote_disposition: 'local-only',
+      remote_kind: 'intent',
+      remote_intent: 'host_fleet.credential_rotate',
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, revision: null, credential_class: null, reason: 'origin_not_allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const intent = payload && isRecord(payload.intent) ? payload.intent : null;
+        const actor = payload ? hostFleetMutationActor(req, payload, ctx.hostFleetAuthorityToken) : null;
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, revision: null, credential_class: null, reason: 'host_fleet_registry_unavailable' });
+          return;
+        }
+        if (!intent || !actor) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, revision: null, credential_class: null, reason: !actor ? 'operator_confirmation_required' : 'host_credential_rotation_intent_required' });
+          return;
+        }
+        const result = ctx.hostFleetRegistry.applyCredentialRotationIntent(intent, { actor });
+        jsonResponse(res, result.status === 'refused' ? 409 : 200, result);
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-credential-rollback-preflight',
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROLLBACK_PREFLIGHT_API_PATH),
+      remote_disposition: 'local-only',
+      remote_kind: 'observation',
+      remote_intent: null,
+      handler: async (_req, res, _params, searchParams) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: 'narada.host_fleet.credential_rollback_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, available_revisions: [], refusals: ['origin_not_allowed'] });
+          return;
+        }
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: 'narada.host_fleet.credential_rollback_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, available_revisions: [], refusals: ['host_fleet_registry_unavailable'] });
+          return;
+        }
+        const hostId = searchParams.get('host_id')?.trim() ?? '';
+        const instanceId = searchParams.get('host_instance_id')?.trim() ?? '';
+        const key = { host_id: hostId, host_instance_id: instanceId };
+        const host = hostId && instanceId ? ctx.hostFleetRegistry.getHost(key) : null;
+        const availableRevisions = hostId && instanceId
+          ? ctx.hostFleetRegistry.listCredentialHistory(key).map((entry) => entry.revision)
+          : [];
+        const preflight = preflightHostFleetCredentialRollbackIntent({
+          schema: HOST_FLEET_CREDENTIAL_ROLLBACK_INTENT_SCHEMA,
+          request_id: searchParams.get('request_id')?.trim() ?? '',
+          host: key,
+          expected_revision: Number(searchParams.get('expected_revision') ?? Number.NaN),
+          rollback_to_revision: Number(searchParams.get('rollback_to_revision') ?? Number.NaN),
+          confirmation: searchParams.get('confirmation') ?? '',
+        }, host, availableRevisions);
+        jsonResponse(res, preflight.status === 'ready' ? 200 : 409, preflight);
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-credential-rollback',
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROLLBACK_API_PATH),
+      remote_disposition: 'local-only',
+      remote_kind: 'intent',
+      remote_intent: 'host_fleet.credential_rollback',
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, revision: null, restored_from_revision: null, credential_class: null, reason: 'origin_not_allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const intent = payload && isRecord(payload.intent) ? payload.intent : null;
+        const actor = payload ? hostFleetMutationActor(req, payload, ctx.hostFleetAuthorityToken) : null;
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, revision: null, restored_from_revision: null, credential_class: null, reason: 'host_fleet_registry_unavailable' });
+          return;
+        }
+        if (!intent || !actor) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_CREDENTIAL_ROLLBACK_RESULT_SCHEMA, status: 'refused', mutation_performed: false, request_id: '', host: null, revision: null, restored_from_revision: null, credential_class: null, reason: !actor ? 'operator_confirmation_required' : 'host_credential_rollback_intent_required' });
+          return;
+        }
+        const result = ctx.hostFleetRegistry.applyCredentialRollbackIntent(intent, { actor });
+        jsonResponse(res, result.status === 'refused' ? 409 : 200, result);
+      },
+    },
+    {
       route_id: 'operator-console.host-fleet-enrollment',
       method: 'POST',
       pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH),
@@ -1076,7 +1303,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         const payload = await requestJson(req);
         const intent = payload && isRecord(payload.intent) ? payload.intent : null;
-        const actor = payload ? hostFleetMutationActor(req, payload) : null;
+        const actor = payload ? hostFleetMutationActor(req, payload, ctx.hostFleetAuthorityToken) : null;
         if (!ctx.hostFleetRegistry) {
           jsonResponse(res, 503, { schema: HOST_FLEET_ENROLLMENT_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: 'host_fleet_registry_unavailable' });
           return;
