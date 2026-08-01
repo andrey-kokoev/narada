@@ -6,7 +6,7 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 import { seedLiveIntelligenceRegistry } from './live-intelligence-registry-fixture.js';
 
 /**

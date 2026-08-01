@@ -6,13 +6,13 @@ The Operator Console Site Registry UI has one canonical domain model and one exp
 
 ## Ownership
 
-- `@narada2/site-registry-contract` owns browser-safe canonical registry types and runtime parsers for the snake_case HTTP/CLI envelopes.
-- `@narada2/windows-site` remains the durable registry implementation and authority owner. It re-exports the canonical types for existing callers.
-- `@narada2/operator-console-ui` owns ephemeral `SiteListProjection`, `SiteTileProjection`, and `SiteDetailProjection` view models, plus composables for fetch, selection, and plan/apply client state.
+- `@narada-core/site-registry-contract` owns browser-safe canonical registry types and runtime parsers for the snake_case HTTP/CLI envelopes.
+- `@narada-core/windows-site` remains the durable registry implementation and authority owner. It re-exports the canonical types for existing callers.
+- `@narada-core/operator-console-ui` owns ephemeral `SiteListProjection`, `SiteTileProjection`, and `SiteDetailProjection` view models, plus composables for fetch, selection, and plan/apply client state.
 - The site-registry domain module owns typed draft, operation, validation, request-builder, and diff-row contracts. It adapts the canonical contract for browser workflows without becoming a second authority model.
 - `useSiteRegistry` owns list/detail retrieval and presentation projections; `useSiteRegistryMutation` owns one plan/apply gateway; `useSiteRegistryWorkflow` composes them into draft, lifecycle, route, and confirmation state.
 - Components and pages render projections and wire events to the workflow composable; they do not read the registry database, infer authority, or bypass the plan/apply gateway.
-- `@narada2/site-config` remains distinct: its registry projection contracts describe awareness and event-derived read models, not durable User Site registry rows.
+- `@narada-core/site-config` remains distinct: its registry projection contracts describe awareness and event-derived read models, not durable User Site registry rows.
 
 ## Serving Boundary
 
@@ -28,18 +28,18 @@ The CLI serves the same built Vue document at `/console/registry`, `/console/reg
 
 ## Shared Console Boundary
 
-`@narada2/operator-console-contract` owns typed `OperatorSurfaceDescriptor`
+`@narada-core/operator-console-contract` owns typed `OperatorSurfaceDescriptor`
 records and the availability projection for Registry, Launcher, and future
 concepts. `console/routes.ts` maps those records into the browser route model
 and navigation items. The CLI workspace directory uses the same projection,
 so a surface cannot be available in one ingress view and absent from the other
 because of a duplicated list. The route-neutral `OperatorSurfaceShell` lives
-in `@narada2/ui-vue`; `OperatorConsoleShell.vue` is the console-specific
+in `@narada-core/ui-vue`; `OperatorConsoleShell.vue` is the console-specific
 type-safe wrapper. Shared framing leaves domain state to page composables.
 Unknown paths render a bounded not-found projection instead of silently
 falling back to the registry.
 
-The interactive launcher presentation package (`@narada2/workspace-launch-ui`), its selector workflow, and the CLI-owned launcher session dashboard were removed with the interactive group-launch stack (decision 20260718-2038, task #2041). Launch authority stays in `@narada2/cli` through the non-interactive `narada launcher workspace-launch` command.
+The interactive launcher presentation package (`@narada-core/workspace-launch-ui`), its selector workflow, and the CLI-owned launcher session dashboard were removed with the interactive group-launch stack (decision 20260718-2038, task #2041). Launch authority stays in `@narada-core/cli` through the non-interactive `narada launcher workspace-launch` command.
 
 The console route `/console/launch` is a console-owned Site Runtime page. It renders the Site registry collection through the shared site-registry domain and links each Site to its registry entry for launch actions (`Check posture` / `Ensure now`, backed by `narada sites launch`), alongside guidance for single-agent launch. It no longer proxies CLI-owned launcher sessions.
 

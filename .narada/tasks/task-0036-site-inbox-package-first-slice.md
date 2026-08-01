@@ -11,7 +11,7 @@ The source map is external orientation evidence only. Narada proper admits a pac
 
 ## Goal
 
-Create `@narada2/site-inbox` with:
+Create `@narada-core/site-inbox` with:
 
 - inert envelope admission request and decision contracts;
 - scale-relative crossing coordinate types;

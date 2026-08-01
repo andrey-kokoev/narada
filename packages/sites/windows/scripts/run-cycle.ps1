@@ -68,9 +68,9 @@ New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
 
 # Build the inline Node.js script that calls the Windows site runner
 $nodeScript = @"
-const { runWindowsCycle } = require('@narada2/windows-site');
-const { WindowsSiteStore } = require('@narada2/windows-site');
-const { resolveSite } = require('@narada2/windows-site');
+const { runWindowsCycle } = require('@narada-core/windows-site');
+const { WindowsSiteStore } = require('@narada-core/windows-site');
+const { resolveSite } = require('@narada-core/windows-site');
 
 async function main() {
   const resolved = resolveSite('$SiteId', { createIfMissing: false });

@@ -30,4 +30,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/site-config` now carries descriptor/contracts/tests for Site registry awareness and read-only registered Site probe posture. Receiving Sites still own local config writes, live probe execution, trust records, MCP registration, and any target-rooted mutation authority.
+`@narada-core/site-config` now carries descriptor/contracts/tests for Site registry awareness and read-only registered Site probe posture. Receiving Sites still own local config writes, live probe execution, trust records, MCP registration, and any target-rooted mutation authority.

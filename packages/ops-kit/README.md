@@ -1,4 +1,4 @@
-# @narada2/ops-kit
+# @narada-core/ops-kit
 
 Narada operational shaping and preflight library.
 
@@ -14,7 +14,7 @@ It is Narada-specific. It should not become a generic installer or config-manage
 
 ## User Interface
 
-These commands are exposed through the unified `narada` CLI in `@narada2/cli`:
+These commands are exposed through the unified `narada` CLI in `@narada-core/cli`:
 
 - `narada init-repo <path>` — bootstrap a private ops repo
 - `narada want-mailbox <mailbox-id>` — shape a mailbox into config

@@ -6,9 +6,9 @@ import {
   CLOUDFLARE_EXECUTION_TOPOLOGY,
   canonicalSha256,
   feasibleTopologyObservations,
-} from '@narada2/invokable-intelligence-contract';
-import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
-import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
+} from '@narada-core/invokable-intelligence-contract';
+import { createFakeD1 } from '@narada-core/invokable-intelligence-registry';
+import { D1RegistryStore } from '@narada-core/invokable-intelligence-registry/d1';
 import { CloudflareCarrierSession } from '../../src/cloudflare-carrier.ts';
 import worker, { classifyCloudflareToolEffectAdmission, CloudflareCarrierDurableObject } from '../../src/cloudflare-worker.ts';
 

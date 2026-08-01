@@ -17,7 +17,7 @@
     { "kind": "depends_on", "concept_id": "nars_runtime_contract" },
     { "kind": "depends_on", "concept_id": "nars_session_management" }
   ],
-  "owner_surface": "@narada2/agent-start package",
+  "owner_surface": "@narada-core/agent-start package",
   "authority": {
     "kind": "package",
     "ref": "packages/agent-start",

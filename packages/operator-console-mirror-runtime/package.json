@@ -1,11 +1,11 @@
 {
-  "name": "@narada2/operator-console-mirror-runtime",
+  "name": "@narada-core/operator-console-mirror-runtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "narada": {
     "package_role": "operator_console_remote_mirror_lifecycle",
-    "authority_owner": "@narada2/operator-console-mirror-runtime",
+    "authority_owner": "@narada-core/operator-console-mirror-runtime",
     "surface": "operator_console",
     "presentation_only": false
   },
@@ -23,8 +23,8 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@narada2/operator-console-remote-gateway": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/operator-console-remote-gateway": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -35,7 +35,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-console-mirror-runtime"
   },
   "engines": {"node": ">=22.0.0"}

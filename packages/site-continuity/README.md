@@ -13,5 +13,5 @@ A local Windows Site and a Cloudflare-backed Site may recognize the same `site_i
 ## Verification
 
 ```powershell
-pnpm --filter @narada2/site-continuity test
+pnpm --filter @narada-core/site-continuity test
 ```

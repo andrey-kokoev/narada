@@ -2,9 +2,9 @@
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import { runGovernedCommand, runGovernedCommandSync } from '@narada2/process-launch-posture';
-import { validateIdentityAgainstRoster } from '@narada2/agent-context-mcp/session-start';
-import { enforceAgentPathPolicy } from '@narada2/agent-context-mcp/path-policy';
+import { runGovernedCommand, runGovernedCommandSync } from '@narada-core/process-launch-posture';
+import { validateIdentityAgainstRoster } from '@narada-core/agent-context-mcp/session-start';
+import { enforceAgentPathPolicy } from '@narada-core/agent-context-mcp/path-policy';
 import {
   attachPayloadSource,
   enforceInlinePayloadLimit,

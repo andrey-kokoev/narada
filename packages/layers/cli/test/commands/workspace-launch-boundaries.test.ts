@@ -31,7 +31,7 @@ describe('workspace launch module boundaries', () => {
       expect(source, entry).not.toContain('legacy_terminal_plan');
       expect(source, entry).not.toContain('intelligenceProvider');
       expect(source, entry).not.toContain('intelligence_provider');
-      expect(source, entry).not.toContain('@narada2/carrier-provider-contract');
+      expect(source, entry).not.toContain('@narada-core/carrier-provider-contract');
     }
 
     expect(existsSync(resolve(commandsRoot, 'workspace-launch-provider-context.ts'))).toBe(false);

@@ -47,7 +47,7 @@ export interface TraceRecord {
  *
  * Evaluation persistence is NOT a runner hook — it belongs to the runtime
  * integration layer (daemon dispatch) which calls `persistEvaluation()`
- * from `@narada2/control-plane` before `foreman.resolveWorkItem()`.
+ * from `@narada-core/control-plane` before `foreman.resolveWorkItem()`.
  *
  * Trace persistence may remain here as runner-adjacent commentary capture.
  */

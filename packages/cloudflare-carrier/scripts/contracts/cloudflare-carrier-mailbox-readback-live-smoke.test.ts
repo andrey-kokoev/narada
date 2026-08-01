@@ -54,17 +54,17 @@ test('formatMailboxReadbackLiveSmokeText emits downstream reads', () => {
 
   assert.match(text, /Mailbox Readback Smoke: ok/);
   assert.match(text, /Status Shadow: count=2/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
-  assert.match(text, /Status Shadow Read: pnpm --filter @narada2\/cloudflare-carrier mailbox:status-shadow-smoke:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Draft Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref draft_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Send Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref accepted_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Send Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref confirmation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Status Shadow Read: pnpm --filter @narada-core\/cloudflare-carrier mailbox:status-shadow-smoke:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Draft Proposal Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref proposal_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Draft Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref draft_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Send Accepted Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref accepted_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Send Confirmation Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref confirmation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatMailboxReadbackLiveSmokeText suppresses worker-scoped handoffs without worker url', () => {

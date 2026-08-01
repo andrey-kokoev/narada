@@ -1,4 +1,4 @@
-# @narada2/invokable-intelligence-contract
+# @narada-core/invokable-intelligence-contract
 
 Versioned top-level contract for Narada's invokable-intelligence ontology:
 typed resources, qualified capability assertions, typed policy documents,

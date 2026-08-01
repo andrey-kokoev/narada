@@ -6,7 +6,7 @@ import type { CommandContext } from '../../src/lib/command-wrapper.js';
 
 const openLocalIntelligenceRegistryMock = vi.hoisted(() => vi.fn());
 
-vi.mock('@narada2/agent-runtime-server/local-intelligence-runtime', () => ({
+vi.mock('@narada-core/agent-runtime-server/local-intelligence-runtime', () => ({
   openLocalIntelligenceRegistry: openLocalIntelligenceRegistryMock,
 }));
 
@@ -68,16 +68,16 @@ const mockDb = {
   close: vi.fn(),
 };
 
-vi.mock('@narada2/control-plane', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/control-plane')>();
+vi.mock('@narada-core/control-plane', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/control-plane')>();
   return {
     ...mod,
     Database: vi.fn(() => mockDb),
   };
 });
 
-vi.mock('@narada2/charters', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/charters')>();
+vi.mock('@narada-core/charters', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/charters')>();
   return {
     ...mod,
     CodexCharterRunner: vi.fn().mockImplementation(() => ({
@@ -376,12 +376,12 @@ describe('doctor command', () => {
     const freshness = report.checks.find((check) => check.name === 'cli-dist-freshness');
     expect(freshness).toMatchObject({
       status: 'warn',
-      remediation_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+      remediation_command: 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim',
     });
     const freshnessDetail = freshness?.detail.replaceAll('\\', '/');
     expect(freshnessDetail).toContain('packages/layers/cli/src/main.ts is newer than dist');
     expect(freshnessDetail).toContain('packages/layers/cli/dist/main.js');
-    expect(report.checks.find((check) => check.name === 'package-build-posture')?.detail).toContain('repair=pnpm --filter @narada2/cli build && pnpm run narada:install-shim');
+    expect(report.checks.find((check) => check.name === 'package-build-posture')?.detail).toContain('repair=pnpm --filter @narada-core/cli build && pnpm run narada:install-shim');
     expect(report.checks.find((check) => check.name === 'governance-commands-allowed')?.status).toBe('pass');
     expect(report.cli_execution_posture).toMatchObject({
       governance_commands_allowed: true,
@@ -397,7 +397,7 @@ describe('doctor command', () => {
     expect(report.build_repair_action).toMatchObject({
       schema: 'narada.launcher_build_repair_action.v0',
       status: 'required',
-      primary_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+      primary_command: 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim',
       repair_required: true,
     });
   });
@@ -449,8 +449,8 @@ describe('doctor command', () => {
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation).toContain('pnpm install');
     expect(report.checks.find((check) => check.name === 'dependencies-installed')?.remediation_args).toEqual(['pnpm', 'install']);
     expect(report.checks.find((check) => check.name === 'cli-built')?.remediation).toContain('pnpm -r build');
-    expect(report.checks.find((check) => check.name === 'package-build-posture')?.detail).toContain('repair=pnpm --filter @narada2/cli build && pnpm run narada:install-shim');
-    expect(report.checks.find((check) => check.name === 'package-build-posture')?.remediation).toContain('pnpm --filter @narada2/cli build');
+    expect(report.checks.find((check) => check.name === 'package-build-posture')?.detail).toContain('repair=pnpm --filter @narada-core/cli build && pnpm run narada:install-shim');
+    expect(report.checks.find((check) => check.name === 'package-build-posture')?.remediation).toContain('pnpm --filter @narada-core/cli build');
     expect(report.repair_plan).toContainEqual({
       check: 'dependencies-installed',
       command: 'pnpm install',

@@ -1,7 +1,7 @@
 import {
   assertAgentStartResultV0,
   type AgentStartResultV0,
-} from '@narada2/agent-start/launch-result-v0-contract';
+} from '@narada-core/agent-start/launch-result-v0-contract';
 
 export class AgentStartArtifactError extends Error {
   readonly code = 'agent_start_result_contract_invalid' as const;

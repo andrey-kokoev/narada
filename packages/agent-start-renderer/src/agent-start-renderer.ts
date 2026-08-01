@@ -1,4 +1,4 @@
-import { agentIdentityDisplay, renderOperatorObjectSummary, renderOperatorValue } from '@narada2/agent-identity';
+import { agentIdentityDisplay, renderOperatorObjectSummary, renderOperatorValue } from '@narada-core/agent-identity';
 
 const ansi = {
   reset: '\x1b[0m',

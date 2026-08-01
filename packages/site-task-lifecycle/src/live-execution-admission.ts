@@ -64,7 +64,7 @@ function buildChecklistItems(): LiveExecutionAdmissionChecklistItem[] {
       requiredEvidence: [
         'concrete adapter id and owning package/runtime',
         'adapter conformance evidence',
-        'driver/dependency decision outside @narada2/site-task-lifecycle',
+        'driver/dependency decision outside @narada-core/site-task-lifecycle',
       ],
       refusalConditions: [
         'adapter imports source Site DB/history/state',

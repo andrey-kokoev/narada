@@ -26,7 +26,7 @@ The deterministic command is therefore the closure gate for executable-path and 
 Run from `D:\\code\\mcp-surfaces`:
 
 ```powershell
-pnpm --filter @narada2/site-loop-mcp test:e2e:task-executability
+pnpm --filter @narada-core/site-loop-mcp test:e2e:task-executability
 ```
 
 The test creates a temporary Site, starts the real Task Lifecycle MCP child, and drives a deterministic delegated assessment port. It proves:
@@ -51,7 +51,7 @@ $env:NARADA_E2E_WORKER_EXTERNAL_PROVIDER_LIVE = '1'
 $env:NARADA_E2E_WORKER_PROVIDER_REGISTRY = 'D:\\path\\to\\worker-provider-registry.json'
 $env:NARADA_E2E_WORKER_PROVIDER = 'openai-api' # optional; otherwise registry default_provider is used
 $env:NARADA_E2E_WORKER_PROVIDER_API_KEY = '<secret>' # optional when the registry credential env is already present
-pnpm --filter @narada2/worker-delegation-mcp test:e2e:external-provider
+pnpm --filter @narada-core/worker-delegation-mcp test:e2e:external-provider
 ```
 
 The registry path must be an explicit worker-runtime provider registry with schema `narada.carrier.provider_registry.v1`. The test resolves the provider's `cognition_defaults.low.model`, verifies that the model is in `available_models`, requires the OpenAI-compatible chat-completions adapter, and passes the selected provider/model through the Narada Agent Runtime Server worker path. It does not use the frozen migration fixture at `packages/invokable-intelligence-management/test/provider-registry.legacy-fixture.json`.

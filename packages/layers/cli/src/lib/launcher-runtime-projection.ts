@@ -1,10 +1,10 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { agentIdentityRefMatchesRequest } from '@narada2/agent-identity';
-import { evaluateAgentStartHandoff } from '@narada2/agent-start/launch-result-v0-contract';
-import type { AgentStartResultV0, AgentStartSessionRef } from '@narada2/agent-start/launch-result-v0-contract';
-import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
-import type { IntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
+import { agentIdentityRefMatchesRequest } from '@narada-core/agent-identity';
+import { evaluateAgentStartHandoff } from '@narada-core/agent-start/launch-result-v0-contract';
+import type { AgentStartResultV0, AgentStartSessionRef } from '@narada-core/agent-start/launch-result-v0-contract';
+import type { LaunchProcessOwnership } from '@narada-core/launch-process-ownership';
+import type { IntelligenceSelectionAuthority } from '@narada-core/invokable-intelligence-contract';
 import type {
   AgentStartExecutionResult,
   OperatorProjectionLaunchBinding,

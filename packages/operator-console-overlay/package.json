@@ -1,12 +1,12 @@
 {
-  "name": "@narada2/operator-console-overlay",
+  "name": "@narada-core/operator-console-overlay",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "narada": {
     "package_role": "operator_console_overlay_specialization",
     "surface": "operator_console",
-    "authority_owner": "@narada2/cli",
+    "authority_owner": "@narada-core/cli",
     "presentation_only": true
   },
   "bin": {
@@ -24,17 +24,17 @@
     "README.md"
   ],
   "scripts": {
-    "prebuild": "pnpm --filter @narada2/operator-console-contract build && pnpm --filter @narada2/process-launch-posture build && pnpm --filter @narada2/operator-router build && pnpm --filter @narada2/operator-console-runtime build",
+    "prebuild": "pnpm --filter @narada-core/operator-console-contract build && pnpm --filter @narada-core/process-launch-posture build && pnpm --filter @narada-core/operator-router build && pnpm --filter @narada-core/operator-console-runtime build",
     "pretest": "pnpm run build",
     "test": "node --import tsx --test src/operator-console-overlay.test.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/operator-console-contract": "workspace:*",
-    "@narada2/operator-console-runtime": "workspace:*",
-    "@narada2/operator-router": "workspace:*",
-    "@narada2/window-overlay-core": "workspace:*"
+    "@narada-core/operator-console-contract": "workspace:*",
+    "@narada-core/operator-console-runtime": "workspace:*",
+    "@narada-core/operator-router": "workspace:*",
+    "@narada-core/window-overlay-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -44,7 +44,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-console-overlay"
   },
   "engines": {

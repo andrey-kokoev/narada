@@ -8,11 +8,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { fileURLToPath } from 'node:url';
-import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS, canonicalSha256 } from '@narada2/invokable-intelligence-contract';
-import { spawnTestChild } from '@narada2/process-launch-posture';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
-import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS, canonicalSha256 } from '@narada-core/invokable-intelligence-contract';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
+import { registerNarsArtifact } from '@narada-core/nars-session-core/artifacts';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import * as canonicalRuntimeEvents from '../src/runtime-server-events.js';
 import { createNarsTaskExecutabilityDispatchHook } from '../src/task-executability-dispatch.js';
 import {
@@ -406,7 +406,7 @@ async function seedIntelligenceRegistry(siteRoot: any, {
 }
 
 test('package owns the Narada agent runtime server bins and exports', () => {
-  assert.equal(packageJson.name, '@narada2/agent-runtime-server');
+  assert.equal(packageJson.name, '@narada-core/agent-runtime-server');
   assert.equal(packageJson.narada.package_role, 'nars_runtime_server');
   assert.equal(packageJson.narada.owns.includes('server_request_handling'), true);
   assert.equal(packageJson.narada.owns.includes('session_binding'), true);
@@ -416,7 +416,7 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.narada.owns.includes('server_request_lifecycle'), true);
   assert.equal(packageJson.narada.owns.includes('health_projection_request_lifecycle'), true);
   assert.equal(packageJson.narada.owns.includes('runtime_intelligence_reconfiguration'), true);
-  assert.equal(packageJson.narada.carrier_substrate, '@narada2/carrier-runtime in-process');
+  assert.equal(packageJson.narada.carrier_substrate, '@narada-core/carrier-runtime in-process');
   assert.equal(packageJson.narada.runtime_dependency_owner.includes('nars-session-core owns session control'), true);
   assert.equal(packageJson.bin['narada-agent-runtime-server'], './dist/bin/narada-agent-runtime-server.js');
   assert.equal(packageJson.bin['agent-runtime-server'], undefined);
@@ -428,8 +428,8 @@ test('package owns the Narada agent runtime server bins and exports', () => {
   assert.equal(packageJson.exports['./intelligence-runtime-reconfiguration-state'].import, './dist/src/intelligence-runtime-reconfiguration-state.js');
   assert.equal(packageJson.exports['./intelligence-runtime-controller'].import, './dist/src/intelligence-runtime-controller.js');
   assert.equal(packageJson.exports['./local-intelligence-runtime'].import, './dist/src/local-intelligence-runtime.js');
-  assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
-  assert.equal(packageJson.dependencies['@narada2/carrier-terminal-projection'], 'workspace:*');
+  assert.equal(packageJson.dependencies['@narada-core/agent-cli'], undefined);
+  assert.equal(packageJson.dependencies['@narada-core/carrier-terminal-projection'], 'workspace:*');
 });
 
 test('wrapper diagnostics preserve projection and control-input failure details', () => {
@@ -2832,14 +2832,14 @@ test('WebSocket /events isolates same subscription IDs across connections', asyn
 
 test('carrier runtime package boundary forbids agent-cli adapter imports', () => {
   const runtimePackage: any = JSON.parse(readFileSync(new URL('../../carrier-runtime/package.json', import.meta.url), 'utf8'));
-  assert.equal(runtimePackage.dependencies?.['@narada2/agent-cli'], undefined);
+  assert.equal(runtimePackage.dependencies?.['@narada-core/agent-cli'], undefined);
   assert.equal(runtimePackage.exports?.['./compat-agent-cli-runtime-adapter'], undefined);
   const runtimeRoot: any = fileURLToPath(new URL('../../carrier-runtime', import.meta.url));
   const offending: any = walkFiles(join(runtimeRoot, 'src'))
     .filter((path: any) => /\.js$/.test(path))
     .flatMap((path: any) => {
       const text: any = readFileSync(path, 'utf8');
-      return /@narada2\/agent-cli|compat-agent-cli-runtime-adapter/.test(text) ? [path] : [];
+      return /@narada-core\/agent-cli|compat-agent-cli-runtime-adapter/.test(text) ? [path] : [];
     });
   assert.deepEqual(offending, [], 'carrier-runtime must not import agent-cli or reintroduce the retired adapter');
 });
@@ -2976,14 +2976,14 @@ function walkFiles(root: any) {
 
 test('runtime server package boundary forbids direct agent-cli imports', () => {
   const packageRoot: any = fileURLToPath(new URL('..', import.meta.url));
-  assert.equal(packageJson.dependencies['@narada2/agent-cli'], undefined);
+  assert.equal(packageJson.dependencies['@narada-core/agent-cli'], undefined);
   const offending: any = walkFiles(join(packageRoot, 'src'))
     .filter((path: any) => /\.js$/.test(path))
     .flatMap((path: any) => {
       const text: any = readFileSync(path, 'utf8');
-      return /from ['"]@narada2\/agent-cli|import\(['"]@narada2\/agent-cli/.test(text) ? [path] : [];
+      return /from ['"]@narada-core\/agent-cli|import\(['"]@narada-core\/agent-cli/.test(text) ? [path] : [];
     });
-  assert.deepEqual(offending, [], 'agent-runtime-server must not import @narada2/agent-cli directly; use runtime-owned packages or explicit adapter packages');
+  assert.deepEqual(offending, [], 'agent-runtime-server must not import @narada-core/agent-cli directly; use runtime-owned packages or explicit adapter packages');
 });
 
 test('runtime server creates a governed delegated authority handoff for the carrier substrate', () => {
@@ -2999,11 +2999,11 @@ test('runtime server creates a governed delegated authority handoff for the carr
     schema: 'narada.nars.delegated_authority_handoff.v1',
     crossing_regime: 'nars_runtime_server_to_carrier_substrate',
     source: {
-      package: '@narada2/agent-runtime-server',
+      package: '@narada-core/agent-runtime-server',
       entrypoint: 'narada-agent-runtime-server',
     },
     target: {
-      package: '@narada2/carrier-runtime',
+      package: '@narada-core/carrier-runtime',
       mode: 'in-process',
     },
     generated_at: '2026-06-23T00:00:00.000Z',
@@ -3055,11 +3055,11 @@ test('runtime server derives delegated write authority from worker argv when no 
     schema: 'narada.nars.delegated_authority_handoff.v1',
     crossing_regime: 'nars_runtime_server_to_carrier_substrate',
     source: {
-      package: '@narada2/agent-runtime-server',
+      package: '@narada-core/agent-runtime-server',
       entrypoint: 'narada-agent-runtime-server',
     },
     target: {
-      package: '@narada2/carrier-runtime',
+      package: '@narada-core/carrier-runtime',
       mode: 'in-process',
     },
     generated_at: '2026-06-23T00:00:00.000Z',
@@ -3847,7 +3847,7 @@ test('narada-owned entrypoint runs the session-core control runtime in process',
     assert.equal(events[0].mcp_operational_state, 'disabled');
     assert.equal(events[0].delegated_authority_handoff?.schema, 'narada.nars.delegated_authority_handoff.v1');
     assert.equal(events[0].delegated_authority_handoff?.crossing_regime, 'nars_runtime_server_to_carrier_substrate');
-    assert.equal(events[0].delegated_authority_handoff?.target?.package, '@narada2/carrier-runtime');
+    assert.equal(events[0].delegated_authority_handoff?.target?.package, '@narada-core/carrier-runtime');
     assert.equal(events[0].delegated_authority_handoff?.target?.mode, 'in-process');
     assert.equal(events[0].delegated_authority_handoff?.agent_id, 'narada.test');
     assert.equal(events[0].delegated_authority_handoff?.agent_identity_ref?.schema, 'narada.agent_identity_ref.v2');

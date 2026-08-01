@@ -4,7 +4,7 @@ import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-export const RETIRED_PACKAGE_NAME = '@narada2/carrier-provider-contract';
+export const RETIRED_PACKAGE_NAME = '@narada-core/carrier-provider-contract';
 export const RETIRED_PACKAGE_PATH = 'packages/carrier-provider-contract';
 export const LEGACY_SELECTION_ENV_NAMES = Object.freeze([
   'NARADA_INTELLIGENCE_PROVIDER',

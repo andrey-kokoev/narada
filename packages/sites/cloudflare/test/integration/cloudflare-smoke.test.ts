@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import { NaradaSiteCoordinator } from "../../src/coordinator.js";
 import { runCycle } from "../../src/runner.js";
 import { R2Adapter } from "../../src/storage/r2-adapter.js";

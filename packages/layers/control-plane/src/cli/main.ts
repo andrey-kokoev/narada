@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * @deprecated This CLI is deprecated. Please use the @narada2/cli package instead.
- * Install: npm install -g @narada2/cli
+ * @deprecated This CLI is deprecated. Please use the @narada-core/cli package instead.
+ * Install: npm install -g @narada-core/cli
  * Usage: narada <command>
  */
 import { resolve } from "node:path";
@@ -26,9 +26,9 @@ function printDeprecationWarning(): void {
   stderr.write("║  DEPRECATION WARNING                                           ║\n");
   stderr.write("║                                                                ║\n");
   stderr.write("║  This CLI is deprecated and will be removed in a future        ║\n");
-  stderr.write("║  version. Please use the @narada2/cli package:                 ║\n");
+  stderr.write("║  version. Please use the @narada-core/cli package:                 ║\n");
   stderr.write("║                                                                ║\n");
-  stderr.write("║    npm install -g @narada2/cli                                 ║\n");
+  stderr.write("║    npm install -g @narada-core/cli                                 ║\n");
   stderr.write("║    narada <command>                                            ║\n");
   stderr.write("║                                                                ║\n");
   stderr.write("╚════════════════════════════════════════════════════════════════╝\n");

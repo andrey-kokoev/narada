@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 import { startAgentWebUiServer } from '../src/server.ts';
 import { startSessionCoreRuntime } from './e2e/nars-runtime-fixture.js';
 import {
@@ -25,7 +25,7 @@ const speechProviderRegistryPath = fileURLToPath(new URL('../../../../mcp-surfac
 test('[partial-production-launch] speech MCP retained audio projects as a NARS audio artifact in agent-web-ui', async () => {
   const browserPath = findHeadlessBrowser();
   assert.ok(browserPath, 'expected an installed Chromium-family browser for live speech audio projection E2E');
-  assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada2/speech-mcp build`);
+  assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada-core/speech-mcp build`);
   assert.ok(existsSync(speechProviderRegistryPath), `expected speech provider registry at ${speechProviderRegistryPath}`);
 
   const runtime = await startLiveNarsRuntime();

@@ -9,7 +9,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Database, JsonPrincipalSessionBindingRegistry } from '@narada2/control-plane';
+import { Database, JsonPrincipalSessionBindingRegistry } from '@narada-core/control-plane';
 import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 
 function setupRepo(tempDir: string) {

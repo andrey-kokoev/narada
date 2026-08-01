@@ -133,8 +133,8 @@ Finish the current local-NARS-to-Cloudflare path before implementing Cloudflare-
 
 Operational checklist:
 
-1. Build `@narada2/agent-web-ui`.
-2. Build/deploy or preview `@narada2/cloudflare-nars-projection` Worker.
+1. Build `@narada-core/agent-web-ui`.
+2. Build/deploy or preview `@narada-core/cloudflare-nars-projection` Worker.
 3. Register a projection for one live local NARS session.
 4. Start the durable local projection bridge.
 5. Verify event replay from local NARS to Cloudflare web UI.

@@ -76,15 +76,15 @@ export function formatOperationPersistenceReadText(result: any) {
   }
   const workerUrl = result?.worker_url ?? null;
   if (workerUrl && summary.site_id) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
   }
   if (workerUrl && summary.site_id && summary.operation_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
-    lines.push(`Evidence Read: pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    lines.push(`Evidence Read: pnpm --filter @narada-core/cloudflare-carrier product:operation:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     if (!emittedLabels.has('Recovery Read')) {
-      lines.push(`Recovery Read: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Recovery Read: pnpm --filter @narada-core/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`);
     }
   }
   return `${lines.join('\n')}\n`;
@@ -99,31 +99,31 @@ function buildOperationPersistenceWorkflowLinks(result: any, summary: any) {
   if (summary.workflow_next_action=== 'review_recovery_posture') {
     links.push({
       label: 'Recovery Read',
-      command: `pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`,
+      command: `pnpm --filter @narada-core/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`,
     });
   }
   if (summary.workflow_next_action=== 'start_or_select_session') {
     links.push({
       label: 'Session Workflow',
-      command: `pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-session`,
+      command: `pnpm --filter @narada-core/cloudflare-carrier product:operation:session:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-session`,
     });
   }
   if (summary.workflow_next_action=== 'resume_operation_continuation') {
     links.push({
       label: 'Continuation Workflow',
-      command: `pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-continuation-resume`,
+      command: `pnpm --filter @narada-core/cloudflare-carrier product:operation:continuation:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-continuation-resume`,
     });
   }
   if (summary.workflow_next_action=== 'refresh_site_continuity_loop') {
     links.push({
       label: 'Continuity Workflow',
-      command: `pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`,
+      command: `pnpm --filter @narada-core/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`,
     });
   }
   if (summary.workflow_next_action=== 'review_site_continuity_reconciliation_execution' && summary.workflow_focus_ref) {
     links.push({
       label: 'Review Ack',
-      command: `pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --focus-kind ${summary.workflow_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.workflow_focus_ref} --operator-session-file <operator-session-file>`,
+      command: `pnpm --filter @narada-core/cloudflare-carrier product:operation:focus-review:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --focus-kind ${summary.workflow_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${summary.workflow_focus_ref} --operator-session-file <operator-session-file>`,
     });
   }
   return links;

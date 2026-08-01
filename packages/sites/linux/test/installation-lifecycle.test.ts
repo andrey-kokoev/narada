@@ -25,7 +25,7 @@ describe("Linux installation lifecycle", () => {
     expect(plan.status).toBe("planned");
     expect(plan.mutation_performed).toBe(false);
     expect(plan.data_preservation.site_data_preserved).toBe(true);
-    expect(plan.package_action).toContain("@narada2/cli@0.2.0");
+    expect(plan.package_action).toContain("@narada-core/cli@0.2.0");
     expect(plan.evidence_path).toBe(linuxInstallationEvidencePath("/tmp/narada/personal", "upgrade-1"));
     expect(plan.steps.map((step) => step.id)).toEqual([
       "preflight",

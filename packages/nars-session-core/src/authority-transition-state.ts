@@ -1,12 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import {
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
   NARS_AUTHORITY_RUNTIME_TARGET_WRITE_ADMISSIONS,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 import { synchronizeNarsAuthorityHandoffLifecycle } from './authority-handoff-fsm.js';
 import type { NaradaAuthorityHandoffLifecycle } from './authority-handoff-fsm.js';
 import { assertNarsAuthorityRuntimeHostTransition } from './authority-transition-fsm.js';

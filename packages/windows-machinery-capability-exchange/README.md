@@ -1,4 +1,4 @@
-# @narada2/windows-machinery-capability-exchange
+# @narada-core/windows-machinery-capability-exchange
 
 Descriptor-only admission bundle for adopting reusable Windows machinery package slices into Narada proper.
 

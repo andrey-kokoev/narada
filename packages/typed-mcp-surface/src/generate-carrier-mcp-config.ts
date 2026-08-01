@@ -2,7 +2,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { assertCanonicalSiteLocus } from '@narada2/site-common-tools/site-locus-shim';
+import { assertCanonicalSiteLocus } from '@narada-core/site-common-tools/site-locus-shim';
 
 type AnyRecord = Record<string, any>;
 

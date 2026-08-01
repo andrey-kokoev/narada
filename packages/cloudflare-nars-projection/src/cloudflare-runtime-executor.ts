@@ -4,7 +4,7 @@ import {
   type CloudflareAiBinding,
   type CloudflareD1Binding,
   type CloudflareInvocationAdmission,
-} from "@narada2/invokable-intelligence-runtime";
+} from "@narada-core/invokable-intelligence-runtime";
 import type {
   CloudflareNarsAuthorityRuntimeExecutionInput,
   CloudflareNarsAuthorityRuntimeExecutionResult,

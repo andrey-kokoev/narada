@@ -18,7 +18,7 @@ export function parseRepositoryPublicationReadinessLiveSmokeArgs(argv: any= [], 
   const workerUrl = trimTrailingSlash(option(args, '--url') ?? env.CLOUDFLARE_CARRIER_URL ?? '');
   const format = option(args, '--format') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_READINESS_LIVE_FORMAT ?? 'json';
   const siteId = option(args, '--site') ?? env.CLOUDFLARE_CARRIER_SITE_ID ?? 'site_narada_cloudflare';
-  const repositoryRef = option(args, '--repository-ref') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_REPOSITORY_REF ?? 'github:andrey-kokoev/narada';
+  const repositoryRef = option(args, '--repository-ref') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_REPOSITORY_REF ?? 'github:narada-core/narada';
   const branchRef = option(args, '--branch') ?? env.CLOUDFLARE_REPOSITORY_PUBLICATION_LIVE_BRANCH ?? 'cloudflare-publication';
   const requireGithubApp = flag(args, '--require-github-app') || env.CLOUDFLARE_REPOSITORY_PUBLICATION_REQUIRE_GITHUB_APP === '1';
   const auth = resolveAuth(args, env) ?? resolveBearerFromEnv(args, env);
@@ -59,11 +59,11 @@ export function formatRepositoryPublicationReadinessLiveSmokeText(result: any) {
     lines.push(`Missing Configuration: ${result.missing_configuration.join(', ')}`);
   }
   if (workerUrl && siteId) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
-    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
-    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
-    lines.push(`Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Provider Liveness: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
   }
   return `${lines.join('\n')}\n`;
 }

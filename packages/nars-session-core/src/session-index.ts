@@ -5,10 +5,10 @@ import {
   NARS_AUTHORITY_RUNTIME_HOST_KINDS,
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
-} from '@narada2/carrier-protocol';
-import { runtimeOriginFromAuthorityHost } from '@narada2/nars-runtime-contract/runtime-surface-contract';
-import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2 } from '@narada2/agent-identity';
-import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada2/site-paths';
+} from '@narada-core/carrier-protocol';
+import { runtimeOriginFromAuthorityHost } from '@narada-core/nars-runtime-contract/runtime-surface-contract';
+import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2 } from '@narada-core/agent-identity';
+import { narsSessionsRootFromSiteRoot as resolveNarsSessionsRootFromSiteRoot } from '@narada-core/site-paths';
 import { synchronizeNarsAuthorityHandoffLifecycle } from './authority-handoff-fsm.js';
 
 export const NARS_SESSION_INDEX_RECORD_SCHEMA = 'narada.nars.session_index_record.v1';

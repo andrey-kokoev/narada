@@ -77,7 +77,7 @@ export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 # Change to site root (cd is safe because SITE_ROOT is quoted)
 cd "\${SITE_ROOT}"
 
-exec "\${NODE_PATH}" -e "require('@narada2/macos-site').runCycle({ site_id: '\${SITE_ID}' })"
+exec "\${NODE_PATH}" -e "require('@narada-core/macos-site').runCycle({ site_id: '\${SITE_ID}' })"
 `;
 }
 

@@ -228,12 +228,12 @@ test('formatWebhookDelayShadowReadText prints shadow read summary', () => {
   assert.match(text, /Webhook Delay Shadow Read: ok/);
   assert.match(text, /Workflow Route: action=focus_webhook_delay_shadow_read reason=directive_intent_not_recorded_from_shadow_read focus=shadow_focus/);
   assert.match(text, /Observations: count=1 focused=shadow_focus classification=critical/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('formatWebhookDelayShadowReadText suppresses next workflow for passive routes', () => {
@@ -253,7 +253,7 @@ test('formatWebhookDelayShadowReadText suppresses next workflow for passive rout
     },
   });
 
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 

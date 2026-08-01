@@ -10,7 +10,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, 
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SqliteInboxStore } from '@narada2/control-plane';
+import { SqliteInboxStore } from '@narada-core/control-plane';
 import {
   inboxArchitectProcessCommand,
   inboxClaimCommand,
@@ -529,7 +529,7 @@ describe('Canonical Inbox CLI commands', () => {
     setupGitRepo(tempDir);
     const delegatedMain = join(tempDir, 'delegated', 'packages', 'layers', 'cli', 'dist', 'main.js');
     mkdirSync(join(tempDir, 'delegated', 'packages', 'layers', 'cli', 'dist'), { recursive: true });
-    writeFileSync(delegatedMain, "require('@narada2/missing-task-governance-fixture')\n", 'utf8');
+    writeFileSync(delegatedMain, "require('@narada-core/missing-task-governance-fixture')\n", 'utf8');
     writeFileSync(tempDir + '/package.json', JSON.stringify({
       scripts: {
         status: 'node ./delegated/packages/layers/cli/dist/main.js status',
@@ -556,9 +556,9 @@ describe('Canonical Inbox CLI commands', () => {
       script_name: 'status',
       loadable: false,
       failure_kind: 'execution_failed',
-      repair_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+      repair_command: 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim',
     });
-    expect(result.runtime.delegated_cli_embodiment.scripts[0]?.detail).toContain('@narada2/missing-task-governance-fixture');
+    expect(result.runtime.delegated_cli_embodiment.scripts[0]?.detail).toContain('@narada-core/missing-task-governance-fixture');
     expect(result.checks.find((check) => check.name === 'delegated_cli_embodiment_loadable')).toMatchObject({
       ok: false,
     });

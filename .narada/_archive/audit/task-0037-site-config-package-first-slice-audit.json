@@ -39,7 +39,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/site-config now includes descriptor-only Site registry awareness and registered Site probe contracts with refusal guards.",
+  "terminal_claim": "@narada-core/site-config now includes descriptor-only Site registry awareness and registered Site probe contracts with refusal guards.",
   "refused_imports": [
     "target Site config mutation",
     "arbitrary client/project data",
@@ -58,5 +58,5 @@
     "target Site mutation authority"
   ],
   "rollback": "Remove the packages/site-config directory and task/capability/admission evidence for task-0037. No target Site state was inspected, imported, or mutated.",
-  "next_smallest_slice": "Extract @narada2/site-lift descriptor/adoption catalog contracts, or deepen @narada2/site-inbox with disposition/admission-log descriptors."
+  "next_smallest_slice": "Extract @narada-core/site-lift descriptor/adoption catalog contracts, or deepen @narada-core/site-inbox with disposition/admission-log descriptors."
 }

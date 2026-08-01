@@ -4,8 +4,8 @@ import {
   buildCanonicalLocalTestSeed,
   CANONICAL_LOCAL_TEST_IDS,
   canonicalSha256,
-} from '@narada2/invokable-intelligence-contract';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
+} from '@narada-core/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
 
 const INTELLIGENCE_CONTEXT_SCHEMA = 'narada.intelligence.launch_context.v1';
 const PRINCIPAL_BINDING_SCHEMA = 'narada.intelligence.principal_binding.v1';

@@ -10,7 +10,7 @@ const packageRoot: any = resolve(__dirname, '..');
 const naradaProperRoot: any = resolve(packageRoot, '..', '..');
 
 const codexSupport: any = await import(pathToFileURL(resolve(packageRoot, 'src', 'codex-subscription-support.ts')).href);
-const aiProcessInvocation: any = await import('@narada2/carrier-provider-support/ai-process-invocation');
+const aiProcessInvocation: any = await import('@narada-core/carrier-provider-support/ai-process-invocation');
 
 test('codex subscription support defers dry-run auth and scrubs OpenAI API env', () => {
   const processEnv: any = {

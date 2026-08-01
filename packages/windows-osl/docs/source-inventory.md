@@ -27,4 +27,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/windows-osl` now carries descriptor/contracts/tests for a read-only OSL panel payload that a future receiving Site can use after admitting its own local projection and panel carrier. It does not open a panel, install WebView2, mutate PC state, or import source Site runtime state.
+`@narada-core/windows-osl` now carries descriptor/contracts/tests for a read-only OSL panel payload that a future receiving Site can use after admitting its own local projection and panel carrier. It does not open a panel, install WebView2, mutate PC state, or import source Site runtime state.

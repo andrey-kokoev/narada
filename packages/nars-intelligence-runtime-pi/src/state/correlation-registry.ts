@@ -1,4 +1,4 @@
-import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
+import { NarsKernelContractError } from '@narada-core/nars-intelligence-kernel-contract';
 
 function value(value: any) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;

@@ -7,12 +7,12 @@ This inventory records the Narada proper package-set conformance slice for the a
 ## Package Evidence
 
 - `narada-proper.task-0027`: descriptor-only package set adoption.
-- `narada-proper.task-0028`: `@narada2/windows-operator-surface` binding diagnosis service slice.
-- `narada-proper.task-0029`: `@narada2/windows-osl` read-only panel payload slice.
-- `narada-proper.task-0030`: `@narada2/mcp-shell-windows` boundary decision slice.
-- `narada-proper.task-0031`: `@narada2/mcp-test-windows` run contract slice.
-- `narada-proper.task-0032`: `@narada2/windows-pc-site-template` template plan slice.
-- `narada-proper.task-0033`: `@narada2/windows-komorebi-yasb-kit` materialization policy slice.
+- `narada-proper.task-0028`: `@narada-core/windows-operator-surface` binding diagnosis service slice.
+- `narada-proper.task-0029`: `@narada-core/windows-osl` read-only panel payload slice.
+- `narada-proper.task-0030`: `@narada-core/mcp-shell-windows` boundary decision slice.
+- `narada-proper.task-0031`: `@narada-core/mcp-test-windows` run contract slice.
+- `narada-proper.task-0032`: `@narada-core/windows-pc-site-template` template plan slice.
+- `narada-proper.task-0033`: `@narada-core/windows-komorebi-yasb-kit` materialization policy slice.
 
 ## Lifted
 
@@ -27,4 +27,4 @@ This inventory records the Narada proper package-set conformance slice for the a
 
 ## Package Claim
 
-`@narada2/windows-machinery-capability-exchange` now carries descriptor/contracts/tests for reporting package-set conformance. It remains descriptor-only and does not materialize Windows machinery.
+`@narada-core/windows-machinery-capability-exchange` now carries descriptor/contracts/tests for reporting package-set conformance. It remains descriptor-only and does not materialize Windows machinery.

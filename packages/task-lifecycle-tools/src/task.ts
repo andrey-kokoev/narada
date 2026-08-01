@@ -1,6 +1,6 @@
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 

@@ -6,7 +6,7 @@ import {
   type OperatorSurfaceId,
   type OperatorSurfaceRouteDescriptor,
   type OperatorWorkspaceRouteDirectory,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 
 export const CLOUDFLARE_NARS_WORKSPACE_DIRECTORY_STATE_SCHEMA = 'narada.cloudflare_nars_workspace.directory_state.v1' as const;
 export const CLOUDFLARE_NARS_WORKSPACE_ROUTE_LEASE_SCHEMA = 'narada.cloudflare_nars_workspace.route_lease.v1' as const;

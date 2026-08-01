@@ -10,10 +10,10 @@ import type {
   MaterializationAdmission,
   MaterializationEnvelope,
   MaterializationRevocation,
-} from "@narada2/invokable-intelligence-contract";
-import { SqliteMaterializationStore } from "@narada2/invokable-intelligence-materialization";
-import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
-import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+} from "@narada-core/invokable-intelligence-contract";
+import { SqliteMaterializationStore } from "@narada-core/invokable-intelligence-materialization";
+import { SqliteRegistryStore } from "@narada-core/invokable-intelligence-registry";
+import type { ResolverContext } from "@narada-core/invokable-intelligence-resolver";
 
 import { deployManagementBundle } from "./deployment.js";
 import type { ManagementDeploymentBundle } from "./deployment.js";

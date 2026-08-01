@@ -1,15 +1,15 @@
-# @narada2/cli
+# @narada-core/cli
 
 Command-line interface for the Narada deterministic state compiler and control plane.
 
-> **How to read this package**: The CLI currently surfaces the Exchange/Graph mailbox vertical most prominently because it is the first mature vertical. Under the hood, all commands operate through the same kernel-agnostic `@narada2/control-plane` library, which also supports timer, webhook, filesystem, and process automations as first-class peers.
+> **How to read this package**: The CLI currently surfaces the Exchange/Graph mailbox vertical most prominently because it is the first mature vertical. Under the hood, all commands operate through the same kernel-agnostic `@narada-core/control-plane` library, which also supports timer, webhook, filesystem, and process automations as first-class peers.
 
 ## Installation
 
 ```bash
-npm install -g @narada2/cli
+npm install -g @narada-core/cli
 # or
-pnpm add -g @narada2/cli
+pnpm add -g @narada-core/cli
 ```
 
 ## Quick Start
@@ -268,7 +268,7 @@ narada backup-ls -i backup.tar.gz --detailed
 Use the bounded acceptance command for the main launcher/NARS/web-ui path:
 
 ```bash
-pnpm --filter @narada2/cli test:launcher-acceptance
+pnpm --filter @narada-core/cli test:launcher-acceptance
 ```
 
 This single command runs the authoritative launcher journey checks in a serialized sequence:

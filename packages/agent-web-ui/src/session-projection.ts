@@ -23,11 +23,11 @@ import {
   clearTurnSummaryState,
   type TurnSummary,
 } from './session-projection-turn-summary.ts';
-import { agentIdentityGroupKey } from '@narada2/agent-identity';
+import { agentIdentityGroupKey } from '@narada-core/agent-identity';
 import {
   classifyNarsClientEventDisposition,
   operatorViewIncludesDisposition,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import {
   createOperatorInputDeliveryState,
   materializeOperatorInputDelivery,

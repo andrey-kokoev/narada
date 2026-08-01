@@ -148,7 +148,7 @@ test('OperatorProjectionOpenRequest records browser projection intent as data', 
     projection_kind: 'browser_url',
     target_ref: 'http://127.0.0.1:9999/',
     purpose: 'agent_web_ui_attach',
-    caller: { package: '@narada2/cli', command: 'agent-web-ui attach' },
+    caller: { package: '@narada-core/cli', command: 'agent-web-ui attach' },
     mode: 'plan',
   }, { now: new Date('2026-07-02T00:00:00.000Z') });
 
@@ -196,7 +196,7 @@ test('OperatorProjectionOpenRequest executes through injected browser opener', a
   const calls: any[] = [];
   const result = await executeOperatorProjectionOpenRequest({
     target_ref: 'file:///tmp/index.html',
-    caller: { package: '@narada2/process-launch-posture', command: 'test' },
+    caller: { package: '@narada-core/process-launch-posture', command: 'test' },
   }, {
     env: {},
     openUrl: async (target) => { calls.push(target); },

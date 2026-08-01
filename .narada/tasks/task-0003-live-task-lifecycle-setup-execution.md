@@ -21,7 +21,7 @@ The current OSM asks for the separate live execution task for root init, real ad
 Execute one coherent live setup increment:
 
 - initialize Narada proper task lifecycle paths under `D:\code\narada`;
-- activate a concrete adapter outside `@narada2/site-task-lifecycle`;
+- activate a concrete adapter outside `@narada-core/site-task-lifecycle`;
 - create/mutate the local task lifecycle DB through that adapter;
 - register local MCP capability evidence and smoke-test the available Narada MCP transport.
 
@@ -44,14 +44,14 @@ Adapter id: `narada-proper.adapter.task-0003.sqlite3-cli.v0`
 
 Mechanism: Windows `sqlite3.exe`, invoked by `.narada/execution/task-0003/live-setup.ts`.
 
-The adapter is outside `@narada2/site-task-lifecycle`. The package remains adapter-interface-only and owns no SQLite dependency.
+The adapter is outside `@narada-core/site-task-lifecycle`. The package remains adapter-interface-only and owns no SQLite dependency.
 
 ## Non-Goals
 
 - No narada-andrey DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state import.
 - No source history import.
 - No package-owned SQLite dependency.
-- No direct DB mutation from `@narada2/site-task-lifecycle`.
+- No direct DB mutation from `@narada-core/site-task-lifecycle`.
 - No claim that `site_task_lifecycle.*` is exposed by the existing generic `narada-mcp` server unless smoke evidence proves it.
 
 ## Verification Checklist

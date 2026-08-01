@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/nars-intelligence-kernel-contract",
+  "name": "@narada-core/nars-intelligence-kernel-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -37,7 +37,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/nars-intelligence-kernel-contract"
   },
   "engines": {

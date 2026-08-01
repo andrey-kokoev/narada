@@ -1,4 +1,4 @@
-# @narada2/agent-context-memory
+# @narada-core/agent-context-memory
 
 Reusable first-slice contracts for Site-local agent-context checkpoint memory.
 

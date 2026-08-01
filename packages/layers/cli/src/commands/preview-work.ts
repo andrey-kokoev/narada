@@ -4,8 +4,8 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
-import type { AllowedAction } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada-core/control-plane';
+import type { AllowedAction } from '@narada-core/control-plane';
 
 export interface PreviewWorkOptions {
   config?: string;
@@ -107,7 +107,7 @@ async function previewForScope(
     MailboxContextMaterializer,
     MockCharterRunner,
     FileMessageStore,
-  } = await import('@narada2/control-plane');
+  } = await import('@narada-core/control-plane');
 
   const db = new Database(coordinatorDbPath);
   const factDb = new Database(factsDbPath);
@@ -170,8 +170,8 @@ async function previewForScope(
     } else {
       // Try to instantiate a real charter runner from environment/config
       try {
-        const { CodexCharterRunner } = await import('@narada2/charters');
-        const { loadCharterEnv } = await import('@narada2/control-plane');
+        const { CodexCharterRunner } = await import('@narada-core/charters');
+        const { loadCharterEnv } = await import('@narada-core/control-plane');
         const env = loadCharterEnv();
         const apiKey = env.openai_api_key ?? env.kimi_api_key;
         if (!apiKey) {

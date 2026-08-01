@@ -4,7 +4,7 @@ Narada uses explicit finite-state machines when a lifecycle controls authority, 
 
 ## Authority Runtime-Host Transition
 
-Owner: `@narada2/nars-session-core`.
+Owner: `@narada-core/nars-session-core`.
 
 Schema: `narada.nars.authority_runtime_host_transition_state.v1`.
 
@@ -18,7 +18,7 @@ The transition guard is in `packages/nars-session-core/src/authority-transition-
 
 ## AI Process Invocation
 
-Owner: `@narada2/carrier-provider-support`.
+Owner: `@narada-core/carrier-provider-support`.
 
 Schema: `narada.ai_process_invocation_state.v2`, embedded in the existing `narada.ai_process_invocation.v2` evidence artifacts.
 
@@ -28,7 +28,7 @@ Pre-spawn refusal is `planned -> refused`. Execution failure and interruption ar
 
 ## NARS Provider Invocation
 
-Owner: `@narada2/nars-provider-runtime`.
+Owner: `@narada-core/nars-provider-runtime`.
 
 Schema: `narada.nars.provider_invocation_state.v2`.
 
@@ -38,7 +38,7 @@ Admission refusal is `admitting -> refused`; it preserves the lower-level refusa
 
 ## Owned Subprocess
 
-Owner: `@narada2/nars-provider-runtime`.
+Owner: `@narada-core/nars-provider-runtime`.
 
 Schema: `narada.nars.owned_process_state.v1`.
 
@@ -48,7 +48,7 @@ An owned process may also enter `failed`, then `released`. `terminate` and `term
 
 ## Recovery Attempt
 
-Owner: `@narada2/nars-session-core`.
+Owner: `@narada-core/nars-session-core`.
 
 Schema: `narada.nars.recovery_attempt_state.v1`.
 
@@ -58,7 +58,7 @@ Already-completed or terminal turns are recorded as `skipped`. Replay interrupti
 
 ## Event Attachment
 
-Owner: `@narada2/nars-session-core` event hub, used by the WebSocket and JSONL runtime surfaces.
+Owner: `@narada-core/nars-session-core` event hub, used by the WebSocket and JSONL runtime surfaces.
 
 Schema: `narada.nars.event_attachment_state.v1`.
 
@@ -68,7 +68,7 @@ An attachment without replay may use `requested -> live`. Sender failure enters 
 
 ## MCP Surface and Carrier Continuity
 
-Owner: `@narada2/mcp-surface-carrier-supervisor`.
+Owner: `@narada-core/mcp-surface-carrier-supervisor`.
 
 Schema: `narada.mcp.surface_carrier.lifecycle_state.v1`.
 
@@ -83,7 +83,7 @@ restart a process, rebind a surface, or mutate a runtime registry.
 
 ## MCP Fabric and Server Probe
 
-Owner: `@narada2/mcp-fabric`.
+Owner: `@narada-core/mcp-fabric`.
 
 Schema: `narada.mcp.fabric.lifecycle_state.v1`.
 
@@ -96,7 +96,7 @@ not tool-admission authority.
 
 ## Concept and Protocol Lifecycle
 
-Owner: `@narada2/agent-context-tools`.
+Owner: `@narada-core/agent-context-tools`.
 
 Schema: `narada.concept_protocol.lifecycle_state.v1`.
 
@@ -113,7 +113,7 @@ inserting the event.
 ## Capability Lifecycle and Runtime Admission
 
 The read-only capability maturity projection owned by
-`@narada2/mcp-surface-carrier-supervisor` uses schema
+`@narada-core/mcp-surface-carrier-supervisor` uses schema
 `narada.capability.lifecycle_state.v1`:
 
 `observed -> named -> designed -> implemented -> cataloged -> mcp_exposed -> admitted -> trialed -> in_use`
@@ -122,7 +122,7 @@ Any non-`blocked` state may enter `blocked`; `blocked -> observed` is recovery.
 The projection's `admitted` state is evidence that a capability reached that
 maturity stage. It is not a grant and cannot authorize a call. Runtime gateway
 health and tool execution remain separate FSMs owned by
-`@narada2/nars-capability-gateway`.
+`@narada-core/nars-capability-gateway`.
 
 ## Operator Action and Confirmation
 
@@ -144,7 +144,7 @@ mutation methods perform these transitions. The action executor enters
 
 ## Site-Live Carrier Operation
 
-Owner: `@narada2/site-common-tools`, `src/site-init/site-live-carriers.mjs`.
+Owner: `@narada-core/site-common-tools`, `src/site-init/site-live-carriers.mjs`.
 
 Schema: `narada.site_live_carrier.lifecycle_state.v1`.
 
@@ -153,7 +153,7 @@ Verification and recovery are explicit branches from `planned`: `planned -> veri
 
 ## Operator-Surface Carrier Claim
 
-Owner: `@narada2/operator-surface-carriers`, Windows glue scripts.
+Owner: `@narada-core/operator-surface-carriers`, Windows glue scripts.
 
 Schema: `narada.operator_surface_carrier.lifecycle_state.v1`.
 
@@ -161,7 +161,7 @@ New surface launch evidence follows `requested -> launching -> claim_written -> 
 
 ## Agent-Context MCP Transport Session
 
-Owner: `@narada2/agent-context-tools`, `agent-context-mcp-server.mjs`.
+Owner: `@narada-core/agent-context-tools`, `agent-context-mcp-server.mjs`.
 
 Schema: `narada.agent_context_mcp.session_state.v1`.
 
@@ -169,7 +169,7 @@ The stdio protocol session follows `created -> initializing -> initialized -> se
 
 ## Runtime Request Lifecycle
 
-Owner: `@narada2/agent-runtime-server`, JSONL runtime control service.
+Owner: `@narada-core/agent-runtime-server`, JSONL runtime control service.
 
 Schema: `narada.nars.runtime_request_state.v1`.
 
@@ -192,7 +192,7 @@ in the runtime health projection.
 
 ## Runtime Health Projection Request
 
-Owner: `@narada2/agent-runtime-server`, HTTP health projection wrapper.
+Owner: `@narada-core/agent-runtime-server`, HTTP health projection wrapper.
 
 Schema: `narada.nars.health_projection_request_state.v1`.
 
@@ -208,7 +208,7 @@ does not replace the runtime request FSM or the session health projection.
 
 ## Provider Runtime Reconfiguration
 
-Owner: `@narada2/agent-runtime-server`, using `@narada2/nars-provider-runtime`
+Owner: `@narada-core/agent-runtime-server`, using `@narada-core/nars-provider-runtime`
 for provider binding and call construction.
 
 Schema: `narada.nars.provider_runtime_reconfiguration_state.v1`.
@@ -246,7 +246,7 @@ through process-global mutable state.
 
 ## Site-Registry and Receiving-Site Bootstrap
 
-Owner: `@narada2/cli`, `site-registry-management.ts` and `sites.ts`.
+Owner: `@narada-core/cli`, `site-registry-management.ts` and `sites.ts`.
 
 Schema: `narada.site_registry_bootstrap.lifecycle_state.v1`.
 
@@ -254,7 +254,7 @@ Registry management uses `requested -> preflighted -> planned -> applying -> ver
 
 ## Workspace Launch Plan and Execution
 
-Owner: `@narada2/cli`, workspace-launch planning and execution boundary.
+Owner: `@narada-core/cli`, workspace-launch planning and execution boundary.
 
 Schemas: `narada.workspace_launch.plan.v1`, `narada.workspace_launch.smoke.v1`, and `narada.workspace_launch.action_refusal.v1`.
 
@@ -262,7 +262,7 @@ The workspace launcher requires an explicit agent, site, role, `--all`, or confi
 
 ## Site Operating Loop Run, Trigger, and Health
 
-Owner: `@narada2/site-operating-loop`.
+Owner: `@narada-core/site-operating-loop`.
 
 Schemas: `narada.site_operating_loop.run.lifecycle_state.v1`, `narada.site_operating_loop.trigger.lifecycle_state.v1`, and `narada.site_operating_loop.health.lifecycle_state.v1`.
 
@@ -272,7 +272,7 @@ Lifecycle evidence is stored in `lifecycle_json` columns beside run, trigger, an
 
 ## NARS Authority Handoff
 
-Owner: `@narada2/nars-session-core`, orchestration boundary for authority transfer.
+Owner: `@narada-core/nars-session-core`, orchestration boundary for authority transfer.
 
 Schema: `narada.nars.authority_handoff.lifecycle_state.v1`.
 
@@ -280,7 +280,7 @@ The operator-visible handoff follows `proposed -> validating -> preparing -> dra
 
 ## Agent Web UI Attachment
 
-Owner: `@narada2/cli`, `agent-web-ui attach` orchestration and returned attach plan.
+Owner: `@narada-core/cli`, `agent-web-ui attach` orchestration and returned attach plan.
 
 Schema: `narada.agent_web_ui.attachment.lifecycle_state.v1`.
 
@@ -288,7 +288,7 @@ Attachment follows `requested -> discovering -> resolving_endpoints -> probing_h
 
 ## Operator Router Projection Lease
 
-Owner: `@narada2/operator-router`, route-set client lease handle.
+Owner: `@narada-core/operator-router`, route-set client lease handle.
 
 Schema: `narada.operator_router.projection_lease.lifecycle_state.v1`.
 
@@ -296,7 +296,7 @@ A projection lease follows `requested -> registering -> active -> renewing -> ac
 
 ## Site Loop Execution
 
-Owner: `@narada2/site-operating-loop`, execution orchestration above the persisted run/trigger/health machines.
+Owner: `@narada-core/site-operating-loop`, execution orchestration above the persisted run/trigger/health machines.
 
 Schema: `narada.site_operating_loop.execution.lifecycle_state.v1`.
 
@@ -304,7 +304,7 @@ Execution follows `scheduled -> admitted -> running`, may pass through `waiting`
 
 ## Delegated Work-Order / DAG
 
-Owner: `@narada2/delegated-task-mcp`, persisted in each delegated task result; `@narada2/task-governance` retains the Narada-side compatibility contract only.
+Owner: `@narada-core/delegated-task-mcp`, persisted in each delegated task result; `@narada-core/task-governance` retains the Narada-side compatibility contract only.
 
 Schema: `narada.delegation.work_order.lifecycle_state.v1`.
 
@@ -312,7 +312,7 @@ The envelope follows `requested -> admitted -> planned -> dispatched -> running 
 
 ## MCP Fabric Runtime
 
-Owner: `@narada2/mcp-fabric`, fabric runtime orchestration above individual server loading and probing.
+Owner: `@narada-core/mcp-fabric`, fabric runtime orchestration above individual server loading and probing.
 
 Schema: `narada.mcp.fabric.runtime.lifecycle_state.v1`.
 
@@ -320,7 +320,7 @@ The fabric follows `declared -> loading -> ready`. Probe or transport trouble mo
 
 ## Generic Site Init
 
-Owner: `@narada2/site-common-tools`, `src/site-init/site-init.mjs`.
+Owner: `@narada-core/site-common-tools`, `src/site-init/site-init.mjs`.
 
 Schema: `narada.site_init.lifecycle_state.v1`.
 
@@ -328,7 +328,7 @@ Inspection follows `requested -> inspecting`. A preview follows `inspecting -> p
 
 ## Site Lift Transfer and Admission
 
-Owner: `@narada2/site-common-tools`, site-lift package creation, send, and inbox admission tools.
+Owner: `@narada-core/site-common-tools`, site-lift package creation, send, and inbox admission tools.
 
 Schema: `narada.site_lift.lifecycle_state.v1`.
 

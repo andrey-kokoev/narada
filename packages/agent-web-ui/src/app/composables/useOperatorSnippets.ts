@@ -1,4 +1,4 @@
-import { AGENT_WEB_UI_SNIPPET_USAGE, parseAgentWebUiSnippetCommand } from '@narada2/nars-client-projection-contract';
+import { AGENT_WEB_UI_SNIPPET_USAGE, parseAgentWebUiSnippetCommand } from '@narada-core/nars-client-projection-contract';
 import { computed, ref } from 'vue';
 import { AGENT_WEB_UI_PREFERENCE_KEYS, readJsonPreference, writeJsonPreference } from '../lib/browserPreferences.ts';
 

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { normalizeIntelligenceKernelKind } from '@narada2/nars-intelligence-kernel-contract';
+import { normalizeIntelligenceKernelKind } from '@narada-core/nars-intelligence-kernel-contract';
 
 export const INTELLIGENCE_LAUNCH_CONTEXT_SCHEMA: any = 'narada.intelligence.launch_context.v1';
 export const INTELLIGENCE_PRINCIPAL_BINDING_SCHEMA: any = 'narada.intelligence.principal_binding.v1';

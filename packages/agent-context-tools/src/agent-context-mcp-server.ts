@@ -38,8 +38,8 @@ import {
   agentIdentityDisplay,
   buildAgentIdentityRefV2,
   resolveAgentIdentityRef,
-} from '@narada2/agent-identity';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+} from '@narada-core/agent-identity';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import { buildReground, formatMarkdown } from './doctrinal-reground.js';
 import * as hydrationService from './agent-context-hydration-service.js';
 import * as inquirySpaceService from './inquiry-space-service.js';
@@ -71,7 +71,7 @@ import {
   payloadValidate,
   resultShow,
   resolveToolPayloadArgs,
-} from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
+} from '@narada-core/site-common-tools/compat/mcp-payload-file.legacy-site';
 import {
   acknowledgeMcpRestartRequest,
   buildMcpFreshnessStatus,
@@ -79,7 +79,7 @@ import {
   reconcileNoRequestMcpFreshnessMarker,
   writeMcpRestartRequest,
   writeMcpRuntimeInstanceObservation,
-} from '@narada2/site-common-tools/mcp-freshness-service';
+} from '@narada-core/site-common-tools/mcp-freshness-service';
 import { discoverCodexSessionEvidence, extractCodexSessionEvidencePacket, verifyCodexExactResume } from './codex-session-evidence.js';
 import {
   buildRoleBindingProjection,
@@ -100,13 +100,13 @@ import {
   loadRehydrationOnboardingCard,
   showSiteEvolutionOrientation,
 } from './site-evolution-orientation.js';
-import { buildMcpRuntimeRegistryStatus } from '@narada2/site-common-tools/operator-surface/mcp-runtime-instance-registry';
+import { buildMcpRuntimeRegistryStatus } from '@narada-core/site-common-tools/operator-surface/mcp-runtime-instance-registry';
 import {
   NARADA_PC_SITE_LOCUS,
   NARADA_USER_SITE_LOCUS,
-} from '@narada2/site-common-tools/site-locus-shim';
-import { taskLifecycleTools } from '@narada2/task-lifecycle-tools/src/task-mcp-tool-registry.js';
-import { resolveTaskLifecycleMcpServer as resolveTaskLifecycleMcpServerForSite } from '@narada2/site-common-tools/task-lifecycle-mcp-resolution';
+} from '@narada-core/site-common-tools/site-locus-shim';
+import { taskLifecycleTools } from '@narada-core/task-lifecycle-tools/src/task-mcp-tool-registry.js';
+import { resolveTaskLifecycleMcpServer as resolveTaskLifecycleMcpServerForSite } from '@narada-core/site-common-tools/task-lifecycle-mcp-resolution';
 import {
   AGENT_CONTEXT_MCP_SESSION_STATE_SCHEMA,
   canTransitionAgentContextMcpSession,
@@ -3893,8 +3893,8 @@ function hydrateAutoAckConfigForSurface(entry: any, taskLifecycleNext: any) {
   if (entry?.surface_id === 'task-lifecycle-mcp.local'
     || entry?.server_entrypoint === 'task-lifecycle-mcp'
     || entry?.server_entrypoint === 'tools/task-lifecycle/task-mcp-server.js'
-    || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js'
-    || entry?.server_entrypoint === 'node_modules/@narada2/task-lifecycle-mcp/src/task-lifecycle/task-mcp-server.js') {
+    || entry?.server_entrypoint === 'node_modules/@narada-core/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js'
+    || entry?.server_entrypoint === 'node_modules/@narada-core/task-lifecycle-mcp/src/task-lifecycle/task-mcp-server.js') {
     if (taskLifecycleNext?.status !== 'ok') return null;
     const taskToolNames: any = taskLifecycleTools().map((tool: any) => tool.name).sort();
     return {
@@ -3903,7 +3903,7 @@ function hydrateAutoAckConfigForSurface(entry: any, taskLifecycleNext: any) {
       targetEntrypoint: 'task-lifecycle-mcp',
       restartRequestPath: join(siteRoot, '.ai', 'tmp', 'task-lifecycle-restart-request.json'),
       baselinePath: join(siteRoot, '.ai', 'tmp', 'task-lifecycle-mcp-baseline.json'),
-      watchedPaths: ['node_modules/@narada2/task-lifecycle-mcp/dist/src', 'node_modules/@narada2/task-lifecycle-mcp/src', 'node_modules/@narada2/mcp-transport', 'tools/task-lifecycle'],
+      watchedPaths: ['node_modules/@narada-core/task-lifecycle-mcp/dist/src', 'node_modules/@narada-core/task-lifecycle-mcp/src', 'node_modules/@narada-core/mcp-transport', 'tools/task-lifecycle'],
       expectedTools: taskToolNames,
       registeredTools: taskToolNames,
       note: 'Task-lifecycle MCP restart auto-acknowledged during startup hydration after post-request boot evidence.',

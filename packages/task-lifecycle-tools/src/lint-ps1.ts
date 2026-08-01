@@ -17,7 +17,7 @@
 import { resolve, relative, dirname } from 'path';
 import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 

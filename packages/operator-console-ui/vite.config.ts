@@ -15,7 +15,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
-      '@narada2/site-registry-contract': fileURLToPath(new URL('../site-registry-contract/src/index.ts', import.meta.url)),
+      '@narada-core/site-registry-contract': fileURLToPath(new URL('../site-registry-contract/src/index.ts', import.meta.url)),
     },
   },
 });

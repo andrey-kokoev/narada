@@ -23,13 +23,13 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
-import { buildNarsAttachCommands } from '@narada2/nars-client-projection-contract';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
+import { buildNarsAttachCommands } from '@narada-core/nars-client-projection-contract';
 import {
   ADMITTED_LAUNCH_SELECTION_KINDS,
   AGENT_CLI_OPERATOR_SURFACE_KIND,
   resolveOperatorSurfaceRuntimeSelection,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import {
   carrierControlPath,
   carrierSessionPath,
@@ -58,11 +58,11 @@ import {
   codexContextIsolationStatus,
   resolveCodexCliScriptPath,
 } from './codex-subscription-support.js';
-import { openLocalIntelligenceRegistry } from '@narada2/agent-runtime-server/local-intelligence-runtime';
-import { createIntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
-import { inspectLocalIntelligenceReadiness } from '@narada2/invokable-intelligence-management/local-readiness';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
+import { openLocalIntelligenceRegistry } from '@narada-core/agent-runtime-server/local-intelligence-runtime';
+import { createIntelligenceSelectionAuthority } from '@narada-core/invokable-intelligence-contract';
+import { inspectLocalIntelligenceReadiness } from '@narada-core/invokable-intelligence-management/local-readiness';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
+import { discoverNarsSessions } from '@narada-core/nars-session-core/session-index';
 import {
   buildSessionAuthorityEnvironment,
   defaultSessionAuthorityDbPath,
@@ -71,7 +71,7 @@ import {
   openLocalSessionAuthority,
   SessionAuthorityError,
   SESSION_AUTHORITY_REFUSAL_CODES,
-} from '@narada2/nars-session-authority';
+} from '@narada-core/nars-session-authority';
 import { resolveAgentStartExecutionPosture, spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from './carrier-process-launch.js';
 import { canonicalJson, identityToken, mcpScopeLoci, normalizeMcpScope, parseArgs } from './launcher-cli-contract.js';
 import { buildLauncherContractsFromAgentStartResult, buildRuntimeHealthPosture, startupCommandFromSequence } from './launch-result-contracts.js';
@@ -110,15 +110,15 @@ const NARADA_PROPER_ROOT: any = process.env.NARADA_PROPER_ROOT ?? naradaProperRo
 const candidateSiteToolsRoot: any = args.site_tools_root ?? join(rootDir, 'tools');
 const siteLocalToolsRoot: any = join(siteNaradaRoot(rootDir), 'tools');
 const packagedCommonToolsRoot: any = join(NARADA_PROPER_ROOT, 'packages', 'site-common-tools', 'src');
-// @narada2/agent-context-mcp is the single canonical home of session-start
+// @narada-core/agent-context-mcp is the single canonical home of session-start
 // (#2067 convergence) in source checkouts it resolves through the pnpm
 // workspace to ../mcp-surfaces, in published installs to the bundled package.
 // The narada source copy (agent-context-tools/src/session-start.ts) is only a
 // re-export shim kept for existing narada importers.
-const packagedAgentContextSessionStartPath: any = await resolvePackagedModule('@narada2/agent-context-mcp/session-start');
-const packagedWriteFileModulePath: any = await resolvePackagedModule('@narada2/site-common-tools/incubation/write-file-utf8.ts')
+const packagedAgentContextSessionStartPath: any = await resolvePackagedModule('@narada-core/agent-context-mcp/session-start');
+const packagedWriteFileModulePath: any = await resolvePackagedModule('@narada-core/site-common-tools/incubation/write-file-utf8.ts')
   ?? join(packagedCommonToolsRoot, 'incubation', 'write-file-utf8.ts');
-const packagedMcpFabricModulePath: any = await resolvePackagedModule('@narada2/mcp-fabric')
+const packagedMcpFabricModulePath: any = await resolvePackagedModule('@narada-core/mcp-fabric')
   ?? join(NARADA_PROPER_ROOT, 'packages', 'mcp-fabric', 'src', 'mcp-fabric.ts');
 const commonToolsRoot: any = existsSync(join(candidateSiteToolsRoot, 'incubation', 'write-file-utf8.ts'))
   ? candidateSiteToolsRoot
@@ -220,7 +220,7 @@ const naradaPackages: any = createNaradaPackageResolver({
   naradaProperRoot: NARADA_PROPER_ROOT,
   importerUrl: import.meta.url,
 });
-const RUNTIME_SUBSTRATE_KINDS_PACKET: any = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada2/operator-surface-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
+const RUNTIME_SUBSTRATE_KINDS_PACKET: any = Object.freeze(JSON.parse(readFileSync(resolveNaradaPackageExport('@narada-core/operator-surface-runtime-contract', './runtime-substrate-kinds'), 'utf8')));
 const RUNTIME_CONTRACT_SCHEMA: any = RUNTIME_SUBSTRATE_KINDS_PACKET.schema;
 const AGENT_TUI_CARRIER: any = 'agent-tui';
 const AGENT_PI_TUI_CARRIER: any = 'agent-pi-tui';
@@ -358,7 +358,7 @@ function firstEnvironmentValueWithName(names: any = []) : any{
 
 async function loadAgentStartRenderer() : Promise<any>{
   if (agentStartRenderer) return agentStartRenderer;
-  const rendererUrl: any = pathToFileURL(resolveNaradaPackageExport('@narada2/agent-start-renderer')).href;
+  const rendererUrl: any = pathToFileURL(resolveNaradaPackageExport('@narada-core/agent-start-renderer')).href;
   agentStartRenderer = await import(rendererUrl);
   return agentStartRenderer;
 }
@@ -719,14 +719,14 @@ function piCliScriptPath() : any{
 }
 
 function agentRuntimeServerScriptPath() : any{
-  const packageRoot: any = naradaPackageRoot('@narada2/agent-runtime-server');
+  const packageRoot: any = naradaPackageRoot('@narada-core/agent-runtime-server');
   // The runtime host is launched by plain Node. Prefer the package's stable
   // executable wrapper when present so a source-only .ts bin cannot bypass the
   // required TypeScript loader handoff.
   const plainNodeWrapper: any = join(packageRoot, 'bin', 'narada-agent-runtime-server.mjs');
   return existsSync(plainNodeWrapper)
     ? plainNodeWrapper
-    : resolveNaradaPackageBin('@narada2/agent-runtime-server', 'narada-agent-runtime-server');
+    : resolveNaradaPackageBin('@narada-core/agent-runtime-server', 'narada-agent-runtime-server');
 }
 
 function agentCliSessionName(identityName: any) : any{
@@ -1577,7 +1577,7 @@ const output: any = {
   context_isolation: carrier === 'codex' ? codexContextIsolationStatus({ exec: execFlag, dryRun }) : { status: 'isolated', carrier, runtime },
   nars_health: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER ? {
     schema: 'narada.agent_start.nars_health_discovery.v1',
-    owner: '@narada2/agent-runtime-server',
+    owner: '@narada-core/agent-runtime-server',
     method: 'session.health',
     http_path: '/health',
     endpoint: null,
@@ -1587,7 +1587,7 @@ const output: any = {
   } : null,
   nars_events: carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER ? {
     schema: 'narada.agent_start.nars_event_stream_discovery.v1',
-    owner: '@narada2/agent-runtime-server',
+    owner: '@narada-core/agent-runtime-server',
     method: 'session.events.subscribe',
     transport_kind: 'websocket',
     websocket_path: '/events',

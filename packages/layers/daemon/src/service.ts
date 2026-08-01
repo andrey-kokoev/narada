@@ -79,17 +79,17 @@ import {
   type SchedulerOptions,
   type ToolCatalogEntry,
   type WorkItemLease,
-} from '@narada2/control-plane';
-import { SearchEngine } from '@narada2/search';
-import { CodexCharterRunner, KimiCliCharterRunner, ToolRunner } from '@narada2/charters';
-import type { ToolDefinition, ToolInvocationRequest } from '@narada2/charters';
+} from '@narada-core/control-plane';
+import { SearchEngine } from '@narada-core/search';
+import { CodexCharterRunner, KimiCliCharterRunner, ToolRunner } from '@narada-core/charters';
+import type { ToolDefinition, ToolInvocationRequest } from '@narada-core/charters';
 import { createLogger } from './lib/logger.js';
 import type { LogFormat } from './lib/logger.js';
 import { PidFile } from './lib/pid-file.js';
 import { HealthFile, type HealthStatus as DaemonHealthStatus } from './lib/health.js';
-import { computeHealthTransition, type CycleOutcome, type HealthStatus } from '@narada2/control-plane';
+import { computeHealthTransition, type CycleOutcome, type HealthStatus } from '@narada-core/control-plane';
 // TODO(Task 342): Wire computeHealthTransition into updateHealth when notification emission is implemented.
-import { getRecoveryGuidance, healthClassPermitsExecution } from '@narada2/charters';
+import { getRecoveryGuidance, healthClassPermitsExecution } from '@narada-core/charters';
 import {
   InMemoryPrincipalRuntimeRegistry,
   canClaimWork,
@@ -97,7 +97,7 @@ import {
   attachPrincipal,
   getPrincipalHealth,
   type PrincipalRuntimeRegistry,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 import { createObservationServer, type ObservationApiScope } from './observation/observation-server.js';
 import { registerScopeApis } from './observation/scope-registry.js';
 import type { WakeReason } from './observation/types.js';
@@ -132,11 +132,11 @@ export interface SyncServiceConfig {
 }
 
 export interface DispatchHooks {
-  afterSyncCompleted?: (signal: import("@narada2/control-plane").SyncCompletionSignal, result: import("@narada2/control-plane").WorkOpeningResult) => Promise<void>;
+  afterSyncCompleted?: (signal: import("@narada-core/control-plane").SyncCompletionSignal, result: import("@narada-core/control-plane").WorkOpeningResult) => Promise<void>;
   afterWorkOpened?: (workItem: WorkItem) => Promise<void>;
   afterLeaseAcquired?: (workItem: WorkItem, lease: LeaseAcquisitionResult) => Promise<void>;
-  beforeRuntimeInvoke?: (workItem: WorkItem, attempt: ExecutionAttempt, envelope: import("@narada2/control-plane").CharterInvocationEnvelope) => Promise<void>;
-  afterRuntimeComplete?: (workItem: WorkItem, attempt: ExecutionAttempt, output: import("@narada2/control-plane").CharterOutputEnvelope) => Promise<void>;
+  beforeRuntimeInvoke?: (workItem: WorkItem, attempt: ExecutionAttempt, envelope: import("@narada-core/control-plane").CharterInvocationEnvelope) => Promise<void>;
+  afterRuntimeComplete?: (workItem: WorkItem, attempt: ExecutionAttempt, output: import("@narada-core/control-plane").CharterOutputEnvelope) => Promise<void>;
   beforeToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt, requests: ToolInvocationRequest[]) => Promise<void>;
   duringToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt, request: ToolInvocationRequest, index: number) => Promise<void>;
   afterToolExecution?: (workItem: WorkItem, attempt: ExecutionAttempt) => Promise<void>;
@@ -160,11 +160,11 @@ function siteControlRoot(siteRoot: string): string {
   return basename(root).toLowerCase() === '.narada' ? root : join(root, '.narada');
 }
 
-function hasDraftReplyAction(output: import("@narada2/control-plane").CharterOutputEnvelope): boolean {
+function hasDraftReplyAction(output: import("@narada-core/control-plane").CharterOutputEnvelope): boolean {
   return output.proposed_actions.some((action) => action.action_type === "draft_reply");
 }
 
-function parseReviewVerdict(output: import("@narada2/control-plane").CharterOutputEnvelope): { passed: boolean; violations: string[]; notes: string[] } {
+function parseReviewVerdict(output: import("@narada-core/control-plane").CharterOutputEnvelope): { passed: boolean; violations: string[]; notes: string[] } {
   const verdictFact = output.facts.find((fact) => fact.kind === "draft_review_verdict");
   if (!verdictFact) {
     return { passed: false, violations: ["reviewer did not return draft_review_verdict fact"], notes: [output.summary] };
@@ -182,11 +182,11 @@ function parseReviewVerdict(output: import("@narada2/control-plane").CharterOutp
 }
 
 function buildDraftReviewEnvelope(
-  base: import("@narada2/control-plane").CharterInvocationEnvelope,
-  candidate: import("@narada2/control-plane").CharterOutputEnvelope,
+  base: import("@narada-core/control-plane").CharterInvocationEnvelope,
+  candidate: import("@narada-core/control-plane").CharterOutputEnvelope,
   reviewerIndex: 1 | 2,
-  priorReview?: import("@narada2/control-plane").CharterOutputEnvelope,
-): import("@narada2/control-plane").CharterInvocationEnvelope {
+  priorReview?: import("@narada-core/control-plane").CharterOutputEnvelope,
+): import("@narada-core/control-plane").CharterInvocationEnvelope {
   return {
     ...base,
     execution_id: `${base.execution_id}_draft_review_${reviewerIndex}`,
@@ -216,12 +216,12 @@ function buildDraftReviewEnvelope(
 
 export async function runPrePersistenceDraftReviews(
   charterRunner: CharterRunner,
-  envelope: import("@narada2/control-plane").CharterInvocationEnvelope,
-  output: import("@narada2/control-plane").CharterOutputEnvelope,
+  envelope: import("@narada-core/control-plane").CharterInvocationEnvelope,
+  output: import("@narada-core/control-plane").CharterOutputEnvelope,
 ): Promise<void> {
   if (!hasDraftReplyAction(output)) return;
 
-  let priorReview: import("@narada2/control-plane").CharterOutputEnvelope | undefined;
+  let priorReview: import("@narada-core/control-plane").CharterOutputEnvelope | undefined;
   for (const reviewerIndex of [1, 2] as const) {
     const reviewEnvelope = buildDraftReviewEnvelope(envelope, output, reviewerIndex, priorReview);
     const reviewOutput = await charterRunner.run(reviewEnvelope);
@@ -1017,7 +1017,7 @@ async function createDispatchContext(
     // In production (no explicit charterRunner override), broken/unconfigured runtimes
     // skip execution so work items remain opened until health recovers. Tests that
     // explicitly provide a charterRunner bypass this gate.
-    let charterHealth: import('@narada2/charters').CharterRuntimeHealth | undefined;
+    let charterHealth: import('@narada-core/charters').CharterRuntimeHealth | undefined;
     try {
       charterHealth = await deps.charterRunner.probeHealth();
     } catch (probeError) {
@@ -1350,7 +1350,7 @@ async function createDispatchContext(
     const threshold = syncFreshThresholdMs ?? 24 * 60 * 60 * 1000;
     const syncFresh = lastSync ? Date.now() - lastSync.getTime() < threshold : false;
 
-    let charterRuntimeHealth: import('@narada2/charters').CharterRuntimeHealth | undefined;
+    let charterRuntimeHealth: import('@narada-core/charters').CharterRuntimeHealth | undefined;
     try {
       charterRuntimeHealth = await deps.charterRunner.probeHealth();
     } catch (probeError) {

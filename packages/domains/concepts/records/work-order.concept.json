@@ -17,7 +17,7 @@
     { "kind": "depends_on", "concept_id": "delegation_dag_template" },
     { "kind": "informs", "concept_id": "mcp_ergonomics_feedback_loop" }
   ],
-  "owner_surface": "@narada2/delegated-task-mcp package",
+  "owner_surface": "@narada-core/delegated-task-mcp package",
   "authority": {
     "kind": "package",
     "ref": "mcp-surfaces/packages/delegated-task-mcp",

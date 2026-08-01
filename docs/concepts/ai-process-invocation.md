@@ -93,7 +93,7 @@ A new local AI process path is not complete until it either calls AiProcessInvoc
 
 The current implementation has two repository loci:
 
-- Narada proper uses `@narada2/carrier-provider-support` for launcher, NARS provider, and direct carrier paths.
+- Narada proper uses `@narada-core/carrier-provider-support` for launcher, NARS provider, and direct carrier paths.
 - `mcp-surfaces` worker-delegation uses the same policy shape locally until the shared package can be consumed cleanly across that repository boundary.
 
 Both loci must preserve the same semantics: admit before spawn, refuse before spawn, redact secrets, record artifacts, and release live leases on process exit.

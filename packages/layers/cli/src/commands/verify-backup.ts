@@ -8,7 +8,7 @@ import { createHash, createDecipheriv } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pipeline } from 'node:stream/promises';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';

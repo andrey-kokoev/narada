@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildAgentIdentityRefV2 } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2 } from '@narada-core/agent-identity';
 import { createSiteAgentLaunchAdmission } from '../../src/commands/site-agent-launch-admission.js';
 import { createSiteAgentLaunchDiagnostics } from '../../src/commands/site-agent-launch-diagnostics.js';
 import { createSiteAgentLaunchGateway } from '../../src/commands/site-agent-launch-gateway.js';

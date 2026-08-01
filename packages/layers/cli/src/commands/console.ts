@@ -16,8 +16,8 @@ import {
   createControlClientFactory,
 } from '../lib/console-core.js';
 import { stopOperatorConsoleProjection } from './console-projection-lifecycle.js';
-import { startOperatorConsoleOverlay } from '@narada2/operator-console-overlay';
-import { createOperatorConsoleRemoteGateway, type OperatorConsoleRemoteGateway } from '@narada2/operator-console-remote-gateway';
+import { startOperatorConsoleOverlay } from '@narada-core/operator-console-overlay';
+import { createOperatorConsoleRemoteGateway, type OperatorConsoleRemoteGateway } from '@narada-core/operator-console-remote-gateway';
 
 export interface ConsoleOptions {
   format?: string;
@@ -112,7 +112,7 @@ export async function consoleStatusCommand(
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const registry = await openRegistry();
   try {
-    const { aggregateHealth } = await import('@narada2/windows-site');
+    const { aggregateHealth } = await import('@narada-core/windows-site');
     const summary = await aggregateHealth(registry, createObservationFactory());
 
     if (fmt.getFormat() === 'human') {
@@ -176,7 +176,7 @@ export async function consoleAttentionCommand(
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const registry = await openRegistry();
   try {
-    const { deriveAttentionQueue } = await import('@narada2/windows-site');
+    const { deriveAttentionQueue } = await import('@narada-core/windows-site');
     const items = await deriveAttentionQueue(registry, createObservationFactory());
 
     if (fmt.getFormat() === 'human') {
@@ -219,7 +219,7 @@ export async function consoleControlCommand(
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   const registry = await openRegistry();
   try {
-    const { ControlRequestRouter } = await import('@narada2/windows-site');
+    const { ControlRequestRouter } = await import('@narada-core/windows-site');
 
     const router = new ControlRequestRouter({
       registry,

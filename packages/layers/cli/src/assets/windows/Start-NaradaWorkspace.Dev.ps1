@@ -199,15 +199,15 @@ try {
   $json = Get-JsonPayloadFromOutput -Output $output
   if ($json) {
     $result = $json | ConvertFrom-Json
-    $requiredCommand = if ($result.required_command) { [string]$result.required_command } else { 'pnpm --filter @narada2/cli build' }
+    $requiredCommand = if ($result.required_command) { [string]$result.required_command } else { 'pnpm --filter @narada-core/cli build' }
     $reason = if ($result.reason) { [string]$result.reason } else { 'unknown' }
     $status = if ($result.status) { [string]$result.status } else { 'unknown' }
     if ($status -eq 'stale') {
       $null = Get-Command pnpm -ErrorAction Stop
-      Write-Host "Narada CLI dist is stale ($reason); rebuilding @narada2/cli..."
+      Write-Host "Narada CLI dist is stale ($reason); rebuilding @narada-core/cli..."
       Push-Location -LiteralPath $NaradaProperRoot
       try {
-        $buildOutput = & pnpm --filter "@narada2/cli" build 2>&1
+        $buildOutput = & pnpm --filter "@narada-core/cli" build 2>&1
         $buildExitCode = $LASTEXITCODE
       } finally {
         Pop-Location

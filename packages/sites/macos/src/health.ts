@@ -5,7 +5,7 @@
  * the result to the site-local SQLite coordinator.
  */
 
-import { computeHealthTransition, type HealthStatus } from "@narada2/control-plane";
+import { computeHealthTransition, type HealthStatus } from "@narada-core/control-plane";
 import type { SiteHealthRecord, MacosCycleOutcome } from "./types.js";
 import { SqliteSiteCoordinator, openCoordinatorDb } from "./coordinator.js";
 

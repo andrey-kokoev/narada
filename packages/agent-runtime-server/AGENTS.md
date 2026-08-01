@@ -1,4 +1,4 @@
-# AGENTS.md - @narada2/agent-runtime-server
+# AGENTS.md - @narada-core/agent-runtime-server
 
 This package owns the stable Narada Agent Runtime Server (NARS) entrypoint and protocol-facing wrapper.
 
@@ -10,7 +10,7 @@ For the full concept and implementation contract, read:
 
 ## Package Role
 
-`@narada2/agent-runtime-server` is the public NARS package authority. Its binary is `narada-agent-runtime-server`.
+`@narada-core/agent-runtime-server` is the public NARS package authority. Its binary is `narada-agent-runtime-server`.
 
 It owns the public runtime-server contract for:
 
@@ -23,18 +23,18 @@ It owns the public runtime-server contract for:
 - artifact HTTP request handling;
 - protocol-facing wrapper behavior around the carrier substrate.
 
-It binds transport and process lifetime to one `@narada2/nars-session-core` supervisor. The in-process carrier is a stateless turn adapter; provider execution is delegated to `@narada2/nars-provider-runtime`.
+It binds transport and process lifetime to one `@narada-core/nars-session-core` supervisor. The in-process carrier is a stateless turn adapter; provider execution is delegated to `@narada-core/nars-provider-runtime`.
 
 ## Boundary Rules
 
 Distinguish public NARS ownership from current implementation placement.
 
-NARS owns the public session-control contract, transport binding, health/event projection, and process lifetime. `@narada2/nars-session-core` owns session and turn lifecycle transitions, durable events, artifacts, input queue state, health, recovery, session indexing, and authority transitions. `@narada2/carrier-runtime` receives a pure turn context and returns turn evidence; it owns no session persistence or compatibility surface. `@narada2/nars-provider-runtime` owns provider execution.
+NARS owns the public session-control contract, transport binding, health/event projection, and process lifetime. `@narada-core/nars-session-core` owns session and turn lifecycle transitions, durable events, artifacts, input queue state, health, recovery, session indexing, and authority transitions. `@narada-core/carrier-runtime` receives a pure turn context and returns turn evidence; it owns no session persistence or compatibility surface. `@narada-core/nars-provider-runtime` owns provider execution.
 
 Do not move the following into this package as private implementation internals unless the NARS contract and package split are deliberately changed:
 
 - provider adapter internals;
-- MCP server discovery or low-level tool dispatch internals, which belong to `@narada2/nars-capability-gateway`;
+- MCP server discovery or low-level tool dispatch internals, which belong to `@narada-core/nars-capability-gateway`;
 - provider credential resolution;
 - runtime dependency construction;
 - launcher planning or agent selection;

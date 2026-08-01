@@ -62,7 +62,7 @@ A later MCP mutation task must name:
 - Live registration without a Narada proper MCP/runtime authority surface.
 - Tools that mutate without admitted adapter authority.
 - Importing narada-andrey DB, task, inbox, roster, checkpoint, operator-surface, PC-locus, secret, identity-specific, or source-history state.
-- Making `@narada2/site-task-lifecycle` own a SQLite dependency.
+- Making `@narada-core/site-task-lifecycle` own a SQLite dependency.
 
 ## Verification Gate
 

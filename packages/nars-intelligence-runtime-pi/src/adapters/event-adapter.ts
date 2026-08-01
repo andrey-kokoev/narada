@@ -1,4 +1,4 @@
-import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
+import { NarsKernelContractError } from '@narada-core/nars-intelligence-kernel-contract';
 import { SUPPORTED_PI_EVENT_KINDS } from '../pi/pi-version-capabilities.ts';
 
 const EVENT_CLASSIFICATIONS: any = Object.freeze({

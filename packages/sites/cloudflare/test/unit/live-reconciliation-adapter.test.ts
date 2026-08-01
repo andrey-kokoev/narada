@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import { NaradaSiteCoordinator } from "../../src/coordinator.js";
 import { createMockState } from "../fixtures/mock-sqlite.js";
 import {

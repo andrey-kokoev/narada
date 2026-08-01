@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/carrier-protocol-contract",
+  "name": "@narada-core/carrier-protocol-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -16,13 +16,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
-    "@narada2/carrier-protocol": "workspace:*"
+    "@narada-core/carrier-protocol": "workspace:*"
   },
   "description": "Carrier protocol contracts",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/carrier-protocol-contract"
   },
   "engines": {

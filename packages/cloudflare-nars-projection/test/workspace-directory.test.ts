@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   OPERATOR_CONSOLE_ASSET_PATH,
   OPERATOR_CONSOLE_PATH,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import { CLOUDFLARE_NARS_PROJECTION_INTENT_SCHEMA } from '../src/index.js';
 import { createCloudflareNarsWorkspaceDirectoryService, NarsWorkspaceDirectory } from '../src/workspace-directory.js';
 import { createCloudflareNarsProjectionWorker, NarsProjectionState } from '../src/worker.js';

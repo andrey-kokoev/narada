@@ -8,30 +8,30 @@ The monorepo packages were reorganized into a layered taxonomy:
 
 | Old Location | New Location | Package Name |
 |--------------|--------------|--------------|
-| `packages/exchange-fs-sync` | `packages/layers/control-plane` | `@narada2/control-plane` |
-| `packages/exchange-fs-sync-cli` | `packages/layers/cli` | `@narada2/cli` |
-| `packages/exchange-fs-sync-daemon` | `packages/layers/daemon` | `@narada2/daemon` |
-| `packages/exchange-fs-sync-search` | `packages/verticals/search` | `@narada2/search` |
-| `packages/charters` | `packages/domains/charters` | `@narada2/charters` |
+| `packages/exchange-fs-sync` | `packages/layers/control-plane` | `@narada-core/control-plane` |
+| `packages/exchange-fs-sync-cli` | `packages/layers/cli` | `@narada-core/cli` |
+| `packages/exchange-fs-sync-daemon` | `packages/layers/daemon` | `@narada-core/daemon` |
+| `packages/exchange-fs-sync-search` | `packages/verticals/search` | `@narada-core/search` |
+| `packages/charters` | `packages/domains/charters` | `@narada-core/charters` |
 
 ## Compatibility Shims
 
 Thin compatibility shims remain at the old package names for transitional use:
 
-- `@narada2/exchange-fs-sync` → re-exports `@narada2/control-plane` (shim removed)
-- `@narada2/exchange-fs-sync-cli` → re-exports `@narada2/cli` (shim removed)
-- `@narada2/exchange-fs-sync-daemon` → re-exports `@narada2/daemon` (shim removed)
-- `@narada2/exchange-fs-sync-search` → re-exports `@narada2/search` (shim removed)
+- `@narada-core/exchange-fs-sync` → re-exports `@narada-core/control-plane` (shim removed)
+- `@narada-core/exchange-fs-sync-cli` → re-exports `@narada-core/cli` (shim removed)
+- `@narada-core/exchange-fs-sync-daemon` → re-exports `@narada-core/daemon` (shim removed)
+- `@narada-core/exchange-fs-sync-search` → re-exports `@narada-core/search` (shim removed)
 
-The `@narada2/charters` name moved entirely to `packages/domains/charters`; no shim remains at the old location.
+The `@narada-core/charters` name moved entirely to `packages/domains/charters`; no shim remains at the old location.
 
 ## Binary Names
 
 | Old Binary | New Binary | Package |
 |------------|------------|---------|
-| `exchange-sync` | `narada` | `@narada2/cli` |
-| `exchange-fs-sync-daemon` | `narada-daemon` | `@narada2/daemon` |
-| `exchange-fs-sync-search` | `narada-search` | `@narada2/search` |
+| `exchange-sync` | `narada` | `@narada-core/cli` |
+| `exchange-fs-sync-daemon` | `narada-daemon` | `@narada-core/daemon` |
+| `exchange-fs-sync-search` | `narada-search` | `@narada-core/search` |
 
 Legacy binaries have been removed. Use `narada`, `narada-daemon`, and `narada-search`.
 
@@ -39,8 +39,8 @@ Legacy binaries have been removed. Use `narada`, `narada-daemon`, and `narada-se
 
 Config schema moved:
 
-- Old: `node_modules/@narada2/exchange-fs-sync/config.schema.json`
-- New: `node_modules/@narada2/control-plane/config.schema.json`
+- Old: `node_modules/@narada-core/exchange-fs-sync/config.schema.json`
+- New: `node_modules/@narada-core/control-plane/config.schema.json`
 
 The compatibility shim has been removed. Update to the new path.
 
@@ -55,11 +55,11 @@ Update `file:` references to point to the new physical locations:
 ```json
 {
   "dependencies": {
-    "@narada2/charters": "file:../narada/packages/domains/charters",
-    "@narada2/cli": "file:../narada/packages/layers/cli",
-    "@narada2/daemon": "file:../narada/packages/layers/daemon",
-    "@narada2/search": "file:../narada/packages/verticals/search",
-    "@narada2/control-plane": "file:../narada/packages/layers/control-plane"
+    "@narada-core/charters": "file:../narada/packages/domains/charters",
+    "@narada-core/cli": "file:../narada/packages/layers/cli",
+    "@narada-core/daemon": "file:../narada/packages/layers/daemon",
+    "@narada-core/search": "file:../narada/packages/verticals/search",
+    "@narada-core/control-plane": "file:../narada/packages/layers/control-plane"
   }
 }
 ```
@@ -86,7 +86,7 @@ Update the `$schema` field:
 
 ```json
 {
-  "$schema": "../node_modules/@narada2/control-plane/config.schema.json"
+  "$schema": "../node_modules/@narada-core/control-plane/config.schema.json"
 }
 ```
 
@@ -101,9 +101,9 @@ pnpm install
 
 If you consume Narada packages from within the monorepo via `workspace:*`, update your dependency names:
 
-- `@narada2/exchange-fs-sync` → `@narada2/control-plane`
-- `@narada2/exchange-fs-sync-cli` → `@narada2/cli`
-- `@narada2/exchange-fs-sync-daemon` → `@narada2/daemon`
-- `@narada2/exchange-fs-sync-search` → `@narada2/search`
+- `@narada-core/exchange-fs-sync` → `@narada-core/control-plane`
+- `@narada-core/exchange-fs-sync-cli` → `@narada-core/cli`
+- `@narada-core/exchange-fs-sync-daemon` → `@narada-core/daemon`
+- `@narada-core/exchange-fs-sync-search` → `@narada-core/search`
 
 The `workspace:*` protocol will resolve them to the new locations automatically.

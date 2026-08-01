@@ -10,7 +10,7 @@
       "intelligence_kernel_kinds": ["narada-native", "pi-sdk", "pi-rpc"],
       "tool_fabric_adapter_kind": "narada-agent-runtime-server-mcp-client",
       "tool_fabric_source": ".ai/mcp",
-      "adapter_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
+      "adapter_entrypoint": "package:@narada-core/agent-runtime-server#narada-agent-runtime-server",
       "projection_capabilities": ["nars_attach"],
       "conformance": {
         "evidence_level": "code_enforced",
@@ -34,7 +34,7 @@
       "intelligence_kernel_kinds": ["narada-native", "pi-sdk", "pi-rpc"],
       "tool_fabric_adapter_kind": "narada-agent-runtime-server-mcp-client",
       "tool_fabric_source": ".ai/mcp",
-      "adapter_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
+      "adapter_entrypoint": "package:@narada-core/agent-runtime-server#narada-agent-runtime-server",
       "projection_capabilities": ["nars_attach"],
       "conformance": {
         "evidence_level": "code_enforced",
@@ -58,7 +58,7 @@
       "intelligence_kernel_kinds": ["narada-native", "pi-sdk", "pi-rpc"],
       "tool_fabric_adapter_kind": "narada-agent-runtime-server-mcp-client",
       "tool_fabric_source": ".ai/mcp",
-      "adapter_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
+      "adapter_entrypoint": "package:@narada-core/agent-runtime-server#narada-agent-runtime-server",
       "projection_capabilities": ["nars_attach"],
       "conformance": {
         "evidence_level": "code_enforced",
@@ -82,7 +82,7 @@
       "intelligence_kernel_kinds": ["narada-native", "pi-sdk", "pi-rpc"],
       "tool_fabric_adapter_kind": "narada-agent-runtime-server-mcp-client",
       "tool_fabric_source": ".ai/mcp",
-      "adapter_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
+      "adapter_entrypoint": "package:@narada-core/agent-runtime-server#narada-agent-runtime-server",
       "projection_capabilities": ["nars_attach"],
       "conformance": {
         "evidence_level": "code_enforced",

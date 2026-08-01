@@ -3,12 +3,12 @@ import { writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
 import {
   deliverRemoteProjectionInputsOnce,
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
-} from '@narada2/cloudflare-nars-projection/node';
+} from '@narada-core/cloudflare-nars-projection/node';
 import { startAgentWebUiServer } from '../src/server.ts';
 import { startSessionCoreRuntime, waitFor } from './e2e/nars-runtime-fixture.js';
 import {

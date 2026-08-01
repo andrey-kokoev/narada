@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/agent-runtime-server",
+  "name": "@narada-core/agent-runtime-server",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -20,7 +20,7 @@
       "runtime_host_lifecycle",
       "capability_gateway_binding"
     ],
-    "carrier_substrate": "@narada2/carrier-runtime in-process",
+    "carrier_substrate": "@narada-core/carrier-runtime in-process",
     "runtime_dependency_owner": "nars-session-core owns session control and durability; this package owns the scoped capability-gateway binding; nars-provider-runtime supplies provider execution"
   },
   "bin": {
@@ -118,31 +118,31 @@
     "test:one-by-one": "node --import tsx test/run-one-by-one.ts",
     "test:e2e:pty": "node --import tsx test/pty-e2e.ts",
     "test:live:pi-client-kernel": "node --import tsx test/live-pi-client-kernel-substitutability-fixture-e2e.ts --enable-live-e2e",
-    "test:live:codex-provider-admission": "pnpm --filter @narada2/cli build && node --import tsx test/live-codex-provider-admission-e2e.ts --enable-live-codex",
+    "test:live:codex-provider-admission": "pnpm --filter @narada-core/cli build && node --import tsx test/live-codex-provider-admission-e2e.ts --enable-live-codex",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/agent-identity": "workspace:*",
-    "@narada2/carrier-command-contract": "workspace:*",
-    "@narada2/carrier-runtime": "workspace:*",
-    "@narada2/carrier-protocol": "workspace:*",
-    "@narada2/carrier-terminal-projection": "workspace:*",
-    "@narada2/carrier-provider-support": "workspace:*",
-    "@narada2/invokable-intelligence-materialization": "workspace:*",
-    "@narada2/invokable-intelligence-contract": "workspace:*",
-    "@narada2/invokable-intelligence-registry": "workspace:*",
-    "@narada2/invokable-intelligence-resolver": "workspace:*",
-    "@narada2/invokable-intelligence-runtime": "workspace:*",
-    "@narada2/launch-process-ownership": "workspace:*",
-    "@narada2/nars-session-authority": "workspace:*",
-    "@narada2/nars-session-core": "workspace:*",
-    "@narada2/nars-runtime-contract": "workspace:*",
-    "@narada2/nars-capability-gateway": "workspace:*",
-    "@narada2/nars-intelligence-kernel-contract": "workspace:*",
-    "@narada2/nars-pi-kernel": "workspace:*",
-    "@narada2/nars-provider-runtime": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/site-paths": "workspace:*"
+    "@narada-core/agent-identity": "workspace:*",
+    "@narada-core/carrier-command-contract": "workspace:*",
+    "@narada-core/carrier-runtime": "workspace:*",
+    "@narada-core/carrier-protocol": "workspace:*",
+    "@narada-core/carrier-terminal-projection": "workspace:*",
+    "@narada-core/carrier-provider-support": "workspace:*",
+    "@narada-core/invokable-intelligence-materialization": "workspace:*",
+    "@narada-core/invokable-intelligence-contract": "workspace:*",
+    "@narada-core/invokable-intelligence-registry": "workspace:*",
+    "@narada-core/invokable-intelligence-resolver": "workspace:*",
+    "@narada-core/invokable-intelligence-runtime": "workspace:*",
+    "@narada-core/launch-process-ownership": "workspace:*",
+    "@narada-core/nars-session-authority": "workspace:*",
+    "@narada-core/nars-session-core": "workspace:*",
+    "@narada-core/nars-runtime-contract": "workspace:*",
+    "@narada-core/nars-capability-gateway": "workspace:*",
+    "@narada-core/nars-intelligence-kernel-contract": "workspace:*",
+    "@narada-core/nars-pi-kernel": "workspace:*",
+    "@narada-core/nars-provider-runtime": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/site-paths": "workspace:*"
   },
   "devDependencies": {
     "node-pty": "^1.1.0"
@@ -151,7 +151,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/agent-runtime-server"
   },
   "engines": {

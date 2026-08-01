@@ -27,7 +27,7 @@ export type {
   ToolInvocationRequest,
 } from "./types.js";
 
-export { validateCharterOutput } from "@narada2/charters";
+export { validateCharterOutput } from "@narada-core/charters";
 export { arbitrateEvaluations } from "./validation.js";
 export { DefaultForemanFacade, type ForemanFacadeDeps, type ForemanFacadeOptions } from "./facade.js";
 export { OutboundHandoff, type OutboundHandoffDeps } from "./handoff.js";

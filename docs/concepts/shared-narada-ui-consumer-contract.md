@@ -13,14 +13,14 @@ UI-neutral MCP surface boundary in D:/code/mcp-surfaces.
 
 | Consumer need | Consume | Do not consume |
 | --- | --- | --- |
-| Standalone HTML or a server-rendered CLI page | `@narada2/ui` via the compiled `styles.css` export | `@narada2/ui-vue`, Vue runtime, Agent Web UI |
-| Reusable Vue primitive | `@narada2/ui` and `@narada2/ui-vue` | Agent Web UI session components |
-| Agent Web UI session experience | `@narada2/ui`, `@narada2/ui-vue`, and app-owned session code | Copying shared foundation styles or taking ownership of shared primitives |
-| MCP surface | No renderer package | `@narada2/ui`, `@narada2/ui-vue`, Vue/React/Svelte, Tailwind runtime, Agent Web UI |
+| Standalone HTML or a server-rendered CLI page | `@narada-core/ui` via the compiled `styles.css` export | `@narada-core/ui-vue`, Vue runtime, Agent Web UI |
+| Reusable Vue primitive | `@narada-core/ui` and `@narada-core/ui-vue` | Agent Web UI session components |
+| Agent Web UI session experience | `@narada-core/ui`, `@narada-core/ui-vue`, and app-owned session code | Copying shared foundation styles or taking ownership of shared primitives |
+| MCP surface | No renderer package | `@narada-core/ui`, `@narada-core/ui-vue`, Vue/React/Svelte, Tailwind runtime, Agent Web UI |
 
-## @narada2/ui
+## @narada-core/ui
 
-`@narada2/ui` owns the renderer-neutral CSS foundation:
+`@narada-core/ui` owns the renderer-neutral CSS foundation:
 
 - semantic design tokens and light/dark theme values;
 - typography, reset, control defaults, and base accessibility rules;
@@ -38,16 +38,16 @@ keeps the page usable without a dev server or Vue bundle. Its remaining inline
 CSS is Registry-specific layout, form, lifecycle, preview, and responsive
 behavior and must use shared semantic tokens.
 
-## @narada2/ui-vue
+## @narada-core/ui-vue
 
-`@narada2/ui-vue` owns Narada's reusable Vue primitive layer:
+`@narada-core/ui-vue` owns Narada's reusable Vue primitive layer:
 
 - source-owned wrappers for the explicit initial shadcn-vue primitive set;
 - Vue runtime adapters and `cn()`;
 - workspace component and component-style exports;
 - `components.json` generator metadata.
 
-The package may depend on `@narada2/ui` and Vue UI runtime dependencies.
+The package may depend on `@narada-core/ui` and Vue UI runtime dependencies.
 It is private and workspace-only; its source exports are intentionally compiled
 by Narada-owned Vue applications. It is not part of the external npm consumer
 contract.
@@ -55,7 +55,7 @@ It must not absorb Agent Web UI session state, MCP domain components,
 application composables, or product-specific panels. shadcn-vue is a generator
 and maintenance input; it is not the consumer boundary for application code.
 
-## @narada2/agent-web-ui
+## @narada-core/agent-web-ui
 
 Agent Web UI owns session-specific behavior:
 
@@ -65,8 +65,8 @@ Agent Web UI owns session-specific behavior:
 - app composables, protocol adapters, and session state;
 - styles that target those product surfaces.
 
-Its stylesheet entrypoint imports `@narada2/ui/styles.css` and
-`@narada2/ui-vue/components.css` first, then app-owned layers. It may
+Its stylesheet entrypoint imports `@narada-core/ui/styles.css` and
+`@narada-core/ui-vue/components.css` first, then app-owned layers. It may
 keep product rules that happen to use shared tokens. It must not recreate shared
 token, reset, primitive, or generic command/tooltip implementation files.
 
@@ -102,7 +102,7 @@ The extraction is complete only when each foundation rule has one owner.
 - Agent Web UI's copied `theme.css`, `primitives.css`, and
   `dark-theme.css` foundation files were removed.
 - Site Registry's copied foundation rules were replaced by the compiled
-  `@narada2/ui/styles.css` artifact.
+  `@narada-core/ui/styles.css` artifact.
 
 ### Explicit app-specific exceptions
 
@@ -127,17 +127,17 @@ product-specific exception, or removed duplicate before it is added.
 
 The following checks are the durable evidence for this boundary:
 
-1. `pnpm --filter @narada2/ui test` proves the compiled CSS export and
+1. `pnpm --filter @narada-core/ui test` proves the compiled CSS export and
    plain HTML fixture.
-2. `pnpm --filter @narada2/ui-vue test` proves Vue typechecking, the
+2. `pnpm --filter @narada-core/ui-vue test` proves Vue typechecking, the
    public primitive imports, and the built fixture.
-3. `pnpm --filter @narada2/agent-web-ui typecheck`,
-   `pnpm --filter @narada2/agent-web-ui build`,
-   `pnpm --filter @narada2/agent-web-ui test`, and
-   `pnpm --filter @narada2/agent-web-ui test:browser` prove the
+3. `pnpm --filter @narada-core/agent-web-ui typecheck`,
+   `pnpm --filter @narada-core/agent-web-ui build`,
+   `pnpm --filter @narada-core/agent-web-ui test`, and
+   `pnpm --filter @narada-core/agent-web-ui test:browser` prove the
    migrated session consumer.
-4. `pnpm --filter @narada2/ui build` followed by
-   `pnpm --filter @narada2/cli typecheck` and the focused
+4. `pnpm --filter @narada-core/ui build` followed by
+   `pnpm --filter @narada-core/cli typecheck` and the focused
    `console-server.test.ts` run prove the standalone CLI delivery
    path from a built checkout.
 5. `node --import tsx --test test/integration/operator-console-ui-e2e.test.mjs`

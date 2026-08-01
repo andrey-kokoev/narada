@@ -334,7 +334,7 @@ A named policy configuration that defines how a context should be analyzed and w
 - **Layer**: Control plane / charters domain
 - **User-facing**: Yes — users declare `primary_charter` and `secondary_charters` in scope config
 - **Durable boundary**: Config-scoped; charter outputs persisted in `evaluations`
-- **Authority owner**: Charter runtime (`@narada2/charters`)
+- **Authority owner**: Charter runtime (`@narada-core/charters`)
 
 Replaces the generic term `agent`. Each scope binds one primary charter and optional secondary charters for arbitration.
 

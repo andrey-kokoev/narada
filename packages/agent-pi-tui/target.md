@@ -62,7 +62,7 @@ It must not embed or launch the Pi agent runtime.
 
 ```text
 
-@narada2/agent-runtime-server
+@narada-core/agent-runtime-server
 
 &#x20;             │
 
@@ -72,7 +72,7 @@ It must not embed or launch the Pi agent runtime.
 
 &#x20;             ▼
 
-@narada2/agent-pi-tui
+@narada-core/agent-pi-tui
 
 &#x20; ├── NARS client adapter
 
@@ -160,7 +160,7 @@ Package identity:
 
 {
 
-&#x20; "name": "@narada2/agent-pi-tui",
+&#x20; "name": "@narada-core/agent-pi-tui",
 
 &#x20; "version": "0.1.0",
 
@@ -174,7 +174,7 @@ Package identity:
 
 &#x20;   "operator\_surface\_kind": "agent-pi-tui",
 
-&#x20;   "runtime\_server\_owner": "@narada2/agent-runtime-server",
+&#x20;   "runtime\_server\_owner": "@narada-core/agent-runtime-server",
 
 &#x20;   "rendering\_substrate": "@earendil-works/pi-tui"
 
@@ -646,7 +646,7 @@ Consume:
 
 ```text
 
-@narada2/nars-client-projection-contract
+@narada-core/nars-client-projection-contract
 
 ```
 
@@ -1236,7 +1236,7 @@ Expected launch-matrix row:
 
 &#x20; "tool\_fabric\_source": ".ai/mcp",
 
-&#x20; "adapter\_entrypoint": "package:@narada2/agent-runtime-server#narada-agent-runtime-server",
+&#x20; "adapter\_entrypoint": "package:@narada-core/agent-runtime-server#narada-agent-runtime-server",
 
 &#x20; "projection\_capabilities": \[
 
@@ -1726,7 +1726,7 @@ Implement in bounded slices:
 
 
 
-\* `@narada2/agent-pi-tui` package;
+\* `@narada-core/agent-pi-tui` package;
 
 \* `narada-agent-pi-tui` binary;
 
@@ -1837,7 +1837,7 @@ with all four as sibling operator projections.
 
 ## Execution Notes
 
-- Implemented `@narada2/agent-pi-tui` and the `narada-agent-pi-tui` binary as a
+- Implemented `@narada-core/agent-pi-tui` and the `narada-agent-pi-tui` binary as a
   NARS-only projection client using `@earendil-works/pi-tui` for terminal
   rendering.
 - Added Narada-owned attach, bounded replay, live subscription, durable cursor
@@ -1856,12 +1856,12 @@ with all four as sibling operator projections.
 
 ## Verification
 
-- `pnpm --filter @narada2/agent-pi-tui typecheck` — passed.
-- `pnpm --filter @narada2/agent-pi-tui test` — passed (5 files, 16 tests).
-- `pnpm --filter @narada2/agent-pi-tui build` — passed.
-- `pnpm --filter @narada2/nars-client-projection-contract test` — passed.
-- `pnpm --filter @narada2/operator-surface-runtime-contract test` — passed.
-- `pnpm --filter @narada2/agent-start test:option-contract` — passed.
+- `pnpm --filter @narada-core/agent-pi-tui typecheck` — passed.
+- `pnpm --filter @narada-core/agent-pi-tui test` — passed (5 files, 16 tests).
+- `pnpm --filter @narada-core/agent-pi-tui build` — passed.
+- `pnpm --filter @narada-core/nars-client-projection-contract test` — passed.
+- `pnpm --filter @narada-core/operator-surface-runtime-contract test` — passed.
+- `pnpm --filter @narada-core/agent-start test:option-contract` — passed.
 - CLI typecheck and focused launcher/admission tests — passed.
 - Static dependency/source audit found no forbidden Pi runtime identifiers or
   launch paths in the new package.

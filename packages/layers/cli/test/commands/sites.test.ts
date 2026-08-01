@@ -34,8 +34,8 @@ const mockDb = {
   close: vi.fn(),
 };
 
-vi.mock('@narada2/windows-site', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/windows-site')>();
+vi.mock('@narada-core/windows-site', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/windows-site')>();
   return {
     ...mod,
     Database: vi.fn(() => mockDb),
@@ -58,13 +58,13 @@ vi.mock('@narada2/windows-site', async (importOriginal) => {
   };
 });
 
-vi.mock('@narada2/macos-site', () => ({
+vi.mock('@narada-core/macos-site', () => ({
   discoverMacosSites: vi.fn(() => []),
   getMacosSiteStatus: vi.fn(),
   isMacosSite: vi.fn(() => false),
 }), { virtual: true });
 
-vi.mock('@narada2/linux-site', () => ({
+vi.mock('@narada-core/linux-site', () => ({
   listAllSites: vi.fn(() => []),
   getSiteHealth: vi.fn(),
   isLinuxSite: vi.fn(() => false),
@@ -158,7 +158,7 @@ describe('sites commands', () => {
 
   describe('sitesDiscoverCommand', () => {
     it('discovers sites by filesystem scan', async () => {
-      const { SiteRegistry } = await import('@narada2/windows-site');
+      const { SiteRegistry } = await import('@narada-core/windows-site');
       const originalDiscover = SiteRegistry.prototype.discoverSites;
       SiteRegistry.prototype.discoverSites = vi.fn(function (this: unknown, variant: string) {
         if (variant === 'wsl') {

@@ -15,7 +15,7 @@ import {
   loadConfig,
   isMultiMailboxConfig,
   loadMultiMailboxConfig,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 export interface DraftsOptions {
   config?: string;
@@ -112,7 +112,7 @@ async function loadDraftsReport(
   limit: number,
 ): Promise<DraftSummary> {
   const { Database, SqliteOutboundStore } = await import(
-    '@narada2/control-plane'
+    '@narada-core/control-plane'
   );
   const capturedAt = new Date().toISOString();
   const rows: DraftRow[] = [];

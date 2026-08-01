@@ -1,7 +1,7 @@
 import { PassThrough } from 'node:stream';
 import { expect, test } from '@playwright/test';
-import { runNarsAttachClient } from '@narada2/agent-cli/nars-attach-client';
-import { AGENT_WEB_UI_SNIPPET_ACTIONS } from '@narada2/nars-client-projection-contract';
+import { runNarsAttachClient } from '@narada-core/agent-cli/nars-attach-client';
+import { AGENT_WEB_UI_SNIPPET_ACTIONS } from '@narada-core/nars-client-projection-contract';
 import { startSharedRuntime, waitFor } from './nars-runtime-fixture.js';
 
 function healthSnapshot(event: any) {

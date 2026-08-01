@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/operator-console-remote-gateway",
+  "name": "@narada-core/operator-console-remote-gateway",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -21,8 +21,8 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@narada2/operator-console-contract": "workspace:*",
-    "@narada2/operator-router": "workspace:*"
+    "@narada-core/operator-console-contract": "workspace:*",
+    "@narada-core/operator-router": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -33,7 +33,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-console-remote-gateway"
   },
   "engines": {

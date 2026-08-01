@@ -202,7 +202,7 @@ describe('Narada MCP facade', () => {
     expect(result).toMatchObject({
       status: 'success',
       schema: 'narada.site_task_lifecycle.mcp_plan_init_result.v0',
-      packageName: '@narada2/site-task-lifecycle',
+      packageName: '@narada-core/site-task-lifecycle',
       siteId: 'task-lifecycle-site',
       mutationAttempted: false,
       sourceStateImported: false,
@@ -365,7 +365,7 @@ describe('Narada MCP facade', () => {
     expect(result).toMatchObject({
       status: 'success',
       schema: 'narada.agent_context_memory.mcp_plan_hydration_result.v0',
-      packageName: '@narada2/agent-context-memory',
+      packageName: '@narada-core/agent-context-memory',
       mutationAttempted: false,
       mutationExecuted: false,
       runtimeHydrationExecuted: false,

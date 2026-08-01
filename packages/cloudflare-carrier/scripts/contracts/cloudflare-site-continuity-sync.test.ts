@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileGoverned, spawnTestChild } from '@narada2/process-launch-posture';
+import { execFileGoverned, spawnTestChild } from '@narada-core/process-launch-posture';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
@@ -451,11 +451,11 @@ test('site continuity read-cloudflare emits operator text handoff when using ope
     assert.match(result.stdout, /Site Continuity Sync/);
     assert.match(result.stdout, /Command: read-cloudflare/);
     assert.match(result.stdout, /Exchange Packet:/);
-    assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-    assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
-    assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
-    assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+    assert.match(result.stdout, /Operation List: pnpm --filter @narada-core\/cloudflare-carrier product:operation:list:text/);
+    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
+    assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
@@ -528,13 +528,13 @@ test('site continuity sync-once emits operator text handoff when using operator 
     assert.match(result.stdout, /Loop Report: site-continuity-loop:site_fixture:/);
     assert.match(result.stdout, /Loop Report Artifact Path: .*site-continuity-loop-report\.json/);
     assert.match(result.stdout, /Durability Action: refreshed_existing_packet/);
-    assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-    assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
-    assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
-    assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
-    assert.match(result.stdout, /Inbound Packet Materialize: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings -- --packet .*cloudflare-inbound\.json/);
-    assert.match(result.stdout, /Loop Report Publish: pnpm --filter @narada2\/cloudflare-carrier product:site-continuity:loop-report:text -- --url \S+ --site site_fixture --operator-session-file \S+ --report-file .*site-continuity-loop-report\.json/);
+    assert.match(result.stdout, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+    assert.match(result.stdout, /Operation List: pnpm --filter @narada-core\/cloudflare-carrier product:operation:list:text/);
+    assert.match(result.stdout, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url \S+ --site site_fixture --operator-session-file \S+ --execute-site-next/);
+    assert.match(result.stdout, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url \S+ --site site_fixture --operator-session-file \S+/);
+    assert.match(result.stdout, /Inbound Packet Materialize: pnpm --filter @narada-core\/cloudflare-carrier continuity:bindings -- --packet .*cloudflare-inbound\.json/);
+    assert.match(result.stdout, /Loop Report Publish: pnpm --filter @narada-core\/cloudflare-carrier product:site-continuity:loop-report:text -- --url \S+ --site site_fixture --operator-session-file \S+ --report-file .*site-continuity-loop-report\.json/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
@@ -624,8 +624,8 @@ test('site continuity reconciliation execution emits operator text handoff when 
     assert.match(result.stdout, /Command: reconciliation-execution-put/);
     assert.match(result.stdout, /Execution Recorded: yes/);
     assert.match(result.stdout, /Execution Status: completed/);
-    assert.match(result.stdout, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-    assert.match(result.stdout, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
+    assert.match(result.stdout, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+    assert.match(result.stdout, /Operation List: pnpm --filter @narada-core\/cloudflare-carrier product:operation:list:text/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
@@ -666,7 +666,7 @@ test('site continuity publication evidence emits operator text handoff when usin
   const evidence = {
     repository_publication_request_id: 'repository-publication-request-fixture',
     publication_execution_id: 'repository-publication-execution-fixture',
-    repository_ref: 'github:andrey-kokoev/narada',
+    repository_ref: 'github:narada-core/narada',
     branch_ref: 'main',
     source_change_ref: 'git:commit:fixture',
     windows_admission_action: 'refuse',
@@ -699,8 +699,8 @@ test('site continuity publication evidence emits operator text handoff when usin
     assert.match(result.stdout, /Command: repository-publication-evidence-put/);
     assert.match(result.stdout, /Request: repository-publication-request-fixture/);
     assert.match(result.stdout, /Execution: repository-publication-execution-fixture/);
-    assert.match(result.stdout, /Publication Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
-    assert.match(result.stdout, /Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+    assert.match(result.stdout, /Publication Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:request:review:text/);
+    assert.match(result.stdout, /Publication Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
@@ -723,7 +723,7 @@ test('site continuity sync executes pending repository publication requests by r
             repository_publication_request_id: 'repository-publication-request-fixture',
             publication_ref: 'repository-publication:fixture',
             requested_action_ref: 'repository-publication-action:fixture',
-            repository_ref: 'github:andrey-kokoev/narada',
+            repository_ref: 'github:narada-core/narada',
             branch_ref: 'main',
             source_change_ref: 'git:commit:fixture-source',
             cloudflare_repository_publication_admission: {
@@ -802,7 +802,7 @@ test('site continuity pending publication execution emits operator text handoff 
             repository_publication_request_id: 'repository-publication-request-fixture',
             publication_ref: 'repository-publication:fixture',
             requested_action_ref: 'repository-publication-action:fixture',
-            repository_ref: 'github:andrey-kokoev/narada',
+            repository_ref: 'github:narada-core/narada',
             branch_ref: 'main',
             source_change_ref: 'git:commit:fixture-source',
             cloudflare_repository_publication_admission: {
@@ -843,9 +843,9 @@ test('site continuity pending publication execution emits operator text handoff 
     assert.equal(result.code, 0, result.stderr);
     assert.match(result.stdout, /Command: repository-publication-execute-pending/);
     assert.match(result.stdout, /Selection: selected requests=1/);
-    assert.match(result.stdout, /Publication Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
-    assert.match(result.stdout, /Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
-    assert.match(result.stdout, /Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
+    assert.match(result.stdout, /Publication Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:request:review:text/);
+    assert.match(result.stdout, /Publication Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+    assert.match(result.stdout, /Publication Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
   } finally {
     await mock.close();
     await rm(root, { recursive: true, force: true });
@@ -869,7 +869,7 @@ test('site continuity sync executes pending repository publication requests with
             repository_publication_request_id: 'repository-publication-request-push-fixture',
             publication_ref: 'repository-publication:push-fixture',
             requested_action_ref: 'repository-publication-action:push-fixture',
-            repository_ref: 'github:andrey-kokoev/narada',
+            repository_ref: 'github:narada-core/narada',
             branch_ref: 'main',
             source_change_ref: `git:commit:${fixture.head}`,
             cloudflare_repository_publication_admission: {

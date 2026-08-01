@@ -40,7 +40,7 @@ All three variants are **Sites**, not operations, not verticals, and not deploym
 >
 > This chapter documents one concrete Linux materialization with two primary variants (system-mode and user-mode). A generic `Site` abstraction (interface, base class, or shared package) is **not justified yet**. The Cloudflare, Windows, and Linux families differ in lock mechanism, secret binding, and process lifecycle enough that premature abstraction would hide real substrate constraints.
 >
-> If Tasks 430–435 reveal substantial commonality (e.g., identical health schema, identical cycle-step pipeline, identical trace format), a shared `@narada2/site-core` package may be proposed in the closure review (Task 435). Until then, each substrate keeps its own package or module.
+> If Tasks 430–435 reveal substantial commonality (e.g., identical health schema, identical cycle-step pipeline, identical trace format), a shared `@narada-core/site-core` package may be proposed in the closure review (Task 435). Until then, each substrate keeps its own package or module.
 
 ---
 
@@ -192,7 +192,7 @@ Both variants share these Narada concerns, even though the Linux substrate diffe
 | **Site identity** | `site_id` string, directory name under `/var/lib/narada/` | `site_id` string, directory name under `~/.local/share/narada/` |
 | **Cycle trigger** | systemd system timer → `Type=oneshot` service → Node.js | systemd user timer → `Type=oneshot` user service → Node.js |
 | **Coordinator/storage** | `better-sqlite3` file at `{siteRoot}/coordinator.db` | Same (`better-sqlite3` file) |
-| **Lock/recovery model** | `FileLock` from `@narada2/control-plane` (cross-platform, handles Linux via PID check) | Same `FileLock` |
+| **Lock/recovery model** | `FileLock` from `@narada-core/control-plane` (cross-platform, handles Linux via PID check) | Same `FileLock` |
 | **Health/trace location** | SQLite `site_health` + `cycle_traces` tables | Identical SQLite tables |
 | **Trace artifacts** | `{siteRoot}/traces/` | `{siteRoot}/traces/` |
 | **Secret binding** | systemd credentials → env → `.env` → config | Secret Service → `pass` → env → `.env` → config |
@@ -281,7 +281,7 @@ The Cycle explicitly avoids long-running daemon assumptions.
 
 ### Steps
 
-1. **Acquire Site/Cycle lock** — Claim exclusive coordination authority via `FileLock` from `@narada2/control-plane`. Fail fast if another Cycle is active.
+1. **Acquire Site/Cycle lock** — Claim exclusive coordination authority via `FileLock` from `@narada-core/control-plane`. Fail fast if another Cycle is active.
 2. **Sync source deltas** — Pull new facts from the Source. Write cursor and apply-log updates.
 3. **Derive / admit work** — Run context formation + foreman admission over new facts. Open or supersede work items.
 4. **Run charter evaluation** — Lease runnable work, execute charters, persist evaluations.

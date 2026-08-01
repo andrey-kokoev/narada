@@ -13,7 +13,7 @@ describe('verify-policy', () => {
 
     it('classifies single test file', () => {
       expect(classifyCommandScope('vitest run test/unit/foo.test.ts')).toBe('single-file');
-      expect(classifyCommandScope('pnpm --filter @narada2/cli exec vitest run test/commands/foo.test.ts')).toBe('single-file');
+      expect(classifyCommandScope('pnpm --filter @narada-core/cli exec vitest run test/commands/foo.test.ts')).toBe('single-file');
     });
 
     it('classifies multiple test files', () => {
@@ -21,7 +21,7 @@ describe('verify-policy', () => {
     });
 
     it('classifies package-level commands', () => {
-      expect(classifyCommandScope('pnpm --filter @narada2/charters test')).toBe('package');
+      expect(classifyCommandScope('pnpm --filter @narada-core/charters test')).toBe('package');
       expect(classifyCommandScope('pnpm exec vitest run')).toBe('package');
     });
 
@@ -62,13 +62,13 @@ describe('verify-policy', () => {
     });
 
     it('rejects package-level by default', () => {
-      const result = checkCommandPolicy('pnpm --filter @narada2/charters test');
+      const result = checkCommandPolicy('pnpm --filter @narada-core/charters test');
       expect(result.allowed).toBe(false);
       expect(result.scope).toBe('package');
     });
 
     it('allows package-level with override', () => {
-      const result = checkCommandPolicy('pnpm --filter @narada2/charters test', {
+      const result = checkCommandPolicy('pnpm --filter @narada-core/charters test', {
         allowPackage: true,
       });
       expect(result.allowed).toBe(true);

@@ -1,5 +1,5 @@
 import { onBeforeUnmount, ref } from 'vue';
-import { agentIdentityDisplay } from '@narada2/agent-identity';
+import { agentIdentityDisplay } from '@narada-core/agent-identity';
 import type { SessionTransport } from '../../protocol/sessionTransport';
 
 export interface HealthIdentitySummary {

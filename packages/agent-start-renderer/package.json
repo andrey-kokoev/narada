@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/agent-start-renderer",
+  "name": "@narada-core/agent-start-renderer",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -11,7 +11,7 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@narada2/agent-identity": "workspace:*"
+    "@narada-core/agent-identity": "workspace:*"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -22,7 +22,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/agent-start-renderer"
   },
   "engines": {

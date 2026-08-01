@@ -8,7 +8,7 @@
 import { randomUUID } from 'node:crypto';
 import { access, unlink, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { scanTasksByRange } from '../lib/task-governance.js';

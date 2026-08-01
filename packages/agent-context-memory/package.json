@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/agent-context-memory",
+  "name": "@narada-core/agent-context-memory",
   "version": "0.1.0",
   "description": "Descriptor contracts for Site-local agent-context checkpoint memory",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/agent-context-memory"
   }
 }

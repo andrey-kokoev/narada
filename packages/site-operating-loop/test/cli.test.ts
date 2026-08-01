@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { once } from 'node:events';
 import { test } from 'node:test';
-import { runHiddenPostureCommandSync, spawnTestChild } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync, spawnTestChild } from '@narada-core/process-launch-posture';
 
 const packageRoot = new URL('..', import.meta.url);
 const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.ts', import.meta.url));

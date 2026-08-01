@@ -1,6 +1,6 @@
-# AGENTS.md - @narada2/operator-console-contract
+# AGENTS.md - @narada-core/operator-console-contract
 
-Shared UI-neutral descriptors for the Narada Operator Console surface catalog: concepts, ownership, authority, projection, intent admission, routes, and default availability. Package metadata in `package.json` (`narada` block) is authoritative: `package_role: shared_operator_domain_and_wire_contract`, `surface: operator_console`, `authority_owner: @narada2/cli`.
+Shared UI-neutral descriptors for the Narada Operator Console surface catalog: concepts, ownership, authority, projection, intent admission, routes, and default availability. Package metadata in `package.json` (`narada` block) is authoritative: `package_role: shared_operator_domain_and_wire_contract`, `surface: operator_console`, `authority_owner: @narada-core/cli`.
 
 For kernel and workspace rules, read `../../AGENTS.md` (narada-root) first.
 
@@ -12,7 +12,7 @@ It owns:
 - the `v3` route directory, authoritative for browser workspace handoff, including route path constants (`OPERATOR_CONSOLE_PATH`, registry/launch/sessions paths, `OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH`);
 - the redacted `OperatorSessionWireRecord` used by the read-only Agent Sessions inventory.
 
-Consumers: `@narada2/cli` console server, `@narada2/operator-console-ui`, and the Cloudflare NARS projection (`/api/nars/workspace/routes`). No consumer may keep a second list of operator surfaces.
+Consumers: `@narada-core/cli` console server, `@narada-core/operator-console-ui`, and the Cloudflare NARS projection (`/api/nars/workspace/routes`). No consumer may keep a second list of operator surfaces.
 
 It does not own:
 
@@ -31,8 +31,8 @@ It does not own:
 ## Verification
 
 ```text
-pnpm --filter @narada2/operator-console-contract test
-pnpm --filter @narada2/operator-console-contract typecheck
+pnpm --filter @narada-core/operator-console-contract test
+pnpm --filter @narada-core/operator-console-contract typecheck
 ```
 
 `test` runs the node:test suite (`test/index.test.ts`) via tsx; `build` is `tsc -p tsconfig.build.json`.

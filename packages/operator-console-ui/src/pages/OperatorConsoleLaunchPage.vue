@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { OPERATOR_CONSOLE_REGISTRY_PATH } from '@narada2/operator-console-contract';
+import { OPERATOR_CONSOLE_REGISTRY_PATH } from '@narada-core/operator-console-contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import SiteRegistryList from '../site-registry/components/SiteRegistryList.vue';
 import { useSiteRegistry } from '../site-registry/composables/useSiteRegistry';

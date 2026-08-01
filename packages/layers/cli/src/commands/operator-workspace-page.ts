@@ -8,14 +8,14 @@ import {
   type OperatorSurfaceAvailabilityOverrides,
   type OperatorSurfaceRouteAvailabilityOverrides,
   type OperatorSurfaceProjection,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 
 const require = createRequire(import.meta.url);
 let sharedUiCssCache: string | undefined;
 
 function sharedUiCss(): string {
   if (sharedUiCssCache !== undefined) return sharedUiCssCache;
-  const cssPath = require.resolve('@narada2/ui/styles.css');
+  const cssPath = require.resolve('@narada-core/ui/styles.css');
   sharedUiCssCache = readFileSync(cssPath, 'utf8').replace(/<\/style/gi, '<\\/style');
   return sharedUiCssCache;
 }

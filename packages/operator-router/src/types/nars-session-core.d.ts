@@ -1,4 +1,4 @@
-declare module '@narada2/nars-session-core/artifacts' {
+declare module '@narada-core/nars-session-core/artifacts' {
   export interface NarsArtifactContentResult {
     content: Buffer;
     content_type: string;
@@ -11,7 +11,7 @@ declare module '@narada2/nars-session-core/artifacts' {
   export function registerNarsArtifact(input: { sessionPath: string; sessionId: string; siteRoot: string; sourcePath: string; kind: string }): { record: { artifact_id: string } };
 }
 
-declare module '@narada2/nars-session-core/session-index' {
+declare module '@narada-core/nars-session-core/session-index' {
   export interface NarsSessionDiscoveryResult {
     sessions: Array<Record<string, unknown> & { session_id?: string | null; record?: Record<string, unknown> | null }>;
   }

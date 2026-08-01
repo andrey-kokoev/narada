@@ -1,4 +1,4 @@
-import { stopOperatorConsoleRuntime } from '@narada2/operator-console-runtime';
+import { stopOperatorConsoleRuntime } from '@narada-core/operator-console-runtime';
 
 export type ConsoleProjectionStopStatus = 'not_running' | 'stopped' | 'stale_route_removed';
 

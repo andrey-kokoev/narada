@@ -21,7 +21,7 @@ The Windows Site materialization (Tasks 371–377) provides the following substr
 | **File lock acquisition** | Implemented | `FileLock.acquire()` with 10s timeout, stale-lock recovery |
 | **Stuck-lock recovery** | Implemented | TTL-based steal in `recoverStuckLock()` |
 | **Bounded Cycle execution** | Partial | 8-step pipeline with fixture stubs for steps 2–6 |
-| **Health transition** | Implemented | `computeHealthTransition()` from `@narada2/control-plane` |
+| **Health transition** | Implemented | `computeHealthTransition()` from `@narada-core/control-plane` |
 | **Health persistence** | Implemented | SQLite `site_health` table |
 | **Trace persistence** | Implemented | SQLite `cycle_traces` table |
 | **Cycle ceiling enforcement** | Implemented | 5-minute default ceiling with abort buffer |
@@ -46,10 +46,10 @@ The Windows Site materialization (Tasks 371–377) provides the following substr
 
 | Capability | Status | Evidence |
 |------------|--------|----------|
-| **Graph delta sync** | Reusable from control-plane | `HttpSourceAdapter` in `@narada2/control-plane` |
-| **Config loading** | Implemented | `loadConfig()` from `@narada2/control-plane` |
-| **Cursor persistence** | Implemented | `cursor.ts` in `@narada2/control-plane` |
-| **Apply-log idempotency** | Implemented | `apply-log.ts` in `@narada2/control-plane` |
+| **Graph delta sync** | Reusable from control-plane | `HttpSourceAdapter` in `@narada-core/control-plane` |
+| **Config loading** | Implemented | `loadConfig()` from `@narada-core/control-plane` |
+| **Cursor persistence** | Implemented | `cursor.ts` in `@narada-core/control-plane` |
+| **Apply-log idempotency** | Implemented | `apply-log.ts` in `@narada-core/control-plane` |
 
 ### 1.3 Coordinator / Persistence (`packages/sites/windows/src/coordinator.ts`)
 
@@ -115,9 +115,9 @@ The Windows Site materialization (Tasks 371–377) provides the following substr
 
 | Gap | Exists? | Needed For | Resolution |
 |-----|---------|------------|------------|
-| `CampaignRequestContextFormation` | ❌ No | Grouping campaign-request facts by thread | Implement in `@narada2/control-plane/src/foreman/` (Task 388 defines behavior) |
+| `CampaignRequestContextFormation` | ❌ No | Grouping campaign-request facts by thread | Implement in `@narada-core/control-plane/src/foreman/` (Task 388 defines behavior) |
 | Campaign-production charter | ❌ No | Producing `campaign_brief` or `send_reply` evaluations | Materialize in ops repo; bind in Site config (Task 389) |
-| `campaign_brief` action type | ❌ No | Durable draft campaign intent | Add to outbound action types in `@narada2/control-plane` (Task 390) |
+| `campaign_brief` action type | ❌ No | Durable draft campaign intent | Add to outbound action types in `@narada-core/control-plane` (Task 390) |
 | Campaign sender allowlist config | ❌ No | Filtering `campaign_request_senders` | Add to Site `config.json` schema (Task 388) |
 | Campaign segment config | ❌ No | Segment mention extraction | Add to Site `config.json` schema (Task 388) |
 

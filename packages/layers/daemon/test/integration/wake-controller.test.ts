@@ -6,7 +6,7 @@ import {
   createSyncService,
   type SyncService,
 } from "../../src/service.js";
-import type { NormalizedBatch, GraphAdapter } from "@narada2/control-plane";
+import type { NormalizedBatch, GraphAdapter } from "@narada-core/control-plane";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-wake-"));

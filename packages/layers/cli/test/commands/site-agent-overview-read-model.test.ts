@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildAgentIdentityRefV2 } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2 } from '@narada-core/agent-identity';
 import { createSiteAgentOverviewReadModel } from '../../src/commands/site-agent-overview-read-model.js';
 import { siteAuthorityRootForRoot } from '../../src/lib/site-authority-paths.js';
 import type { WorkspaceLaunchRecord } from '../../src/commands/workspace-launch-types.js';

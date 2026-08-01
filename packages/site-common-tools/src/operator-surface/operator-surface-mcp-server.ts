@@ -2,8 +2,8 @@
 import { createHash } from 'crypto';
 import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, statSync, writeFileSync } from 'fs';
 import { dirname, resolve, join, relative } from 'path';
-import Database from '@narada2/sqlite';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import Database from '@narada-core/sqlite';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 import { fileURLToPath } from 'url';
 import net from 'net';
 import {

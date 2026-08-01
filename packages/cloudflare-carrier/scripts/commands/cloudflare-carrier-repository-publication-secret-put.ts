@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';

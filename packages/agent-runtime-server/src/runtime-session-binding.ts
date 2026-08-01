@@ -1,6 +1,6 @@
-import { NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS } from '@narada2/nars-intelligence-kernel-contract';
-import { createCarrierTurnAdapter } from '@narada2/carrier-runtime/carrier-turn-adapter';
-import { createNarsSessionSupervisor } from '@narada2/nars-session-core/session-supervisor';
+import { NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS } from '@narada-core/nars-intelligence-kernel-contract';
+import { createCarrierTurnAdapter } from '@narada-core/carrier-runtime/carrier-turn-adapter';
+import { createNarsSessionSupervisor } from '@narada-core/nars-session-core/session-supervisor';
 import { NarsIntelligenceInvocationError } from './intelligence-runtime-controller.js';
 
 function isProviderFollowUpRoundLimitError(error: any) {

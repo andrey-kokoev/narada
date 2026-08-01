@@ -33,7 +33,7 @@
  * See: `docs/02-architecture.md` § "Dual Recovery Model"
  */
 
-import { runGovernedCommand } from "@narada2/process-launch-posture";
+import { runGovernedCommand } from "@narada-core/process-launch-posture";
 import type { IntentStore } from "../intent/store.js";
 import type { ProcessExecutionStore } from "./store.js";
 import type { ProcessRunPayload } from "./types.js";

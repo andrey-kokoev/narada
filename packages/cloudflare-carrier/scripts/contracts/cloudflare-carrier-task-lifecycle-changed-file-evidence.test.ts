@@ -324,15 +324,15 @@ test('formatTaskLifecycleChangedFileEvidenceText renders admitted and refused su
   assert.match(admitted, /Report: report-1/);
   assert.match(admitted, /Changed File Evidence Count: 1/);
   assert.match(admitted, /Filesystem Mutation: not_admitted/);
-  assert.match(admitted, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(admitted, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(admitted, /Posture Coherence Review:/);
   assert.match(admitted, /Durability Coherence Review:/);
   assert.match(admitted, /Session Evidence:/);
   assert.match(admitted, /Operation Review:/);
   assert.match(admitted, /Operation Next Workflow:/);
-  assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
-  assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(admitted, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(admitted.includes('secret-token'), false);
 
   const refused = formatTaskLifecycleChangedFileEvidenceText({
@@ -356,8 +356,8 @@ test('formatTaskLifecycleChangedFileEvidenceText renders admitted and refused su
   assert.match(refused, /Task Lifecycle Changed File Evidence: refused/);
   assert.match(refused, /Code: changed_file_evidence_not_admitted/);
   assert.match(refused, /Decision: action=refuse reason=windows_task_lifecycle_mutation_authority_retained/);
-  assert.match(refused, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
-  assert.match(refused, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(refused, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
+  assert.match(refused, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(refused.includes('operator-session-cookie'), false);
 });
 

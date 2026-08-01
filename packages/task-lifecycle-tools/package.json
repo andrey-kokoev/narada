@@ -1,14 +1,14 @@
 {
-  "name": "@narada2/task-lifecycle-tools",
+  "name": "@narada-core/task-lifecycle-tools",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/site-common-tools": "workspace:*",
-    "@narada2/sqlite": "workspace:*",
-    "@narada2/task-governance": "workspace:*",
-    "@narada2/agent-identity": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/site-common-tools": "workspace:*",
+    "@narada-core/sqlite": "workspace:*",
+    "@narada-core/task-governance": "workspace:*",
+    "@narada-core/agent-identity": "workspace:*"
   },
   "engines": {
     "node": ">=22.0.0"
@@ -21,7 +21,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/task-lifecycle-tools"
   },
   "exports": {

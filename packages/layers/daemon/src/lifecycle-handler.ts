@@ -8,7 +8,7 @@
  * - renewalRequired: Subscription needs to be renewed
  */
 
-import type { LifecycleNotification, LifecycleEvent } from "@narada2/control-plane";
+import type { LifecycleNotification, LifecycleEvent } from "@narada-core/control-plane";
 import type { ParsedNotification } from "./webhook-server.js";
 import { createLogger, type Logger } from "./lib/logger.js";
 

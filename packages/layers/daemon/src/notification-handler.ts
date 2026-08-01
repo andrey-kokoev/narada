@@ -11,12 +11,12 @@ import type {
   GraphNotification,
   Notification,
   LifecycleNotification,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import {
   isChangeNotification,
   isLifecycleNotification,
   extractMessageId,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type { ParsedNotification } from "./webhook-server.js";
 import { createLogger, type Logger } from "./lib/logger.js";
 

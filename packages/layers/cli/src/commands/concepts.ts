@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 
-type ConceptsModule = typeof import('@narada2/concepts');
+type ConceptsModule = typeof import('@narada-core/concepts');
 
 let conceptsModulePromise: Promise<ConceptsModule> | null = null;
 
@@ -10,7 +10,7 @@ async function loadConceptsModule(): Promise<ConceptsModule> {
   if (!conceptsModulePromise) {
     conceptsModulePromise = (async () => {
       try {
-        return await import('@narada2/concepts');
+        return await import('@narada-core/concepts');
       } catch {
         return await import('../../../../domains/concepts/dist/index.js');
       }

@@ -2,7 +2,7 @@ import type {
   OperatorSurfaceProjection,
   OperatorSurfaceRouteProjection,
   OperatorWorkspaceRouteDirectory,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 
 export function renderCloudflareWorkspacePage(
   directory: OperatorWorkspaceRouteDirectory,

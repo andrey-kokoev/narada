@@ -172,7 +172,7 @@ Cloudflare carrier is a carrier/runtime family for Cloudflare-hosted execution. 
 ## Open Decisions
 
 1. Whether event streaming should be WebSocket-only or support SSE for read-only projection.
-2. Whether the local gateway lives in `@narada2/agent-runtime-server`, a new package, or the CLI as an initial executable wrapper.
+2. Whether the local gateway lives in `@narada-core/agent-runtime-server`, a new package, or the CLI as an initial executable wrapper.
 3. Whether Cloudflare Access identity maps to Narada operator identity through User Site config, Site config, or a dedicated remote-access policy file.
 4. How much redaction is required for `operations` projection before it is safe over remote observation.
 5. Whether remote observation should record durable audit events in the local Site or only gateway logs for the first slice.

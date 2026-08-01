@@ -97,7 +97,7 @@ await writeFile(mcpCapabilityPath, `${JSON.stringify({
   status: 'registered_file_backed_capability_evidence',
   site_id: 'narada-proper',
   site_root: siteRoot,
-  package: '@narada2/site-task-lifecycle',
+  package: '@narada-core/site-task-lifecycle',
   transport_command: 'node_modules/.bin/narada-mcp.cmd --site-root D:\\\\code\\\\narada --site-id narada-proper',
   tools_expected: [
     'site_task_lifecycle.plan_init',

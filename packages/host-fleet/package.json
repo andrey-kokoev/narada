@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/host-fleet",
+  "name": "@narada-core/host-fleet",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -7,7 +7,7 @@
     "package_role": "host_fleet_registry_and_gateway",
     "surface": "host_fleet",
     "presentation_only": false,
-    "authority_owner": "@narada2/host-fleet"
+    "authority_owner": "@narada-core/host-fleet"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -44,7 +44,7 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@narada2/sqlite": "workspace:*"
+    "@narada-core/sqlite": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -55,7 +55,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/host-fleet"
   },
   "engines": {

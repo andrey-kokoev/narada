@@ -5,7 +5,7 @@ import { expect, test } from 'vitest';
 
 const packageRoot = fileURLToPath(new URL('..', import.meta.url));
 const workspaceRoot = join(packageRoot, '..', '..');
-const projectionBuild = 'pnpm --filter @narada2/cloudflare-nars-projection build';
+const projectionBuild = 'pnpm --filter @narada-core/cloudflare-nars-projection build';
 
 function readPackage(relativePath: string): Record<string, unknown> {
   return JSON.parse(readFileSync(join(workspaceRoot, relativePath), 'utf8')) as Record<string, unknown>;

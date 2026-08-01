@@ -1,4 +1,4 @@
-import type { Database } from "@narada2/control-plane";
+import type { Database } from "@narada-core/control-plane";
 import {
   executeOperatorAction,
   SqliteCoordinatorStore,
@@ -6,7 +6,7 @@ import {
   SqliteIntentStore,
   type OperatorActionPayload,
   type OperatorActionResult,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type {
   ConsoleControlRequest,
   ControlRequestResult,
@@ -144,7 +144,7 @@ export function createWindowsSiteControlClient(
   const variant = site.variant;
 
   const contextFactory: WindowsSiteControlContextFactory = async (_siteId, _scopeId) => {
-    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+    const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
     const db = new DatabaseCtor(siteDbPath(_siteId, variant)) as Database;
 
     const coordinatorStore = new SqliteCoordinatorStore({ db });

@@ -1,4 +1,4 @@
-import { shouldProjectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+import { shouldProjectNarsClientEvent } from '@narada-core/nars-client-projection-contract';
 import type { PiRowViewModel, ProjectionView } from '../types.js';
 import { durableEventIdentity, durableEventSequence } from '../nars-client/event-stream.js';
 

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada2/operator-router';
+import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada-core/operator-router';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -282,7 +282,7 @@ async function resolveSiteRecord(
   reference: string,
 ): Promise<{ record: { siteId: string; siteRoot: string } | null; error?: string }> {
   try {
-    const { resolveRegistryDbPathByLocus, openRegistryDb, SiteRegistry } = await import('@narada2/windows-site');
+    const { resolveRegistryDbPathByLocus, openRegistryDb, SiteRegistry } = await import('@narada-core/windows-site');
     const dbPath = resolveRegistryDbPathByLocus({ authorityLocus: 'user' });
     const db = await openRegistryDb(dbPath);
     const registry = new SiteRegistry(db);
@@ -303,7 +303,7 @@ async function checkMcpFabricMaterialization(
 ): Promise<{ check: SiteLaunchCheck; validation?: McpFabricValidation }> {
   try {
     // Variable specifier keeps the untyped .ts workspace module out of tsc resolution.
-    const mcpFabricSpecifier = '@narada2/mcp-fabric';
+    const mcpFabricSpecifier = '@narada-core/mcp-fabric';
     const { loadSiteMcpFabric } = (await import(mcpFabricSpecifier)) as McpFabricModule;
     const fabric = loadSiteMcpFabric(siteRoot, { validateRegistry: 'diagnostic' });
     const validation = fabric.registry_validation;

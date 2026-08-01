@@ -4,8 +4,8 @@
  * provider or model selections.
  */
 
-import type { AuthoritativeDecisionClock, ResourceRef } from "@narada2/invokable-intelligence-contract";
-import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+import type { AuthoritativeDecisionClock, ResourceRef } from "@narada-core/invokable-intelligence-contract";
+import type { ResolverContext } from "@narada-core/invokable-intelligence-resolver";
 
 export interface LocalSiteContext {
   targetSite: ResourceRef;

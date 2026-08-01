@@ -1,4 +1,4 @@
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 
 export function runProcessTest({ label, command = process.execPath, args, cwd, env = process.env, timeoutMs = 8500 }: any) : any{
   return new Promise((resolve: any) => {

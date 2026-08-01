@@ -20,7 +20,7 @@ Surface: `narada-proper.surface.agent-context-memory.live-first-slice-mcp.v0`
 
 ## Boundary
 
-The package `@narada2/agent-context-memory` remains descriptor/contract oriented. The CLI runtime layer owns the local JSON store carrier for this first slice.
+The package `@narada-core/agent-context-memory` remains descriptor/contract oriented. The CLI runtime layer owns the local JSON store carrier for this first slice.
 
 ## Not Admitted
 

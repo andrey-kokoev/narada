@@ -1,4 +1,4 @@
-declare module '@narada2/concepts' {
+declare module '@narada-core/concepts' {
   export const DEFAULT_CONCEPT_RECORDS_DIR: string;
 
   export interface ConceptConfidence {

@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/operator-console-contract",
+  "name": "@narada-core/operator-console-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "package_role": "shared_operator_domain_and_wire_contract",
     "surface": "operator_console",
     "presentation_only": false,
-    "authority_owner": "@narada2/cli"
+    "authority_owner": "@narada-core/cli"
   },
   "exports": {
     ".": {
@@ -34,7 +34,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-console-contract"
   },
   "engines": {

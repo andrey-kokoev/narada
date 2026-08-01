@@ -13,7 +13,7 @@ A Site Operating Loop runtime is the Narada-owned runtime contract for durable, 
 Canonical package:
 
 ```text
-@narada2/site-operating-loop
+@narada-core/site-operating-loop
 ```
 
 Canonical binary:
@@ -26,14 +26,14 @@ Canonical exports:
 
 | Export | Owns |
 | --- | --- |
-| `@narada2/site-operating-loop/site-loop-store` | Durable loop store, runtime-host authority/lease, runs, steps, locks, health, control, runtime events, triggers, attention, directive outcomes. |
-| `@narada2/site-operating-loop/runner` | One bounded Loop Run over a Site-provided step list. |
-| `@narada2/site-operating-loop/runtime` | Recurring runtime host that checks control state, claims triggers, executes bounded runs, and records runtime events. |
-| `@narada2/site-operating-loop/server` | Local HTTP/SSE attachment surface over one Site loop store. |
-| `@narada2/site-operating-loop/loop-module` | Validation of Site-owned loop body modules and step records. |
-| `@narada2/site-operating-loop/policy` | Generic policy loading, merging, validation, and quiet-hours helpers. |
-| `@narada2/site-operating-loop/state` | Pure run, trigger, and health lifecycle guards and transition evidence. |
-| `@narada2/site-operating-loop/runtime-host-state` | Pure Site Operating Runtime Host lifecycle FSM and transition guards. |
+| `@narada-core/site-operating-loop/site-loop-store` | Durable loop store, runtime-host authority/lease, runs, steps, locks, health, control, runtime events, triggers, attention, directive outcomes. |
+| `@narada-core/site-operating-loop/runner` | One bounded Loop Run over a Site-provided step list. |
+| `@narada-core/site-operating-loop/runtime` | Recurring runtime host that checks control state, claims triggers, executes bounded runs, and records runtime events. |
+| `@narada-core/site-operating-loop/server` | Local HTTP/SSE attachment surface over one Site loop store. |
+| `@narada-core/site-operating-loop/loop-module` | Validation of Site-owned loop body modules and step records. |
+| `@narada-core/site-operating-loop/policy` | Generic policy loading, merging, validation, and quiet-hours helpers. |
+| `@narada-core/site-operating-loop/state` | Pure run, trigger, and health lifecycle guards and transition evidence. |
+| `@narada-core/site-operating-loop/runtime-host-state` | Pure Site Operating Runtime Host lifecycle FSM and transition guards. |
 
 ## Layer Shape
 
@@ -170,7 +170,7 @@ summary as `context.prepared`. Preparation is for cycle-local observation or
 compatibility materialization; durable loop evidence still belongs in the phase
 steps returned by `createSiteOperatingLoopSteps()`.
 
-The generic contract validator is `resolveSiteOperatingLoopModule()` from `@narada2/site-operating-loop/loop-module`.
+The generic contract validator is `resolveSiteOperatingLoopModule()` from `@narada-core/site-operating-loop/loop-module`.
 
 Minimum step shape:
 

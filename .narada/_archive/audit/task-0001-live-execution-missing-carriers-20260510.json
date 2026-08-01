@@ -31,7 +31,7 @@
     },
     {
       "id": "narada-proper.carrier.task-0001.concrete-adapter.v0",
-      "missing_surface": "concrete adapter implementation outside @narada2/site-task-lifecycle with dependency/driver owner and conformance evidence"
+      "missing_surface": "concrete adapter implementation outside @narada-core/site-task-lifecycle with dependency/driver owner and conformance evidence"
     },
     {
       "id": "narada-proper.carrier.task-0001.db-mutation.v0",

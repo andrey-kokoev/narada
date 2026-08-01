@@ -9,7 +9,7 @@ where a Site runs.
 
 | Path | Status | Use |
 | --- | --- | --- |
-| Published `@narada2/cli` through npm or pnpm | Supported | Normal installation on a developer machine or server |
+| Published `@narada-core/cli` through npm or pnpm | Supported | Normal installation on a developer machine or server |
 | Narada repository checkout with `pnpm install` and a local build | Supported for development | Working on Narada itself |
 | `linux-user` Site | Supported target | Personal workstation or non-root user service |
 | `linux-system` Site | Supported target | Headless machine or system service |
@@ -33,9 +33,9 @@ silently install a second Node runtime into a Site.
 ## Published CLI Installation
 
 ```bash
-npm install -g @narada2/cli
+npm install -g @narada-core/cli
 # or:
-pnpm add -g @narada2/cli
+pnpm add -g @narada-core/cli
 
 narada --help
 narada --version
@@ -51,11 +51,11 @@ or ignored local `dist/` directories are publication failures.
 This path is for Narada development, not ordinary operators:
 
 ```bash
-git clone https://github.com/andrey-kokoev/narada.git
+git clone https://github.com/narada-core/narada.git
 cd narada
 corepack enable
 pnpm install
-pnpm --filter @narada2/cli build
+pnpm --filter @narada-core/cli build
 pnpm exec narada --help
 ```
 
@@ -247,7 +247,7 @@ controlled fixture for host-sensitive Linux contracts. It never calls a real
 provider or mutates an external supervisor:
 
 ```bash
-pnpm --filter @narada2/cli run test:linux-installation-e2e
+pnpm --filter @narada-core/cli run test:linux-installation-e2e
 ```
 
 The gate composes these proofs:
@@ -266,7 +266,7 @@ execution substrate as `native_linux`, `wsl`, or `controlled_fixture`. WSL is
 not accepted as native Linux. Native Linux CI must set the explicit guard:
 
 ```bash
-NARADA_REQUIRE_NATIVE_LINUX_E2E=1 pnpm --filter @narada2/cli run test:linux-installation-e2e
+NARADA_REQUIRE_NATIVE_LINUX_E2E=1 pnpm --filter @narada-core/cli run test:linux-installation-e2e
 ```
 
 The CLI `prepublishOnly` hook runs the Linux gate after publication admission;
@@ -285,10 +285,10 @@ provider or require provider credentials.
 From a checkout with GitHub CLI authentication, dispatch and observe it with:
 
 ```bash
-gh workflow run native-linux-installation.yml --repo andrey-kokoev/narada --ref main
-gh run list --repo andrey-kokoev/narada --workflow native-linux-installation.yml --limit 1
-gh run watch <run-id> --repo andrey-kokoev/narada --exit-status
-gh run download <run-id> --repo andrey-kokoev/narada --name native-linux-installation-evidence-<run-id>
+gh workflow run native-linux-installation.yml --repo narada-core/narada --ref main
+gh run list --repo narada-core/narada --workflow native-linux-installation.yml --limit 1
+gh run watch <run-id> --repo narada-core/narada --exit-status
+gh run download <run-id> --repo narada-core/narada --name native-linux-installation-evidence-<run-id>
 ```
 
 A successful run is evidence for the native Linux host gate only when the

@@ -14,8 +14,8 @@
   ],
   "verification": [
     {
-      "command": "pnpm -r --depth -1 list --json | Select-String -Pattern '\"name\": \"@narada2/(windows-site|cloudflare-site|linux-site|macos-site)\"'",
-      "result": "@narada2/windows-site, @narada2/cloudflare-site, @narada2/linux-site, and @narada2/macos-site found"
+      "command": "pnpm -r --depth -1 list --json | Select-String -Pattern '\"name\": \"@narada-core/(windows-site|cloudflare-site|linux-site|macos-site)\"'",
+      "result": "@narada-core/windows-site, @narada-core/cloudflare-site, @narada-core/linux-site, and @narada-core/macos-site found"
     }
   ],
   "terminal_claim": "packages/sites/* is restored to the pnpm workspace and Site packages are discoverable.",

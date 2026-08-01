@@ -41,7 +41,7 @@ export interface NaradaProperMcpRolePolicyProjection {
   server: NaradaProperMcpRolePolicyServer;
   policy_source: {
     kind: 'mcp_surface_registry';
-    package_name: '@narada2/narada-proper-mcp';
+    package_name: '@narada-core/narada-proper-mcp';
     surface_id: string;
   };
   reconciled_runtime_posture: {
@@ -106,7 +106,7 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
   {
     schema: 'narada.mcp_surface_registry.record.v0',
     surface_id: 'narada-proper.surface.agent-facing-mcp.v1',
-    package_name: '@narada2/narada-proper-mcp',
+    package_name: '@narada-core/narada-proper-mcp',
     surface_type: 'target_local_agent_facing_mcp',
     status: 'live',
     semantic_purpose: 'Target-local agent-facing Narada proper MCP facade over bounded Site, inbox, task, work-next, and agent-context surfaces.',
@@ -178,7 +178,7 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
   {
     schema: 'narada.mcp_surface_registry.record.v0',
     surface_id: 'narada-proper.surface.windows-shell-mcp.policy.v1',
-    package_name: '@narada2/mcp-shell-windows',
+    package_name: '@narada-core/mcp-shell-windows',
     surface_type: 'execution_policy_descriptor',
     status: 'planned',
     semantic_purpose: 'Policy descriptors for audited Windows shell-like MCP execution; not Narada proper authority.',
@@ -209,7 +209,7 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
   {
     schema: 'narada.mcp_surface_registry.record.v0',
     surface_id: 'narada-proper.surface.windows-test-mcp.policy.v1',
-    package_name: '@narada2/mcp-test-windows',
+    package_name: '@narada-core/mcp-test-windows',
     surface_type: 'test_gateway_descriptor',
     status: 'planned',
     semantic_purpose: 'Descriptor contracts for approved Windows test gateway MCP surfaces.',
@@ -239,7 +239,7 @@ export const NARADA_PROPER_MCP_SURFACE_REGISTRY: NaradaProperMcpSurfaceRecord[] 
   {
     schema: 'narada.mcp_surface_registry.record.v0',
     surface_id: 'narada-proper.surface.carrier-supervisor-mcp.policy.v1',
-    package_name: '@narada2/mcp-surface-carrier-supervisor',
+    package_name: '@narada-core/mcp-surface-carrier-supervisor',
     surface_type: 'carrier_supervisor_descriptor',
     status: 'planned',
     semantic_purpose: 'Read-only descriptor contracts for MCP surface carrier supervisor lifecycle.',
@@ -301,7 +301,7 @@ export function buildNaradaProperArchitectRolePolicyProjection(input: {
   include_alias_tools?: boolean;
 } = {}): NaradaProperMcpRolePolicyProjection {
   const registry = input.registry ?? NARADA_PROPER_MCP_SURFACE_REGISTRY;
-  const surface = registry.find((record) => record.package_name === '@narada2/narada-proper-mcp' && record.status === 'live');
+  const surface = registry.find((record) => record.package_name === '@narada-core/narada-proper-mcp' && record.status === 'live');
   if (!surface) throw new Error('narada_proper_mcp_live_surface_missing');
 
   const exposed = new Set(surface.tool_contract.exposed_tools);
@@ -319,7 +319,7 @@ export function buildNaradaProperArchitectRolePolicyProjection(input: {
     server: 'narada-proper',
     policy_source: {
       kind: 'mcp_surface_registry',
-      package_name: '@narada2/narada-proper-mcp',
+      package_name: '@narada-core/narada-proper-mcp',
       surface_id: surface.surface_id,
     },
     reconciled_runtime_posture: {

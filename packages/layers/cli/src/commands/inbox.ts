@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, readdirSync, statSync } from 'node:fs';
 import { access, mkdir, readFile, readdir, stat, writeFile, unlink } from 'node:fs/promises';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 import {
   type InboxAuthorityLevel,
   type InboxEnvelope,
@@ -11,7 +11,7 @@ import {
   type InboxPromotionTargetKind,
   type InboxSourceKind,
   SqliteInboxStore,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { taskCreateCommand } from './task-create.js';
@@ -2443,7 +2443,7 @@ function inspectInboxReadiness(cwdInput: string, inboxDbPath: unknown): Record<s
     sqlite_binding_loaded: true,
     sqlite_binding_detail: 'node:sqlite loaded by CLI process',
     cli_build_present: existsSync(cliBuildPath),
-    cli_build_detail: existsSync(cliBuildPath) ? cliBuildPath : `${cliBuildPath} missing; run pnpm --filter @narada2/cli build`,
+    cli_build_detail: existsSync(cliBuildPath) ? cliBuildPath : `${cliBuildPath} missing; run pnpm --filter @narada-core/cli build`,
   };
 }
 
@@ -2482,7 +2482,7 @@ function inspectInboxRuntime(cwdInput: string): InboxRuntimeDiagnostics {
     canonical_inbox_commands_available: canonicalInboxCommandsAvailable,
     canonical_inbox_commands_detail: canonicalInboxCommandsAvailable
       ? `expected repo CLI build exists: ${expectedDistEntry}`
-      : `expected repo CLI build missing: ${expectedDistEntry}; run pnpm --filter @narada2/cli build`,
+      : `expected repo CLI build missing: ${expectedDistEntry}; run pnpm --filter @narada-core/cli build`,
     delegated_cli_embodiment: delegatedCliEmbodiment,
     preflight_recommendation: 'Run narada inbox doctor before cross-environment inbox submission; submit from the authority clone when runtime posture is ambiguous.',
   };

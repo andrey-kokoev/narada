@@ -68,11 +68,11 @@ In `~/src/narada.sonar/package.json`:
 ```json
 {
   "dependencies": {
-    "@narada2/charters": "file:../narada/packages/domains/charters",
-    "@narada2/cli": "file:../narada/packages/layers/cli",
-    "@narada2/control-plane": "file:../narada/packages/layers/control-plane",
-    "@narada2/daemon": "file:../narada/packages/layers/daemon",
-    "@narada2/search": "file:../narada/packages/verticals/search"
+    "@narada-core/charters": "file:../narada/packages/domains/charters",
+    "@narada-core/cli": "file:../narada/packages/layers/cli",
+    "@narada-core/control-plane": "file:../narada/packages/layers/control-plane",
+    "@narada-core/daemon": "file:../narada/packages/layers/daemon",
+    "@narada-core/search": "file:../narada/packages/verticals/search"
   }
 }
 ```

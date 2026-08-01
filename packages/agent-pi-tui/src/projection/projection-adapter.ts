@@ -2,7 +2,7 @@ import {
   classifyNarsClientEventProjection,
   projectNarsClientEvent,
   shouldProjectNarsClientProjection,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import type { NarsEvent, PiRenderableContent, PiRowIdentity, PiRowViewModel, ProjectionClass } from '../types.js';
 import { artifactContentFromEvent } from '../nars-client/artifact-client.js';
 

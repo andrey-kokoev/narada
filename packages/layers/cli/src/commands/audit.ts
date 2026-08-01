@@ -5,7 +5,7 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada-core/control-plane';
 
 export interface AuditOptions {
   config?: string;
@@ -132,7 +132,7 @@ async function auditForScope(
     Database,
     getOperatorActionsForScope,
     getOperatorActionsForContext,
-  } = await import('@narada2/control-plane');
+  } = await import('@narada-core/control-plane');
 
   const db = new Database(dbPath);
   try {

@@ -13,12 +13,12 @@ const browserSurfaceConsumers = [
   {
     name: 'agent-web-ui',
     root: agentWebUiRoot,
-    runtimeDependencies: ['@narada2/ui', '@narada2/ui-vue'],
+    runtimeDependencies: ['@narada-core/ui', '@narada-core/ui-vue'],
   },
   {
     name: 'operator-console-ui',
     root: operatorConsoleUiRoot,
-    runtimeDependencies: ['@narada2/ui-vue'],
+    runtimeDependencies: ['@narada-core/ui-vue'],
   },
 ];
 
@@ -34,7 +34,7 @@ test('shared UI package exports and consumer direction are explicit', async () =
   assert.equal(uiPackage.publishConfig?.access, 'public');
   assert.equal(uiPackage.scripts?.prepack, 'pnpm run build');
   assert.equal(uiVuePackage.exports['./components.css'], './src/components.css');
-  assert.equal(uiVuePackage.dependencies['@narada2/ui'], 'workspace:*');
+  assert.equal(uiVuePackage.dependencies['@narada-core/ui'], 'workspace:*');
 
   for (const consumer of browserSurfaceConsumers) {
     const packageJson = await readJson(resolve(consumer.root, 'package.json'));
@@ -60,9 +60,9 @@ test('consumers import shared foundation before app-specific layers', async () =
   const operatorConsoleShell = await readFile(resolve(operatorConsoleUiRoot, 'src/components/OperatorConsoleShell.vue'), 'utf8');
   const siteRegistryPage = await readFile(resolve(operatorConsoleUiRoot, 'src/pages/SiteRegistryPage.vue'), 'utf8');
 
-  assert.match(agentStyles, /@import "@narada2\/ui\/styles\.css"(?:\s+layer\([^)]*\))?;/);
-  assert.match(agentStyles, /@import "@narada2\/ui-vue\/components\.css"(?:\s+layer\([^)]*\))?;/);
-  assert.match(operatorConsoleMain, /@narada2\/ui-vue\/styles\.css/);
+  assert.match(agentStyles, /@import "@narada-core\/ui\/styles\.css"(?:\s+layer\([^)]*\))?;/);
+  assert.match(agentStyles, /@import "@narada-core\/ui-vue\/components\.css"(?:\s+layer\([^)]*\))?;/);
+  assert.match(operatorConsoleMain, /@narada-core\/ui-vue\/styles\.css/);
   assert.match(operatorConsoleShell, /OperatorSurfaceShell/);
   assert.match(siteRegistryPage, /OperatorConsoleShell/);
   assert.match(agentBaseStyles, /height: 100vh/);

@@ -7,7 +7,7 @@ import {
   parseAgentWebUiSnippetCommand,
   type AgentWebUiCommand,
   type AgentWebUiSnippetAction,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import type { OperatorSnippet, OperatorSnippetDeliveryMode } from '../composables/useOperatorSnippets';
 
 export type OperatorCommandPaletteEntry =

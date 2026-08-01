@@ -1,1 +1,1 @@
-export * from '@narada2/task-governance-core/mutation-evidence';
+export * from '@narada-core/task-governance-core/mutation-evidence';

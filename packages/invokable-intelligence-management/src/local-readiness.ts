@@ -21,7 +21,7 @@ import {
   validateCanonicalCatalogRecord,
   validateInvocationRouteCandidate,
   validateModelOfferingGraph,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   AccessGrant,
   BudgetAuthorization,
@@ -38,8 +38,8 @@ import type {
   Resource,
   ModelOffering,
   IntelligenceAuthorityStatement,
-} from "@narada2/invokable-intelligence-contract";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
+} from "@narada-core/invokable-intelligence-contract";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
 
 export const LOCAL_INTELLIGENCE_READINESS_SCHEMA =
   "narada.invokable-intelligence.local-readiness.v1" as const;

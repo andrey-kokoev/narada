@@ -13,5 +13,5 @@ v1 does not define a forwarding transport between local and Cloudflare embodimen
 ## Verification
 
 ```powershell
-pnpm --filter @narada2/site-authority-map test
+pnpm --filter @narada-core/site-authority-map test
 ```

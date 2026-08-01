@@ -27,8 +27,8 @@ import {
   validateProjectionCredential,
 } from '../src/index.js';
 import { createCloudflareNarsProjectionWorker, NarsProjectionState } from '../src/worker.js';
-import { validateNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
-import { classifyNarsClientEventProjection, projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+import { validateNarsRuntimeSurfaceContract } from '@narada-core/nars-runtime-contract/runtime-surface-contract';
+import { classifyNarsClientEventProjection, projectNarsClientEvent } from '@narada-core/nars-client-projection-contract';
 
 const now = '2026-06-30T21:00:00.000Z';
 

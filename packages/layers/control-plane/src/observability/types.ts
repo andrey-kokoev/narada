@@ -37,7 +37,7 @@ export interface ScopeReadiness {
   /** True when the charter runtime health class permits execution (healthy, degraded_draft_only, partially_degraded) */
   charter_runtime_healthy: boolean;
   /** The current charter runtime health class, or null if not probed */
-  charter_runtime_health_class: import("@narada2/charters").CharterRuntimeHealthClass | null;
+  charter_runtime_health_class: import("@narada-core/charters").CharterRuntimeHealthClass | null;
 }
 
 /** @source derived — Per-scope dispatch summary */

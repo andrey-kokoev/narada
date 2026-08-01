@@ -2,7 +2,7 @@
  * Database schema for FTS5 search
  */
 
-import type Database from '@narada2/sqlite';
+import type Database from '@narada-core/sqlite';
 
 /**
  * Initialize the FTS5 schema

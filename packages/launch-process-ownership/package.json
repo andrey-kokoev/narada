@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/launch-process-ownership",
+  "name": "@narada-core/launch-process-ownership",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/launch-process-ownership"
   },
   "devDependencies": {

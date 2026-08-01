@@ -57,18 +57,18 @@ export function initRepo(repoPath: string, options: InitRepoOptions = {}): InitR
   // local-source mode uses link: refs into the monorepo.
   const deps: Record<string, string> = options.localSource
     ? {
-        "@narada2/control-plane": resolvePackageRef("packages/layers/control-plane", absPath),
-        "@narada2/cli": resolvePackageRef("packages/layers/cli", absPath),
-        "@narada2/daemon": resolvePackageRef("packages/layers/daemon", absPath),
-        "@narada2/search": resolvePackageRef("packages/verticals/search", absPath),
-        "@narada2/charters": resolvePackageRef("packages/domains/charters", absPath),
+        "@narada-core/control-plane": resolvePackageRef("packages/layers/control-plane", absPath),
+        "@narada-core/cli": resolvePackageRef("packages/layers/cli", absPath),
+        "@narada-core/daemon": resolvePackageRef("packages/layers/daemon", absPath),
+        "@narada-core/search": resolvePackageRef("packages/verticals/search", absPath),
+        "@narada-core/charters": resolvePackageRef("packages/domains/charters", absPath),
       }
     : {
-        "@narada2/control-plane": "^0.1.0",
-        "@narada2/cli": "^0.1.0",
-        "@narada2/daemon": "^0.1.0",
-        "@narada2/search": "^0.1.0",
-        "@narada2/charters": "^0.1.0",
+        "@narada-core/control-plane": "^0.1.0",
+        "@narada-core/cli": "^0.1.0",
+        "@narada-core/daemon": "^0.1.0",
+        "@narada-core/search": "^0.1.0",
+        "@narada-core/charters": "^0.1.0",
       };
 
   // package.json
@@ -128,7 +128,7 @@ export function initRepo(repoPath: string, options: InitRepoOptions = {}): InitR
   // config/config.json — minimal starter config (or demo scope if --demo)
   const starterConfig = options.demo
     ? {
-        $schema: "../node_modules/@narada2/control-plane/config.schema.json",
+        $schema: "../node_modules/@narada-core/control-plane/config.schema.json",
         root_dir: "./data",
         scopes: [
           {
@@ -166,7 +166,7 @@ export function initRepo(repoPath: string, options: InitRepoOptions = {}): InitR
         ],
       }
     : {
-        $schema: "../node_modules/@narada2/control-plane/config.schema.json",
+        $schema: "../node_modules/@narada-core/control-plane/config.schema.json",
         root_dir: "./data",
         scopes: [],
       };
@@ -178,7 +178,7 @@ export function initRepo(repoPath: string, options: InitRepoOptions = {}): InitR
     "config/config.example.json",
     JSON.stringify(
       {
-        $schema: "../node_modules/@narada2/control-plane/config.schema.json",
+        $schema: "../node_modules/@narada-core/control-plane/config.schema.json",
         root_dir: "./data",
         scopes: [
           {

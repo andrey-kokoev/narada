@@ -13,7 +13,7 @@ The plan includes:
 
 ## Non-Execution Boundary
 
-`@narada2/site-task-lifecycle` still owns no SQLite dependency, performs no SQLite mutation, performs no live MCP registration, and imports no source Site state. A receiving Site must separately admit the live initializer execution, concrete adapter execution, DB mutation, and live MCP registration.
+`@narada-core/site-task-lifecycle` still owns no SQLite dependency, performs no SQLite mutation, performs no live MCP registration, and imports no source Site state. A receiving Site must separately admit the live initializer execution, concrete adapter execution, DB mutation, and live MCP registration.
 
 ## Refusals
 

@@ -8,8 +8,8 @@ import type { ChildProcess } from 'node:child_process';
 import {
   createOperatorConsoleRemoteGateway,
   type OperatorConsoleRemoteGateway,
-} from '@narada2/operator-console-remote-gateway';
-import { runGovernedCommandSync, spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+} from '@narada-core/operator-console-remote-gateway';
+import { runGovernedCommandSync, spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 
 export const OPERATOR_CONSOLE_MIRROR_STATE_SCHEMA = 'narada.operator_console_mirror.state.v1' as const;
 export const OPERATOR_CONSOLE_MIRROR_STATUS_SCHEMA = 'narada.operator_console_mirror.status.v1' as const;

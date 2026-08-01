@@ -28,7 +28,7 @@ import { createFormatter } from '../lib/formatter.js';
 import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 import { agentAddressResolutionPublic, resolveAgentAddress, type AgentAddressResolution } from '../lib/agent-address.js';
 import { classifyTaskHandoffActionability } from '../lib/task-actionability.js';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 
 export interface TaskPeekNextOptions {
   agent: string;

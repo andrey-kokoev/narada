@@ -76,7 +76,7 @@ When a new launch observes a same Site/role session with a different `launch_ses
 
 ## Schema Ownership
 
-The ownership stamp schema is part of Narada's launch authority boundary and is maintained by `@narada2/launch-process-ownership`. CLI and runtime code must import that package rather than keeping local schema builders.
+The ownership stamp schema is part of Narada's launch authority boundary and is maintained by `@narada-core/launch-process-ownership`. CLI and runtime code must import that package rather than keeping local schema builders.
 
 ## Freshness Rule
 

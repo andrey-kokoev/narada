@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { Command } from 'commander';
 import { GroupedHelp } from './lib/grouped-help.js';
-import { loadEnvFile } from '@narada2/control-plane';
+import { loadEnvFile } from '@narada-core/control-plane';
 import { registerRuntimeCoreCommands } from './commands/runtime-core-register.js';
 import { registerRuntimeCommands } from './commands/runtime-register.js';
 import { registerProductUtilityCommands } from './commands/product-utility-register.js';

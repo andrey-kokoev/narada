@@ -2,9 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
-import { createSessionCoreRuntimeService } from '@narada2/agent-runtime-server/session-core-runtime-service';
-import { createEventHub, startEventStreamProjection, startHealthProjection } from '@narada2/agent-runtime-server/test-fixtures';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { createSessionCoreRuntimeService } from '@narada-core/agent-runtime-server/session-core-runtime-service';
+import { createEventHub, startEventStreamProjection, startHealthProjection } from '@narada-core/agent-runtime-server/test-fixtures';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import { startAgentWebUiServer } from '../../src/server.ts';
 
 export function waitFor(predicate: any, timeoutMs: any, evidence: any= () => ({})) {

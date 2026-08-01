@@ -3,8 +3,8 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, appendFileSync, rea
 import { resolve, relative, isAbsolute, sep, posix } from 'node:path';
 import { glob } from 'node:fs/promises';
 import { createHash, randomUUID } from 'node:crypto';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
-import { enforceAgentPathPolicy } from '@narada2/agent-context-mcp/path-policy';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
+import { enforceAgentPathPolicy } from '@narada-core/agent-context-mcp/path-policy';
 import { buildOutputRefToolContent, listOutputTools, outputShow } from '../../mcp-payload-file.js';
 
 const PROTOCOL_VERSION: any = '2024-11-05';

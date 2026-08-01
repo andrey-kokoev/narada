@@ -78,13 +78,13 @@ The fixture-backed proof runs entirely without live credentials. Its canonical s
 
 ```bash
 # Canonical fixture-backed proof (source through fact, recovery, observation, and draft confirmation)
-pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/smoke-test.test.ts
+pnpm --filter @narada-core/control-plane exec vitest run test/integration/live-operation/smoke-test.test.ts
 
 # Pipeline-focused proof (proves through outbound command creation)
-pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/draft-proposal-pipeline.test.ts
+pnpm --filter @narada-core/control-plane exec vitest run test/integration/live-operation/draft-proposal-pipeline.test.ts
 
 # Daemon-level dispatch proof (proves scheduler + execution + foreman resolution)
-pnpm --filter @narada2/daemon exec vitest run test/integration/dispatch.test.ts
+pnpm --filter @narada-core/daemon exec vitest run test/integration/dispatch.test.ts
 ```
 
 ### Expected Outputs

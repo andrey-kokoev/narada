@@ -210,7 +210,7 @@ identity mismatch is refused rather than guessed.
 
 ## Current State
 
-- `@narada2/operator-router` owns the stable loopback listener, singleton lock,
+- `@narada-core/operator-router` owns the stable loopback listener, singleton lock,
   hidden detached startup, authenticated registration, finite leases, health
   state, bounded HTTP/WebSocket forwarding, and redacted route inventory. Its
   client rejects port `0`; only direct server construction may use port `0`,

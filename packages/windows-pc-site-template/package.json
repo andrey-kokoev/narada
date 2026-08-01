@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/windows-pc-site-template",
+  "name": "@narada-core/windows-pc-site-template",
   "version": "0.1.0",
   "description": "Parameterized descriptor template for Windows PC Site embodiments",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/windows-pc-site-template"
   }
 }

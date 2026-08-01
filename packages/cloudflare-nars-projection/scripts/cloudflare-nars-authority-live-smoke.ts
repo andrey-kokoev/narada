@@ -12,10 +12,10 @@ if (args.help) {
     'Cloudflare NARS projection intelligence-boundary live smoke',
     '',
     'Planning mode:',
-    '  pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live',
+    '  pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live',
     '',
     'Live mode:',
-    '  pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url <url> --browser-token <fingerprint>',
+    '  pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url <url> --browser-token <fingerprint>',
     '',
   ].join('\n'));
   process.exit(0);

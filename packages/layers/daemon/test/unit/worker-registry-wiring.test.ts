@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createScopeService } from "../../src/service.js";
 import { OUTBOUND_WORKER_IDS } from "../../src/lib/workers.js";
 import { createLogger } from "../../src/lib/logger.js";
-import type { ScopeConfig, ExchangeFsSyncConfig } from "@narada2/control-plane";
+import type { ScopeConfig, ExchangeFsSyncConfig } from "@narada-core/control-plane";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-wiring-"));

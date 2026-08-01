@@ -12,11 +12,11 @@ Stabilize proven first-slice Site task lifecycle extraction.
 
 ## Goal
 
-Preserve `@narada2/site-task-lifecycle` as a pure descriptor/contract package and stabilize the Narada proper CLI/runtime MCP surface for local-only task lifecycle setup and evidence readback.
+Preserve `@narada-core/site-task-lifecycle` as a pure descriptor/contract package and stabilize the Narada proper CLI/runtime MCP surface for local-only task lifecycle setup and evidence readback.
 
 ## Non-Goals
 
-- No SQLite dependency or mutation inside `@narada2/site-task-lifecycle`.
+- No SQLite dependency or mutation inside `@narada-core/site-task-lifecycle`.
 - No narada-andrey runtime DB, task/inbox state, roster/checkpoint/operator-surface/PC/secrets state, identity-specific data, or source history import.
 - No broad list/query tool, richer task transitions, cross-Site mutation, or OSM policy implementation.
 

@@ -9,7 +9,7 @@ import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SqliteInboxStore } from '@narada2/control-plane';
+import { SqliteInboxStore } from '@narada-core/control-plane';
 import { coherenceScanCommand } from '../../src/commands/coherence-scan.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 

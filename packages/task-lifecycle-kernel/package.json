@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/task-lifecycle-kernel",
+  "name": "@narada-core/task-lifecycle-kernel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -30,7 +30,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/task-lifecycle-kernel"
   },
   "engines": {

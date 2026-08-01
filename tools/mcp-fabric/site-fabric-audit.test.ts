@@ -155,7 +155,7 @@ writeFileSync(join(dotNaradaSite, 'capabilities', 'mcp-surfaces.json'), `${JSON.
   schema: 'narada.site.capabilities.v0',
   mcp_surfaces: [{
     surface_id: 'legacy.surface',
-    package: '@narada2/legacy-mcp',
+    package: '@narada-core/legacy-mcp',
     registered_live_tools: ['agent_context_hydrate_current'],
   }, {
     surface_id: 'stale.surface',

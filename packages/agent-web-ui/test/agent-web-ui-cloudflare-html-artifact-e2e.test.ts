@@ -4,12 +4,12 @@ import { createServer } from 'node:http';
 import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { spawnTestChild } from '@narada2/process-launch-posture';
-import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
 import {
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
-} from '@narada2/cloudflare-nars-projection/node';
+} from '@narada-core/cloudflare-nars-projection/node';
 import { startAgentWebUiServer } from '../src/server.ts';
 import {
   findHeadlessBrowser,
@@ -46,7 +46,7 @@ async function createRealNarsSiteWithHtmlArtifact() {
       '</html>',
     ].join(''), 'utf8');
     const audioPath = join(siteRoot, 'spoken.wav');
-    assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada2/speech-mcp build`);
+    assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada-core/speech-mcp build`);
     assert.ok(existsSync(speechProviderRegistryPath), `expected speech provider registry at ${speechProviderRegistryPath}`);
     const speech = await callLiveSpeechMcp({
       siteRoot,

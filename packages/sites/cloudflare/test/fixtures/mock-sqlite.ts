@@ -1,4 +1,4 @@
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 
 export class MockSqlStorageCursor<T extends Record<string, SqlStorageValue>> implements SqlStorageCursor<T> {
   private index = 0;

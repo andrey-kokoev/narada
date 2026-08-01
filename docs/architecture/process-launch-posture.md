@@ -165,7 +165,7 @@ Target shape:
   "target_ref": "http://127.0.0.1:9999/",
   "purpose": "operator_projection",
   "caller": {
-    "package": "@narada2/cli",
+    "package": "@narada-core/cli",
     "command": "agent-web-ui attach"
   },
   "mode": "execute",
@@ -187,7 +187,7 @@ Rules:
 - Planned outcomes whose target is not known yet should carry `target_ref: null` plus a resolution note from the caller.
 - `openBrowserUrl(...)` remains the low-level executor for admitted `browser_url` requests.
 
-The substrate lives in `@narada2/process-launch-posture` as `createOperatorProjectionOpenRequest`, `admitOperatorProjectionOpenRequest`, and `executeOperatorProjectionOpenRequest`. Current CLI integrations route `agent-web-ui attach` and task graph browser-render opens through this substrate, and launcher plans expose planned `operator_projection_open_requests` for `agent-web-ui` projections whose URL is resolved at attach time.
+The substrate lives in `@narada-core/process-launch-posture` as `createOperatorProjectionOpenRequest`, `admitOperatorProjectionOpenRequest`, and `executeOperatorProjectionOpenRequest`. Current CLI integrations route `agent-web-ui attach` and task graph browser-render opens through this substrate, and launcher plans expose planned `operator_projection_open_requests` for `agent-web-ui` projections whose URL is resolved at attach time.
 
 The request belongs in process-launch posture because it admits the visible host effect. Its semantic placement in the runtime graph is documented in [`Narada Runtime Projection Graph`](../concepts/narada-runtime-projection-graph.md#operator-projection-open-requests).
 

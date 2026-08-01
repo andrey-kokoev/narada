@@ -203,11 +203,11 @@ export function buildLinuxInstallationLifecyclePlan(
     ? "data_removal_requires_separate_guarded_operation"
     : versions.refusalReason ?? compatibilityRefusal(request);
   const packageAction = request.operation === "upgrade"
-    ? `Package manager must install @narada2/cli@${versions.targetVersion ?? "<target-version>"}.`
+    ? `Package manager must install @narada-core/cli@${versions.targetVersion ?? "<target-version>"}.`
     : request.operation === "rollback"
-      ? `Package manager must install @narada2/cli@${versions.targetVersion ?? "<rollback-version>"}.`
+      ? `Package manager must install @narada-core/cli@${versions.targetVersion ?? "<rollback-version>"}.`
       : request.operation === "uninstall"
-        ? "Package manager may remove @narada2/cli after Site and supervisor teardown are verified."
+        ? "Package manager may remove @narada-core/cli after Site and supervisor teardown are verified."
         : "No package replacement; apply the declared schema migration artifact.";
   const supervisorAction = request.operation === "uninstall"
     ? "Stop, disable, and unregister the Site supervisor; preserve Site data."

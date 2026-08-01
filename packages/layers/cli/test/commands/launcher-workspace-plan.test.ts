@@ -25,7 +25,7 @@ const runAgentStartCommandMock = vi.hoisted(() => vi.fn(() => ({
   },
 })));
 
-vi.mock('@narada2/nars-session-core/session-index', () => ({
+vi.mock('@narada-core/nars-session-core/session-index', () => ({
   discoverNarsSessions: discoverNarsSessionsMock,
 }));
 
@@ -59,7 +59,7 @@ function titleValues(wtArgs: string[]): string[] {
 function expectedIntelligenceSelectionAuthority(siteId: string, siteRoot: string): Record<string, unknown> {
   return {
     schema: 'narada.invokable-intelligence.selection-authority.v1',
-    owner: '@narada2/invokable-intelligence-runtime',
+    owner: '@narada-core/invokable-intelligence-runtime',
     resolution_phase: 'runtime-invocation',
     authority_scope: { kind: 'site', site_id: siteId },
     catalog: { store_kind: 'node:sqlite', locator: join(siteRoot, '.ai', 'intelligence-registry.db') },
@@ -305,7 +305,7 @@ describe('launcher workspace planning', () => {
     expect(result.selected_agents[0].launch_runtime).toBe('narada-agent-runtime-server');
     expect(result.selected_agents[0].intelligence_selection_authority).toEqual({
       schema: 'narada.invokable-intelligence.selection-authority.v1',
-      owner: '@narada2/invokable-intelligence-runtime',
+      owner: '@narada-core/invokable-intelligence-runtime',
       resolution_phase: 'runtime-invocation',
       authority_scope: { kind: 'site', site_id: 'sonar' },
       catalog: {

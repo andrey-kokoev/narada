@@ -6,7 +6,7 @@
  * secrets; credentials stay locator references resolved by the runtime.
  */
 
-import type { InvocationPlan, Model } from "@narada2/invokable-intelligence-contract";
+import type { InvocationPlan, Model } from "@narada-core/invokable-intelligence-contract";
 
 export interface LegacyBindingOverrides {
   /** Legacy provider id (inference-provider id without the kind prefix). */

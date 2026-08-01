@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/agent-start",
+  "name": "@narada-core/agent-start",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -9,20 +9,20 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@narada2/agent-context-mcp": "workspace:*",
-    "@narada2/agent-identity": "workspace:*",
-    "@narada2/agent-runtime-server": "workspace:*",
-    "@narada2/invokable-intelligence-contract": "workspace:*",
-    "@narada2/invokable-intelligence-management": "workspace:*",
-    "@narada2/nars-intelligence-kernel-contract": "workspace:*",
-    "@narada2/operator-surface-runtime-contract": "workspace:*",
-    "@narada2/carrier-protocol": "workspace:*",
-    "@narada2/carrier-provider-support": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/nars-client-projection-contract": "workspace:*",
-    "@narada2/nars-session-authority": "workspace:*",
-    "@narada2/nars-session-core": "workspace:*",
-    "@narada2/site-paths": "workspace:*",
+    "@narada-core/agent-context-mcp": "workspace:*",
+    "@narada-core/agent-identity": "workspace:*",
+    "@narada-core/agent-runtime-server": "workspace:*",
+    "@narada-core/invokable-intelligence-contract": "workspace:*",
+    "@narada-core/invokable-intelligence-management": "workspace:*",
+    "@narada-core/nars-intelligence-kernel-contract": "workspace:*",
+    "@narada-core/operator-surface-runtime-contract": "workspace:*",
+    "@narada-core/carrier-protocol": "workspace:*",
+    "@narada-core/carrier-provider-support": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/nars-client-projection-contract": "workspace:*",
+    "@narada-core/nars-session-authority": "workspace:*",
+    "@narada-core/nars-session-core": "workspace:*",
+    "@narada-core/site-paths": "workspace:*",
     "zod": "^3.22.0"
   },
   "bin": {
@@ -71,7 +71,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/agent-start"
   },
   "engines": {

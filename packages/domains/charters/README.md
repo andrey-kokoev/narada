@@ -1,4 +1,4 @@
-# @narada2/charters
+# @narada-core/charters
 
 Charter contracts, policy profiles, and runtime bindings for Narada.
 
@@ -26,13 +26,13 @@ Those belong in private ops repositories such as `narada.sonar`, not in the publ
 ## Installation
 
 ```bash
-npm install @narada2/charters
+npm install @narada-core/charters
 # or
-pnpm add @narada2/charters
+pnpm add @narada-core/charters
 ```
 
 ## Related Packages
 
-- `@narada2/control-plane`: deterministic kernel and mailbox vertical
-- `@narada2/daemon`: long-running orchestration surface
-- `@narada2/cli`: operator CLI
+- `@narada-core/control-plane`: deterministic kernel and mailbox vertical
+- `@narada-core/daemon`: long-running orchestration surface
+- `@narada-core/cli`: operator CLI

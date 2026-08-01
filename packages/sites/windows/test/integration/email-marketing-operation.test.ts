@@ -18,9 +18,9 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "@narada2/sqlite";
-import { SqliteCoordinatorStore } from "@narada2/control-plane";
-import { SqliteOutboundStore } from "@narada2/control-plane";
+import Database from "@narada-core/sqlite";
+import { SqliteCoordinatorStore } from "@narada-core/control-plane";
+import { SqliteOutboundStore } from "@narada-core/control-plane";
 
 interface FixtureMailFact {
   factId: string;

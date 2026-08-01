@@ -1,7 +1,7 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 import { join } from 'node:path';
 import { buildUnifiedWorkboard, deriveNextRecommendation } from './unified-workboard.js';
 import {
@@ -17,7 +17,7 @@ import {
   buildMcpRestartPressure,
   buildStaleLiveNavigationDegradation,
   deriveMcpRestartPressureRecommendation,
-} from '@narada2/task-governance/runtime/mcp-freshness-service';
+} from '@narada-core/task-governance/runtime/mcp-freshness-service';
 
 function parseArgs(argv: any) : any {
   const args: any = { cwd: null, agentId: null, json: false, limit: 8, lastWorkboardCheckAt: null };

@@ -1,7 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { scanMaxTaskNumber } from '@narada2/task-governance-core/task-governance';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { scanMaxTaskNumber } from '@narada-core/task-governance-core/task-governance';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore } from '../lib/task-lifecycle-store.js';

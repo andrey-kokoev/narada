@@ -3,11 +3,11 @@ import {
   type SiteEventEnvelope,
   type SiteEventFamily,
   type SiteTelemetryPublicationEdge,
-} from "@narada2/site-config";
+} from "@narada-core/site-config";
 import type {
   RemoteSiteInboxFinalizePayload,
   RemoteSiteInboxMessage,
-} from "@narada2/site-inbox";
+} from "@narada-core/site-inbox";
 
 export interface CapabilityResolver {
   resolveCapability(ref: string): Promise<string> | string;

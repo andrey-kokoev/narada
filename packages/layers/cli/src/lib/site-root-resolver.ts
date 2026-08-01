@@ -189,7 +189,7 @@ async function openSiteRegistry(): Promise<{ listSites(): Array<{ siteId: string
     resolveRegistryDbPathByLocus,
     openRegistryDb,
     SiteRegistry,
-  } = await import('@narada2/windows-site');
+  } = await import('@narada-core/windows-site');
   const dbPath = resolveRegistryDbPathByLocus({ authorityLocus: 'user' });
   const db = await openRegistryDb(dbPath);
   return new SiteRegistry(db);

@@ -8,7 +8,7 @@ import { taskAmendCommand, taskMakeActionableCommand } from '../../src/commands/
 import { taskReadCommand } from '../../src/commands/task-read.js';
 import { collectCriteriaValue, mergeCriteriaInputs } from '../../src/commands/task-authoring-register.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { Database } from '@narada2/control-plane';
+import { Database } from '@narada-core/control-plane';
 import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { parseFrontMatter } from '../../src/lib/task-governance.js';
 import { parseTaskSpecFromMarkdown } from '../../src/lib/task-spec.js';

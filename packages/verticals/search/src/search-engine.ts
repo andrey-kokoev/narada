@@ -4,7 +4,7 @@
  * Provides a consistent API over FTS5 (primary) with fallback handling
  */
 
-import type Database from '@narada2/sqlite';
+import type Database from '@narada-core/sqlite';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createSearchDb, closeSearchDb } from './db.js';

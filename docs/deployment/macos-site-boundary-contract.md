@@ -21,10 +21,10 @@ The macOS Site materialization **must** provide:
 | 1 | **Site discovery** | `discoverMacosSites()` scans `~/Library/Application Support/Narada/*` for directories containing `db/coordinator.db` | Operator must enumerate Sites without knowing IDs in advance |
 | 2 | **Site root resolution** | `resolveSiteRoot(siteId)` → `~/Library/Application Support/Narada/{site_id}`; overridable by `NARADA_SITE_ROOT` | Deterministic, documented path conventions per Apple File System Layout Guidelines |
 | 3 | **Config loading** | `runCycle()` reads `config.json` from `{siteRoot}` using existing `loadConfig()` semantics | Reuse kernel config schema; no new config format |
-| 4 | **Lock acquisition** | `FileLock` from `@narada2/control-plane` (already cross-platform, Unix via `mkdir`-based locking with `mtime` stale detection) | Existing module handles Unix locking; no new lock implementation |
+| 4 | **Lock acquisition** | `FileLock` from `@narada-core/control-plane` (already cross-platform, Unix via `mkdir`-based locking with `mtime` stale detection) | Existing module handles Unix locking; no new lock implementation |
 | 5 | **Stuck-lock recovery** | `recoverStuckLock()` compares lock `mtimeMs` against `lockTtlMs`; removes stale lock directory atomically | Unattended operation layer §2.2 protocol |
 | 6 | **Bounded Cycle runner** | `DefaultMacosSiteRunner.runCycle()` executes 8-step pipeline with wall-clock ceiling and abort buffer | Fixture stubs for steps 2–6 in v0; preserves IAS boundaries |
-| 7 | **Health transitions** | `computeHealthTransition()` from `@narada2/control-plane` | Existing state machine implements unattended layer §3 exactly |
+| 7 | **Health transitions** | `computeHealthTransition()` from `@narada-core/control-plane` | Existing state machine implements unattended layer §3 exactly |
 | 8 | **Health persistence** | SQLite `site_health` table in `{siteRoot}/db/coordinator.db` via `SqliteSiteCoordinator` | Compact traces in SQLite; large artifacts on APFS |
 | 9 | **Trace persistence** | SQLite `cycle_traces` table + APFS `{siteRoot}/traces/` via `writeTraceArtifact()` | Same pattern as Windows/Cloudflare |
 | 10 | **Credential resolution** | macOS Keychain (`security` CLI) → env (`NARADA_{site_id}_{name}`) → `.env` → config | macOS-native secret binding with graceful fallback chain |
@@ -460,7 +460,7 @@ The following corrections were made to `docs/deployment/macos-site-materializati
 
 | Contract Anticipation | Actual Name | Rationale |
 |-----------------------|-------------|-----------|
-| `credential-resolver.ts` | `credentials.ts` | Shorter; aligns with `@narada2/control-plane` naming conventions |
+| `credential-resolver.ts` | `credentials.ts` | Shorter; aligns with `@narada-core/control-plane` naming conventions |
 | `operator-surface.ts` | `observability.ts` | Explicitly read-only; mirrors control-plane `observability/` boundary |
 | `MacosSiteSupervisor` class | `supervisor.ts` (pure functions) | Template generators have no mutable state; functions are sufficient |
 

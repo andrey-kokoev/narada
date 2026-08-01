@@ -30,9 +30,9 @@ const steps: Step[] = [
   { name: "Typecheck", command: "pnpm typecheck" },
   { name: "Build", command: "pnpm build" },
   { name: "Task lifecycle snapshot guard", command: "pnpm narada:guard-task-db" },
-  { name: "Task-governance smoke tests", command: "pnpm --filter @narada2/task-governance test:smoke" },
-  { name: "Charters tests", command: "pnpm --filter @narada2/charters test" },
-  { name: "Ops-kit tests", command: "pnpm --filter @narada2/ops-kit test" },
+  { name: "Task-governance smoke tests", command: "pnpm --filter @narada-core/task-governance test:smoke" },
+  { name: "Charters tests", command: "pnpm --filter @narada-core/charters test" },
+  { name: "Ops-kit tests", command: "pnpm --filter @narada-core/ops-kit test" },
 ];
 
 const colors = {

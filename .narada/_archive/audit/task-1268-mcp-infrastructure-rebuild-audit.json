@@ -7,7 +7,7 @@
   "implemented_at": "2026-05-15T13:55:00.000Z",
   "new_agent_facing_surface": {
     "surface_id": "narada-proper.surface.agent-facing-mcp.v1",
-    "package": "@narada2/narada-proper-mcp",
+    "package": "@narada-core/narada-proper-mcp",
     "command": "node --import tsx packages/narada-proper-mcp/src/main.ts",
     "transport": "stdio",
     "depends_on_cli_dist": false,
@@ -60,15 +60,15 @@
     "schema": "narada.mcp_package_boundary_repair.v0",
     "repaired_at": "2026-05-15T14:54:00Z",
     "changes": [
-      "packages/narada-proper-mcp/src/server.ts imports @narada2/agent-context-memory through the workspace package boundary instead of a relative source path",
+      "packages/narada-proper-mcp/src/server.ts imports @narada-core/agent-context-memory through the workspace package boundary instead of a relative source path",
       "packages/narada-proper-mcp/tsconfig.json emits package-owned source to dist/main.js and dist/index.js",
-      "pnpm offline install refreshed workspace links for @narada2/narada-proper-mcp"
+      "pnpm offline install refreshed workspace links for @narada-core/narada-proper-mcp"
     ],
-    "runtime_launcher_note": "Agent-start continues to point Codex at node --import tsx packages/narada-proper-mcp/src/main.ts because repository dist/ outputs are ignored; this still decouples agent-facing MCP from packages/layers/cli/dist and keeps the MCP implementation owned by @narada2/narada-proper-mcp.",
+    "runtime_launcher_note": "Agent-start continues to point Codex at node --import tsx packages/narada-proper-mcp/src/main.ts because repository dist/ outputs are ignored; this still decouples agent-facing MCP from packages/layers/cli/dist and keeps the MCP implementation owned by @narada-core/narada-proper-mcp.",
     "verified": [
-      "pnpm --filter @narada2/narada-proper-mcp typecheck",
-      "pnpm --filter @narada2/narada-proper-mcp build",
-      "pnpm --filter @narada2/narada-proper-mcp test",
+      "pnpm --filter @narada-core/narada-proper-mcp typecheck",
+      "pnpm --filter @narada-core/narada-proper-mcp build",
+      "pnpm --filter @narada-core/narada-proper-mcp test",
       "node packages/narada-proper-mcp/dist/main.js --help",
       "node packages/narada-proper-mcp/dist/main.js tools/call agent_context_hydrate_current smoke"
     ]

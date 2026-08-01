@@ -38,7 +38,7 @@ export async function cycleCommand(
 
   // Try macOS first
   try {
-    const { isMacosSite } = await import('@narada2/macos-site');
+    const { isMacosSite } = await import('@narada-core/macos-site');
     if (isMacosSite(siteId)) {
       return cycleMacosSite(siteId, options, logger, fmt);
     }
@@ -48,7 +48,7 @@ export async function cycleCommand(
 
   // Try Linux next
   try {
-    const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+    const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada-core/linux-site');
     const linuxMode = resolveLinuxSiteMode(siteId);
     if (linuxMode) {
       return cycleLinuxSite(siteId, linuxMode, options, logger, fmt);
@@ -72,7 +72,7 @@ async function cycleLinuxSite(
     DefaultLinuxSiteRunner,
     resolveSiteRoot,
     ensureSiteDir,
-  } = await import('@narada2/linux-site');
+  } = await import('@narada-core/linux-site');
 
   let siteRoot: string;
   try {
@@ -144,7 +144,7 @@ async function cycleMacosSite(
   logger: CommandContext['logger'],
   fmt: ReturnType<typeof createFormatter>,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const { runCycle } = await import('@narada2/macos-site');
+  const { runCycle } = await import('@narada-core/macos-site');
 
   logger.info('Starting macOS Site cycle', { siteId });
 
@@ -176,7 +176,7 @@ async function cycleWindowsSite(
     resolveSiteRoot,
     ensureSiteDir,
     resolveSiteVariant,
-  } = await import('@narada2/windows-site');
+  } = await import('@narada-core/windows-site');
 
   const variant = resolveSiteVariant(siteId);
   if (!variant) {

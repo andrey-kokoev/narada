@@ -138,11 +138,11 @@ export function formatTaskLifecycleReadText(result: any) {
     `Status: ${summary.task_status ?? 'unknown'}`,
     ...(summary.task_title ? [`Title: ${summary.task_title}`] : []),
     ...(summary.carrier_session_id ? [`Session: ${summary.carrier_session_id}`] : []),
-    ...(workerUrl && summary.site_id ? [`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`] : []),
-    ...(workerUrl && summary.site_id ? [`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`] : []),
-    ...(workerUrl && summary.site_id && summary.carrier_session_id ? [`Session Evidence: pnpm --filter @narada2/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`] : []),
-    ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`] : []),
-    ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`] : []),
+    ...(workerUrl && summary.site_id ? [`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && summary.site_id ? [`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operator-session-file <operator-session-file> --execute-site-next`] : []),
+    ...(workerUrl && summary.site_id && summary.carrier_session_id ? [`Session Evidence: pnpm --filter @narada-core/cloudflare-carrier product:session:evidence:text -- --url ${workerUrl} --site ${summary.site_id} --carrier-session-id ${summary.carrier_session_id} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file>`] : []),
+    ...(workerUrl && summary.site_id && summary.operation_id ? [`Operation Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${summary.site_id} --operation-id ${summary.operation_id} --operator-session-file <operator-session-file> --execute-operation-next`] : []),
     ...(summary.claimed_by_agent_id ? [`Claimed By: ${summary.claimed_by_agent_id}`] : []),
     ...(summary.reported_by_agent_id ? [`Reported By: ${summary.reported_by_agent_id}`] : []),
     ...(summary.finished_by_agent_id ? [`Finished By: ${summary.finished_by_agent_id}`] : []),
@@ -166,12 +166,12 @@ function formatTaskLifecycleNextCommands(result: any, summary: any) {
   const workflowAgentOption = normalizedStatus === 'open'
     ? ` --agent-id ${claimAgent}`
     : '';
-  const workflowCommand = `Task Workflow: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId}${workflowAgentOption} --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
+  const workflowCommand = `Task Workflow: pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId}${workflowAgentOption} --operator-session-file <operator-session-file> --execute-task-lifecycle-next`;
   if (summary.report_id && !summary.finish_id) {
     return finishAgent
       ? [
           workflowCommand,
-          `Finish Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent ${finishAgent} --finish-verdict accepted --operator-session-file <operator-session-file>`,
+          `Finish Command: pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:finish:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --finalizer-agent ${finishAgent} --finish-verdict accepted --operator-session-file <operator-session-file>`,
         ]
       : [workflowCommand];
   }
@@ -179,14 +179,14 @@ function formatTaskLifecycleNextCommands(result: any, summary: any) {
     return reportAgent
       ? [
           workflowCommand,
-          `Report Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent ${reportAgent} --summary <summary> --operator-session-file <operator-session-file>`,
+          `Report Command: pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:report:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --reporter-agent ${reportAgent} --summary <summary> --operator-session-file <operator-session-file>`,
         ]
       : [workflowCommand];
   }
   if (normalizedStatus=== 'open') {
     return [
       workflowCommand,
-      `Claim Command: pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --claimant-agent ${claimAgent} --operator-session-file <operator-session-file>`,
+      `Claim Command: pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:claim:text -- --url ${workerUrl} --site ${siteId} --task-id ${taskId} --claimant-agent ${claimAgent} --operator-session-file <operator-session-file>`,
     ];
   }
   return [];

@@ -1,4 +1,4 @@
-import { NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES } from '@narada2/carrier-protocol';
+import { NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES } from '@narada-core/carrier-protocol';
 
 export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATE_SCHEMA = 'narada.nars.authority_runtime_host_transition_state.v1' as const;
 

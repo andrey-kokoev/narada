@@ -1,10 +1,10 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { readNarsArtifactContent, readNarsArtifactIndex } from '@narada2/nars-session-core/artifacts';
-import type { OperatorSurfaceHostRef, OperatorSurfaceId, OperatorSurfaceRouteDescriptor } from '@narada2/operator-console-contract';
+import { spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
+import { readNarsArtifactContent, readNarsArtifactIndex } from '@narada-core/nars-session-core/artifacts';
+import type { OperatorSurfaceHostRef, OperatorSurfaceId, OperatorSurfaceRouteDescriptor } from '@narada-core/operator-console-contract';
 import { deliverProjectionInputToNars } from './nars-session-input-client.js';
 import {
   buildProjectionRegistrationPlan,

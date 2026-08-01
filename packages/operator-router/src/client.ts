@@ -3,7 +3,7 @@ import { mkdir, readFile, rename } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+import { spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
   OPERATOR_ROUTER_ADMIN_ROUTES_SCHEMA,

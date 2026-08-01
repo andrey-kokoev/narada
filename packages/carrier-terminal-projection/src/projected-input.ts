@@ -1,5 +1,5 @@
-import { commandRecords, resolveCommandInput } from '@narada2/carrier-command-contract';
-import type { CarrierCommand, ResolvedCarrierCommand } from '@narada2/carrier-command-contract';
+import { commandRecords, resolveCommandInput } from '@narada-core/carrier-command-contract';
+import type { CarrierCommand, ResolvedCarrierCommand } from '@narada-core/carrier-command-contract';
 
 export type JsonRecord = Record<string, unknown>;
 

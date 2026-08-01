@@ -2,7 +2,7 @@
  * FTS5 Query Engine - search using SQLite FTS5
  */
 
-import type Database from '@narada2/sqlite';
+import type Database from '@narada-core/sqlite';
 import type { SearchQuery, SearchResult, SearchDocument } from './types.js';
 
 export interface Fts5QueryOptions {

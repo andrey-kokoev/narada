@@ -6,7 +6,7 @@ import {
   planIntelligenceAuthorityApplication,
   validateAuthoritativeDecisionClock,
   validateInvocation,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   CanonicalCatalogRecord,
   CatalogAccessRecord,
@@ -30,8 +30,8 @@ import type {
   Resource,
   RouteCapabilityAssertion,
   ResolverMaterializedInputs,
-} from "@narada2/invokable-intelligence-contract";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
+} from "@narada-core/invokable-intelligence-contract";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
 
 import { assembleCandidates, evaluateCandidate } from "./evaluate.js";
 import type { CandidateEvaluation, ResolverContext } from "./types.js";

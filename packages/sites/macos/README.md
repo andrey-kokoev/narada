@@ -1,4 +1,4 @@
-# @narada2/macos-site
+# @narada-core/macos-site
 
 macOS Site materialization for Narada bounded Cycle execution.
 
@@ -49,13 +49,13 @@ The first Keychain access from a new process may trigger a macOS system dialog a
 
 ```bash
 # Trigger the TCC prompt interactively before activating the LaunchAgent
-npx tsx -e "require('@narada2/macos-site').setupKeychainAccess('my-site')"
+npx tsx -e "require('@narada-core/macos-site').setupKeychainAccess('my-site')"
 ```
 
 Or use the helper directly:
 
 ```typescript
-import { setupKeychainAccess } from "@narada2/macos-site";
+import { setupKeychainAccess } from "@narada-core/macos-site";
 await setupKeychainAccess("my-site");
 ```
 
@@ -91,7 +91,7 @@ The wrapper script is `#!/bin/zsh` with absolute paths and quoted variables to h
 ### Runner
 
 ```typescript
-import { DefaultMacosSiteRunner } from "@narada2/macos-site";
+import { DefaultMacosSiteRunner } from "@narada-core/macos-site";
 
 const runner = new DefaultMacosSiteRunner();
 const result = await runner.runCycle({
@@ -107,7 +107,7 @@ const result = await runner.runCycle({
 ### Supervisor
 
 ```typescript
-import { writeLaunchAgentFiles, generateLoadCommand } from "@narada2/macos-site";
+import { writeLaunchAgentFiles, generateLoadCommand } from "@narada-core/macos-site";
 
 const { plistPath, scriptPath } = await writeLaunchAgentFiles(config);
 console.log(generateLoadCommand("my-site"));
@@ -116,7 +116,7 @@ console.log(generateLoadCommand("my-site"));
 ### Credentials
 
 ```typescript
-import { resolveSecret, resolveSecretRequired } from "@narada2/macos-site";
+import { resolveSecret, resolveSecretRequired } from "@narada-core/macos-site";
 
 const token = await resolveSecret("my-site", "GRAPH_ACCESS_TOKEN");
 const required = await resolveSecretRequired("my-site", "ADMIN_TOKEN");

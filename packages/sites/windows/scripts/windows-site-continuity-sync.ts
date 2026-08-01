@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, win32, posix } from 'node:path';
 import { homedir } from 'node:os';
 import { stdin, stdout, stderr } from 'node:process';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import {
   SITE_CONTINUITY_EMBODIMENT_KINDS,
   SITE_CONTINUITY_EXCHANGE_CLASSES,

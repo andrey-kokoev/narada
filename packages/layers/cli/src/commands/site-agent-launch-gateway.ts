@@ -2,14 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { loadIntelligenceLaunchContext } from '@narada2/agent-start/intelligence-launch-context';
+import { loadIntelligenceLaunchContext } from '@narada-core/agent-start/intelligence-launch-context';
 import type {
   OperatorSiteAgentLaunchFailurePhase,
   OperatorSiteAgentLaunchDiagnosticSummary,
   OperatorSiteAgentLaunchWireResponse,
   OperatorSiteAgentLaunchHandoffWireRecord,
   OperatorSiteAgentWireRecord,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import { silentCommandContext } from '../lib/command-wrapper.js';
 import { agentWebUiAttachCommand } from './agent-web-ui.js';
 import { workspaceLaunchCommand } from './workspace-launch-application.js';

@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/invokable-intelligence-runtime",
+  "name": "@narada-core/invokable-intelligence-runtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "package_role": "portable_invocation_gateway_and_evidence_recorder",
     "surface": "invokable_intelligence",
     "presentation_only": false,
-    "authority_owner": "@narada2/cli"
+    "authority_owner": "@narada-core/cli"
   },
   "exports": {
     ".": {
@@ -27,10 +27,10 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@narada2/invokable-intelligence-contract": "workspace:*",
-    "@narada2/invokable-intelligence-materialization": "workspace:*",
-    "@narada2/invokable-intelligence-registry": "workspace:*",
-    "@narada2/invokable-intelligence-resolver": "workspace:*"
+    "@narada-core/invokable-intelligence-contract": "workspace:*",
+    "@narada-core/invokable-intelligence-materialization": "workspace:*",
+    "@narada-core/invokable-intelligence-registry": "workspace:*",
+    "@narada-core/invokable-intelligence-resolver": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",
@@ -41,7 +41,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/invokable-intelligence-runtime"
   },
   "engines": {

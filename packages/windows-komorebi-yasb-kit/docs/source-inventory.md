@@ -27,4 +27,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/windows-komorebi-yasb-kit` now carries descriptor/contracts/tests for Komorebi/YASB template materialization posture. A receiving PC Site must still admit its own PC-locus authority, materialization carrier, repair carrier, and runtime evidence path.
+`@narada-core/windows-komorebi-yasb-kit` now carries descriptor/contracts/tests for Komorebi/YASB template materialization posture. A receiving PC Site must still admit its own PC-locus authority, materialization carrier, repair carrier, and runtime evidence path.

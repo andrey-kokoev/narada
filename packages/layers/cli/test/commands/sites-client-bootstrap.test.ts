@@ -199,7 +199,7 @@ describe('sitesBootstrapClientCommand', () => {
     const siteRoot = join(workspace, '.narada');
     const delegatedMain = join(siteRoot, 'delegated', 'packages', 'layers', 'cli', 'dist', 'main.js');
     await mkdir(join(siteRoot, 'delegated', 'packages', 'layers', 'cli', 'dist'), { recursive: true });
-    await writeFile(delegatedMain, "require('@narada2/missing-task-governance-fixture')\n", 'utf8');
+    await writeFile(delegatedMain, "require('@narada-core/missing-task-governance-fixture')\n", 'utf8');
     await writeFile(join(siteRoot, 'package.json'), JSON.stringify({
       scripts: {
         status: 'node ./delegated/packages/layers/cli/dist/main.js status',

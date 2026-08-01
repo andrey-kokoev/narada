@@ -5,9 +5,9 @@
   "template_catalog": {
     "template_id": "narada-proper.templates.site.site-machinery.v0",
     "template_components": [
-      "@narada2/site-inbox",
-      "@narada2/site-config",
-      "@narada2/site-lift"
+      "@narada-core/site-inbox",
+      "@narada-core/site-config",
+      "@narada-core/site-lift"
     ]
   },
   "site": {
@@ -22,21 +22,21 @@
   },
   "packages": [
     {
-      "name": "@narada2/site-inbox",
+      "name": "@narada-core/site-inbox",
       "include_contracts": true,
       "include_docs": true,
       "include_schema_descriptors": true,
       "include_conformance_tests": true
     },
     {
-      "name": "@narada2/site-config",
+      "name": "@narada-core/site-config",
       "include_contracts": true,
       "include_docs": true,
       "include_schema_descriptors": true,
       "include_conformance_tests": true
     },
     {
-      "name": "@narada2/site-lift",
+      "name": "@narada-core/site-lift",
       "include_contracts": true,
       "include_docs": true,
       "include_schema_descriptors": true,
@@ -65,9 +65,9 @@
   "evidence": {
     "template_refs": [
       "narada-proper.templates.site.site-machinery.v0",
-      "package:@narada2/site-inbox",
-      "package:@narada2/site-config",
-      "package:@narada2/site-lift"
+      "package:@narada-core/site-inbox",
+      "package:@narada-core/site-config",
+      "package:@narada-core/site-lift"
     ],
     "refused_imports": []
   }

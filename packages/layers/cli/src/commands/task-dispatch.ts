@@ -24,7 +24,7 @@ import type {
   DispatchPacketRow,
   TaskAssignmentRow,
 } from '../lib/task-lifecycle-store.js';
-import { JsonPrincipalSessionBindingRegistry } from '@narada2/control-plane';
+import { JsonPrincipalSessionBindingRegistry } from '@narada-core/control-plane';
 
 export interface TaskDispatchOptions {
   action: 'queue' | 'pickup' | 'status' | 'start';

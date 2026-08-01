@@ -1,9 +1,9 @@
 import { join } from "node:path";
-import { FileLock, computeHealthTransition } from "@narada2/control-plane";
+import { FileLock, computeHealthTransition } from "@narada-core/control-plane";
 import type { MacosSiteConfig, MacosCycleResult } from "./types.js";
 import { ensureSiteDir, resolveSiteRoot, siteDbPath } from "./path-utils.js";
 import { SqliteSiteCoordinator } from "./coordinator.js";
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 
 export interface CycleConfig {
   ceilingMs: number;

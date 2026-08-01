@@ -29,7 +29,7 @@ to the current hosted Cloudflare package and adjacent docs.
 
 | Surface | Why it may remain | Guardrail |
 | --- | --- | --- |
-| Package name `@narada2/site-registry-cloudflare` | Existing deployment/import coordinate. | Docs must say this package co-locates concerns and is not Site authority. |
+| Package name `@narada-core/site-registry-cloudflare` | Existing deployment/import coordinate. | Docs must say this package co-locates concerns and is not Site authority. |
 | Environment prefix `NARADA_SITE_REGISTRY_*` | Existing deployment coordinate and secret binding prefix. | Secret names remain capability coordinates, not conceptual authority. |
 | `/webhook` | Existing receiver route. | New docs should call it a telemetry event receiver route. |
 | `/api/messages/*` | Existing remote exchange compatibility route. | New docs should prefer Site Communication Candidate Exchange naming and distinguish cloud receipt from local admission. |

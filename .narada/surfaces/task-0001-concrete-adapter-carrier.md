@@ -7,7 +7,7 @@ Source packet: `.narada/admission/candidates/task-0001-live-execution-admission-
 
 ## Purpose
 
-This carrier admits the Narada proper boundary for a concrete task DB adapter outside `@narada2/site-task-lifecycle`.
+This carrier admits the Narada proper boundary for a concrete task DB adapter outside `@narada-core/site-task-lifecycle`.
 
 The package remains adapter-interface-only. It owns no SQLite dependency and performs no SQLite mutation.
 
@@ -25,12 +25,12 @@ A later live execution task must name:
 
 ## Allowed Future Scope
 
-- Admit a concrete adapter outside `@narada2/site-task-lifecycle`.
+- Admit a concrete adapter outside `@narada-core/site-task-lifecycle`.
 - Bind that adapter only after conformance evidence and dependency ownership are recorded.
 
 ## Denied Scope
 
-- Adding a SQLite dependency to `@narada2/site-task-lifecycle`.
+- Adding a SQLite dependency to `@narada-core/site-task-lifecycle`.
 - Importing source Site DB/history/state.
 - Binding narada-andrey task, inbox, roster, checkpoint, operator-surface, PC-locus, secret, identity-specific, or source-history state.
 - Treating the neutral in-memory test fixture as a live runtime adapter.

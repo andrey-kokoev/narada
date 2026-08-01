@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { basename, isAbsolute, join, normalize, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadMcpSurfaceRegistry, registryServerNames, registrySurfaces, siteControlRoot } from '@narada2/carrier-action-admission/tool-metadata';
+import { loadMcpSurfaceRegistry, registryServerNames, registrySurfaces, siteControlRoot } from '@narada-core/carrier-action-admission/tool-metadata';
 import { McpFabricError } from './mcp-fabric-errors.js';
 import { mcpFabricRepairPlan } from './mcp-fabric-repair-plans.js';
 import { createMcpFabricLifecycle, transitionMcpFabricLifecycle } from './mcp-fabric-state.js';

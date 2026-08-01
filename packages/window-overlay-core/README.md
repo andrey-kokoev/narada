@@ -1,4 +1,4 @@
-# @narada2/window-overlay-core
+# @narada-core/window-overlay-core
 
 Reusable Windows overlay-window mechanics for Narada operator surfaces.
 

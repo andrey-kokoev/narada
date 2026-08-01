@@ -21,7 +21,7 @@ import {
   type OperatorSurfaceProjection,
   type OperatorSurfaceScope,
   type OperatorWorkspaceRouteDirectory,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 
 export type OperatorWorkspaceRouteDirectoryFetch = (
   input: string,

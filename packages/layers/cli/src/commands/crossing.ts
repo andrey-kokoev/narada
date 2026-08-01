@@ -11,7 +11,7 @@ import {
   CROSSING_REGIME_INVENTORY,
   type CrossingClassification,
   type CrossingRegimeInventoryEntry,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { attachFormattedOutput } from '../lib/cli-output.js';

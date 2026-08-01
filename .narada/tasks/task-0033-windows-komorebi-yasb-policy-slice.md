@@ -15,7 +15,7 @@ The source files are external orientation evidence only. Narada proper admits de
 
 ## Goal
 
-Deepen `@narada2/windows-komorebi-yasb-kit` with:
+Deepen `@narada-core/windows-komorebi-yasb-kit` with:
 
 - typed materialization request/decision descriptors;
 - surface distinction between operator-surface MCP, PC Site local fallback, and refused live runtime directory;

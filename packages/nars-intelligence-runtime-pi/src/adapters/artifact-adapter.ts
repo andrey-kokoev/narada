@@ -1,4 +1,4 @@
-import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
+import { NarsKernelContractError } from '@narada-core/nars-intelligence-kernel-contract';
 
 const ARTIFACT_CONTAINER_KEYS: any = new Set(['artifact', 'artifacts', 'artifact_ref', 'artifact_refs', 'narada_artifact', 'narada_artifacts']);
 const FORBIDDEN_PATH_KEYS: any = new Set(['path', 'sourcepath', 'filepath', 'filesystempath', 'sessiondir']);

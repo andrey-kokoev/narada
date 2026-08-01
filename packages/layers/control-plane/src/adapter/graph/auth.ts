@@ -1,4 +1,4 @@
-import { execFileGoverned } from "@narada2/process-launch-posture";
+import { execFileGoverned } from "@narada-core/process-launch-posture";
 
 type GraphTokenExecFile = typeof execFileGoverned;
 

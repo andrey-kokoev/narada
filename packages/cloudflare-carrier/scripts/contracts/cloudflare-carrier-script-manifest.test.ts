@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { existsSync, readdirSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, relative } from 'node:path';

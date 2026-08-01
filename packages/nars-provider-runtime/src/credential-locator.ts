@@ -1,6 +1,6 @@
 type AnyRecord = Record<string, any>;
 
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 
 export const SITE_SECRET_LOOKUP_TIMEOUT_MS = 5000;
 export const SITE_SECRET_LOOKUP_SCRIPT = `

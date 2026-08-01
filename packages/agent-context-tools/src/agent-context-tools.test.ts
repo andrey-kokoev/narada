@@ -7,7 +7,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { materializeAgentSessionStart, openAgentContextDb, validateIdentityAgainstRoster } from './session-start.js';
 import { enforceAgentPathPolicy, resolveAgentPathPolicy } from './path-policy.js';
 import Database, { DEFAULT_BUSY_TIMEOUT_MS } from './sqlite-database.js';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 
 const root: any = dirname(fileURLToPath(import.meta.url));
 

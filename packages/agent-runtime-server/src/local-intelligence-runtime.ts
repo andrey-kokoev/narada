@@ -4,23 +4,23 @@ import { join } from 'node:path';
 import {
   deriveUserSiteRootFromRegistryPath,
   probeCodexSubscriptionService as probeCodexSubscriptionReadiness,
-} from '@narada2/carrier-provider-support/codex-subscription-readiness';
+} from '@narada-core/carrier-provider-support/codex-subscription-readiness';
 import {
   latestCatalogRecords,
   resolveInvocationPrincipalAdmission,
   resolveRouteCapabilities,
-} from '@narada2/invokable-intelligence-contract';
-import { SqliteMaterializationStore } from '@narada2/invokable-intelligence-materialization';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
-import { buildResolverContext, createLocalInvocationGateway } from '@narada2/invokable-intelligence-runtime';
-import { assembleCandidates, deterministicId, resolveInvocation } from '@narada2/invokable-intelligence-resolver';
-import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
-import { createCanonicalInvocationAdapter } from '@narada2/nars-provider-runtime/canonical-invocation-adapter';
+} from '@narada-core/invokable-intelligence-contract';
+import { SqliteMaterializationStore } from '@narada-core/invokable-intelligence-materialization';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
+import { buildResolverContext, createLocalInvocationGateway } from '@narada-core/invokable-intelligence-runtime';
+import { assembleCandidates, deterministicId, resolveInvocation } from '@narada-core/invokable-intelligence-resolver';
+import { readNarsEventLog } from '@narada-core/nars-session-core/event-log';
+import { createCanonicalInvocationAdapter } from '@narada-core/nars-provider-runtime/canonical-invocation-adapter';
 import {
   assertNarsKernelCapabilityGateway,
   normalizeIntelligenceKernelKind,
-} from '@narada2/nars-intelligence-kernel-contract';
-import { createIntelligenceKernel } from '@narada2/nars-pi-kernel';
+} from '@narada-core/nars-intelligence-kernel-contract';
+import { createIntelligenceKernel } from '@narada-core/nars-pi-kernel';
 import { createLocalTopologyObserver } from './local-topology-observer.js';
 import { LOCAL_RUNTIME_SERVICE_EVIDENCE_SCHEMA } from './local-topology-observer.js';
 

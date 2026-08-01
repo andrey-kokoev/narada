@@ -8,7 +8,7 @@
  *   observe-only → draft-only → review-required → autonomous
  */
 
-import type { AllowedAction } from "@narada2/control-plane";
+import type { AllowedAction } from "@narada-core/control-plane";
 
 export type PosturePreset =
   | "observe-only"

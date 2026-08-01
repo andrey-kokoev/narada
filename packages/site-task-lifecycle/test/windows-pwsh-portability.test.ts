@@ -22,7 +22,7 @@ describe('Windows PowerShell package portability', () => {
     expect(doc).toContain('Consume From Repo Package');
     expect(doc).toContain('Do Not Copy Live Site State');
     expect(doc).toContain('D:\\code\\narada\\packages\\site-task-lifecycle');
-    expect(doc).toContain('local concrete adapter outside `@narada2/site-task-lifecycle`');
+    expect(doc).toContain('local concrete adapter outside `@narada-core/site-task-lifecycle`');
     expect(doc).toContain('It cannot claim live setup until the receiving Site admits and verifies its own initializer');
   });
 
@@ -73,7 +73,7 @@ describe('Windows PowerShell package portability', () => {
     expect(adapterBoundary.packageExecutesSqliteMutation).toBe(false);
     expect(setupPlan.siteRoot).toBe('D:\\Sites\\site-alpha');
     expect(setupPlan.taskDbInitPlan.statements).toEqual(adapterExecution.statements);
-    expect(setupPlan.remainingAdmissionsRequired).toContain('concrete adapter execution outside @narada2/site-task-lifecycle');
+    expect(setupPlan.remainingAdmissionsRequired).toContain('concrete adapter execution outside @narada-core/site-task-lifecycle');
     expect(writeRequest.adapterDecision).toBe('adapter_interface_only');
     expect(writeRequest.operations).toHaveLength(3);
     expect(findDeniedSourceImports([

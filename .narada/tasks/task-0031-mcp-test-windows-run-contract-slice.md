@@ -15,7 +15,7 @@ The source files are external orientation evidence only. Narada proper admits de
 
 ## Goal
 
-Deepen `@narada2/mcp-test-windows` with:
+Deepen `@narada-core/mcp-test-windows` with:
 
 - typed test registry entry descriptors;
 - test run request/decision descriptors;

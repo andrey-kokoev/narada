@@ -147,11 +147,11 @@ export function formatSiteContinuityLoopReportText(result: any) {
   const sessionFile = result?.operator_session_file ?? null;
   if (worker && sessionFile && summary.site_id) {
     const baseArgs = `-- --url ${worker} --site ${summary.site_id} --operator-session-file ${sessionFile}`;
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
-    lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
-    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
-    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text ${baseArgs}`);
+    lines.push(`Operation List: pnpm --filter @narada-core/cloudflare-carrier product:operation:list:text ${baseArgs}`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
   }
 
   return lines.join('\n') + '\n';

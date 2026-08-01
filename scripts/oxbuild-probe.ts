@@ -5,7 +5,7 @@ import { join, relative, resolve } from "node:path";
 import { tmpdir } from "node:os";
 
 const root = resolve(import.meta.dirname, "..");
-const packageName = "@narada2/intent-zones";
+const packageName = "@narada-core/intent-zones";
 const packageDir = join(root, "packages", "intent-zones");
 const distDir = join(packageDir, "dist");
 const workDir = join(tmpdir(), `narada-oxbuild-probe-${Date.now()}`);

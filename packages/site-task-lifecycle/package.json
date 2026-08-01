@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-task-lifecycle",
+  "name": "@narada-core/site-task-lifecycle",
   "version": "0.1.0",
   "description": "Receiving-Site task lifecycle initializer and admission guards",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-task-lifecycle"
   }
 }

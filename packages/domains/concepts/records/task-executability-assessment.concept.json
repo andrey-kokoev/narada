@@ -21,7 +21,7 @@
     { "kind": "observes", "concept_id": "concept_registry" },
     { "kind": "observes", "concept_id": "canonical_outbox" }
   ],
-  "owner_surface": "@narada2/task-governance-core task lifecycle authority",
+  "owner_surface": "@narada-core/task-governance-core task lifecycle authority",
   "authority": {
     "kind": "package",
     "ref": "narada-core/packages/task-governance-core",

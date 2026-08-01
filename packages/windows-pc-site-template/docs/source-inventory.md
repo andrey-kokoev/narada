@@ -27,4 +27,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/windows-pc-site-template` now carries descriptor/contracts/tests for greenfield Windows PC Site template planning. A receiving Site must still admit root creation, local carriers, runtime materialization, profile mutation, and PC-locus state separately.
+`@narada-core/windows-pc-site-template` now carries descriptor/contracts/tests for greenfield Windows PC Site template planning. A receiving Site must still admit root creation, local carriers, runtime materialization, profile mutation, and PC-locus state separately.

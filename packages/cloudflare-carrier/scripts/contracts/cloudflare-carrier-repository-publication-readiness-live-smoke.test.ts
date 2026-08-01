@@ -47,11 +47,11 @@ test('formatRepositoryPublicationReadinessLiveSmokeText emits provider liveness 
   });
 
   assert.match(text, /Repository Publication Readiness Smoke: ready/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
 });
 
 test('formatRepositoryPublicationReadinessLiveSmokeText suppresses provider liveness follow-on without site id', () => {
@@ -72,11 +72,11 @@ test('formatRepositoryPublicationReadinessLiveSmokeText suppresses provider live
     missing_configuration: [],
   });
 
-  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
   assert.doesNotMatch(text, /Posture Coherence Review:/);
   assert.doesNotMatch(text, /Durability Coherence Review:/);
-  assert.doesNotMatch(text, /Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
+  assert.doesNotMatch(text, /Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider-liveness:text/);
 });
 
 test('runRepositoryPublicationReadinessLiveSmoke returns summarized readiness state', async () => {

@@ -1,4 +1,4 @@
-import { AGENT_WEB_UI_HELP_LINES } from '@narada2/nars-client-projection-contract';
+import { AGENT_WEB_UI_HELP_LINES } from '@narada-core/nars-client-projection-contract';
 import type { PiTheme } from '../types.js';
 import { resetAnsi } from '../theme/theme.js';
 

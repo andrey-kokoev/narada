@@ -8,13 +8,13 @@ Prior report: `OSM:osm_20260510_135815_964_179155b0`
 
 ## Purpose
 
-Admit, defer, or reject the external live executions required before Narada proper can claim a receiving Narada Site with live admitted task-lifecycle functionality from `@narada2/site-task-lifecycle`.
+Admit, defer, or reject the external live executions required before Narada proper can claim a receiving Narada Site with live admitted task-lifecycle functionality from `@narada-core/site-task-lifecycle`.
 
 This packet does not perform live setup. It names the execution surfaces, authority owners, preconditions, evidence, refusal conditions, rollback posture, and terminal criteria.
 
 ## Global Boundaries
 
-- `@narada2/site-task-lifecycle` remains adapter-interface-only.
+- `@narada-core/site-task-lifecycle` remains adapter-interface-only.
 - The package owns no SQLite dependency.
 - The package executes no SQLite mutation.
 - The package performs no live MCP registration.
@@ -27,7 +27,7 @@ This packet does not perform live setup. It names the execution surfaces, author
 
 Admission id: `narada-proper.exec.task-0001.initializer.v0`
 Authority owner: receiving Site authority under Narada proper admission.
-Expected surface: admitted task execution surface invoking `initializeSiteTaskLifecycle(options)` from `@narada2/site-task-lifecycle`.
+Expected surface: admitted task execution surface invoking `initializeSiteTaskLifecycle(options)` from `@narada-core/site-task-lifecycle`.
 Expected command/tool: no raw command is admitted by this packet; a later admitted carrier may run a package-local Node/tsx harness or equivalent Narada proper task execution tool with the approved options.
 
 Preconditions:
@@ -69,7 +69,7 @@ Expected command/tool: no concrete adapter command is admitted by this packet; a
 
 Preconditions:
 
-- Adapter implementation is outside `@narada2/site-task-lifecycle`.
+- Adapter implementation is outside `@narada-core/site-task-lifecycle`.
 - Adapter has conformance evidence matching `TaskDbAdapterConformanceContract`.
 - Driver/dependency ownership is declared by receiving Site storage authority.
 
@@ -84,7 +84,7 @@ Required evidence:
 Refusal conditions:
 
 - Adapter imports narada-andrey DBs or history.
-- Adapter makes `@narada2/site-task-lifecycle` own a SQLite dependency.
+- Adapter makes `@narada-core/site-task-lifecycle` own a SQLite dependency.
 - Adapter has no rollback/closeout evidence path.
 - Adapter bypasses receiving Site authority.
 
@@ -177,7 +177,7 @@ Terminal criterion:
 Terminal live Site setup is claimable only after all four execution admissions are admitted, executed, and verified:
 
 - Initializer execution completed under admitted receiving Site authority.
-- Concrete adapter admitted outside `@narada2/site-task-lifecycle`.
+- Concrete adapter admitted outside `@narada-core/site-task-lifecycle`.
 - DB mutation executed and confirmed through admitted adapter authority.
 - Live MCP registration admitted, executed, and smoke-tested under Narada proper runtime authority.
 - No narada-andrey DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state or source history imported.

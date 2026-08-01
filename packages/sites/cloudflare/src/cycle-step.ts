@@ -19,7 +19,7 @@ import type { CycleStepResult, FactRecord } from "./types.js";
 import type { SourceAdapter } from "./source-adapter.js";
 import type { EffectExecutionAdapter } from "./effect-worker.js";
 import { executeApprovedCommands } from "./effect-worker.js";
-import type { CharterRunner } from "@narada2/charters";
+import type { CharterRunner } from "@narada-core/charters";
 import { runCharterInSandbox } from "./sandbox/charter-runtime.js";
 
 export type CycleStepId = 2 | 3 | 4 | 5 | 6 | 7;

@@ -1,8 +1,8 @@
-# `@narada2/nars-pi-kernel`
+# `@narada-core/nars-pi-kernel`
 
 The canonical checkout path is `packages/nars-intelligence-runtime-pi`. The
 directory name is retained for workspace compatibility; the package identity
-and all ownership references are `@narada2/nars-pi-kernel`.
+and all ownership references are `@narada-core/nars-pi-kernel`.
 
 This package implements the representation-neutral NARS intelligence-kernel
 contract with an isolated Pi SDK host and a supervised JSONL Pi RPC host.
@@ -62,6 +62,6 @@ is not resent.
 Run the bounded verification layers with:
 
 ```bash
-pnpm --filter @narada2/nars-pi-kernel test
-pnpm --filter @narada2/nars-pi-kernel test:live
+pnpm --filter @narada-core/nars-pi-kernel test
+pnpm --filter @narada-core/nars-pi-kernel test:live
 ```

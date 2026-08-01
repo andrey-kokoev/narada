@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
-import type { SiteRegistryRelationTransitionInput } from '@narada2/site-registry-cloudflare';
+import type { SiteRegistryRelationTransitionInput } from '@narada-core/site-registry-cloudflare';
 import type { ExitCode } from '../lib/exit-codes.js';
 import { ExitCode as Code } from '../lib/exit-codes.js';
 

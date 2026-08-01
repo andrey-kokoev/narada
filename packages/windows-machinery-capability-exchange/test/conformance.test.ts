@@ -28,7 +28,7 @@ describe('windows machinery conformance report', () => {
     const report = buildWindowsMachineryConformanceReport(completeRecords().slice(0, 2));
 
     expect(report.status).toBe('incomplete_descriptor_set');
-    expect(report.missing_packages).toContain('@narada2/windows-operator-surface');
+    expect(report.missing_packages).toContain('@narada-core/windows-operator-surface');
     expect(report.refused_state).toEqual(expect.arrayContaining([
       'runtime_databases',
       'operator_surface_runtime_state',

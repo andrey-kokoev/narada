@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { FileLock, computeHealthTransition } from "@narada2/control-plane";
+import { FileLock, computeHealthTransition } from "@narada-core/control-plane";
 import type { WindowsSiteConfig, WindowsCycleResult } from "./types.js";
 import { ensureSiteDir, resolveSiteRoot } from "./path-utils.js";
 import { notifyOperator } from "./notification.js";
@@ -17,7 +17,7 @@ import {
   createReconcileStepHandler,
   type CycleStepResult,
 } from "./cycle-step.js";
-import type { CharterRunner, RuntimePolicy } from "@narada2/control-plane";
+import type { CharterRunner, RuntimePolicy } from "@narada-core/control-plane";
 import type { FixtureSourceDelta } from "./cycle-coordinator.js";
 import { createGraphSource } from "./graph-source.js";
 
@@ -75,7 +75,7 @@ export class DefaultWindowsSiteRunner implements WindowsSiteRunner {
     try {
       await ensureSiteDir(config.site_id, config.variant);
 
-      const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+      const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
       const { siteDbPath } = await import("./path-utils.js");
       const db = new DatabaseCtor(siteDbPath(config.site_id, config.variant));
       const coordinator = new WindowsCycleCoordinator(db);
@@ -265,7 +265,7 @@ export class DefaultWindowsSiteRunner implements WindowsSiteRunner {
 
       // Update health on failure
       try {
-        const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+        const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
         const { siteDbPath } = await import("./path-utils.js");
         const db = new DatabaseCtor(siteDbPath(config.site_id, config.variant));
         const failCoordinator = new WindowsCycleCoordinator(db);
@@ -326,7 +326,7 @@ export class DefaultWindowsSiteRunner implements WindowsSiteRunner {
     // Best-effort trace write if not already done
     if (stepResults.length === 0) {
       try {
-        const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+        const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
         const { siteDbPath } = await import("./path-utils.js");
         const db = new DatabaseCtor(siteDbPath(config.site_id, config.variant));
         const traceCoordinator = new WindowsCycleCoordinator(db);

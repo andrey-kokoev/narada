@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-operating-loop",
+  "name": "@narada-core/site-operating-loop",
   "version": "0.1.0",
   "description": "Narada Site Operating Loop substrate",
   "private": true,
@@ -15,7 +15,7 @@
     "narada-site-loop": "./dist/bin/narada-site-loop.js"
   },
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "exports": {
     ".": {
@@ -66,7 +66,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-operating-loop"
   },
   "engines": {

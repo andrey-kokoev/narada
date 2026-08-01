@@ -6,11 +6,11 @@ import {
   MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
   MANAGEMENT_DEPLOYMENT_RESULT_SCHEMA,
   MANAGEMENT_RESULT_SCHEMA,
-} from '@narada2/invokable-intelligence-management';
-import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
-import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
+} from '@narada-core/invokable-intelligence-management';
+import { createFakeD1 } from '@narada-core/invokable-intelligence-registry';
+import { D1RegistryStore } from '@narada-core/invokable-intelligence-registry/d1';
 
-import { createCloudflareSiteRegistryAdapter } from '@narada2/cloudflare-site-registry';
+import { createCloudflareSiteRegistryAdapter } from '@narada-core/cloudflare-site-registry';
 import {
   CLOUDFLARE_INTELLIGENCE_MANAGEMENT_API_REQUEST_SCHEMA,
   CLOUDFLARE_INTELLIGENCE_MANAGEMENT_API_RESPONSE_SCHEMA,

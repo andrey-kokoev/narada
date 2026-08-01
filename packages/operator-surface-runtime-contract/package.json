@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/operator-surface-runtime-contract",
+  "name": "@narada-core/operator-surface-runtime-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -26,13 +26,13 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/nars-intelligence-kernel-contract": "workspace:*"
+    "@narada-core/nars-intelligence-kernel-contract": "workspace:*"
   },
   "description": "Shared runtime launch, MCP runtime, terminal runtime, heartbeat, and session identity contracts for Narada operator surfaces",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-surface-runtime-contract"
   },
   "engines": {

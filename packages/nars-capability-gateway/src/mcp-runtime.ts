@@ -2,12 +2,12 @@ type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
 const processEnv: AnyRecord = process.env;
 
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+import { spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 const spawnHiddenPostureProcessAny: AnyFunction = spawnHiddenPostureProcess as AnyFunction;
-import { loadSiteMcpFabric, projectServerEnvironment } from '@narada2/mcp-fabric';
+import { loadSiteMcpFabric, projectServerEnvironment } from '@narada-core/mcp-fabric';
 const loadSiteMcpFabricAny: AnyFunction = loadSiteMcpFabric as AnyFunction;
 const projectServerEnvironmentAny: AnyFunction = projectServerEnvironment as AnyFunction;
-import { buildLaunchProcessOwnershipEvidence, normalizeOptionalString } from '@narada2/launch-process-ownership';
+import { buildLaunchProcessOwnershipEvidence, normalizeOptionalString } from '@narada-core/launch-process-ownership';
 const buildLaunchProcessOwnershipEvidenceAny: AnyFunction = buildLaunchProcessOwnershipEvidence as AnyFunction;
 const normalizeOptionalStringAny: AnyFunction = normalizeOptionalString as AnyFunction;
 

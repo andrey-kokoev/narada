@@ -1,4 +1,4 @@
-# @narada2/task-governance
+# @narada-core/task-governance
 
 Task governance is Narada's self-build control subsystem. It owns the durable task lifecycle, task assignment, evidence admission, task projection, recommendation, reconciliation-facing domain rules, and package-level tests for those rules.
 
@@ -46,7 +46,7 @@ The service extraction queue is tracked in
 
 ## CEIZ / TIZ Boundary
 
-Command Execution Intent Zone and Testing Intent Zone contracts are owned by `@narada2/intent-zones`. Task governance persists references and row projections needed for task evidence, but the authority grammar of command execution and test execution is not task-owned.
+Command Execution Intent Zone and Testing Intent Zone contracts are owned by `@narada-core/intent-zones`. Task governance persists references and row projections needed for task evidence, but the authority grammar of command execution and test execution is not task-owned.
 
 - CEIZ owns command-run request/result types and execution-output admission semantics.
 - TIZ owns verification request/result types and test-run policy.
@@ -57,35 +57,35 @@ Command Execution Intent Zone and Testing Intent Zone contracts are owned by `@n
 The CLI consumes this package through workspace package exports. After editing `packages/task-governance/src`, run:
 
 ```bash
-pnpm --filter @narada2/task-governance build
-pnpm --filter @narada2/cli typecheck
+pnpm --filter @narada-core/task-governance build
+pnpm --filter @narada-core/cli typecheck
 ```
 
 After editing lower shared contracts in `packages/intent-zones/src`, build from the lower package upward:
 
 ```bash
-pnpm --filter @narada2/intent-zones build
-pnpm --filter @narada2/task-governance build
-pnpm --filter @narada2/cli typecheck
+pnpm --filter @narada-core/intent-zones build
+pnpm --filter @narada-core/task-governance build
+pnpm --filter @narada-core/cli typecheck
 ```
 
-`pnpm verify` includes only the `@narada2/task-governance` smoke test. Broader package tests are intentionally separate because they exercise file-backed SQLite and dominate the fast gate runtime:
+`pnpm verify` includes only the `@narada-core/task-governance` smoke test. Broader package tests are intentionally separate because they exercise file-backed SQLite and dominate the fast gate runtime:
 
 ```bash
-pnpm --filter @narada2/task-governance test:smoke
-pnpm --filter @narada2/task-governance test:fast
+pnpm --filter @narada-core/task-governance test:smoke
+pnpm --filter @narada-core/task-governance test:fast
 ```
 
 Assignment-lifecycle integration coverage is also separate:
 
 ```bash
-pnpm --filter @narada2/task-governance test:assignment-lifecycle
+pnpm --filter @narada-core/task-governance test:assignment-lifecycle
 ```
 
 The exhaustive governance test is also intentionally separate:
 
 ```bash
-pnpm --filter @narada2/task-governance test:governance
+pnpm --filter @narada-core/task-governance test:governance
 ```
 
 Use `test:fast` when changing projection, recommender, evidence admission, close, allocation, or search semantics. Use the assignment-lifecycle test when changing claim, continue, release, roster, or assignment-intent semantics. Use the exhaustive governance test when changing lint, lifecycle, report, review, or dependency semantics.

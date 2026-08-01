@@ -39,18 +39,18 @@ Package posture is broadly coherent, but the package set does not yet have a sin
 
 The distinction is present in README/docs and tests, especially in the newer reusable Site packages, but future agents still need to infer it package-by-package.
 
-Risk: agents may overgeneralize a runtime-owning package such as `@narada2/control-plane` or `@narada2/sites-linux` into the descriptor-only posture used by `@narada2/site-task-lifecycle` and `@narada2/agent-context-memory`, or conversely treat descriptor packages as live authority carriers.
+Risk: agents may overgeneralize a runtime-owning package such as `@narada-core/control-plane` or `@narada-core/sites-linux` into the descriptor-only posture used by `@narada-core/site-task-lifecycle` and `@narada-core/agent-context-memory`, or conversely treat descriptor packages as live authority carriers.
 
 Recommended follow-up: create a package role catalog under `packages/` or `.narada/capabilities/` and add a small check that descriptor packages do not acquire SQLite, shell, secret, or runtime mutation dependencies without an explicit role change.
 
 ## Coherent Postures Observed
 
-- `@narada2/site-task-lifecycle` states adapter-interface-only posture, no package-owned SQLite dependency, no SQLite mutation, source-state refusal, MCP request/result contracts, and Windows PowerShell consuming-Site guidance.
-- `@narada2/agent-context-memory` states descriptor/contract posture, no SQLite dependency ownership, no live hydration execution, and refusal guards for source DBs, checkpoint history, rosters, task/inbox state, operator-surface state, PC-locus state, secrets, and identity-specific runtime state.
-- `@narada2/site-inbox`, `@narada2/site-config`, and `@narada2/site-lift` preserve descriptor/admission/refusal posture and reject source DB/history/runtime/credential imports.
+- `@narada-core/site-task-lifecycle` states adapter-interface-only posture, no package-owned SQLite dependency, no SQLite mutation, source-state refusal, MCP request/result contracts, and Windows PowerShell consuming-Site guidance.
+- `@narada-core/agent-context-memory` states descriptor/contract posture, no SQLite dependency ownership, no live hydration execution, and refusal guards for source DBs, checkpoint history, rosters, task/inbox state, operator-surface state, PC-locus state, secrets, and identity-specific runtime state.
+- `@narada-core/site-inbox`, `@narada-core/site-config`, and `@narada-core/site-lift` preserve descriptor/admission/refusal posture and reject source DB/history/runtime/credential imports.
 - Windows machinery packages carry refusal tests/docs for PC-locus state, WSL crossings, credentials, operator-surface runtime copying, and source Site state imports.
-- `@narada2/mcp-shell-windows` is correctly framed as a boundary/policy package, not a live shell execution grant.
-- Runtime-owning packages such as `@narada2/control-plane`, `@narada2/cli`, and `@narada2/sites-linux` legitimately include SQLite/credential/runtime concepts as implementation zones rather than descriptor-only reusable packages.
+- `@narada-core/mcp-shell-windows` is correctly framed as a boundary/policy package, not a live shell execution grant.
+- Runtime-owning packages such as `@narada-core/control-plane`, `@narada-core/cli`, and `@narada-core/sites-linux` legitimately include SQLite/credential/runtime concepts as implementation zones rather than descriptor-only reusable packages.
 
 ## Non-Findings
 

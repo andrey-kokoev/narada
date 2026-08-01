@@ -1,14 +1,14 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 import {
   CarrierRestartOutcomeV1Schema,
   CarrierRestartRequestV1Schema,
   type CarrierRestartOutcomeV1,
   type CarrierRestartRequestV1,
-} from '@narada2/mcp-fabric-contracts';
-import { resolveNaradaSitePaths, type NaradaSitePaths } from '@narada2/site-paths';
+} from '@narada-core/mcp-fabric-contracts';
+import { resolveNaradaSitePaths, type NaradaSitePaths } from '@narada-core/site-paths';
 import {
   activateTargetAuthority,
   authorityTransitionStatePathFromSessionPath,
@@ -22,7 +22,7 @@ import {
   retireSourceAuthority,
   sealSourceAuthority,
   type NaradaAuthorityTransitionSourceState,
-} from '@narada2/nars-session-core';
+} from '@narada-core/nars-session-core';
 
 const MAX_FILE_TAIL_BYTES = 128 * 1024;
 const MAX_PROCESS_OUTPUT_BYTES = 32 * 1024;

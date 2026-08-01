@@ -29,7 +29,7 @@ The incoming request authorizes asking Narada proper to proceed from the prepare
    - Must define before/after file evidence and rollback.
 
 2. `narada-proper.exec.task-0001.concrete-adapter.v0`
-   - Must name the concrete adapter implementation outside `@narada2/site-task-lifecycle`.
+   - Must name the concrete adapter implementation outside `@narada-core/site-task-lifecycle`.
    - Must name its dependency/driver owner.
    - Must provide conformance and rollback evidence.
 

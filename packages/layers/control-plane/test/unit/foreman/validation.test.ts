@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateCharterOutput } from "@narada2/charters";
+import { validateCharterOutput } from "@narada-core/charters";
 import { arbitrateEvaluations } from "../../../src/foreman/validation.js";
 import type { CharterOutputEnvelope, CharterInvocationEnvelope } from "../../../src/foreman/types.js";
 

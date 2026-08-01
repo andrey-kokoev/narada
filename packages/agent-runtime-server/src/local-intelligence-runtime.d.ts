@@ -1,20 +1,20 @@
-import type { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
+import type { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
 import type {
   AuthoritativeDecisionClock,
   InvocationPlan,
   ResourceRef,
   IntelligenceSelectionChoices,
-} from '@narada2/invokable-intelligence-contract';
-import type { NarsKernelCapabilityGateway } from '@narada2/nars-intelligence-kernel-contract';
+} from '@narada-core/invokable-intelligence-contract';
+import type { NarsKernelCapabilityGateway } from '@narada-core/nars-intelligence-kernel-contract';
 import type {
   IntelligenceMaterializationStore,
-} from '@narada2/invokable-intelligence-materialization';
+} from '@narada-core/invokable-intelligence-materialization';
 import type {
   InvocationAdapter,
   LocalInvocationGateway,
-} from '@narada2/invokable-intelligence-runtime';
-import type { IntelligenceRegistryStore } from '@narada2/invokable-intelligence-registry';
-import type { ResolverContext } from '@narada2/invokable-intelligence-resolver';
+} from '@narada-core/invokable-intelligence-runtime';
+import type { IntelligenceRegistryStore } from '@narada-core/invokable-intelligence-registry';
+import type { ResolverContext } from '@narada-core/invokable-intelligence-resolver';
 
 export interface NarsIntelligenceKernelLike {
   start(context: Record<string, unknown>): Promise<Record<string, unknown>>;

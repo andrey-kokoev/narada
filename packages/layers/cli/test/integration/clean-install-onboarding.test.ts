@@ -44,8 +44,8 @@ test('built CLI boundary provisions an empty Windows User Site and exposes repai
     assert.equal(installPayload.mutation_performed, true);
     assert.equal(installPayload.installation_profile, 'minimal');
     assert.deepEqual(installPayload.optional_modules, []);
-    assert.equal(installPayload.package.bundled_components.runtime_server.name, '@narada2/agent-runtime-server');
-    assert.equal(installPayload.package.bundled_components.web_ui.name, '@narada2/agent-web-ui');
+    assert.equal(installPayload.package.bundled_components.runtime_server.name, '@narada-core/agent-runtime-server');
+    assert.equal(installPayload.package.bundled_components.web_ui.name, '@narada-core/agent-web-ui');
     assert.equal(existsSync(join(siteRoot, 'config.json')), true);
     assert.equal(existsSync(join(siteRoot, 'config', 'launch', 'agents.psd1')), true);
     assert.equal(existsSync(join(siteRoot, 'Start-NaradaWorkspace.ps1')), true);
@@ -64,8 +64,8 @@ test('built CLI boundary provisions an empty Windows User Site and exposes repai
     const advancedPayload = parseJsonOutput(advanced.stdout, 'advanced install');
     assert.equal(advancedPayload.installation_profile, 'advanced');
     assert.deepEqual(advancedPayload.optional_modules, ['cloudflare', 'additional-roles', 'mcp-development', 'site-administration']);
-    assert.equal(advancedPayload.package.bundled_components.runtime_server.name, '@narada2/agent-runtime-server');
-    assert.equal(advancedPayload.package.bundled_components.web_ui.name, '@narada2/agent-web-ui');
+    assert.equal(advancedPayload.package.bundled_components.runtime_server.name, '@narada-core/agent-runtime-server');
+    assert.equal(advancedPayload.package.bundled_components.web_ui.name, '@narada-core/agent-web-ui');
     assert.equal(existsSync(advancedPayload.installation_manifest_path), true);
 
     const doctor = runCli([

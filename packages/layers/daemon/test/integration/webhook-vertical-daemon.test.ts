@@ -10,7 +10,7 @@ import {
   FileApplyLogStore,
   SqliteFactStore,
   DefaultSyncRunner,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import { createGenericWebhookServer } from "../../src/generic-webhook-server.js";
 import type { GenericWebhookServer } from "../../src/generic-webhook-server.js";
 

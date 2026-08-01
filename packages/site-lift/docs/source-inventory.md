@@ -28,4 +28,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/site-lift` now carries descriptor/contracts/tests for advisory Site-lift catalog and adoption packet posture. Receiving Sites still own admission, materialization, verification, and local evidence.
+`@narada-core/site-lift` now carries descriptor/contracts/tests for advisory Site-lift catalog and adoption packet posture. Receiving Sites still own admission, materialization, verification, and local evidence.

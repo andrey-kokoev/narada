@@ -1,7 +1,7 @@
 import type { Command } from 'commander';
 import {
   operatorSurfaceKindsForProjectionCapability,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionReconcileCommand, narsSessionsCommand } from './nars.js';

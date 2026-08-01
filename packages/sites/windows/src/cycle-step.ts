@@ -8,18 +8,18 @@
  */
 
 import type { WindowsCycleCoordinator } from "./cycle-coordinator.js";
-import type { Source } from "@narada2/control-plane";
-import { sourceRecordToFact } from "@narada2/control-plane";
+import type { Source } from "@narada-core/control-plane";
+import { sourceRecordToFact } from "@narada-core/control-plane";
 import {
   buildInvocationEnvelope,
   buildEvaluationRecord,
   persistEvaluation,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type {
   CharterRunner,
   RuntimePolicy,
   PolicyContext,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 
 export type CycleStepId = 2 | 3 | 4 | 5 | 6 | 7;
 
@@ -224,7 +224,7 @@ export function createLiveSyncStepHandler(
       };
     }
 
-    let batch: import("@narada2/control-plane").SourceBatch;
+    let batch: import("@narada-core/control-plane").SourceBatch;
     try {
       const cursor = ctx.coordinator.getCursor(source.sourceId);
       batch = await source.pull(cursor);
@@ -651,7 +651,7 @@ export function createCampaignEvaluateStepHandler(
             coordinatorStore: ctx.coordinator.coordinatorStore,
             rootDir: config.rootDir,
             getRuntimePolicy: config.getRuntimePolicy,
-            materializerRegistry: new (await import("@narada2/control-plane")).VerticalMaterializerRegistry(),
+            materializerRegistry: new (await import("@narada-core/control-plane")).VerticalMaterializerRegistry(),
           },
           { executionId, workItem, maxPriorEvaluations: 3, materializer: new SimpleMailMaterializer() },
         );

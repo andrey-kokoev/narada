@@ -1,9 +1,9 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { SqliteInboxStore } from '@narada2/control-plane';
+import { SqliteInboxStore } from '@narada-core/control-plane';
 import { onboardingCascadeForSiteKind } from './onboarding-cascade.js';
 import { readOperatorSurfaceIdentities, type OperatorSurfaceIdentity } from './operator-surface-registry.js';
-import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 
 export type SiteReadinessPosture =
   | 'site_absent'

@@ -1,5 +1,5 @@
 import type { NarsEvent } from '../../src/types.js';
-import { NARS_CLIENT_CONFORMANCE_FIXTURES } from '@narada2/nars-client-projection-contract';
+import { NARS_CLIENT_CONFORMANCE_FIXTURES } from '@narada-core/nars-client-projection-contract';
 
 const conformanceEvents: any = NARS_CLIENT_CONFORMANCE_FIXTURES.canonical_events as readonly NarsEvent[];
 

@@ -2,7 +2,7 @@ import type {
   OperatorSessionDisplayState,
   OperatorSessionListWireResponse,
   OperatorSessionWireRecord,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import { createAgentSessionsTransport, type AgentSessionsTransport } from './transport';
 
 export interface AgentSessionRecord {

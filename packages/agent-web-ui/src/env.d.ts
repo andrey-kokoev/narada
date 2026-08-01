@@ -4,7 +4,7 @@ declare module '*.vue' {
   export default component;
 }
 
-declare module '@narada2/nars-client-projection-contract' {
+declare module '@narada-core/nars-client-projection-contract' {
   export type AgentWebUiCommandKind = 'local_ui' | 'nars_protocol' | 'nars_session_command' | 'raw_protocol_frame';
   export type AgentWebUiCommandGroup = 'conversation' | 'session' | 'diagnostics' | 'settings' | 'snippets' | 'local' | 'advanced';
   export interface AgentWebUiCommand {

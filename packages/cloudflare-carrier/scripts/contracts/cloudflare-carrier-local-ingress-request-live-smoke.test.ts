@@ -35,14 +35,14 @@ test('formatLocalIngressRequestLiveSmokeText emits downstream reads', () => {
   });
 
   assert.match(text, /Local Ingress Request Smoke: ok/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
-  assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text/);
-  assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text/);
+  assert.match(text, /Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:request:review:text/);
+  assert.match(text, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:evidence:review:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
 });
 
 test('formatLocalIngressRequestLiveSmokeText suppresses focused handoffs without concrete worker and site targets', () => {

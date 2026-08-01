@@ -96,7 +96,7 @@ This schema is a target shape. Existing charters may not yet expose every field.
 
 ## In-Kernel Reactor
 
-- Evaluation happens inside `@narada2/control-plane`.
+- Evaluation happens inside `@narada-core/control-plane`.
 - Best for deterministic rules that can be fully specified in advance.
 - Admission may be automatic when the rule is admitted and the output is within `allowed_reactions`.
 

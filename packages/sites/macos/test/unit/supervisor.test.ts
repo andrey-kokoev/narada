@@ -115,7 +115,7 @@ describe("supervisor templates", () => {
     it("invokes node with exec", () => {
       const script = generateWrapperScript(tempDir, "/usr/local/bin/node", "test-site");
       expect(script).toContain('exec "${NODE_PATH}"');
-      expect(script).toContain("require('@narada2/macos-site')");
+      expect(script).toContain("require('@narada-core/macos-site')");
     });
   });
 

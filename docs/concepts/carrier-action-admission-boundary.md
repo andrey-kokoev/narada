@@ -162,7 +162,7 @@ Agent Runtime Server remains responsible for turn/session evidence. The Carrier 
 
 The first implemented Agent Runtime Server slice is a non-effectful admission layer.
 
-MCP surface metadata is projected from the Site-local `.narada/capabilities/mcp-surfaces.json` registry through `@narada2/mcp-fabric`. The registry loader accepts current `surfaces` entries with explicit `tool_contract` fields. Older `registered_live_tools` entries without an explicit contract are not classified by name; they are treated as uncontracted live tools and refused until the Site registry declares them in `tool_contract.read_only_tools`, `tool_contract.mutating_tools`, or `tool_contract.refused_tools`. The live carrier/server layer preserves matched registry metadata on discovered MCP servers and passes it into `@narada2/carrier-action-admission` before any tool execution decision.
+MCP surface metadata is projected from the Site-local `.narada/capabilities/mcp-surfaces.json` registry through `@narada-core/mcp-fabric`. The registry loader accepts current `surfaces` entries with explicit `tool_contract` fields. Older `registered_live_tools` entries without an explicit contract are not classified by name; they are treated as uncontracted live tools and refused until the Site registry declares them in `tool_contract.read_only_tools`, `tool_contract.mutating_tools`, or `tool_contract.refused_tools`. The live carrier/server layer preserves matched registry metadata on discovered MCP servers and passes it into `@narada-core/carrier-action-admission` before any tool execution decision.
 
 Registry metadata is authoritative for a matched surface. If a live MCP server exposes a tool that is absent from its authoritative surface contract, the request is refused with `surface_registry_tool_not_declared`. If a tool has no authoritative metadata at all, it is refused with `tool_without_authoritative_metadata`; Carrier Action Admission does not infer read-only, mutating, command, file, task, inbox, or publication authority from tool names. Registry-to-client-config validation is diagnostic during carrier startup and strict only when explicitly requested by tooling such as doctors, audits, or tests.
 
@@ -181,14 +181,14 @@ This is not the full authority layer. It is the boundary that prevents carrier t
 Verification commands for this slice:
 
 ```powershell
-pnpm --filter @narada2/mcp-fabric test
-pnpm --filter @narada2/mcp-fabric typecheck
-pnpm --filter @narada2/carrier-action-admission test
-pnpm --filter @narada2/carrier-action-admission typecheck
-pnpm --filter @narada2/agent-cli test
-pnpm --filter @narada2/agent-cli typecheck
-pnpm --filter @narada2/cli test -- carrier-actions
-pnpm --filter @narada2/cli typecheck
+pnpm --filter @narada-core/mcp-fabric test
+pnpm --filter @narada-core/mcp-fabric typecheck
+pnpm --filter @narada-core/carrier-action-admission test
+pnpm --filter @narada-core/carrier-action-admission typecheck
+pnpm --filter @narada-core/agent-cli test
+pnpm --filter @narada-core/agent-cli typecheck
+pnpm --filter @narada-core/cli test -- carrier-actions
+pnpm --filter @narada-core/cli typecheck
 ```
 
 ## Relationship To Agent Carriers

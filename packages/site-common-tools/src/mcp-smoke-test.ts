@@ -9,7 +9,7 @@
 
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 
 const options: any = parseArgs(process.argv.slice(2));
 

@@ -1,9 +1,9 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, delimiter, join, resolve } from 'node:path';
-import { runAiProcessInvocationSync } from '@narada2/carrier-provider-support/ai-process-invocation';
-import { codexAuthHome as sharedCodexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
-import { codexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { runAiProcessInvocationSync } from '@narada-core/carrier-provider-support/ai-process-invocation';
+import { codexAuthHome as sharedCodexAuthHome } from '@narada-core/carrier-provider-support/codex-subscription-auth';
+import { codexCommand } from '@narada-core/carrier-provider-support/codex-subscription-command';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 
 function defaultSpawnSync(command: any, args: any, options: any) : any{
   return runHiddenPostureCommandSync(command, args, { ...options, posture: 'provider_subprocess' });

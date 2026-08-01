@@ -92,7 +92,7 @@ export interface McpToolDescriptor {
 
 export interface McpRegistrationDescriptor {
   schema: 'narada.agent_context_memory.mcp_registration_descriptor.v0';
-  packageName: '@narada2/agent-context-memory';
+  packageName: '@narada-core/agent-context-memory';
   transport: 'descriptor_only';
   liveRegistrationPerformed: false;
   tools: McpToolDescriptor[];
@@ -102,7 +102,7 @@ export interface McpRegistrationDescriptor {
 export interface CapabilityRegistryFragment {
   schema: 'narada.agent_context_memory.capability_registry_fragment.v0';
   capabilityFamily: 'agent_context_memory';
-  packageName: '@narada2/agent-context-memory';
+  packageName: '@narada-core/agent-context-memory';
   capabilities: Array<{
     capability: string;
     posture: 'descriptor_only' | 'requires_local_admission';

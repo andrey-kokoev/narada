@@ -11,7 +11,7 @@
     "tasks": [1254, 1255, 1256, 1257, 1258]
   },
   "bounded_claim": [
-    "@narada2/crew-startup-shortcut can build launch intent sequences",
+    "@narada-core/crew-startup-shortcut can build launch intent sequences",
     "Narada proper has .narada/crew/architect.launch-intent-sequence.json",
     "verifier and request planner are operational",
     "durable request artifact exists at .narada/crew/launch-requests/narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json with status awaiting_admitted_carrier"

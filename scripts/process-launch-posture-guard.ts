@@ -157,7 +157,7 @@ if (updateBaseline) {
     schema: 'narada.process_launch_posture.baseline.v2',
     generated_at: new Date().toISOString(),
     id_basis: 'file + child-process api + local source context sha256/16; line is metadata only',
-    note: 'Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.',
+    note: 'Migration baseline for raw process launch sites. New sites must use @narada-core/process-launch-posture wrappers or be intentionally added here.',
     entries,
   };
   writeFileSync(baselinePath, `${JSON.stringify(baseline, null, 2)}\n`, 'utf8');

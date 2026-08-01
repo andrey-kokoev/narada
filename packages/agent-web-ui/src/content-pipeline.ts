@@ -1,4 +1,4 @@
-import { renderOperatorValue } from '@narada2/agent-identity';
+import { renderOperatorValue } from '@narada-core/agent-identity';
 import { isRecord, type UnknownRecord } from './types.ts';
 
 export type MessageContentPart = {

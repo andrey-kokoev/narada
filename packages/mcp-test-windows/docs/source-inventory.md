@@ -26,4 +26,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/mcp-test-windows` now carries descriptor/contracts/tests for planning approved Windows/Narada test executions. A receiving Site must still admit its own test carrier, bound-agent policy, execution audit, and evidence storage.
+`@narada-core/mcp-test-windows` now carries descriptor/contracts/tests for planning approved Windows/Narada test executions. A receiving Site must still admit its own test carrier, bound-agent policy, execution audit, and evidence storage.

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { readAdmissionLog, resolveEnvelopeStatus } from '@narada2/task-governance/runtime/inbox/admission-log';
+import { readAdmissionLog, resolveEnvelopeStatus } from '@narada-core/task-governance/runtime/inbox/admission-log';
 import { resolveAgentRoleWithDiagnostics } from './agent-role-resolution.js';
 
 const CORRECTIVE_COVERAGE_PRESSURE_STATUSES: any = new Set([

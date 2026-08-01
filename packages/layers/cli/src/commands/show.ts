@@ -4,7 +4,7 @@ import { stat } from 'node:fs/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { coordinatorDbPathForRoot } from '../lib/site-authority-paths.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada-core/control-plane';
 
 export interface ShowOptions {
   config?: string;
@@ -138,7 +138,7 @@ async function inspectEntity(
     getEvaluationDetail,
     getDecisionDetail,
     getExecutionDetail,
-  } = await import('@narada2/control-plane');
+  } = await import('@narada-core/control-plane');
 
   const db = new Database(dbPath);
   try {
@@ -183,7 +183,7 @@ async function inspectEntity(
     lines.push('');
 
     if (type === 'evaluation') {
-      const d = detail as import('@narada2/control-plane').EvaluationDetail;
+      const d = detail as import('@narada-core/control-plane').EvaluationDetail;
       lines.push(`Evaluation ID:  ${d.evaluation_id}`);
       lines.push(`Execution ID:   ${d.execution_id}`);
       lines.push(`Work Item ID:   ${d.work_item_id}`);
@@ -213,7 +213,7 @@ async function inspectEntity(
       lines.push('── Tool Requests ──');
       lines.push(JSON.stringify(d.tool_requests, null, 2));
     } else if (type === 'decision') {
-      const d = detail as import('@narada2/control-plane').DecisionDetail;
+      const d = detail as import('@narada-core/control-plane').DecisionDetail;
       lines.push(`Decision ID:      ${d.decision_id}`);
       lines.push(`Context ID:       ${d.context_id}`);
       lines.push(`Approved Action:  ${d.approved_action}`);
@@ -226,7 +226,7 @@ async function inspectEntity(
       lines.push('── Payload ──');
       lines.push(JSON.stringify(d.payload, null, 2));
     } else if (type === 'execution') {
-      const d = detail as import('@narada2/control-plane').ExecutionDetail;
+      const d = detail as import('@narada-core/control-plane').ExecutionDetail;
       lines.push(`Execution ID:     ${d.execution_id}`);
       lines.push(`Work Item ID:     ${d.work_item_id}`);
       lines.push(`Revision ID:      ${d.revision_id}`);

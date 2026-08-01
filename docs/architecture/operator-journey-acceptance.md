@@ -43,9 +43,9 @@ removed with the group-launch stack (decision 20260718-2038, task #2041).
 
 The bounded acceptance commands are:
 
-pnpm --filter @narada2/cli run test:launcher-acceptance
-pnpm --filter @narada2/cli run test:operator-journey-acceptance
-pnpm --filter @narada2/agent-start run test:launcher-contract
+pnpm --filter @narada-core/cli run test:launcher-acceptance
+pnpm --filter @narada-core/cli run test:operator-journey-acceptance
+pnpm --filter @narada-core/agent-start run test:launcher-contract
 
 ## Cross-Carrier Matrix
 

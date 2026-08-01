@@ -20,8 +20,8 @@
     }
   ],
   "verification": [
-    "`pnpm --filter @narada2/cli test -- work-next.test.ts` passed.",
-    "`pnpm --filter @narada2/cli build` passed.",
+    "`pnpm --filter @narada-core/cli test -- work-next.test.ts` passed.",
+    "`pnpm --filter @narada-core/cli build` passed.",
     "`narada work-next --agent narada.builder --peek --format json` selects an open role-targeted review obligation with target_role=builder and target_agent_id=null.",
     "`narada work-next --agent narada.architect --peek --format json` lists pending_reviews with suggested_owner=builder and <builder-agent> review commands."
   ]

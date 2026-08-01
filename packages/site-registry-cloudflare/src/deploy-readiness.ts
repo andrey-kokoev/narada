@@ -55,7 +55,7 @@ export function planHostedTelemetryDeployPreflight(input: HostedTelemetryDeployP
   const config = parseJsoncObject(input.wranglerConfigText);
   const checks: HostedTelemetryDeployPreflight["checks"] = [];
   const env = input.env ?? {};
-  const buildCommand = input.buildCommand ?? "pnpm --filter @narada2/site-registry-cloudflare build";
+  const buildCommand = input.buildCommand ?? "pnpm --filter @narada-core/site-registry-cloudflare build";
   const deployCommand = input.deployCommand ?? "wrangler deploy --config packages/site-registry-cloudflare/wrangler.jsonc";
 
   const wranglerAuthPresent = env.CLOUDFLARE_API_TOKEN || env.WRANGLER_API_TOKEN || env.WRANGLER_AUTH_READY === "1";

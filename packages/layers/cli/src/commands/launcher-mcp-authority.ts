@@ -1,10 +1,10 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import { commandResultError, type CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 
 export interface ExplainMcpOptions {
   siteRoot?: string;

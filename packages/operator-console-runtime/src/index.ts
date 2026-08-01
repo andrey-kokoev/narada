@@ -16,11 +16,11 @@ import {
   type EnsureOperatorRouterResult,
   type OperatorRouterRouteRegistration,
   type OperatorRouterRouteProjection,
-} from '@narada2/operator-router';
+} from '@narada-core/operator-router';
 import {
   runGovernedCommandSync,
   spawnHiddenPostureProcess,
-} from '@narada2/process-launch-posture';
+} from '@narada-core/process-launch-posture';
 
 const OPERATOR_CONSOLE_ROUTE_ID = 'operator-console';
 const OPERATOR_CONSOLE_ROUTE_CLASS = 'operator-console' as const;

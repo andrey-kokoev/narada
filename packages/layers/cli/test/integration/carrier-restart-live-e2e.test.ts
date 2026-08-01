@@ -11,14 +11,14 @@ import {
   buildCanonicalLocalTestSeed,
   CANONICAL_LOCAL_TEST_IDS,
   canonicalSha256,
-} from '@narada2/invokable-intelligence-contract';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
-import { spawnTestChild } from '@narada2/process-launch-posture';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+} from '@narada-core/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import {
   readCarrierRestartOutcome,
   requestCarrierRestart,
-} from '@narada2/site-common-tools/operator-surface/carrier-restart-supervisor';
+} from '@narada-core/site-common-tools/operator-surface/carrier-restart-supervisor';
 
 const require = createRequire(import.meta.url);
 const __dirname = dirname(fileURLToPath(import.meta.url));

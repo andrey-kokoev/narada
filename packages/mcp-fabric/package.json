@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/mcp-fabric",
+  "name": "@narada-core/mcp-fabric",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -22,14 +22,14 @@
     "test": "pnpm run build && node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@narada2/carrier-action-admission": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/carrier-action-admission": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "description": "MCP fabric runtime boundary",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/mcp-fabric"
   },
   "engines": {

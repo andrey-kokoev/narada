@@ -3,7 +3,7 @@ import {
   buildAgentWebUiOperatorInputAction,
   findAgentWebUiCommand,
   isNarsRuntimeServerMethod,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import type { NarsProtocolFrame, ProjectionView } from '../types.js';
 import { buildControlFrame, buildRuntimeReconfigureFrame } from '../nars-client/protocol.js';
 import { buildInputDeliveryFrame } from './delivery-mode.js';

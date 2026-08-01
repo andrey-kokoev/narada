@@ -1,4 +1,4 @@
-import { buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiSubscribeFrame, isAgentWebUiCloudflareProtocolFrame, translateAgentWebUiFrameForCloudflare } from '@narada-core/nars-client-projection-contract';
 import { applyRuntimeEventToWebUiState, sequenceFromRuntimeMessage } from './runtime-events.ts';
 import { appendEvent, setText } from './render.ts';
 import { applyCloudflareEventQuery, cloudflareEventItemToRuntimeMessage, cloudflareEventsRead, cloudflareReplayCompleted, cloudflareSubscriptionStarted, cloudflareWebSocketEndpoint } from './protocol/cloudflare-session-contract.ts';

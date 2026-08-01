@@ -1,9 +1,9 @@
-import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
+import { discoverNarsSessions } from '@narada-core/nars-session-core/session-index';
 import type {
   OperatorSessionDisplayState,
   OperatorSessionListWireResponse,
   OperatorSessionWireRecord,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import { probeNarsSessionHealth } from '../lib/nars-session-health.js';
 

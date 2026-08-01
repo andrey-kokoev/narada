@@ -21,9 +21,9 @@
   ],
   "implementation": {
     "catalog_packages_added": [
-      "@narada2/site-inbox",
-      "@narada2/site-config",
-      "@narada2/site-lift"
+      "@narada-core/site-inbox",
+      "@narada-core/site-config",
+      "@narada-core/site-lift"
     ],
     "exposure_class": "descriptor_only",
     "operational_command": "narada sites create --dry-run --config <path> --format json",
@@ -52,7 +52,7 @@
     "PC-locus state",
     "secrets or credentials"
   ],
-  "terminal_claim": "Greenfield create-site dry-run/catalog planning now recognizes @narada2/site-inbox, @narada2/site-config, and @narada2/site-lift as Narada proper descriptor-only template components.",
+  "terminal_claim": "Greenfield create-site dry-run/catalog planning now recognizes @narada-core/site-inbox, @narada-core/site-config, and @narada-core/site-lift as Narada proper descriptor-only template components.",
   "not_claimed": [
     "filesystem creation semantics for those packages beyond descriptor-slice artifacts",
     "local inbox DB mutation",

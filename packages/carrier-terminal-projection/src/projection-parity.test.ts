@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   classifyNarsClientEventProjection,
   projectNarsClientEvent,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import { renderOperatorEvent } from './projected-terminal.js';
 
 test('terminal projection follows shared event classes and renders safe artifact references', () => {

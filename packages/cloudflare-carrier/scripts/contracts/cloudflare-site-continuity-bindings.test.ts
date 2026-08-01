@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { createSiteContinuityBinding } from '@narada2/site-continuity';
+import { createSiteContinuityBinding } from '@narada-core/site-continuity';
 
 import {
   admitNextSiteContinuityBinding,
@@ -421,19 +421,19 @@ test('site continuity binding text format emits operator handoff for target site
     output_path: 'D:\\narada\\.narada\\site-continuity\\prepared\\site_beta-packet.json',
     admission_action: 'projection_only',
     admission_reason: 'site_continuity_exchange_packet_projection_admitted',
-    materialize_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet D:\\narada\\.narada\\site-continuity\\prepared\\site_beta-packet.json',
+    materialize_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings -- --packet D:\\narada\\.narada\\site-continuity\\prepared\\site_beta-packet.json',
   });
 
   assert.match(text, /Site Continuity Bindings/);
   assert.match(text, /Action: prepare-next-binding-packet/);
   assert.match(text, /Target Site: site_beta/);
   assert.match(text, /Prepared Packet: D:\\narada\\\.narada\\site-continuity\\prepared\\site_beta-packet\.json/);
-  assert.match(text, /Materialize Registry: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings -- --packet D:\\narada\\\.narada\\site-continuity\\prepared\\site_beta-packet\.json/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Materialize Registry: pnpm --filter @narada-core\/cloudflare-carrier continuity:bindings -- --packet D:\\narada\\\.narada\\site-continuity\\prepared\\site_beta-packet\.json/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation List: pnpm --filter @narada-core\/cloudflare-carrier product:operation:list:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_beta --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
 });
 
 test('site continuity binding text format falls back to site list when no target site exists', () => {
@@ -448,7 +448,7 @@ test('site continuity binding text format falls back to site list when no target
     sites: [],
   });
 
-  assert.match(text, /Site List: pnpm --filter @narada2\/cloudflare-carrier product:site:list:text/);
+  assert.match(text, /Site List: pnpm --filter @narada-core\/cloudflare-carrier product:site:list:text/);
 });
 
 test('site continuity binding workflow refuses invalid materialized registry', async () => {

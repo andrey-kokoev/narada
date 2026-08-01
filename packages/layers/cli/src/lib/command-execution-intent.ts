@@ -1,1 +1,1 @@
-export * from '@narada2/intent-zones/command-execution-intent';
+export * from '@narada-core/intent-zones/command-execution-intent';

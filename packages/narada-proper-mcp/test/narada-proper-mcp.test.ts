@@ -51,7 +51,7 @@ describe('narada proper MCP surface', () => {
   it('declares the old narada-mcp facade as replaced compatibility', () => {
     expect(NARADA_PROPER_MCP_SURFACE).toMatchObject({
       surface_id: 'narada-proper.surface.agent-facing-mcp.v1',
-      package_name: '@narada2/narada-proper-mcp',
+      package_name: '@narada-core/narada-proper-mcp',
       compatibility_facade_replaced: 'narada-mcp',
       source_site_runtime_imported: false,
     });
@@ -59,7 +59,7 @@ describe('narada proper MCP surface', () => {
 
   it('validates the target-local MCP surface registry contract', () => {
     const errors = validateNaradaProperMcpSurfaceRegistry();
-    const proper = NARADA_PROPER_MCP_SURFACE_REGISTRY.find((record) => record.package_name === '@narada2/narada-proper-mcp');
+    const proper = NARADA_PROPER_MCP_SURFACE_REGISTRY.find((record) => record.package_name === '@narada-core/narada-proper-mcp');
     const exposed = new Set(NARADA_MCP_TOOLS.map((tool) => tool.name));
 
     expect(errors).toEqual([]);
@@ -82,7 +82,7 @@ describe('narada proper MCP surface', () => {
       server: 'narada-proper',
       policy_source: {
         kind: 'mcp_surface_registry',
-        package_name: '@narada2/narada-proper-mcp',
+        package_name: '@narada-core/narada-proper-mcp',
       },
       reconciled_runtime_posture: {
         config_path: 'config.json',
@@ -887,7 +887,7 @@ describe('narada proper MCP surface', () => {
     expect(LEGACY_CLI_MCP_FACADE_POSTURE).toMatchObject({
       path: 'packages/layers/cli/src/mcp-server.ts',
       status: 'compatibility_quarantined',
-      replacement: '@narada2/narada-proper-mcp',
+      replacement: '@narada-core/narada-proper-mcp',
       monolithic_cli_dist_required_for_covered_surfaces: false,
     });
   });

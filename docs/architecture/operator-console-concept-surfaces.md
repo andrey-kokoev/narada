@@ -14,7 +14,7 @@ The browser is a projection and workflow client. It is not a second authority mo
 
 ## Operator Surface Catalog
 
-`@narada2/operator-console-contract` owns the UI-neutral
+`@narada-core/operator-console-contract` owns the UI-neutral
 `OperatorSurfaceDescriptor` records for the console concepts. Each descriptor
 names its concept, scope, owner, routes, default availability, and bounded
 operator handoff. `projectOperatorSurfaceCatalog` adds current availability
@@ -39,12 +39,12 @@ composable, page, and projection chain below.
 
 | Concern | Owner |
 | --- | --- |
-| Surface and wire contracts | `@narada2/operator-console-contract` |
-| Admitted agent inventory | User Site launch registry, read by `@narada2/cli` |
+| Surface and wire contracts | `@narada-core/operator-console-contract` |
+| Admitted agent inventory | User Site launch registry, read by `@narada-core/cli` |
 | Site kind | Explicit Site configuration (`user_site`, `pc_site`, or `site`) |
 | Work posture | Principal Runtime projection |
-| Runtime/session posture | `@narada2/nars-session-core` session index |
-| Cross-authority read model and launch admission | `@narada2/cli` |
+| Runtime/session posture | `@narada-core/nars-session-core` session index |
+| Cross-authority read model and launch admission | `@narada-core/cli` |
 | Browser transport and parser | `operator-console-ui/src/site-agents/transport.ts` and `adapter.ts` |
 | Refresh and launch client state | `useSiteAgents` |
 | Collection page | `/console/agents` |
@@ -62,15 +62,15 @@ healthy sessions do not produce a guessed URL.
 
 | Concern | Owner |
 | --- | --- |
-| Canonical data and request envelopes | `@narada2/site-registry-contract` |
-| Durable registry authority | `@narada2/windows-site` |
+| Canonical data and request envelopes | `@narada-core/site-registry-contract` |
+| Durable registry authority | `@narada-core/windows-site` |
 | Browser domain types and validation | `operator-console-ui/src/site-registry/domain.ts` |
 | Browser HTTP transport | `operator-console-ui/src/site-registry/transport.ts` |
 | Browser contract adapter | `operator-console-ui/src/site-registry/adapter.ts` |
 | Read and detail state | `useSiteRegistry` |
 | Mutation state | `useSiteRegistryMutation` |
 | Draft, operation, confirmation, and route workflow | `useSiteRegistryWorkflow` |
-| Shared console chrome and route resolution | `@narada2/ui-vue` `OperatorSurfaceShell`, `OperatorConsoleShell.vue`, `console/routes.ts`, `@narada2/operator-console-contract` |
+| Shared console chrome and route resolution | `@narada-core/ui-vue` `OperatorSurfaceShell`, `OperatorConsoleShell.vue`, `console/routes.ts`, `@narada-core/operator-console-contract` |
 | Collection page | `/console/registry` |
 | Add workflow | `/console/registry/add` |
 | Manage workflow | `/console/registry/manage` |
@@ -83,19 +83,19 @@ The registry page is a collection and selection surface. Add and manage are sepa
 
 | Concern | Owner |
 | --- | --- |
-| Launch authority | `@narada2/cli` (`narada launcher workspace-launch`, `narada sites launch`) |
+| Launch authority | `@narada-core/cli` (`narada launcher workspace-launch`, `narada sites launch`) |
 | Launch page presentation | `operator-console-ui/src/pages/OperatorConsoleLaunchPage.vue` |
 | Site collection domain | Shared site-registry transport and `useSiteRegistry` composable |
 | Repeated projection | `SiteTileProjection` rendered by the registry list |
 
-`/console/launch` is a console-owned Site Runtime page, not a launcher session router. It renders the Site registry collection and per-Site launch guidance, and links each Site to its registry entry for posture checks and ensure runs. It does not start agents or duplicate launch authority. The interactive group-launch selector, its CLI-owned session dashboard, and the `@narada2/workspace-launch-contract` / `@narada2/workspace-launch-ui` packages were removed (decision 20260718-2038, task #2041).
+`/console/launch` is a console-owned Site Runtime page, not a launcher session router. It renders the Site registry collection and per-Site launch guidance, and links each Site to its registry entry for posture checks and ensure runs. It does not start agents or duplicate launch authority. The interactive group-launch selector, its CLI-owned session dashboard, and the `@narada-core/workspace-launch-contract` / `@narada-core/workspace-launch-ui` packages were removed (decision 20260718-2038, task #2041).
 
 ### Agent Session Inventory
 
 | Concern | Owner |
 | --- | --- |
-| Session descriptor and redacted wire record | `@narada2/operator-console-contract` |
-| Durable session discovery | `@narada2/nars-session-core` session index |
+| Session descriptor and redacted wire record | `@narada-core/operator-console-contract` |
+| Durable session discovery | `@narada-core/nars-session-core` session index |
 | Site selection for discovery | CLI User Site Registry read model |
 | Browser HTTP transport | `operator-console-ui/src/agent-sessions/transport.ts` |
 | Browser contract adapter | `operator-console-ui/src/agent-sessions/adapter.ts` |

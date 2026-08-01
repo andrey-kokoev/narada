@@ -6,7 +6,7 @@
 
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { join } from 'node:path';
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import type { BenchmarkResult } from './framework.js';
 
 export interface Baseline {

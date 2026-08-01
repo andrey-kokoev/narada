@@ -4,7 +4,7 @@ import type {
   SiteRegistryManagementResponse,
   SiteRegistryMutationRequest,
   SiteVariant,
-} from '@narada2/site-registry-contract';
+} from '@narada-core/site-registry-contract';
 
 export type SiteRegistryPageMode = 'add' | 'manage';
 

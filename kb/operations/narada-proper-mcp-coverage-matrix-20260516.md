@@ -50,8 +50,8 @@ Both files also dispatch `narada_ee_run`, but it is not listed in `NARADA_MCP_TO
 | Capability / consent | Fabric traversal reads `.ai/capability-consent-registry.json`; no first-class tools | Same | Partial internal check only; no canonical consent CRUD/export/reconstruct tool | Canonical capability consent registry and capability-governed secret management |
 | Command execution | Hidden `narada_ee_run`; `narada_ee_mcp_doctor` | Same | Refused/legacy-coupled; WSL Windows path marked superseded by Windows-native posture | Command Execution Intent Zone; Windows shell MCP package for bounded execution descriptors |
 | Filesystem reads/writes | No general file tools | Same | Intentionally missing/refused | Bounded file excerpt reader or stronger canonical service per state surface |
-| Tests | No Narada proper MCP test execution tool | Same | Missing in proper facade; descriptor contracts exist in `@narada2/mcp-test-windows` | Test gateway package and command execution intent service |
-| Shell / Git | No general shell/Git tools; hidden EE run is superseded | Same | Missing/refused in proper facade; descriptor package exists for shell policy | `@narada2/mcp-shell-windows`, repository publication intent zone |
+| Tests | No Narada proper MCP test execution tool | Same | Missing in proper facade; descriptor contracts exist in `@narada-core/mcp-test-windows` | Test gateway package and command execution intent service |
+| Shell / Git | No general shell/Git tools; hidden EE run is superseded | Same | Missing/refused in proper facade; descriptor package exists for shell policy | `@narada-core/mcp-shell-windows`, repository publication intent zone |
 | Operator surface | No bind/focus/action tools | Same | Missing; denied source imports mention operator surfaces as unsafe runtime state | Operator Surface service and operator-surface adapter |
 | Site probe/connectivity/identity/lift | Fabric context only; no probe/connect/identity/lift tools | Same | Mostly missing | Site probe/connectivity/identity/lift services before MCP exposure |
 | Outbox | No tools | Same | Missing/refused | Canonical Outbox service |

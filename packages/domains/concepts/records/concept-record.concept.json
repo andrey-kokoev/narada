@@ -17,7 +17,7 @@
     { "kind": "embodies", "concept_id": "concept" },
     { "kind": "stored_by", "concept_id": "concept_registry" }
   ],
-  "owner_surface": "@narada2/concepts package",
+  "owner_surface": "@narada-core/concepts package",
   "authority": {
     "kind": "package",
     "ref": "packages/domains/concepts",

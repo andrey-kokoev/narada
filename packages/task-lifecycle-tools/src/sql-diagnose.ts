@@ -14,7 +14,7 @@
 
 import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { Database } from '@narada2/sqlite';
+import { Database } from '@narada-core/sqlite';
 
 const DB_PATHS: any = {
   task: ['.ai', 'task-lifecycle.db'],

@@ -5,8 +5,8 @@ import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS, canonicalSha256 } from '@narada2/invokable-intelligence-contract';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
+import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS, canonicalSha256 } from '@narada-core/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
 
 const packageRoot: any = fileURLToPath(new URL('..', import.meta.url));
 const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.ts', import.meta.url));

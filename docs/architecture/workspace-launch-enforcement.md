@@ -211,8 +211,8 @@ pnpm --dir packages/layers/cli exec vitest run --silent=true test/lib/command-wr
 pnpm --dir packages/agent-start exec node test/launcher-registry-contract.test.mjs
 pnpm --dir packages/agent-start exec node test/option-contract.test.mjs
 pnpm --dir packages/agent-runtime-server exec node --test test/server-wrapper.test.mjs
-pnpm --filter @narada2/agent-web-ui test
-pnpm --filter @narada2/cli build
+pnpm --filter @narada-core/agent-web-ui test
+pnpm --filter @narada-core/cli build
 ```
 
 The full verification suite remains the release gate. A passing focused suite

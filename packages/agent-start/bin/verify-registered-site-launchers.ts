@@ -2,10 +2,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 const resolveAgentIdentityRefAny: any = resolveAgentIdentityRef;
-import { operatorSurfaceLaunchMatrixRow } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import { operatorSurfaceLaunchMatrixRow } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 if (process.argv.includes('--help') || process.argv.includes('-h')) {

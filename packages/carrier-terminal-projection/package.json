@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/carrier-terminal-projection",
+  "name": "@narada-core/carrier-terminal-projection",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -26,9 +26,9 @@
     "./package.json": "./package.json"
   },
   "dependencies": {
-    "@narada2/agent-identity": "workspace:*",
-    "@narada2/carrier-command-contract": "workspace:*",
-    "@narada2/nars-client-projection-contract": "workspace:*"
+    "@narada-core/agent-identity": "workspace:*",
+    "@narada-core/carrier-command-contract": "workspace:*",
+    "@narada-core/nars-client-projection-contract": "workspace:*"
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
@@ -39,7 +39,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/carrier-terminal-projection"
   },
   "engines": {

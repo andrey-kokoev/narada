@@ -42,7 +42,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/mcp-test-windows now includes descriptor-only test registry and run-request decision contracts with refusal guards.",
+  "terminal_claim": "@narada-core/mcp-test-windows now includes descriptor-only test registry and run-request decision contracts with refusal guards.",
   "refused_imports": [
     "live Test MCP server",
     "source pass/fail history",
@@ -60,5 +60,5 @@
     "receiving Site test carrier admission"
   ],
   "rollback": "Remove test run contract source, tests, source inventory doc, README section, and this task evidence. No tests were launched by the package and no runtime evidence was imported.",
-  "next_smallest_slice": "Deepen @narada2/windows-pc-site-template with template option descriptors and no-runtime-state guards, or compose mcp-shell/mcp-test package examples."
+  "next_smallest_slice": "Deepen @narada-core/windows-pc-site-template with template option descriptors and no-runtime-state guards, or compose mcp-shell/mcp-test package examples."
 }

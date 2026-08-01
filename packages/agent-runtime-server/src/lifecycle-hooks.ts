@@ -3,8 +3,8 @@ import {
   narsLifecycleHookPayloadFromEvent,
   narsLifecycleHooksForEvent,
   validateNarsLifecycleHookPayload,
-} from '@narada2/carrier-protocol';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+} from '@narada-core/carrier-protocol';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { valueAfterFlag } from './runtime-server-options.js';

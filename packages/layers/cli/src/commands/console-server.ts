@@ -28,7 +28,7 @@ import {
   DEFAULT_OPERATOR_ROUTER_PORT,
   readOperatorRouterRoutes,
   type OperatorRouterRouteProjection,
-} from '@narada2/operator-router';
+} from '@narada-core/operator-router';
 import {
   OPERATOR_CONSOLE_AGENTS_PATH,
   OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA,
@@ -44,7 +44,7 @@ import {
   type OperatorSurfaceRouteAvailabilityOverrides,
   type OperatorConsoleHttpRouteParity,
   type OperatorConsoleHttpRouteParityEntry,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import {
   createHostGatewayClient,
   relayHostGatewayWebSocket,
@@ -53,7 +53,7 @@ import {
   resolveRuntimeTarget,
   openHostFleetRegistry,
   type HostFleetRegistry,
-} from '@narada2/host-fleet';
+} from '@narada-core/host-fleet';
 
 export const DEFAULT_OPERATOR_CONSOLE_PORT = DEFAULT_OPERATOR_ROUTER_PORT;
 export const OPERATOR_CONSOLE_IDENTITY = 'narada.operator-console';
@@ -114,7 +114,7 @@ function projectOperatorConsoleHttpRouteParity(
 
 function resolveOperatorConsoleArtifactOptions(): { packageRoot: string; published: boolean } | undefined {
   try {
-    const packageRoot = dirname(moduleRequire.resolve('@narada2/operator-console-ui/package.json'));
+    const packageRoot = dirname(moduleRequire.resolve('@narada-core/operator-console-ui/package.json'));
     const sourcePackagesRoot = `${resolve(naradaProperRoot(), 'packages')}${sep}`.toLowerCase();
     return {
       packageRoot,

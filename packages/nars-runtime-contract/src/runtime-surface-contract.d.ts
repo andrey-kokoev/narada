@@ -2,7 +2,7 @@ import {
   NARS_AUTHORITY_RUNTIME_HOST_KINDS,
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 
 export const NARS_RUNTIME_SURFACE_CONTRACT_SCHEMA: 'narada.nars.runtime_surface_contract.v1';
 export const NARS_RUNTIME_ORIGINS: readonly ['local', 'cloudflare'];
@@ -22,7 +22,7 @@ export {
   NARS_AUTHORITY_RUNTIME_HOST_KINDS,
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 
 export type NarsRuntimeOrigin = 'local' | 'cloudflare';
 export type NarsSurfaceOrigin = 'local' | 'cloudflare';

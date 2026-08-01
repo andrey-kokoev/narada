@@ -8,10 +8,10 @@ export type NarsClientProjectionDisposition =
   | 'raw_record'
   | 'state_sample';
 
-import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada2/agent-identity';
-import { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
-import { NARS_SESSION_EVENT_DEFAULT_VIEW, NARS_SESSION_EVENT_VIEWS, normalizeNarsSessionEventView as normalizeSessionEventView } from '@narada2/nars-session-core/event-log';
-export * from '@narada2/nars-session-core/surface-attachment';
+import { agentIdentityDisplay, agentIdentityGroupKey } from '@narada-core/agent-identity';
+import { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod } from '@narada-core/nars-session-core/session-control-contract';
+import { NARS_SESSION_EVENT_DEFAULT_VIEW, NARS_SESSION_EVENT_VIEWS, normalizeNarsSessionEventView as normalizeSessionEventView } from '@narada-core/nars-session-core/event-log';
+export * from '@narada-core/nars-session-core/surface-attachment';
 import {
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD,
@@ -20,7 +20,7 @@ import {
   buildNarsRuntimeIntelligenceReconfigureCancelFrame,
   buildNarsRuntimeIntelligenceReconfigureFrame,
   isNarsRuntimeServerMethod,
-} from '@narada2/nars-runtime-contract';
+} from '@narada-core/nars-runtime-contract';
 
 export { NARS_SESSION_CORE_METHOD_LIST, NARS_SESSION_CORE_METHODS, isNarsSessionCoreMethod };
 export { NARS_SESSION_EVENT_DEFAULT_VIEW, NARS_SESSION_EVENT_VIEWS };
@@ -1685,7 +1685,7 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
   clients: Object.freeze({
     agent_cli: Object.freeze({
       id: 'agent_cli',
-      package: '@narada2/agent-cli',
+      package: '@narada-core/agent-cli',
       bin: 'narada-agent-cli',
       attach_template: 'narada-agent-cli --attach <event_endpoint>',
       required_endpoints: Object.freeze(['event_endpoint']),
@@ -1699,7 +1699,7 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
     }),
     agent_pi_tui: Object.freeze({
       id: 'agent_pi_tui',
-      package: '@narada2/agent-pi-tui',
+      package: '@narada-core/agent-pi-tui',
       bin: 'narada-agent-pi-tui',
       attach_template: 'narada-agent-pi-tui --attach <event_endpoint>',
       required_endpoints: Object.freeze(['event_endpoint']),
@@ -1707,7 +1707,7 @@ export const NARS_CLIENT_PROJECTION_REGISTRY = Object.freeze({
     }),
     agent_web_ui: Object.freeze({
       id: 'agent_web_ui',
-      package: '@narada2/agent-web-ui',
+      package: '@narada-core/agent-web-ui',
       bin: 'narada-agent-web-ui',
       attach_template: 'narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>',
       required_endpoints: Object.freeze(['event_endpoint', 'health_endpoint']),

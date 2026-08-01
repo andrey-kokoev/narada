@@ -1,10 +1,10 @@
 import { join, resolve } from 'node:path';
-import { SqliteInboxStore } from '@narada2/control-plane';
+import { SqliteInboxStore } from '@narada-core/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore, type TaskLifecycleRow, type TaskSpecRow } from '../lib/task-lifecycle-store.js';
 import { classifyTaskHandoffActionability, type TaskHandoffActionability } from '../lib/task-actionability.js';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef, type AgentIdentityRefV2 } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef, type AgentIdentityRefV2 } from '@narada-core/agent-identity';
 
 export interface TaskWorkboardOptions {
   cwd?: string;

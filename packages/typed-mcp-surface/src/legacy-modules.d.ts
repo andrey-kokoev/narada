@@ -1,4 +1,4 @@
-declare module '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site' {
+declare module '@narada-core/site-common-tools/compat/mcp-payload-file.legacy-site' {
   export const attachPayloadSource;
   export const buildOutputRefToolContent;
   export const commandCreate;
@@ -19,19 +19,19 @@ declare module '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site' 
   export const resultShow;
   export const resolveToolPayloadArgs;
 }
-declare module '@narada2/site-common-tools/site-locus-shim' {
+declare module '@narada-core/site-common-tools/site-locus-shim' {
   export const assertCanonicalSiteLocus;
 }
 
-declare module '@narada2/site-common-tools/inbox/admission-log' {
+declare module '@narada-core/site-common-tools/inbox/admission-log' {
   export const appendAdmissionEvent; export const admitEnvelope; export const emitEnvelopeAdmitted; export const acknowledgeEnvelope; export const dismissEnvelope; export const exportDispositionLedger; export const readAdmissionLog; export const recordPromotion; export const resolveEnvelopeStatus;
 }
-declare module '@narada2/site-common-tools/inbox/envelope-kinds' {
+declare module '@narada-core/site-common-tools/inbox/envelope-kinds' {
   export const INBOX_ENVELOPE_KINDS; export const assertKnownInboxEnvelopeKind;
 }
-declare module '@narada2/site-common-tools/inbox/inbox-index' {
+declare module '@narada-core/site-common-tools/inbox/inbox-index' {
   export const isValidEnvelopeId;
 }
-declare module '@narada2/task-lifecycle-tools/recovery-truthfulness-guard' {
+declare module '@narada-core/task-lifecycle-tools/recovery-truthfulness-guard' {
   export const validateRecoveryTruthfulnessPacket;
 }

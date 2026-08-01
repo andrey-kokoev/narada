@@ -6,7 +6,7 @@ Accepted for task-0001 first package slice.
 
 ## Context
 
-`@narada2/site-task-lifecycle` has earned neutral task lifecycle contracts, import-refusal guards, MCP descriptor metadata, inbox-envelope projection, and task DB schema/init plans. It has not earned live receiving-Site storage authority, a runtime SQLite driver choice, or a DB write/admission path.
+`@narada-core/site-task-lifecycle` has earned neutral task lifecycle contracts, import-refusal guards, MCP descriptor metadata, inbox-envelope projection, and task DB schema/init plans. It has not earned live receiving-Site storage authority, a runtime SQLite driver choice, or a DB write/admission path.
 
 The next implementation fork is whether the package owns a SQLite dependency, exposes an adapter interface only, or ships both.
 

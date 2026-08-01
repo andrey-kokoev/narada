@@ -7,7 +7,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "http";
-import type { WebhookEventQueue } from "@narada2/control-plane";
+import type { WebhookEventQueue } from "@narada-core/control-plane";
 import { createLogger } from "./lib/logger.js";
 
 export interface GenericWebhookServerConfig {

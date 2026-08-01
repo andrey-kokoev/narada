@@ -91,7 +91,7 @@ been produced and verified. The minimum shape is:
 {
   "schema": "narada.launch_artifact.v1",
   "target": "narada-cli",
-  "package": "@narada2/cli",
+  "package": "@narada-core/cli",
   "package_root": "packages/layers/cli",
   "output_root": "dist",
   "required_outputs": ["main.js", "index.js", "mcp-main.js", "ui/workbench.html"],
@@ -102,13 +102,13 @@ been produced and verified. The minimum shape is:
     "source_hash": "...",
     "input_count": 42,
     "inputs": ["packages/layers/cli/src/main.ts"],
-    "packages": ["@narada2/cli"]
+    "packages": ["@narada-core/cli"]
   },
   "toolchain": {
     "node": "...",
     "package_manager": "pnpm@..."
   },
-  "recipe": {"package": "@narada2/cli", "build_script": "build"},
+  "recipe": {"package": "@narada-core/cli", "build_script": "build"},
   "recipe_hash": "...",
   "outputs": {
     "algorithm": "sha256",

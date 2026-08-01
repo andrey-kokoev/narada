@@ -1,5 +1,5 @@
-import { operatorViewPolicyFor, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada2/nars-client-projection-contract';
-import { agentIdentityDisplay, agentIdentityRefMatchesRequest, renderOperatorValue } from '@narada2/agent-identity';
+import { operatorViewPolicyFor, projectNarsClientEvent, shouldProjectNarsClientProjection } from '@narada-core/nars-client-projection-contract';
+import { agentIdentityDisplay, agentIdentityRefMatchesRequest, renderOperatorValue } from '@narada-core/agent-identity';
 import { createTerminalStyle, formatTerminalMessageBlockLines } from './terminal-style.js';
 import type { TerminalStyle } from './terminal-style.js';
 import {

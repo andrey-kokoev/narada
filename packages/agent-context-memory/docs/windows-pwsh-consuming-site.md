@@ -1,6 +1,6 @@
 # Windows PowerShell Consuming Site
 
-Future Windows PowerShell Narada Sites should consume `@narada2/agent-context-memory` from the Narada repo package or a published package artifact. They should not copy a live Site's agent-context database, checkpoints, sessions, operator-surface bindings, or PC runtime state.
+Future Windows PowerShell Narada Sites should consume `@narada-core/agent-context-memory` from the Narada repo package or a published package artifact. They should not copy a live Site's agent-context database, checkpoints, sessions, operator-surface bindings, or PC runtime state.
 
 ## Package Consumption
 

@@ -61,8 +61,8 @@ const mockDb = {
   close: vi.fn(),
 };
 
-vi.mock('@narada2/control-plane', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/control-plane')>();
+vi.mock('@narada-core/control-plane', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/control-plane')>();
   return {
     ...mod,
     Database: vi.fn(() => mockDb),

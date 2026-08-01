@@ -15,7 +15,7 @@ The tool reads a local task row, evidence refs, and admission events from the ta
 
 ## Boundaries
 
-- No SQLite dependency in `@narada2/site-task-lifecycle`.
+- No SQLite dependency in `@narada-core/site-task-lifecycle`.
 - No source-state import.
 - No arbitrary SQL.
 - No DB mutation.

@@ -1,7 +1,7 @@
 import { createServer, type Server } from 'node:http';
 import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
+import { projectOperatorWorkspaceRouteDirectory } from '@narada-core/operator-console-contract';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
 
 const bridgeToken = 'operator-console-bridge-token-012345';

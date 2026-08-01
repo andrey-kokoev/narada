@@ -10,7 +10,7 @@ import {
   readNarsArtifactContent,
   readNarsArtifact,
   publicNarsArtifactRecord,
-} from '@narada2/nars-session-core/artifacts';
+} from '@narada-core/nars-session-core/artifacts';
 import {
   OPERATOR_ROUTER_HEALTH_SCHEMA,
   OPERATOR_ROUTER_IDENTITY,
@@ -447,7 +447,7 @@ async function resolveArtifactContent(route: OperatorRouterRouteRegistration, pa
   if (parts.length === 2 && parts[1] !== 'content') return null;
   const artifactId = decodeURIComponent(parts[0] ?? '');
   if (!artifactId || artifactId === '.' || artifactId === '..' || artifactId.includes('/') || artifactId.includes('\\') || /[\u0000-\u001f\u007f]/u.test(artifactId)) return null;
-  const sessions = await import('@narada2/nars-session-core/session-index');
+  const sessions = await import('@narada-core/nars-session-core/session-index');
   const discovered = sessions.discoverNarsSessions({ siteRoot: source.site_root });
   const session = discovered.sessions.find((entry: Record<string, unknown>) => entry.session_id === source.session_id);
   const record = session?.record as Record<string, unknown> | undefined;

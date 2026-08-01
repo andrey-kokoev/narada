@@ -4,8 +4,8 @@ import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { PassThrough } from 'node:stream';
-import { createNarsPiSdkKernel } from '@narada2/nars-pi-kernel';
-import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
+import { createNarsPiSdkKernel } from '@narada-core/nars-pi-kernel';
+import { readNarsEventLog } from '@narada-core/nars-session-core/event-log';
 import { createSessionCoreRuntimeService } from '../src/session-core-runtime-service.js';
 
 function waitFor(predicate: any, timeoutMs: any = 5000, label: any = 'condition') {

@@ -7,7 +7,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CLOUDFLARE_KIMI, fixtureBundle } from "@narada2/invokable-intelligence-contract";
+import { CLOUDFLARE_KIMI, fixtureBundle } from "@narada-core/invokable-intelligence-contract";
 import type {
   CapabilityAssertion,
   InvocationAuditEvidence,
@@ -19,7 +19,7 @@ import type {
   InvocationResultEnvelope,
   InvocationTerminalOutcome,
   PlanRevalidationEvidence,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 import { RegistryError } from "./store.js";
 import type { IntelligenceRegistryStore } from "./store.js";

@@ -1,4 +1,4 @@
-# @narada2/invokable-intelligence-runtime
+# @narada-core/invokable-intelligence-runtime
 
 Local Narada runtime integration for invokable intelligence (#2184).
 The invocation entry point that replaces env-based provider/model

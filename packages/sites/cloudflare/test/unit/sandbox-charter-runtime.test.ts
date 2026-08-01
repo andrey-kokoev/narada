@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import { NaradaSiteCoordinator } from "../../src/coordinator.js";
 import { createMockState } from "../fixtures/mock-sqlite.js";
 import { runCycle } from "../../src/runner.js";
@@ -23,7 +23,7 @@ import {
   createMockCharterRunnerForSandbox,
   runCharterInSandbox,
 } from "../../src/sandbox/charter-runtime.js";
-import { MockCharterRunner } from "@narada2/charters";
+import { MockCharterRunner } from "@narada-core/charters";
 
 function createCoordinator() {
   const db = new Database(":memory:");
@@ -137,7 +137,7 @@ describe("Sandbox Charter Runtime Attachment (Task 353)", () => {
   it("sandbox catches charter runner errors gracefully", async () => {
     const { coordinator } = createCoordinator();
 
-    const throwingRunner: import("@narada2/charters").CharterRunner = {
+    const throwingRunner: import("@narada-core/charters").CharterRunner = {
       async run() {
         throw new Error("simulated charter crash");
       },

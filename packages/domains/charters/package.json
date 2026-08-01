@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/charters",
+  "name": "@narada-core/charters",
   "version": "0.1.0",
   "description": "Charter contracts, knowledge sources, and coordinator bindings for mailbox agents",
   "main": "./dist/index.js",
@@ -21,7 +21,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/domains/charters"
   },
   "keywords": [
@@ -47,11 +47,11 @@
     "vitest": "^4.1.10"
   },
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
     "zod": "^3.25.76"
   },
-  "homepage": "https://github.com/andrey-kokoev/narada",
+  "homepage": "https://github.com/narada-core/narada",
   "bugs": {
-    "url": "https://github.com/andrey-kokoev/narada/issues"
+    "url": "https://github.com/narada-core/narada/issues"
   }
 }

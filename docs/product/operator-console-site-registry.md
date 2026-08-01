@@ -369,7 +369,7 @@ As of Task 483, it adds live binding for **Cloudflare Sites** via a substrate-ne
 
 ### Substrate-Neutral Adapter Interface
 
-The console uses a `ConsoleSiteAdapter` interface (defined in `@narada2/windows-site`) that each substrate package implements:
+The console uses a `ConsoleSiteAdapter` interface (defined in `@narada-core/windows-site`) that each substrate package implements:
 
 ```typescript
 interface ConsoleSiteAdapter {
@@ -380,9 +380,9 @@ interface ConsoleSiteAdapter {
 ```
 
 Adapters:
-- **`windowsSiteAdapter`** (`@narada2/windows-site`) — opens local SQLite, calls `executeOperatorAction`.
-- **`linuxSiteAdapter`** (`@narada2/linux-site`) — opens local SQLite for observation; control returns explicit unsupported errors (v0 Linux Sites do not yet implement operator actions).
-- **`cloudflareSiteAdapter`** (`@narada2/cloudflare-site`) — calls remote Worker HTTP endpoints (`GET /status`, `POST /control/actions`) with Bearer token auth.
+- **`windowsSiteAdapter`** (`@narada-core/windows-site`) — opens local SQLite, calls `executeOperatorAction`.
+- **`linuxSiteAdapter`** (`@narada-core/linux-site`) — opens local SQLite for observation; control returns explicit unsupported errors (v0 Linux Sites do not yet implement operator actions).
+- **`cloudflareSiteAdapter`** (`@narada-core/cloudflare-site`) — calls remote Worker HTTP endpoints (`GET /status`, `POST /control/actions`) with Bearer token auth.
 
 The CLI selects the first adapter whose `supports()` returns true for a registered site.
 
@@ -512,10 +512,10 @@ Query parameters for bounded routes:
 
 The console does not introduce a second Site Registry domain.
 
-- `@narada2/site-registry-contract` is the browser-safe home of the existing canonical registry type vocabulary and the runtime parser for the snake_case HTTP/CLI envelopes.
-- `@narada2/windows-site` remains the durable registry implementation and authority owner; it re-exports the canonical types for existing callers.
-- `@narada2/operator-console-ui` derives `SiteListProjection`, `SiteTileProjection`, and `SiteDetailProjection` from canonical records. Its composables own fetch, selection, and plan/apply client state; components and pages own presentation only.
-- `@narada2/site-config` remains distinct. Its `SiteRegistryProjectionContract` and `SiteRegistryReadModel` describe awareness and event-derived read models, not durable User Site registry rows.
+- `@narada-core/site-registry-contract` is the browser-safe home of the existing canonical registry type vocabulary and the runtime parser for the snake_case HTTP/CLI envelopes.
+- `@narada-core/windows-site` remains the durable registry implementation and authority owner; it re-exports the canonical types for existing callers.
+- `@narada-core/operator-console-ui` derives `SiteListProjection`, `SiteTileProjection`, and `SiteDetailProjection` from canonical records. Its composables own fetch, selection, and plan/apply client state; components and pages own presentation only.
+- `@narada-core/site-config` remains distinct. Its `SiteRegistryProjectionContract` and `SiteRegistryReadModel` describe awareness and event-derived read models, not durable User Site registry rows.
 
 The browser boundary rejects malformed API data before projections run. UI projections are ephemeral view models: they are not persisted, do not grant authority, and do not replace the plan/apply gateway.
 

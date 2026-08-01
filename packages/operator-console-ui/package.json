@@ -1,12 +1,12 @@
 {
-  "name": "@narada2/operator-console-ui",
+  "name": "@narada-core/operator-console-ui",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "narada": {
     "package_role": "private_operator_surface_ui",
     "surface": "operator_console",
-    "authority_owner": "@narada2/cli",
+    "authority_owner": "@narada-core/cli",
     "presentation_only": true,
     "launch_artifact": {
       "target": "operator-console",
@@ -26,17 +26,17 @@
     "dist"
   ],
   "scripts": {
-    "prebuild": "pnpm --filter @narada2/ui build",
+    "prebuild": "pnpm --filter @narada-core/ui build",
     "build": "vite build --config vite.config.ts",
     "postbuild": "node --import tsx ../layers/cli/scripts/write-launch-artifact.ts --target operator-console --package-root . --site-root ../..",
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
     "test": "pnpm run typecheck && node --import tsx --test test/projections.test.ts test/site-registry-domain.test.ts test/site-registry-adapter.test.ts test/agent-sessions-adapter.test.ts test/agent-sessions-scope.test.ts test/site-agents-adapter.test.ts test/site-agents-interactions.test.ts test/projection-handoff.test.ts test/routes.test.ts test/route-directory.test.ts test/site-registry-workflow.test.ts test/architecture-boundary.test.ts test/host-fleet-adapter.test.ts test/host-fleet-transport.test.ts test/host-fleet-aggregate.test.ts"
   },
   "dependencies": {
-    "@narada2/host-fleet": "workspace:*",
-    "@narada2/operator-console-contract": "workspace:*",
-    "@narada2/site-registry-contract": "workspace:*",
-    "@narada2/ui-vue": "workspace:*",
+    "@narada-core/host-fleet": "workspace:*",
+    "@narada-core/operator-console-contract": "workspace:*",
+    "@narada-core/site-registry-contract": "workspace:*",
+    "@narada-core/ui-vue": "workspace:*",
     "lucide-vue-next": "^0.563.0",
     "vue": "^3.5.0"
   },
@@ -51,7 +51,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-console-ui"
   },
   "engines": {

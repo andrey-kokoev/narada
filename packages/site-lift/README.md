@@ -1,4 +1,4 @@
-# @narada2/site-lift
+# @narada-core/site-lift
 
 Descriptor contracts for advisory Site lift catalogs and receiving-Site adoption packets.
 

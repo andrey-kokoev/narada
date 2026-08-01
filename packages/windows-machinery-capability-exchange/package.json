@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/windows-machinery-capability-exchange",
+  "name": "@narada-core/windows-machinery-capability-exchange",
   "version": "0.1.0",
   "description": "Descriptor bundle for Windows machinery capability exchange adoption",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/windows-machinery-capability-exchange"
   }
 }

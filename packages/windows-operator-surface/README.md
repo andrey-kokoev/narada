@@ -1,4 +1,4 @@
-# @narada2/windows-operator-surface
+# @narada-core/windows-operator-surface
 
 Descriptor contracts for Windows operator-surface identity projection, runtime binding evidence, OSL labels, panel payloads, and health states.
 

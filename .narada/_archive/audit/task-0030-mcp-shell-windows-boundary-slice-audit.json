@@ -43,7 +43,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/mcp-shell-windows now includes descriptor-only boundary decisions for filesystem MCP, shell MCP Git tools, domain MCP routing, and refusal.",
+  "terminal_claim": "@narada-core/mcp-shell-windows now includes descriptor-only boundary decisions for filesystem MCP, shell MCP Git tools, domain MCP routing, and refusal.",
   "refused_imports": [
     "live shell MCP server",
     "source Site roster or path policy",
@@ -62,5 +62,5 @@
     "receiving Site path policy admission"
   ],
   "rollback": "Remove shell boundary source, tests, source inventory doc, README section, and this task evidence. No command, Git, or runtime state was executed or imported.",
-  "next_smallest_slice": "Deepen @narada2/mcp-test-windows with test-command descriptor/refusal contracts, or add receiving-Site examples composing shell boundary decisions with admitted carriers."
+  "next_smallest_slice": "Deepen @narada-core/mcp-test-windows with test-command descriptor/refusal contracts, or add receiving-Site examples composing shell boundary decisions with admitted carriers."
 }

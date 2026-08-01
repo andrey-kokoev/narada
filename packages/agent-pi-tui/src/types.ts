@@ -1,4 +1,4 @@
-import type { OperatorViewLane } from '@narada2/nars-client-projection-contract';
+import type { OperatorViewLane } from '@narada-core/nars-client-projection-contract';
 
 export type JsonObject = Record<string, unknown>;
 

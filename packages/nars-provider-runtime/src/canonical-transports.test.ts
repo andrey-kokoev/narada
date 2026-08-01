@@ -7,7 +7,7 @@ import { mkdtempSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { AiProcessInvocationRefusalError } from '@narada2/carrier-provider-support/ai-process-invocation';
+import { AiProcessInvocationRefusalError } from '@narada-core/carrier-provider-support/ai-process-invocation';
 import { buildCodexMcpRequest, buildOpenAiChatRequest } from './canonical-protocol-adapters.js';
 import { sendCodex, sendHttp } from './canonical-transports.js';
 

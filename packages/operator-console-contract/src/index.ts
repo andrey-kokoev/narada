@@ -353,7 +353,7 @@ export interface OperatorSiteAgentAdmissionChoice {
 
 export interface OperatorSiteAgentIntelligenceSelectionAuthority {
   schema: 'narada.invokable-intelligence.selection-authority.v1';
-  owner: '@narada2/invokable-intelligence-runtime';
+  owner: '@narada-core/invokable-intelligence-runtime';
   resolution_phase: 'runtime-invocation';
   authority_scope: {
     kind: 'site';
@@ -746,7 +746,7 @@ function parseIntelligenceSelectionAuthority(value: unknown): OperatorSiteAgentI
   const catalog = recordValue(row?.catalog);
   if (!row
     || row.schema !== 'narada.invokable-intelligence.selection-authority.v1'
-    || row.owner !== '@narada2/invokable-intelligence-runtime'
+    || row.owner !== '@narada-core/invokable-intelligence-runtime'
     || row.resolution_phase !== 'runtime-invocation'
     || !scope
     || scope.kind !== 'site'
@@ -987,7 +987,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     owner: 'User Site Host Registry',
     authority: { kind: 'user-site', id: null },
     authorityHost: { kind: 'local', id: 'user-site', origin: null },
-    projection: { kind: 'host-fleet', owner: '@narada2/operator-console-ui' },
+    projection: { kind: 'host-fleet', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'host-fleet-control', endpoint: OPERATOR_CONSOLE_HOSTS_API_PATH, endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [
@@ -1006,9 +1006,9 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Sites and Agents',
     scope: 'operator-console',
     owner: 'Operator Workspace',
-    authority: { kind: 'operator-console', id: '@narada2/cli' },
+    authority: { kind: 'operator-console', id: '@narada-core/cli' },
     authorityHost: { kind: 'local', id: 'operator-console', origin: null },
-    projection: { kind: 'site-agent-overview', owner: '@narada2/operator-console-ui' },
+    projection: { kind: 'site-agent-overview', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'agent-launch', endpoint: OPERATOR_CONSOLE_AGENTS_API_PATH, endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [
@@ -1029,7 +1029,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     owner: 'Canonical Site Registry',
     authority: { kind: 'user-site', id: null },
     authorityHost: { kind: 'local', id: 'user-site', origin: null },
-    projection: { kind: 'registry', owner: '@narada2/operator-console-ui' },
+    projection: { kind: 'registry', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'registry-workflow', endpoint: OPERATOR_CONSOLE_REGISTRY_PATH, endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [
@@ -1050,9 +1050,9 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Site Runtime',
     scope: 'operator-console',
     owner: 'Narada CLI sites',
-    authority: { kind: 'operator-console', id: '@narada2/cli' },
+    authority: { kind: 'operator-console', id: '@narada-core/cli' },
     authorityHost: { kind: 'local', id: 'operator-console', origin: null },
-    projection: { kind: 'launcher', owner: '@narada2/operator-console-ui' },
+    projection: { kind: 'launcher', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'launcher-control', endpoint: '/console/launch', endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [
@@ -1073,7 +1073,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     owner: 'Narada CLI onboarding',
     authority: { kind: 'user-site', id: null },
     authorityHost: { kind: 'local', id: 'operator-console', origin: null },
-    projection: { kind: 'workspace', owner: '@narada2/operator-console-ui' },
+    projection: { kind: 'workspace', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'onboarding-control', endpoint: OPERATOR_CONSOLE_ONBOARDING_PATH, endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [
@@ -1094,7 +1094,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     owner: 'Task and Agent Operations',
     authority: { kind: 'site', id: null },
     authorityHost: { kind: 'local', id: 'operator-console', origin: null },
-    projection: { kind: 'site-operations', owner: '@narada2/cli' },
+    projection: { kind: 'site-operations', owner: '@narada-core/cli' },
     intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [
@@ -1116,7 +1116,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     owner: 'Agent Web UI',
     authority: { kind: 'nars-session-index', id: null },
     authorityHost: { kind: 'local', id: 'operator-console', origin: null },
-    projection: { kind: 'session-inventory', owner: '@narada2/operator-console-ui' },
+    projection: { kind: 'session-inventory', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] },
     diagnosticOnly: false,
     routes: [
@@ -1137,7 +1137,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     owner: 'Artifact projection',
     authority: { kind: 'artifact', id: null },
     authorityHost: { kind: 'local', id: 'operator-console', origin: null },
-    projection: { kind: 'artifact', owner: '@narada2/agent-web-ui' },
+    projection: { kind: 'artifact', owner: '@narada-core/agent-web-ui' },
     intent: { kind: 'artifact-open', endpoint: '/artifacts/<session-id>/<artifact-id>/', endpointBase: 'workspace', protocols: ['http'] },
     diagnosticOnly: false,
     routes: [

@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/carrier-command-contract",
+  "name": "@narada-core/carrier-command-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,7 +19,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/carrier-command-contract"
   },
   "engines": {

@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { SqliteInboxStore } from '@narada2/control-plane';
+import { SqliteInboxStore } from '@narada-core/control-plane';
 import { operatorStartCommand } from '../../src/commands/operator.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 

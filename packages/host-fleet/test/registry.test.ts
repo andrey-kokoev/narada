@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import {
   HOST_FLEET_ENROLLMENT_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,

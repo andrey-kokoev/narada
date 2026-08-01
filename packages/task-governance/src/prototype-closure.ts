@@ -1,1 +1,1 @@
-export * from '@narada2/task-governance-core/prototype-closure';
+export * from '@narada-core/task-governance-core/prototype-closure';

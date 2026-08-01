@@ -32,7 +32,7 @@ import type {
   Resource,
   ResourceId,
   ResourceKind,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 export class RegistryError extends Error {
   readonly code: string;

@@ -1,4 +1,4 @@
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 
 const store: any = openTaskLifecycleStore(process.argv[2] || process.cwd());
 try {

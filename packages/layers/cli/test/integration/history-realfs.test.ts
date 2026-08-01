@@ -497,7 +497,7 @@ test('built narada CLI detects abrupt daemon death and stop timeout', { timeout:
 });
 
 test('built narada CLI completes the local-history operator happy path', { timeout: 90_000 }, async () => {
-  assert.equal(existsSync(cliPath), true, `CLI dist missing: ${cliPath}. Run pnpm --filter @narada2/cli build first.`);
+  assert.equal(existsSync(cliPath), true, `CLI dist missing: ${cliPath}. Run pnpm --filter @narada-core/cli build first.`);
   const root = await mkdtemp(join(tmpdir(), 'narada-cli-history-built-'));
   const userSite = await mkdtemp(join(tmpdir(), 'narada-cli-history-built-user-'));
   let started = false;
@@ -554,7 +554,7 @@ test('built narada CLI completes the local-history operator happy path', { timeo
 });
 
 test('built narada CLI preserves User Site-root history identity across relocation', { timeout: 60_000 }, async () => {
-  assert.equal(existsSync(cliPath), true, `CLI dist missing: ${cliPath}. Run pnpm --filter @narada2/cli build first.`);
+  assert.equal(existsSync(cliPath), true, `CLI dist missing: ${cliPath}. Run pnpm --filter @narada-core/cli build first.`);
   const userSite = await mkdtemp(join(tmpdir(), 'narada-cli-history-relocation-user-'));
   const root = await mkdtemp(join(tmpdir(), 'narada-cli-history-relocation-root-'));
   const parent = await mkdtemp(join(tmpdir(), 'narada-cli-history-relocation-parent-'));

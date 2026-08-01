@@ -6,7 +6,7 @@ import {
   buildAgentWebUiOperatorInputAction,
   isAgentWebUiCloudflareProtocolFrame,
   translateAgentWebUiFrameForCloudflare,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import { appendEvent, clearEvents } from './render.ts';
 import { readInjectedConfig, resolveAttachConfig } from './config.ts';
 import { toSessionProtocolFrame, type SessionProtocolFrame } from './protocol/session-frame.ts';

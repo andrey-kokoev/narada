@@ -11,7 +11,7 @@
   "first_slice": {
     "kind": "read_only_status_registry",
     "implementation_task": "narada-proper.task-0020",
-    "package": "@narada2/mcp-surface-carrier-supervisor",
+    "package": "@narada-core/mcp-surface-carrier-supervisor",
     "package_path": "packages/mcp-surface-carrier-supervisor",
     "lifecycle_states": [
       "stale",

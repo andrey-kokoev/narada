@@ -1,6 +1,6 @@
 export {};
 
-declare module '@narada2/nars-client-projection-contract' {
+declare module '@narada-core/nars-client-projection-contract' {
   export type NarsClientProjectionDisposition = 'conversation_fact' | 'operation_fact' | 'diagnostic_signal' | 'protocol_evidence' | 'raw_record' | 'state_sample';
   export const OPERATOR_VIEW_LANES: readonly ['conversation', 'operations', 'diagnostics', 'protocol', 'raw'];
   export type OperatorViewLane = typeof OPERATOR_VIEW_LANES[number];

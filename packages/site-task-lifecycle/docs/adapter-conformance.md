@@ -1,6 +1,6 @@
 # Adapter Conformance
 
-`@narada2/site-task-lifecycle` remains adapter-interface-only. It defines a conformance contract that a receiving Site can use when admitting a concrete task DB adapter outside this package.
+`@narada-core/site-task-lifecycle` remains adapter-interface-only. It defines a conformance contract that a receiving Site can use when admitting a concrete task DB adapter outside this package.
 
 ## Package Boundary
 

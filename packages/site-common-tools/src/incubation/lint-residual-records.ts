@@ -23,7 +23,7 @@
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 const rootDir: any = join(__dirname, '..', '..');

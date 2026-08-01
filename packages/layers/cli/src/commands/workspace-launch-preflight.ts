@@ -1,4 +1,4 @@
-import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type { WorkspaceLaunchAgentPlan } from './workspace-launch-types.js';
 import {
   WORKSPACE_LAUNCH_CAPABILITY_MATRIX_SCHEMA,

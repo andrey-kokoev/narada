@@ -5,7 +5,7 @@
 This matrix records the intended symmetry between local NARS sessions, Cloudflare-hosted projection surfaces, and Cloudflare-origin authority/runtime slices. It is a documentation boundary, not a runtime authority claim.
 
 The canonical runtime/surface/authority contract is
-[`@narada2/nars-runtime-contract` `runtime-surface-contract`](../../packages/nars-runtime-contract/src/runtime-surface-contract.ts)
+[`@narada-core/nars-runtime-contract` `runtime-surface-contract`](../../packages/nars-runtime-contract/src/runtime-surface-contract.ts)
 (schema `narada.nars.runtime_surface_contract.v1`). Every supported quadrant reports `runtime_origin`, `surface_origin`, `authority_runtime_host`, `authority_epoch`, `authority_runtime_id`, projection identity/route, and `capability_profile` from declared contract fields — never inferred from transport or UI state.
 
 ## Quadrants

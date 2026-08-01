@@ -1,5 +1,5 @@
 import type { NarsEvent, PiRenderableContent } from '../types.js';
-import { buildNarsArtifactRefPart, buildNarsIntentRefPart } from '@narada2/nars-client-projection-contract';
+import { buildNarsArtifactRefPart, buildNarsIntentRefPart } from '@narada-core/nars-client-projection-contract';
 
 export function artifactContentFromEvent(event: NarsEvent): PiRenderableContent[] {
   const content: PiRenderableContent[] = [];

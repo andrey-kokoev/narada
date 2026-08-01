@@ -222,7 +222,7 @@ When describing higher-order architecture, deployment, or design:
 |--------------|---------|
 | Change event ID computation | [`src/ids/event-id.ts`](packages/layers/control-plane/src/ids/event-id.ts) |
 | Add a new persistence store | [`src/persistence/`](packages/layers/control-plane/src/persistence/) + see [03-persistence.md](packages/layers/control-plane/docs/03-persistence.md) |
-| Modify task governance domain law | [`@narada2/task-governance`](packages/task-governance/README.md) |
+| Modify task governance domain law | [`@narada-core/task-governance`](packages/task-governance/README.md) |
 | Modify the sync loop | [`src/runner/sync-once.ts`](packages/layers/control-plane/src/runner/sync-once.ts) |
 | Add a CLI command | [`packages/layers/cli/src/commands/`](packages/layers/cli/src/commands/) |
 | Change Graph API handling | [`src/adapter/graph/`](packages/layers/control-plane/src/adapter/graph/) |
@@ -899,7 +899,7 @@ narada verify suggest --files packages/layers/cli/src/commands/foo.ts
 narada verify status
 
 # Run the suggested command through policy-guarded scripts
-narada verify run --cmd "pnpm --filter @narada2/cli exec vitest run test/commands/foo.test.ts"
+narada verify run --cmd "pnpm --filter @narada-core/cli exec vitest run test/commands/foo.test.ts"
 ```
 
 The suggestion surface:
@@ -935,7 +935,7 @@ For control-plane and daemon work, broad unit-test suites are slow and can crash
 
 ```bash
 # Example: run a single control-plane test file with telemetry
-pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/unit/ids/event-id.test.ts"
+pnpm test:focused "pnpm --filter @narada-core/control-plane exec vitest run test/unit/ids/event-id.test.ts"
 
 # Example: run a specific daemon test file (preferred over broad suite)
 pnpm test:focused "pnpm --dir packages/layers/daemon exec vitest run test/unit/observation-server.test.ts"
@@ -948,13 +948,13 @@ pnpm --dir packages/layers/cli exec vitest run test/commands/task-report.test.ts
 pnpm --dir packages/layers/cli exec vitest run test/commands/inbox.test.ts test/commands/inbox-mutation-evidence.test.ts
 
 # Example: package-level focused run, only when explicitly justified
-ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"
+ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada-core/charters test"
 
 # Example: multi-file focused run, only when explicitly justified
-ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/audit.test.ts test/commands/show.test.ts"
+ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada-core/cli exec vitest run test/commands/audit.test.ts test/commands/show.test.ts"
 
 # Example: focused typecheck for one package
-pnpm --filter @narada2/control-plane typecheck
+pnpm --filter @narada-core/control-plane typecheck
 ```
 
 `pnpm test:focused` records duration, exit status, and classification to `.ai/metrics/test-runtimes.json` just like the broad wrapper commands.

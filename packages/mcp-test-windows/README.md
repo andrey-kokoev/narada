@@ -1,4 +1,4 @@
-# @narada2/mcp-test-windows
+# @narada-core/mcp-test-windows
 
 Descriptor contracts for an approved Windows test gateway MCP surface.
 

@@ -1,4 +1,4 @@
-import { requestCarrierRestart, showCarrierRestartOutcome } from '@narada2/site-common-tools/operator-surface/carrier-restart-supervisor';
+import { requestCarrierRestart, showCarrierRestartOutcome } from '@narada-core/site-common-tools/operator-surface/carrier-restart-supervisor';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';

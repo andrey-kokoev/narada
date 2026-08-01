@@ -1,4 +1,4 @@
-# `@narada2/agent-pi-tui`
+# `@narada-core/agent-pi-tui`
 
 `agent-pi-tui` is a Narada Agent Runtime Server (NARS) projection client. It
 uses `@earendil-works/pi-tui` for terminal lifecycle and rendering, while
@@ -50,9 +50,9 @@ NARS's `runtime.intelligence.reconfigure` method when that method is exposed.
 ## Verification
 
 ```powershell
-pnpm --filter @narada2/agent-pi-tui typecheck
-pnpm --filter @narada2/agent-pi-tui test
-pnpm --filter @narada2/agent-pi-tui test:live:production-binding  # opt-in launcher matrix
+pnpm --filter @narada-core/agent-pi-tui typecheck
+pnpm --filter @narada-core/agent-pi-tui test
+pnpm --filter @narada-core/agent-pi-tui test:live:production-binding  # opt-in launcher matrix
 ```
 
 The normal test suite does not start providers, runtimes, browsers, or sibling
@@ -75,7 +75,7 @@ production-launch obligations and completion gate are defined in
 ```powershell
 # Build the real sibling agent-tui binary first, or point the test at one.
 $env:NARADA_AGENT_TUI_BIN = 'D:\code\agent-tui\target\debug\narada-agent-tui.exe'
-pnpm --filter @narada2/agent-pi-tui test:baseline-live
+pnpm --filter @narada-core/agent-pi-tui test:baseline-live
 ```
 
 It starts an ephemeral CLI-launched NARS runtime with a fixture provider and
@@ -87,7 +87,7 @@ close. The additional gap scripts cover restart, cancellation, authority
 negatives, transport/idempotency, uncertain retry, MCP faults, PTY boundaries,
 and determinism through the direct runtime fixture harness by default, with an
 explicit production-launch mode. Kernel
-substitutability is owned and executed by `@narada2/agent-runtime-server`, not
+substitutability is owned and executed by `@narada-core/agent-runtime-server`, not
 this projection package. The baseline requires the sibling `agent-cli` launcher, a debug `agent-tui`
 binary (override with `NARADA_AGENT_TUI_BIN`), and a headless Edge/Chrome
 binary (override with `NARADA_LIVE_BROWSER_PATH`). The command is explicitly gated; invoking the script without

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolve } from "node:path";
-import { runHiddenPostureCommandSync } from "@narada2/process-launch-posture";
+import { runHiddenPostureCommandSync } from "@narada-core/process-launch-posture";
 
 const packageRoot = resolve("..", "..", "..");
 const scriptPath = resolve(packageRoot, "scripts", "control-plane-lint.ts");

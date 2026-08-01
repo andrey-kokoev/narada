@@ -1,4 +1,4 @@
-import { agentIdentityDisplay } from '@narada2/agent-identity';
+import { agentIdentityDisplay } from '@narada-core/agent-identity';
 
 function isSessionLifecycleEvent(event: any) {
   return event?.event === 'session_started' || event?.event === 'session_status' || event?.event === 'session_closed';

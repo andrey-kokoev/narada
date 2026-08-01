@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { OperatorSurfaceShell } from '@narada2/ui-vue';
+import { OperatorSurfaceShell } from '@narada-core/ui-vue';
 import { RotateCcw } from 'lucide-vue-next';
 import {
   operatorConsoleNavigationHref,

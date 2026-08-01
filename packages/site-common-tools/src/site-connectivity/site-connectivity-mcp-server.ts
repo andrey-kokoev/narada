@@ -2,7 +2,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import { validateSiteIdentityDocument } from '../site-config/validate-site-config.js';
 import { buildOutputRefToolContent } from '../mcp-payload-file.js';
 

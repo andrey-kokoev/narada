@@ -16,7 +16,7 @@ import type {
 
 const REMAINING_ADMISSIONS = [
   'receiving-Site initializer execution',
-  'concrete adapter execution outside @narada2/site-task-lifecycle',
+  'concrete adapter execution outside @narada-core/site-task-lifecycle',
   'receiving-Site DB mutation execution',
   'Narada proper live MCP registration admission',
 ];

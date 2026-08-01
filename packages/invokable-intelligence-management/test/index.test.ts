@@ -5,8 +5,8 @@ import { fileURLToPath } from "node:url";
 import { tmpdir } from "node:os";
 import test from "node:test";
 
-import { createFakeD1, D1RegistryStore, SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
+import { createFakeD1, D1RegistryStore, SqliteRegistryStore } from "@narada-core/invokable-intelligence-registry";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
 
 import { parseLegacyRegistry } from "../src/legacy.js";
 import { ensureIntelligenceCatalog } from "../src/bootstrap.js";

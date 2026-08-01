@@ -6,7 +6,7 @@ import {
   type SiteEventFamily,
   type SiteEventReceiverContract,
   type SiteTelemetryEventContract,
-} from "@narada2/site-config";
+} from "@narada-core/site-config";
 import {
   buildRemoteSiteInboxMessage,
   planRemoteSiteInboxLocalAdmission,
@@ -14,7 +14,7 @@ import {
   type RemoteSiteInboxFinalizePayload,
   type RemoteSiteInboxMessage,
   type SiteInboxEnvelopeKind,
-} from "@narada2/site-inbox";
+} from "@narada-core/site-inbox";
 
 export * from "./site-scope-chat.js";
 

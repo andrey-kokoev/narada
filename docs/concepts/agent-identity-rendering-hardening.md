@@ -128,15 +128,15 @@ The SOP is complete only when the live authority and every active projection agr
 
 | Gate | Evidence |
 | --- | --- |
-| Focused helper and duplicate-rendering guards | `pnpm --filter @narada2/agent-identity test`; includes recursive source gates that allow `agentIdentityDisplay` only in `@narada2/agent-identity` and reject local identity-ref display fallback chains outside that package. |
-| Launch-result rendering tests | `pnpm --filter @narada2/agent-start-renderer test` |
-| Agent-start transform/syntax gate | `pnpm --filter @narada2/agent-start run syntaxcheck`; proves the TSX-loaded launcher entrypoint and verifier bin are syntactically loadable. |
-| Agent-start option/registry tests | `pnpm --filter @narada2/agent-start test`; includes the transform/syntax gate plus dry-run, provider, registry, and option-contract shards. |
-| Terminal projection tests | `pnpm --filter @narada2/carrier-terminal-projection test` |
-| Shared client projection contract tests | `pnpm --filter @narada2/nars-client-projection-contract test`; proves shared NARS event summaries use canonical identity refs. |
-| Browser projection tests | `pnpm --filter @narada2/agent-web-ui test` |
-| Runtime wrapper tests | `pnpm --filter @narada2/agent-runtime-server test` |
-| Context startup/whoami MCP tests | `pnpm --filter @narada2/agent-context-tools test`; proves default startup summary and whoami both expose canonical `agent_identity_ref`. |
+| Focused helper and duplicate-rendering guards | `pnpm --filter @narada-core/agent-identity test`; includes recursive source gates that allow `agentIdentityDisplay` only in `@narada-core/agent-identity` and reject local identity-ref display fallback chains outside that package. |
+| Launch-result rendering tests | `pnpm --filter @narada-core/agent-start-renderer test` |
+| Agent-start transform/syntax gate | `pnpm --filter @narada-core/agent-start run syntaxcheck`; proves the TSX-loaded launcher entrypoint and verifier bin are syntactically loadable. |
+| Agent-start option/registry tests | `pnpm --filter @narada-core/agent-start test`; includes the transform/syntax gate plus dry-run, provider, registry, and option-contract shards. |
+| Terminal projection tests | `pnpm --filter @narada-core/carrier-terminal-projection test` |
+| Shared client projection contract tests | `pnpm --filter @narada-core/nars-client-projection-contract test`; proves shared NARS event summaries use canonical identity refs. |
+| Browser projection tests | `pnpm --filter @narada-core/agent-web-ui test` |
+| Runtime wrapper tests | `pnpm --filter @narada-core/agent-runtime-server test` |
+| Context startup/whoami MCP tests | `pnpm --filter @narada-core/agent-context-tools test`; proves default startup summary and whoami both expose canonical `agent_identity_ref`. |
 | CLI attach/session tests | `node scripts/run-vitest-quiet.mjs run --silent=true test/commands/nars.test.ts` from `packages/layers/cli` |
 | Registered fleet dry-run | `node D:/code/narada/packages/agent-start/bin/verify-registered-site-launchers.ts --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --jobs 4 --progress` |
 

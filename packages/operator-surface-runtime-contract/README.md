@@ -1,4 +1,4 @@
-# @narada2/operator-surface-runtime-contract
+# @narada-core/operator-surface-runtime-contract
 
 Use `operatorSurfaceKindsForRuntimeHost()` when a consumer needs the
 projections sharing a runtime host, or

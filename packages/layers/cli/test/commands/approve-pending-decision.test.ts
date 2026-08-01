@@ -10,7 +10,7 @@ import { join } from 'node:path';
 import { approvePendingDecisionCommand } from '../../src/commands/approve-pending-decision.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
-import { Database, SqliteCoordinatorStore, SqliteIntentStore, SqliteOutboundStore } from '@narada2/control-plane';
+import { Database, SqliteCoordinatorStore, SqliteIntentStore, SqliteOutboundStore } from '@narada-core/control-plane';
 
 function createMockLogger() {
   return {

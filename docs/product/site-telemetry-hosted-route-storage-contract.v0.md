@@ -11,7 +11,7 @@ any live resource creation or deployment.
 | --- | --- |
 | Surface id | `narada-proper-site-telemetry-publication-v0` |
 | Owning Site | `narada-proper` |
-| Realization package | `@narada2/site-registry-cloudflare` |
+| Realization package | `@narada-core/site-registry-cloudflare` |
 | Worker compatibility name | `narada-site-registry` |
 | Binding prefix | `NARADA_SITE_REGISTRY_*` |
 | Mode | `projection_only` |
@@ -134,7 +134,7 @@ evidence unless destructive cleanup is separately authorized.
 
 Known compatibility drift:
 
-- package name: `@narada2/site-registry-cloudflare`;
+- package name: `@narada-core/site-registry-cloudflare`;
 - Worker template name: `narada-site-registry`;
 - health schema prefix: `narada.site_registry_cloudflare.*`;
 - human shell title: `Narada Site Registry`;

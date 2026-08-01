@@ -1,4 +1,4 @@
-import type { CoordinatorConfig } from "@narada2/charters";
+import type { CoordinatorConfig } from "@narada-core/charters";
 import { readConfig, findScope } from "../lib/config-io.js";
 import { preflight as collectPreflight } from "../readiness/collect.js";
 import { renderPreflight } from "../render/preflight.js";

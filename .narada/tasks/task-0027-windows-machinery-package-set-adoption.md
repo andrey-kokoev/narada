@@ -14,13 +14,13 @@ The narada-andrey packet is external evidence. Narada proper admits only descrip
 
 Accepted package-set direction and adopted all proposed packages one at a time as descriptor-only first slices under the local Narada package namespace:
 
-1. `@narada2/windows-machinery-capability-exchange`
-2. `@narada2/mcp-shell-windows`
-3. `@narada2/mcp-test-windows`
-4. `@narada2/windows-operator-surface`
-5. `@narada2/windows-osl`
-6. `@narada2/windows-pc-site-template`
-7. `@narada2/windows-komorebi-yasb-kit`
+1. `@narada-core/windows-machinery-capability-exchange`
+2. `@narada-core/mcp-shell-windows`
+3. `@narada-core/mcp-test-windows`
+4. `@narada-core/windows-operator-surface`
+5. `@narada-core/windows-osl`
+6. `@narada-core/windows-pc-site-template`
+7. `@narada-core/windows-komorebi-yasb-kit`
 
 ## Non-Goals and Refusals
 

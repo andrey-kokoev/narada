@@ -30,7 +30,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/agent-runtime-server/src/server-wrapper.ts`, `packages/agent-runtime-server/src/runtime-context.ts`, `Start-NaradaAgent.ps1`.
 - Current evidence: the launch path already materializes session and agent identity context through runtime code instead of relying only on ad hoc shell variables.
 - Remaining gap: legacy and canonical env var names still need a single, documented compatibility story so launchers do not split on different env sources.
-- Next verification: `pnpm --filter @narada2/agent-start test` and `pnpm --filter @narada2/carrier-runtime test`.
+- Next verification: `pnpm --filter @narada-core/agent-start test` and `pnpm --filter @narada-core/carrier-runtime test`.
 
 ### 1816. Agent identity rendering guard
 
@@ -38,7 +38,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `docs/concepts/agent-identity-rendering-hardening.md`, `packages/agent-identity/src/index.ts`, `packages/agent-identity/src/index.test.ts`, `packages/agent-start-renderer/src/agent-start-renderer.ts`, `packages/agent-web-ui/src/session-identity.ts`, `packages/agent-web-ui/src/session-projection-activity.ts`, `packages/agent-web-ui/src/health.ts`.
 - Current evidence: the draft doc states the raw `agent_id` vs canonical display invariant, and the rendering code has been moved toward `agent_identity_ref`-based display.
 - Remaining gap: prove the helper and all renderers actually prevent raw identity from leaking into operator-facing text when canonical identity is available.
-- Next verification: `pnpm --filter @narada2/agent-identity test`, `pnpm --filter @narada2/agent-start-renderer test`, `pnpm --filter @narada2/agent-web-ui test`.
+- Next verification: `pnpm --filter @narada-core/agent-identity test`, `pnpm --filter @narada-core/agent-start-renderer test`, `pnpm --filter @narada-core/agent-web-ui test`.
 
 ### 1817. Layered launch output
 
@@ -46,7 +46,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-start-renderer/src/agent-start-renderer.ts`, `packages/agent-start/src/carrier-process-launch.ts`, `packages/agent-start/src/narada-agent-start.ts`, `packages/layers/cli/src/commands/launcher.ts`.
 - Current evidence: launch result materialization now carries session and identity structure instead of a single flat preamble.
 - Remaining gap: verify that the launch text, wait prompt, and result output preserve the intended layering under both CLI and interactive selection flows.
-- Next verification: `pnpm --filter @narada2/agent-start-renderer test` and the launcher option/registry tests in `packages/agent-start/test`.
+- Next verification: `pnpm --filter @narada-core/agent-start-renderer test` and the launcher option/registry tests in `packages/agent-start/test`.
 
 ### 1818. Renderable value contract
 
@@ -54,7 +54,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/carrier-terminal-projection/src/terminal-event-rendering.ts`, `packages/carrier-terminal-projection/src/projected-input.ts`, `packages/nars-client-projection-contract/src/nars-client-projection-contract.ts`, `packages/agent-web-ui/src/runtime-events.ts`.
 - Current evidence: the rendering stack already treats structured message parts and renderable values as first-class inputs instead of plain text blobs.
 - Remaining gap: prove that the same value contract is used consistently in the terminal projection, browser projection, and shared client contract.
-- Next verification: `pnpm --filter @narada2/carrier-terminal-projection test` and `pnpm --filter @narada2/nars-client-projection-contract test`.
+- Next verification: `pnpm --filter @narada-core/carrier-terminal-projection test` and `pnpm --filter @narada-core/nars-client-projection-contract test`.
 
 ### 1819. Launcher Session Dashboard
 
@@ -70,7 +70,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/layers/cli/src/commands/launcher.ts`, `packages/nars-session-core/src/session-index.ts`, `packages/agent-web-ui/src/session-projection.ts`, `packages/agent-web-ui/src/session-projection-activity.ts`.
 - Current evidence: the launcher draft now records handoff, runtime, and projection observation records separately, which is the right shape for a unified observation layer.
 - Remaining gap: verify that the same observation can be rediscovered and displayed after the launcher process restarts.
-- Next verification: `pnpm --filter @narada2/carrier-runtime test` plus the launcher dashboard e2e test.
+- Next verification: `pnpm --filter @narada-core/carrier-runtime test` plus the launcher dashboard e2e test.
 
 ### 1821. Attach ambiguity / staleness UX
 
@@ -86,7 +86,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/src/session-projection.ts`, `packages/agent-web-ui/src/session-projection-activity.ts`, `packages/carrier-protocol/src/carrier-protocol.ts`.
 - Current evidence: the projection reducers already normalize event shape and canonical identity display.
 - Remaining gap: prove that every relevant event lane uses the same normalization path rather than specialized one-off parsing.
-- Next verification: `pnpm --filter @narada2/agent-web-ui test`.
+- Next verification: `pnpm --filter @narada-core/agent-web-ui test`.
 
 ### 1823. Event lanes
 
@@ -94,7 +94,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/src/app/components/NarsSessionShell.vue`, `packages/agent-web-ui/src/app/components/SurfaceNavigator.vue`, `packages/agent-web-ui/src/app/App.vue`.
 - Current evidence: the browser UI already separates session, surface, and activity components instead of rendering one undifferentiated feed.
 - Remaining gap: show that those lanes remain distinct under projection attach, health updates, and conversational events.
-- Next verification: `pnpm --filter @narada2/agent-web-ui test` and the panel-focused UI e2e coverage.
+- Next verification: `pnpm --filter @narada-core/agent-web-ui test` and the panel-focused UI e2e coverage.
 
 ### 1824. Web UI peer maturity
 
@@ -102,7 +102,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-web-ui/README.md`, `packages/agent-web-ui/src/agent-web-ui.css`, `packages/agent-web-ui/src/app/components/*.vue`, `packages/agent-web-ui/test/agent-web-ui-*.test.mjs`.
 - Current evidence: the UI package already has dedicated panel, projection, protocol, and UX smoke tests.
 - Remaining gap: prove the page behaves like a first-class projection peer rather than a thin transport viewer.
-- Next verification: `pnpm --filter @narada2/agent-web-ui test` and the launcher dashboard e2e once the same session is attached from the browser.
+- Next verification: `pnpm --filter @narada-core/agent-web-ui test` and the launcher dashboard e2e once the same session is attached from the browser.
 
 ### 1825. Cloudflare / local symmetry
 
@@ -126,7 +126,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 - Owning files: `packages/agent-start/src/narada-agent-start.ts`, `packages/agent-runtime-server/src/session-core-runtime-service.ts`, `packages/agent-context-tools/src/agent-context-mcp-server.ts`.
 - Current evidence: the runtime stack already separates discovery, projection, and session index responsibilities.
 - Remaining gap: the launcher and delegated worker flows still need explicit proof that MCP exposure is intentional and scoped.
-- Next verification: `pnpm --filter @narada2/carrier-runtime test` and the worker-delegation/launcher tests that cover scoped MCP startup.
+- Next verification: `pnpm --filter @narada-core/carrier-runtime test` and the worker-delegation/launcher tests that cover scoped MCP startup.
 
 ### 1828. User-site scoped provider readiness cache
 
@@ -172,13 +172,13 @@ Each row names the main invariant, the owning files, the best current proof, the
 
 Run the narrow tests that correspond to the changed slice, then update the row in this ledger if the evidence changes:
 
-- `pnpm --filter @narada2/agent-identity test`
-- `pnpm --filter @narada2/agent-start-renderer test`
-- `pnpm --filter @narada2/carrier-terminal-projection test`
-- `pnpm --filter @narada2/nars-client-projection-contract test`
-- `pnpm --filter @narada2/agent-web-ui test`
-- `pnpm --filter @narada2/carrier-runtime test`
-- `pnpm --filter @narada2/agent-start test`
+- `pnpm --filter @narada-core/agent-identity test`
+- `pnpm --filter @narada-core/agent-start-renderer test`
+- `pnpm --filter @narada-core/carrier-terminal-projection test`
+- `pnpm --filter @narada-core/nars-client-projection-contract test`
+- `pnpm --filter @narada-core/agent-web-ui test`
+- `pnpm --filter @narada-core/carrier-runtime test`
+- `pnpm --filter @narada-core/agent-start test`
 - launcher dashboard e2e: `packages/layers/cli/test/integration/operator-console-ui-e2e.test.ts`
 - workspace and site git summaries through Git MCP before committing launcher/NARS changes
 

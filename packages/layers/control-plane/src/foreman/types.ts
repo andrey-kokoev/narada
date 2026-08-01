@@ -24,7 +24,7 @@ import type {
   EscalationProposal,
   ToolInvocationRequest,
   ValidationResult,
-} from "@narada2/charters";
+} from "@narada-core/charters";
 
 export type {
   CharterId,

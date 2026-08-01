@@ -1,4 +1,4 @@
-# @narada2/operator-console-runtime
+# @narada-core/operator-console-runtime
 
 The local Operator Console runtime is the authority for the stable browser
 projection at the host's Operator Router. This package owns readiness,

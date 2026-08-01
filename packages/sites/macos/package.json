@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/macos-site",
+  "name": "@narada-core/macos-site",
   "version": "0.1.0",
   "description": "macOS Site materialization for Narada bounded Cycle execution",
   "main": "./dist/index.js",
@@ -21,9 +21,9 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@narada2/control-plane": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/sqlite": "workspace:*"
+    "@narada-core/control-plane": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/sqlite": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
@@ -32,7 +32,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/sites/macos"
   }
 }

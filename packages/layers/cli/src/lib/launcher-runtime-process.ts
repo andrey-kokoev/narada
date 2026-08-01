@@ -1,6 +1,6 @@
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { execFileGoverned, runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada2/process-launch-posture';
+import { execFileGoverned, runGovernedCommandSync, spawnHiddenPostureProcess, startOperatorTerminal } from '@narada-core/process-launch-posture';
 import type { AgentStartExecutionResult, CommandExecutionResult } from './launcher-contracts.js';
 
 export const DEFAULT_AGENT_START_HANDOFF_TIMEOUT_MS = 30_000;

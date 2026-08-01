@@ -2,7 +2,7 @@ import type { Command } from 'commander';
 import { silentCommandContext } from '../lib/command-wrapper.js';
 import { emitFiniteCommandResult, emitLongLivedCommandStartup, exitLongLivedCommandSuccessfully, resolveCommandFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada2/operator-router';
+import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada-core/operator-router';
 import { agentWebUiAttachCommand } from './agent-web-ui.js';
 import type { AgentWebUiAttachOptions } from './agent-web-ui-types.js';
 

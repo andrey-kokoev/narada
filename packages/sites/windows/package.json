@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/windows-site",
+  "name": "@narada-core/windows-site",
   "version": "0.1.0",
   "description": "Windows Site materialization for Narada bounded Cycle execution",
   "main": "./dist/index.js",
@@ -22,10 +22,10 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@narada2/control-plane": "workspace:*",
-    "@narada2/site-registry-contract": "workspace:*",
-    "@narada2/site-continuity": "workspace:*",
-    "@narada2/sqlite": "workspace:*"
+    "@narada-core/control-plane": "workspace:*",
+    "@narada-core/site-registry-contract": "workspace:*",
+    "@narada-core/site-continuity": "workspace:*",
+    "@narada-core/sqlite": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
@@ -34,7 +34,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/sites/windows"
   }
 }

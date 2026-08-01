@@ -2,8 +2,8 @@ type AnyRecord = Record<string, any>;
 
 import { copyFileSync, existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { codexAuthHome } from '@narada2/carrier-provider-support/codex-subscription-auth';
-import { codexMcpEnvVarNames } from '@narada2/mcp-fabric';
+import { codexAuthHome } from '@narada-core/carrier-provider-support/codex-subscription-auth';
+import { codexMcpEnvVarNames } from '@narada-core/mcp-fabric';
 import {
   buildOpenAiChatRequest as coreBuildOpenAiChatRequest,
   cleanOpenAiMessages as coreCleanOpenAiMessages,

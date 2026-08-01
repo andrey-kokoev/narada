@@ -16,6 +16,6 @@ Admitted mutation scope:
 
 Denied scope:
 - Narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets state.
-- SQLite dependency inside `@narada2/site-task-lifecycle`.
+- SQLite dependency inside `@narada-core/site-task-lifecycle`.
 - Package-owned DB mutation.
 - Cross-Site mutation and richer list/query/transitions.

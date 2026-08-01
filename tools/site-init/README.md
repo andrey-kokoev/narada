@@ -33,7 +33,7 @@ node tools/site-init/site-live-carriers.ts --carrier windows_profile_site_bindin
 
 These carriers do not import source Site runtime state, `.ai` databases, task or inbox history, checkpoint history, roster state, operator-surface runtime state, PC-locus state, secrets, credentials, or source MCP registrations as target authority.
 
-Agent-context memory local storage writes target-local empty memory store and hydration policy artifacts. It does not copy checkpoint history, execute runtime hydration, own a SQLite dependency for `@narada2/agent-context-memory`, or persist secrets.
+Agent-context memory local storage writes target-local empty memory store and hydration policy artifacts. It does not copy checkpoint history, execute runtime hydration, own a SQLite dependency for `@narada-core/agent-context-memory`, or persist secrets.
 
 Site inbox local substrate writes target-local empty inbox index and publication policy artifacts. It does not import source inbox history, write portable envelope files, promote tasks, publish Git artifacts, or register MCP.
 

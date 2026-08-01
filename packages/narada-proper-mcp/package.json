@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/narada-proper-mcp",
+  "name": "@narada-core/narada-proper-mcp",
   "version": "0.1.0",
   "description": "Target-local Narada proper agent-facing MCP surface",
   "type": "module",
@@ -20,8 +20,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@narada2/agent-context-memory": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/agent-context-memory": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -34,7 +34,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/narada-proper-mcp"
   }
 }

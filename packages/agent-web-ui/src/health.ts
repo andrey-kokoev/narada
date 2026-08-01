@@ -1,5 +1,5 @@
 import { setText } from './render.ts';
-import { agentIdentityDisplay } from '@narada2/agent-identity';
+import { agentIdentityDisplay } from '@narada-core/agent-identity';
 import { isRecord, type UnknownRecord } from './types.ts';
 
 type HealthAttachConfig = {

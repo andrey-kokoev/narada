@@ -5,15 +5,15 @@ import nodeTest from 'node:test';
 import {
   TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
   validateSessionEvent,
-} from '@narada2/carrier-protocol';
-import { canonicalSha256 } from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/carrier-protocol';
+import { canonicalSha256 } from '@narada-core/invokable-intelligence-contract';
 import {
   deployManagementBundle,
   MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
-} from '@narada2/invokable-intelligence-management';
-import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization';
-import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
-import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
+} from '@narada-core/invokable-intelligence-management';
+import { D1MaterializationStore } from '@narada-core/invokable-intelligence-materialization';
+import { createFakeD1 } from '@narada-core/invokable-intelligence-registry';
+import { D1RegistryStore } from '@narada-core/invokable-intelligence-registry/d1';
 import {
   fakeD1SiteRegistryDatabase,
   fakeD1TaskDatabase,
@@ -1732,7 +1732,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.next_action, 'review_continuity_packet');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.loop_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.refresh_command, 'pnpm site:continuity:loop -- sync-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.pull_command, 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.pull_command, 'pnpm --filter @narada-core/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site site_fixture --url <worker-url> --token-file <token-file>');
   assert.equal(readAfterPacketPutBody.site_continuity_loop_reports.length, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_executions.length, 1);
   assert.equal(readAfterPacketPutBody.site_continuity_reconciliation_execution_status.schema, 'narada.cloudflare_site_continuity_reconciliation_execution_status.v1');
@@ -2939,7 +2939,7 @@ test('worker repository publication selector uses per-request evidence lookup be
       publication_ref: 'repository-publication:resolved-old',
       requested_action_ref: 'repository-publication-action:resolved-old',
       requested_action_summary: 'already resolved request',
-      repository_ref: 'github:andrey-kokoev/narada',
+      repository_ref: 'github:narada-core/narada',
       branch_ref: 'main',
       source_change_ref: 'git:commit:resolved-old',
       governed_request_contract_ref: 'contract:cloudflare-to-windows-repository-publication-request:v1',
@@ -2982,7 +2982,7 @@ test('worker repository publication selector uses per-request evidence lookup be
         publication_execution_id: 'repository-publication-execution-resolved-old',
         publication_ref: 'repository-publication:resolved-old',
         requested_action_ref: 'repository-publication-action:resolved-old',
-        repository_ref: 'github:andrey-kokoev/narada',
+        repository_ref: 'github:narada-core/narada',
         branch_ref: 'main',
         source_change_ref: 'git:commit:resolved-old',
         windows_admission_action: 'admit',
@@ -3006,7 +3006,7 @@ test('worker repository publication selector uses per-request evidence lookup be
         publication_execution_id: `repository-publication-execution-newer-${index}`,
         publication_ref: `repository-publication:newer-${index}`,
         requested_action_ref: `repository-publication-action:newer-${index}`,
-        repository_ref: 'github:andrey-kokoev/narada',
+        repository_ref: 'github:narada-core/narada',
         branch_ref: 'main',
         source_change_ref: `git:commit:newer-${index}`,
         windows_admission_action: 'admit',
@@ -9563,11 +9563,11 @@ test('cloudflare-carrier stays a separate carrier: no NARS session-semantics own
   const manifest = JSON.parse(readFileSync(join(packageDir, 'package.json'), 'utf8'));
   const dependencyNames = Object.keys(manifest.dependencies ?? {});
   const narsSessionSemanticsPackages = [
-    '@narada2/nars-session-core',
-    '@narada2/nars-runtime-contract',
-    '@narada2/cloudflare-nars-projection',
-    '@narada2/agent-runtime-server',
-    '@narada2/agent-web-ui',
+    '@narada-core/nars-session-core',
+    '@narada-core/nars-runtime-contract',
+    '@narada-core/cloudflare-nars-projection',
+    '@narada-core/agent-runtime-server',
+    '@narada-core/agent-web-ui',
   ];
   assert.deepEqual(
     dependencyNames.filter((name) => narsSessionSemanticsPackages.includes(name)),

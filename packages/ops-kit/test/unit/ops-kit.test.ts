@@ -2,7 +2,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import type { CoordinatorConfig } from "@narada2/charters";
+import type { CoordinatorConfig } from "@narada-core/charters";
 import { wantMailbox } from "../../src/commands/want-mailbox.js";
 import { wantWorkflow } from "../../src/commands/want-workflow.js";
 import { wantPosture } from "../../src/commands/want-posture.js";
@@ -191,8 +191,8 @@ describe("ops-kit", () => {
 
     const pkg = JSON.parse(fs.readFileSync(path.join(repoPath, "package.json"), "utf-8"));
     expect(pkg.name).toBe("narada-sonar");
-    expect(pkg.dependencies["@narada2/control-plane"]).toBe("^0.1.0");
-    expect(pkg.dependencies["@narada2/cli"]).toBe("^0.1.0");
+    expect(pkg.dependencies["@narada-core/control-plane"]).toBe("^0.1.0");
+    expect(pkg.dependencies["@narada-core/cli"]).toBe("^0.1.0");
 
     const config = JSON.parse(fs.readFileSync(path.join(repoPath, "config", "config.json"), "utf-8"));
     expect(config.root_dir).toBe("./data");
@@ -218,8 +218,8 @@ describe("ops-kit", () => {
 
     expect(result.repoPath).toBe(repoPath);
     const pkg = JSON.parse(fs.readFileSync(path.join(repoPath, "package.json"), "utf-8"));
-    expect(pkg.dependencies["@narada2/control-plane"]).toMatch(/^link:/);
-    expect(pkg.dependencies["@narada2/cli"]).toMatch(/^link:/);
+    expect(pkg.dependencies["@narada-core/control-plane"]).toMatch(/^link:/);
+    expect(pkg.dependencies["@narada-core/cli"]).toMatch(/^link:/);
   });
 
   it("preflight incorporates declared operational requirements", () => {

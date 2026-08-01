@@ -4,8 +4,8 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
-import type { AllowedAction, RuntimePolicy, ScopeConfig } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada-core/control-plane';
+import type { AllowedAction, RuntimePolicy, ScopeConfig } from '@narada-core/control-plane';
 
 export interface DeriveWorkOptions {
   config?: string;
@@ -99,7 +99,7 @@ async function deriveForScope(
 
   // Lazy-load SQLite driver to avoid eager native-module load
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore, SqliteIntentStore, SqliteFactStore, DefaultForemanFacade, MailboxContextStrategy, resolveContextStrategy } = await import(
-    '@narada2/control-plane'
+    '@narada-core/control-plane'
   );
 
   const db = new Database(coordinatorDbPath);

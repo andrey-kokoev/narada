@@ -8,7 +8,7 @@ import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { Command } from 'commander';
-import { Database, SqliteInboxStore } from '@narada2/control-plane';
+import { Database, SqliteInboxStore } from '@narada-core/control-plane';
 import { taskWorkboardCommand } from '../../src/commands/task-workboard.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { SqliteTaskLifecycleStore, type TaskStatus } from '../../src/lib/task-lifecycle-store.js';

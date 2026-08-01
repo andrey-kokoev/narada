@@ -3,7 +3,7 @@ import {
   readNarsArtifact,
   readNarsArtifactContent,
   readNarsArtifactIndex,
-} from '@narada2/nars-session-core/artifacts';
+} from '@narada-core/nars-session-core/artifacts';
 
 function sendJsonResponse(response: any, statusCode: any, payload: any) {
   response.writeHead(statusCode, { 'content-type': 'application/json; charset=utf-8' });

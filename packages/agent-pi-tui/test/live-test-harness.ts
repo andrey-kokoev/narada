@@ -12,9 +12,9 @@ import {
   buildCanonicalLocalTestSeed,
   CANONICAL_LOCAL_TEST_IDS,
   canonicalSha256,
-} from '@narada2/invokable-intelligence-contract';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+} from '@narada-core/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 import { assertLiveEvidenceContract } from '../../agent-runtime-server/src/live-evidence-contract.js';
 
 export const REPO_ROOT: any = fileURLToPath(new URL('../../..', import.meta.url));

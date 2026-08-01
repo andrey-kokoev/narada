@@ -138,12 +138,12 @@ The operator does not repair an assessment by editing SQLite or retrying until a
 Run the focused checks from `D:\code\narada`:
 
 ```powershell
-pnpm --filter @narada2/operator-console-ui test
-pnpm --filter @narada2/cloudflare-nars-projection test
-pnpm --filter @narada2/cloudflare-nars-projection typecheck
-pnpm --filter @narada2/cli exec vitest run --silent=true test/commands/console-server.test.ts
-pnpm --filter @narada2/cli exec node --import tsx --test test/commands/console-projection-lifecycle.test.ts
-pnpm --filter @narada2/cli build
+pnpm --filter @narada-core/operator-console-ui test
+pnpm --filter @narada-core/cloudflare-nars-projection test
+pnpm --filter @narada-core/cloudflare-nars-projection typecheck
+pnpm --filter @narada-core/cli exec vitest run --silent=true test/commands/console-server.test.ts
+pnpm --filter @narada-core/cli exec node --import tsx --test test/commands/console-projection-lifecycle.test.ts
+pnpm --filter @narada-core/cli build
 ```
 
 The route-directory behavior is covered by the UI route-state tests and the

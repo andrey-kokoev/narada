@@ -190,18 +190,18 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     ]), { cwd: consumerRoot, env, timeout: 360_000 });
     assert.equal(install.status, 0, `published CLI install failed\n${outputOf(install)}`);
 
-    const installedCliEntrypoint = join(consumerRoot, 'node_modules', '@narada2', 'cli', 'dist', 'main.js');
+    const installedCliEntrypoint = join(consumerRoot, 'node_modules', '@narada-core', 'cli', 'dist', 'main.js');
     assert.equal(existsSync(installedCliEntrypoint), true, `installed CLI entrypoint missing: ${installedCliEntrypoint}`);
-    const installedCliRoot = join(consumerRoot, 'node_modules', '@narada2', 'cli');
+    const installedCliRoot = join(consumerRoot, 'node_modules', '@narada-core', 'cli');
     const packagedAsset = join(installedCliRoot, 'dist', 'assets', 'windows', 'Start-NaradaWorkspace.ps1');
     assert.equal(existsSync(packagedAsset), true, `published launcher asset missing: ${packagedAsset}`);
     const packagedAssetSource = readFileSync(packagedAsset, 'utf8');
     assert.match(packagedAssetSource, /narada-managed-asset: windows-user-site\.v1/);
     assert.doesNotMatch(packagedAssetSource, /IntelligenceProvider|--intelligence-provider/);
     for (const packageName of ['agent-runtime-server', 'agent-web-ui']) {
-      const packageRoot = findInstalledPackageRoot(join(consumerRoot, 'node_modules'), `@narada2/${packageName}`);
-      assert.ok(packageRoot, `published runtime/UI package missing from bundled dependency tree: @narada2/${packageName}`);
-      assert.equal(JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).name, `@narada2/${packageName}`);
+      const packageRoot = findInstalledPackageRoot(join(consumerRoot, 'node_modules'), `@narada-core/${packageName}`);
+      assert.ok(packageRoot, `published runtime/UI package missing from bundled dependency tree: @narada-core/${packageName}`);
+      assert.equal(JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')).name, `@narada-core/${packageName}`);
       const requiredOutput = packageName === 'agent-runtime-server'
         ? join(packageRoot, 'bin', 'narada-agent-runtime-server.ts')
         : join(packageRoot, 'dist', 'index.html');
@@ -220,8 +220,8 @@ test('published CLI installs into a blank Windows profile and provisions the Use
     assert.equal(installPayload.status, 'installed');
     assert.equal(installPayload.installation_profile, 'minimal');
     assert.deepEqual(installPayload.optional_modules, []);
-    assert.equal(installPayload.package.bundled_components.runtime_server.name, '@narada2/agent-runtime-server');
-    assert.equal(installPayload.package.bundled_components.web_ui.name, '@narada2/agent-web-ui');
+    assert.equal(installPayload.package.bundled_components.runtime_server.name, '@narada-core/agent-runtime-server');
+    assert.equal(installPayload.package.bundled_components.web_ui.name, '@narada-core/agent-web-ui');
     assert.equal(existsSync(join(siteRoot, 'Start-NaradaWorkspace.ps1')), true);
     assert.doesNotMatch(
       readFileSync(join(siteRoot, 'Start-NaradaWorkspace.ps1'), 'utf8'),

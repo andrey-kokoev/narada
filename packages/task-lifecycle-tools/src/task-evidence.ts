@@ -1,9 +1,9 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { admitTaskEvidence } from '@narada2/task-governance/evidence-admission';
-import { inspectTaskEvidence } from '@narada2/task-governance/task-governance';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { admitTaskEvidence } from '@narada-core/task-governance/evidence-admission';
+import { inspectTaskEvidence } from '@narada-core/task-governance/task-governance';
 
 const cwd: any = process.argv[2] || process.cwd();
 

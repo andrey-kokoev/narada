@@ -366,12 +366,12 @@ flowchart LR
 
 ```mermaid
 flowchart TD
-  CLI["@narada2/cli"] --> Control["@narada2/control-plane"]
-  Daemon["@narada2/daemon"] --> Control
-  OpsKit["@narada2/ops-kit"] --> CLI
-  Charters["@narada2/charters"] --> Control
-  Mailbox["@narada2/mailbox"] --> Control
-  Search["@narada2/search"] --> Control
+  CLI["@narada-core/cli"] --> Control["@narada-core/control-plane"]
+  Daemon["@narada-core/daemon"] --> Control
+  OpsKit["@narada-core/ops-kit"] --> CLI
+  Charters["@narada-core/charters"] --> Control
+  Mailbox["@narada-core/mailbox"] --> Control
+  Search["@narada-core/search"] --> Control
 
   Control --> KernelDocs["Kernel lawbook and schemas"]
   Daemon --> UI["Operator UI / Observation routes"]

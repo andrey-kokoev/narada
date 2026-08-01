@@ -540,13 +540,13 @@ test('formatSiteFileChangeProposalReviewText surfaces review ack command', () =>
   assert.match(text, /Current Posture: cloudflare_site_file_store_only_no_windows_filesystem_write_no_repository_publication/);
   assert.match(text, /Focused Review: site_file_change_proposal:site_file_change_proposal_live_1 status=acknowledged/);
   assert.match(text, /Requested Posture: proposal_only_no_filesystem_write/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
 test('formatSiteFileChangeProposalReviewText suppresses next workflow for passive routes', () => {
@@ -563,9 +563,9 @@ test('formatSiteFileChangeProposalReviewText suppresses next workflow for passiv
     },
   });
 
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
@@ -582,7 +582,7 @@ test('formatSiteFileChangeProposalReviewText omits synthetic operation ids from 
     },
   });
 
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind site_file_change_proposal --focus-ref site_file_change_proposal_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind site_file_change_proposal --focus-ref site_file_change_proposal_live_1 --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
 test('formatSiteFileChangeProposalReviewText suppresses review ack without site id', () => {

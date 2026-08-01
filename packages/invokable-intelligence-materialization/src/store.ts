@@ -7,7 +7,7 @@ import type {
   MaterializedProjection,
   ResolverMaterializationContext,
   ResolverMaterializedInputs,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 export interface MaterializationMutationResult { changes: number }
 export interface MaterializationSqlStatement { sql: string; params: unknown[] }

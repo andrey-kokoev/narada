@@ -1,4 +1,4 @@
-import type { Database } from "@narada2/control-plane";
+import type { Database } from "@narada-core/control-plane";
 import {
   executeOperatorAction,
   SqliteCoordinatorStore,
@@ -6,12 +6,12 @@ import {
   SqliteIntentStore,
   type OperatorActionPayload,
   type OperatorActionResult,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type {
   ConsoleControlRequest,
   ControlRequestResult,
   SiteControlClient,
-} from "@narada2/windows-site";
+} from "@narada-core/windows-site";
 import { siteDbPath, siteConfigPath } from "./path-utils.js";
 import type { LinuxSiteMode } from "./types.js";
 import { readFileSync } from "node:fs";
@@ -138,7 +138,7 @@ export function createLinuxSiteControlClient(
   mode: LinuxSiteMode
 ): SiteControlClient | undefined {
   const contextFactory: LinuxSiteControlContextFactory = async (_siteId, _scopeId) => {
-    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+    const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
     const db = new DatabaseCtor(siteDbPath(_siteId, mode)) as Database;
 
     const coordinatorStore = new SqliteCoordinatorStore({ db });

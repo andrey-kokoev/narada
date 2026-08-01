@@ -16,7 +16,7 @@ const runSiteCliCommandAsync = vi.fn();
 const getSchedulerSiteDaemonStatus = vi.fn();
 const loadSiteMcpFabric = vi.fn();
 
-vi.mock('@narada2/windows-site', () => ({
+vi.mock('@narada-core/windows-site', () => ({
   resolveRegistryDbPathByLocus: vi.fn(() => '/tmp/test-registry.db'),
   openRegistryDb: vi.fn(async () => ({})),
   SiteRegistry: vi.fn(() => ({
@@ -34,9 +34,9 @@ vi.mock('../../src/lib/launcher-runtime-scheduler.js', () => ({
   getSchedulerSiteDaemonStatus: (...args: unknown[]) => getSchedulerSiteDaemonStatus(...args),
 }));
 
-// Hermetic fabric check: sites-launch resolves @narada2/mcp-fabric via a
+// Hermetic fabric check: sites-launch resolves @narada-core/mcp-fabric via a
 // computed dynamic import; vitest still intercepts by resolved module id.
-vi.mock('@narada2/mcp-fabric', () => ({
+vi.mock('@narada-core/mcp-fabric', () => ({
   loadSiteMcpFabric: (...args: unknown[]) => loadSiteMcpFabric(...args),
 }));
 

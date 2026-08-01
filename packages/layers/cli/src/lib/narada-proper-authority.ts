@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
-import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
+import { siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 import { ExitCode } from './exit-codes.js';
 
 export type SiteEmbodimentRole = 'authority' | 'read_only_forwarding' | 'read_only' | 'forwarding';

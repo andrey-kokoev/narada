@@ -1,5 +1,5 @@
 /**
- * @narada2/charters
+ * @narada-core/charters
  *
  * Charter contracts, knowledge sources, and coordinator bindings
  * for mailbox agents.

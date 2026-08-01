@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import { SqliteInboxStore, type InboxEnvelope } from '@narada2/control-plane';
+import { SqliteInboxStore, type InboxEnvelope } from '@narada-core/control-plane';
 import { readOperatorSurfaceIdentities } from './operator-surface-registry.js';
 import {
   inboxEnvelopeToEvidenceState,

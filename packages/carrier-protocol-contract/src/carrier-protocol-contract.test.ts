@@ -15,7 +15,7 @@ import {
   TOOL_EFFECT_ADMISSION_CASES_SCHEMA,
   TOOL_EFFECT_ADMISSION_REASONS,
   TOOL_RESULT_STATUSES,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 import { loadCarrierProtocolContract } from './carrier-protocol-contract.js';
 
 test('carrier protocol contract exposes schemas and id prefixes', () => {

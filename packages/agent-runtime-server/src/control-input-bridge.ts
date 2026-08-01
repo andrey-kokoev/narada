@@ -1,7 +1,7 @@
 import { open } from 'node:fs/promises';
 import { StringDecoder } from 'node:string_decoder';
-import { normalizeControlInputRecord } from '@narada2/carrier-protocol';
-import { isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
+import { normalizeControlInputRecord } from '@narada-core/carrier-protocol';
+import { isNarsSessionCoreMethod } from '@narada-core/nars-session-core/session-control-contract';
 
 const DEFAULT_POLL_INTERVAL_MS: any = 100;
 const DEFAULT_MAX_READ_BYTES: any = 64 * 1024;

@@ -44,7 +44,7 @@ describe('sites deps-sync', () => {
     const body = result.result as {
       packages: Array<{ package_name: string; source_locus: string; status: string }>;
     };
-    const mcpTransport = body.packages.find((record) => record.package_name === '@narada2/mcp-transport');
+    const mcpTransport = body.packages.find((record) => record.package_name === '@narada-core/mcp-transport');
     expect(mcpTransport?.status).toBe('stale');
     expect(mcpTransport?.source_locus.replaceAll('\\', '/')).toMatch(/mcp-surfaces\/packages\/shared\/mcp-transport$/);
   });

@@ -11,7 +11,7 @@ Task lifecycle MCP tools expose governed task mutation and readback. They are no
 
 ## Shared Contract
 
-The canonical task lifecycle MCP tool contract belongs in `@narada2/task-governance/task-lifecycle-mcp-contract` in Narada proper:
+The canonical task lifecycle MCP tool contract belongs in `@narada-core/task-governance/task-lifecycle-mcp-contract` in Narada proper:
 
 - tool aliases
 - domain tool names
@@ -22,9 +22,9 @@ The canonical task lifecycle MCP tool contract belongs in `@narada2/task-governa
 
 The contract is not a task store, transport store, or Site policy surface. It owns the domain-facing MCP shape that must be identical across Sites, so an agent does not have to learn different argument aliases or report fields per Site. It may advertise `payload_ref` fields where domain tools accept long-argument recovery, but payload bytes and output-ref storage remain transport-owned.
 
-`@narada2/mcp-transport` owns the current byte transport and output-ref helpers such as `mcp_payload_create` and `mcp_output_show`; its canonical source lives in the companion `mcp-surfaces` workspace under `packages/shared/mcp-transport`.
+`@narada-core/mcp-transport` owns the current byte transport and output-ref helpers such as `mcp_payload_create` and `mcp_output_show`; its canonical source lives in the companion `mcp-surfaces` workspace under `packages/shared/mcp-transport`.
 
-`@narada2/task-lifecycle-kernel` is retained only for older boundary helpers during migration. New shared task lifecycle domain contract work goes into `@narada2/task-governance`.
+`@narada-core/task-lifecycle-kernel` is retained only for older boundary helpers during migration. New shared task lifecycle domain contract work goes into `@narada-core/task-governance`.
 
 ## Site Adapter
 
@@ -39,7 +39,7 @@ Site-local behavior remains local:
 
 Site adapters import the shared contract and append local transport tools at the edge. They must not move Site authority into the package. A Site adapter decides whether a task can be claimed, reported, reviewed, closed, or linked to inbox state. The shared package only defines the common call contract and domain service logic.
 
-For stdio MCP, Site adapters launch `@narada2/task-governance/task-lifecycle-mcp-server`. Site-local `tools/task-lifecycle/task-mcp-server.mjs` files are launch adapters only. They must not contain lifecycle dispatch switches, local validation engines, review routing, closeout transitions, recurrence transitions, or task lifecycle write rules.
+For stdio MCP, Site adapters launch `@narada-core/task-governance/task-lifecycle-mcp-server`. Site-local `tools/task-lifecycle/task-mcp-server.mjs` files are launch adapters only. They must not contain lifecycle dispatch switches, local validation engines, review routing, closeout transitions, recurrence transitions, or task lifecycle write rules.
 
 ## Package Provenance
 
@@ -53,14 +53,14 @@ Shared package use must be explicit at each Site. A local junction, workspace li
 
 The provenance record names each shared package, its Narada proper source locus, install path, and link mode. Current shared packages are:
 
-- `@narada2/agent-cli`
-- `@narada2/mcp-transport`
-- `@narada2/task-lifecycle-kernel`
-- `@narada2/task-governance`
+- `@narada-core/agent-cli`
+- `@narada-core/mcp-transport`
+- `@narada-core/task-lifecycle-kernel`
+- `@narada-core/task-governance`
 
 This keeps distribution mechanics separate from Site policy. The package source remains Narada proper; the Site records that it admits the package through a workspace link.
 
-Narada proper itself does not use this command for its own dependencies. Its package links are pnpm workspace links, so `sites deps sync` refuses the Narada proper workspace root instead of replacing package-manager state with Site-local junctions. For client/project Sites, link replacement is bounded to the exact `<site>/node_modules/@narada2/<package>` path before any recursive removal is allowed.
+Narada proper itself does not use this command for its own dependencies. Its package links are pnpm workspace links, so `sites deps sync` refuses the Narada proper workspace root instead of replacing package-manager state with Site-local junctions. For client/project Sites, link replacement is bounded to the exact `<site>/node_modules/@narada-core/<package>` path before any recursive removal is allowed.
 
 ## Agent Recovery
 
@@ -79,7 +79,7 @@ The extraction is governed by classification, not by copying one Site as canonic
 - Adapter: Site root resolution, process launch, stdio wiring, MCP payload/output byte stores, runtime freshness markers, roster projection from local Site files, inbox envelope indexing, and customer-visible effect policy.
 - Repair: stale vendored packages, Site-local copies of MCP dispatch logic, raw package runtime imports, long-payload failure recovery that leaves the agent without a valid next action, and opaque output references without a working reader argument shape.
 
-The package may provide reusable runtime helpers for adapter use, but only through named exports such as `@narada2/task-governance/task-lifecycle-runtime/unified-workboard`. It must not expose a wildcard path into `runtime/task-lifecycle`.
+The package may provide reusable runtime helpers for adapter use, but only through named exports such as `@narada-core/task-governance/task-lifecycle-runtime/unified-workboard`. It must not expose a wildcard path into `runtime/task-lifecycle`.
 
 ## Runtime Entry Point
 

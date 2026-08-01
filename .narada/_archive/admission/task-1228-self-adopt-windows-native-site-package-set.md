@@ -32,10 +32,10 @@ Evidence:
 No-import posture:
 
 - No narada-andrey/User Site runtime DB, task history, inbox history, checkpoint history, roster state, operator-surface state, PC state, secrets, credentials, or identity-specific runtime state was imported.
-- `@narada2/agent-context-memory` remains descriptor/local-store oriented here; runtime hydration is not executed.
-- `@narada2/site-inbox` local substrate is present; publication and task promotion are not executed.
-- `@narada2/site-config` local registry substrate is present; external probe execution and trust mutation are not executed.
-- `@narada2/site-lift` local adoption catalog is present and empty; file copy, package installation, bootstrap, and source Site migration are not executed.
+- `@narada-core/agent-context-memory` remains descriptor/local-store oriented here; runtime hydration is not executed.
+- `@narada-core/site-inbox` local substrate is present; publication and task promotion are not executed.
+- `@narada-core/site-config` local registry substrate is present; external probe execution and trust mutation are not executed.
+- `@narada-core/site-lift` local adoption catalog is present and empty; file copy, package installation, bootstrap, and source Site migration are not executed.
 - MCP registration is target-local manifest evidence only; private MCP client config mutation remains not claimed.
 - Windows profile binding is a target-local artifact only; external profile mutation remains not claimed.
 

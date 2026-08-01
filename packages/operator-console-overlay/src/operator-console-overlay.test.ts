@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OPERATOR_CONSOLE_PATH } from '@narada2/operator-console-contract';
+import { OPERATOR_CONSOLE_PATH } from '@narada-core/operator-console-contract';
 import { OPERATOR_CONSOLE_OVERLAY_ID, createOperatorConsoleOverlayDocument, operatorConsoleUrl, startOperatorConsoleOverlay } from './index.js';
 
 test('uses the stable Operator Router default without owning router lifecycle', () => {

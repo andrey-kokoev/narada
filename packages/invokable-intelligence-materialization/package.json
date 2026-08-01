@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/invokable-intelligence-materialization",
+  "name": "@narada-core/invokable-intelligence-materialization",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "package_role": "portable_intelligence_materialization_storage",
     "surface": "invokable_intelligence",
     "presentation_only": false,
-    "authority_owner": "@narada2/cli"
+    "authority_owner": "@narada-core/cli"
   },
   "exports": {
     "./d1": {
@@ -31,10 +31,10 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@narada2/invokable-intelligence-contract": "workspace:*"
+    "@narada-core/invokable-intelligence-contract": "workspace:*"
   },
   "devDependencies": {
-    "@narada2/invokable-intelligence-registry": "workspace:*",
+    "@narada-core/invokable-intelligence-registry": "workspace:*",
     "@types/node": "^22.5.0",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0"
@@ -43,7 +43,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/invokable-intelligence-materialization"
   },
   "engines": {

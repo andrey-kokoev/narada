@@ -10,7 +10,7 @@ const conceptModule = vi.hoisted(() => ({
   validateConceptRegistry: vi.fn(),
 }));
 
-vi.mock('@narada2/concepts', () => conceptModule);
+vi.mock('@narada-core/concepts', () => conceptModule);
 
 import {
   conceptsLifecycleCommand,
@@ -26,7 +26,7 @@ function createRecord(conceptId: string, canonicalName: string) {
     canonical_name: canonicalName,
     kind: 'policy',
     status: 'draft',
-    owner_surface: '@narada2/site-operating-loop package',
+    owner_surface: '@narada-core/site-operating-loop package',
     aliases: [],
     deprecated_aliases: [],
     confidence: { cl: 0.98, basis: 'fixture' },

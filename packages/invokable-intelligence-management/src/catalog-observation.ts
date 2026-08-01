@@ -15,12 +15,12 @@ import type {
   InferenceProvider,
   Resource,
   ResourceRef,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import {
   CATALOG_OBSERVATION_SCHEMA,
   validateCatalogObservation,
-} from "@narada2/invokable-intelligence-contract";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
+} from "@narada-core/invokable-intelligence-contract";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
 
 export interface CatalogObservationCredentialMaterial {
   /** Internal-only secret value. It must never cross the management result boundary. */

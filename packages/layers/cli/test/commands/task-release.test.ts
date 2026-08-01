@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { claimTaskService } from '@narada2/task-governance-core/task-assignment-lifecycle-service';
+import { claimTaskService } from '@narada-core/task-governance-core/task-assignment-lifecycle-service';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { loadAssignment } from '../../src/lib/task-governance.js';
 import { taskReleaseCommand } from '../../src/commands/task-release.js';

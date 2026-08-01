@@ -1,6 +1,6 @@
 # Cloudflare Hosted Site Telemetry Surface
 
-This runbook materializes `@narada2/site-registry-cloudflare` as a hosted
+This runbook materializes `@narada-core/site-registry-cloudflare` as a hosted
 Site Telemetry Surface realization. The SiteRegistry remains one read model
 served by the surface. This is not the Cloudflare Site Cycle runtime and is not
 Site authority.
@@ -52,11 +52,11 @@ telemetry surface configuration for the SiteRegistry read-model route family.
 Run before any live deploy:
 
 ```powershell
-pnpm --filter @narada2/site-registry-cloudflare smoke:fixture
-pnpm --filter @narada2/site-registry-cloudflare test
-pnpm --filter @narada2/site-registry-cloudflare typecheck
-pnpm --filter @narada2/site-registry-cloudflare build
-pnpm --filter @narada2/site-registry-cloudflare deploy:preflight
+pnpm --filter @narada-core/site-registry-cloudflare smoke:fixture
+pnpm --filter @narada-core/site-registry-cloudflare test
+pnpm --filter @narada-core/site-registry-cloudflare typecheck
+pnpm --filter @narada-core/site-registry-cloudflare build
+pnpm --filter @narada-core/site-registry-cloudflare deploy:preflight
 ```
 
 The smoke fixture verifies health, auth refusal, accepted event projection,
@@ -87,9 +87,9 @@ readiness. These values are deployment coordinates, not Site authority.
 Deploy only after the gate is satisfied:
 
 ```powershell
-pnpm --filter @narada2/site-registry-cloudflare build
+pnpm --filter @narada-core/site-registry-cloudflare build
 $env:NARADA_SITE_TELEMETRY_DEPLOY_APPROVED="1"
-pnpm --filter @narada2/site-registry-cloudflare deploy:live -- --config packages/site-registry-cloudflare/wrangler.jsonc
+pnpm --filter @narada-core/site-registry-cloudflare deploy:live -- --config packages/site-registry-cloudflare/wrangler.jsonc
 ```
 
 ## Post-Deploy Smoke
@@ -108,7 +108,7 @@ token values.
 The non-mutating health verifier is:
 
 ```powershell
-pnpm --filter @narada2/site-registry-cloudflare deploy:verify -- --url https://<worker-url>
+pnpm --filter @narada-core/site-registry-cloudflare deploy:verify -- --url https://<worker-url>
 ```
 
 ## Rollback

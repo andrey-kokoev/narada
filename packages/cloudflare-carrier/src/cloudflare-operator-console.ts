@@ -2927,9 +2927,9 @@ export function renderCloudflareCarrierConsole() {
         ['Next Action', bridge.next_action || 'observe_continuity_packet'],
         ['Loop Command', bridge.loop_command || 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
         ['Refresh Command', bridge.refresh_command || bridge.loop_command || 'pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
-        ['Pull Command', bridge.pull_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
-        ['Push Command', bridge.push_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site <site_id> --url <worker-url> --token-file <token-file> < packet.json'],
-        ['Read Command', bridge.read_command || 'pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
+        ['Pull Command', bridge.pull_command || 'pnpm --filter @narada-core/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
+        ['Push Command', bridge.push_command || 'pnpm --filter @narada-core/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site <site_id> --url <worker-url> --token-file <token-file> < packet.json'],
+        ['Read Command', bridge.read_command || 'pnpm --filter @narada-core/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site <site_id> --url <worker-url> --token-file <token-file>'],
       ];
     }
     function renderLocalCloudContinuityBridge(product = state.operationProduct || {}) {

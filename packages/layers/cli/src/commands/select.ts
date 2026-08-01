@@ -4,7 +4,7 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada-core/control-plane';
 
 export interface SelectOptions {
   config?: string;
@@ -88,7 +88,7 @@ async function selectForScope(
   const dbDir = siteAuthorityRootForRoot(rootDir);
   const factsDbPath = join(dbDir, 'facts.db');
 
-  const { Database, SqliteFactStore } = await import('@narada2/control-plane');
+  const { Database, SqliteFactStore } = await import('@narada-core/control-plane');
 
   const factDb = new Database(factsDbPath);
 

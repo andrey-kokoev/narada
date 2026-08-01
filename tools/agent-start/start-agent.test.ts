@@ -74,7 +74,7 @@ function assertModernAgentCliLaunch(result: any) {
   assert.equal(result.nars_launch.operator_surface_kind, 'agent-cli');
   assert.equal(result.nars_launch.control_transport, 'jsonl_sideband_file');
   assert.equal(result.nars_launch.carrier_relation, 'narada_agent_runtime_server');
-  assert.equal(result.nars_launch.runtime_server.package, '@narada2/agent-runtime-server');
+  assert.equal(result.nars_launch.runtime_server.package, '@narada-core/agent-runtime-server');
   assert.equal(result.nars_launch.runtime_server.entrypoint, 'narada-agent-runtime-server');
   assert.equal(Object.hasOwn(result.nars_launch, 'private_carrier_substrate'), false);
   assert.equal(result.nars_launch.command, process.execPath);

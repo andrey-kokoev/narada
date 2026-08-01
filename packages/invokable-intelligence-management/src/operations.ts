@@ -8,14 +8,14 @@ import type {
   PolicyDocument,
   Resource,
   ResourceId,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   AssertionFilter,
   PolicyFilter,
   RelationRow,
   ResourceFilter,
-} from "@narada2/invokable-intelligence-registry";
-import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+} from "@narada-core/invokable-intelligence-registry";
+import type { ResolverContext } from "@narada-core/invokable-intelligence-resolver";
 
 import { IntelligenceManagementService } from "./service.js";
 import type {

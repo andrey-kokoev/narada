@@ -2,7 +2,7 @@ import { ref, type Ref } from 'vue';
 import type {
   SiteRegistryManagementResponse,
   SiteRegistryMutationRequest,
-} from '@narada2/site-registry-contract';
+} from '@narada-core/site-registry-contract';
 import { createSiteRegistryAdapter, type SiteRegistryClient } from '../adapter';
 
 export type SiteRegistryMutationState = 'idle' | 'planning' | 'applying' | 'complete' | 'error';

@@ -5,9 +5,9 @@ import { mkdtemp, mkdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS } from '@narada2/invokable-intelligence-contract';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS } from '@narada-core/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 
 const { readNarsSessionIndex }: any = await import('../../nars-session-core/src/session-index.js');
 

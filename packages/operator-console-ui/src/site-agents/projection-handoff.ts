@@ -1,7 +1,7 @@
 import {
   OPERATOR_CONSOLE_AGENTS_API_PATH,
   type OperatorSiteAgentLaunchFailureWireRecord,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 
 export interface PendingProjectionDocumentOptions {
   siteId: string;

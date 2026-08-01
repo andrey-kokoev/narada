@@ -9,7 +9,7 @@ export default defineConfig({
     hookTimeout: 30000,
     server: {
       deps: {
-        inline: ['@narada2/control-plane'],
+        inline: ['@narada-core/control-plane'],
       },
     },
   },

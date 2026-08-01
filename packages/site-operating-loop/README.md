@@ -1,4 +1,4 @@
-# @narada2/site-operating-loop
+# @narada-core/site-operating-loop
 
 Shared Site Operating Loop substrate for Narada Sites.
 
@@ -25,8 +25,8 @@ carrier fallback unset and disabled. A Site host must explicitly name and
 enable any fallback; this package validates that declaration but does not
 select or launch carriers.
 
-For simple loops, use `runSiteOperatingLoop()` from `@narada2/site-operating-loop/runner`.
-For hosted loops, use `startSiteOperatingLoopRuntime()` from `@narada2/site-operating-loop/runtime`.
+For simple loops, use `runSiteOperatingLoop()` from `@narada-core/site-operating-loop/runner`.
+For hosted loops, use `startSiteOperatingLoopRuntime()` from `@narada-core/site-operating-loop/runtime`.
 For mature loops that need custom branching or domain-specific reconciliation,
 compose directly with the store helpers.
 
@@ -46,7 +46,7 @@ the runtime owns cadence, pause checks, locking, run/step recording, health, and
 event projection; the Site owns source adapters, policy interpretation beyond the
 generic policy shape, and emitted effects.
 
-The loop module contract is validated by `@narada2/site-operating-loop/loop-module`.
+The loop module contract is validated by `@narada-core/site-operating-loop/loop-module`.
 Each returned step must be an object with `stepId` and an optional `execute()`
 function. `execute(context)` receives loop/run/step ids, dry-run state, prior
 steps, and prior results by step id. `inputRefs`, `outputRefs`, and `evidence`
@@ -130,7 +130,7 @@ It also exposes generic write-side controls: `POST /triggers`,
 `GET /events/stream?snapshot=1` for a bounded snapshot response that closes after
 the current event page.
 
-The package exports from `dist`. Run `pnpm --filter @narada2/site-operating-loop build`
+The package exports from `dist`. Run `pnpm --filter @narada-core/site-operating-loop build`
 after changing `src` or `bin` files.
 
 The Sonar email resident loop is currently the first consumer. Its email intake,

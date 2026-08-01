@@ -28,7 +28,7 @@ A mutation evidence artifact must identify:
 - the confirmation or read-back evidence;
 - enough payload to replay or reconcile the local runtime substrate.
 
-The v1 record schema is represented in `@narada2/task-governance/mutation-evidence`.
+The v1 record schema is represented in `@narada-core/task-governance/mutation-evidence`.
 
 ```ts
 interface MutationEvidenceRecord {

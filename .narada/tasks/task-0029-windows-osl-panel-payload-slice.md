@@ -16,7 +16,7 @@ The source files are external orientation evidence only. Narada proper admits pa
 
 ## Goal
 
-Deepen `@narada2/windows-osl` with:
+Deepen `@narada-core/windows-osl` with:
 
 - typed OSL WebView2 panel payload contracts;
 - neutral payload builder;

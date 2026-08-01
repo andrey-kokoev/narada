@@ -18,7 +18,7 @@ The current OSM asks for a separate admission for mutating task-lifecycle MCP to
 - Mutations are allowed only against the resolved local target Site root.
 - Cross-Site MCP mutation remains refused by the existing MCP traversal guard.
 - Source refs and evidence refs are refusal-checked for source DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets state.
-- The tool writes through the Narada proper MCP adapter boundary, not through `@narada2/site-task-lifecycle`.
+- The tool writes through the Narada proper MCP adapter boundary, not through `@narada-core/site-task-lifecycle`.
 
 ## Adapter/DB Boundary
 
@@ -26,7 +26,7 @@ Adapter id: `narada-proper.adapter.task-0005.mcp-sqlite3-cli.v0`
 
 DB path: `.ai/task-lifecycle.db`
 
-The MCP server executes SQLite mutation as the live adapter surface. `@narada2/site-task-lifecycle` remains adapter-interface-only, owns no SQLite dependency, and executes no SQLite mutation.
+The MCP server executes SQLite mutation as the live adapter surface. `@narada-core/site-task-lifecycle` remains adapter-interface-only, owns no SQLite dependency, and executes no SQLite mutation.
 
 The row written by `site_task_lifecycle.admit_task` is an inert admission record. It does not create a canonical governed task markdown file, SQLite lifecycle assignment, or `work-next` claimability. A separate governed materialization/promotion step must turn the admitted candidate into canonical task lifecycle work before Builder or Architect queues can claim it.
 

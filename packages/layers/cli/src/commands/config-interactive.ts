@@ -10,9 +10,9 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { emitInteractiveCommandFollowUp, exitInteractiveCommandSuccessfully } from '../lib/cli-output.js';
-import { buildGraphTokenProvider } from '@narada2/control-plane';
-import { GraphHttpClient } from '@narada2/control-plane';
-import type { GraphListResponse, GraphMessage } from '@narada2/control-plane';
+import { buildGraphTokenProvider } from '@narada-core/control-plane';
+import { GraphHttpClient } from '@narada-core/control-plane';
+import type { GraphListResponse, GraphMessage } from '@narada-core/control-plane';
 
 export interface ConfigInteractiveOptions {
   output?: string;

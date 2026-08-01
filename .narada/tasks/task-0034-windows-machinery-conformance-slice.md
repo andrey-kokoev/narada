@@ -8,7 +8,7 @@
 
 ## Goal
 
-Deepen `@narada2/windows-machinery-capability-exchange` with:
+Deepen `@narada-core/windows-machinery-capability-exchange` with:
 
 - typed package-set conformance report descriptors;
 - complete/incomplete descriptor-set status;

@@ -6,7 +6,7 @@ import { emitEnvelopeAdmitted, acknowledgeEnvelope, dismissEnvelope, exportDispo
 import { validateRecoveryTruthfulnessPacket } from '../task-lifecycle/recovery-truthfulness-guard.mjs';
 import { INBOX_ENVELOPE_KINDS, assertKnownInboxEnvelopeKind } from '../inbox/envelope-kinds.mjs';
 import { isValidEnvelopeId } from '../inbox/inbox-index.mjs';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import {
   attachPayloadSource,
   buildOutputRefToolContent,

@@ -31,7 +31,7 @@ import type {
   CharterRunner,
   CharterInvocationEnvelope,
   CharterOutputEnvelope,
-} from "@narada2/charters";
+} from "@narada-core/charters";
 import type { GraphAdapter, NormalizedBatch, NormalizedEvent } from "../../../src/types/index.js";
 import { SCHEMA_VERSION } from "../../../src/types/index.js";
 import type { GraphDraftClient, DraftReadResult } from "../../../src/outbound/graph-draft-client.js";

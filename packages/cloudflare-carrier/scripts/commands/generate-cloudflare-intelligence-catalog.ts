@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { buildCanonicalCloudflareTestSeed } from '@narada2/invokable-intelligence-contract';
+import { buildCanonicalCloudflareTestSeed } from '@narada-core/invokable-intelligence-contract';
 
 const deploymentRevision = 6;
 const createdAt = '2026-07-31T04:16:55.000Z';

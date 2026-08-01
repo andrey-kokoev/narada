@@ -1,4 +1,4 @@
-# @narada2/sqlite
+# @narada-core/sqlite
 
 A thin wrapper around Node.js's built-in `node:sqlite` module that exposes a
 `better-sqlite3`-compatible API surface.
@@ -14,7 +14,7 @@ on a native add-on.
 ## API
 
 ```ts
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 
 const db = new Database(":memory:");
 db.exec("CREATE TABLE t (id INTEGER PRIMARY KEY, name TEXT)");

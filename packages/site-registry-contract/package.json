@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-registry-contract",
+  "name": "@narada-core/site-registry-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -8,7 +8,7 @@
     "package_role": "shared_domain_and_wire_contract",
     "surface": "site_registry",
     "presentation_only": false,
-    "authority_owner": "@narada2/windows-site"
+    "authority_owner": "@narada-core/windows-site"
   },
   "exports": {
     ".": {
@@ -34,7 +34,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-registry-contract"
   },
   "engines": {

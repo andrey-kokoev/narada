@@ -17,7 +17,7 @@
     { "kind": "depends_on", "concept_id": "work_order" },
     { "kind": "informs", "concept_id": "delegation_dag_template" }
   ],
-  "owner_surface": "@narada2/surface-feedback-mcp package",
+  "owner_surface": "@narada-core/surface-feedback-mcp package",
   "authority": {
     "kind": "package",
     "ref": "mcp-surfaces/packages/surface-feedback-mcp",

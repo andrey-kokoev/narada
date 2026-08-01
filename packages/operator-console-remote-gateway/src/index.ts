@@ -6,7 +6,7 @@ import { connect as connectTls } from 'node:tls';
 import {
   OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA,
   type OperatorConsoleHttpRouteParityEntry,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 
 export const OPERATOR_CONSOLE_REMOTE_GATEWAY_IDENTITY = 'narada.operator-console-remote-gateway' as const;
 export const OPERATOR_CONSOLE_REMOTE_GATEWAY_HEALTH_SCHEMA = 'narada.operator_console_remote_gateway.health.v1' as const;

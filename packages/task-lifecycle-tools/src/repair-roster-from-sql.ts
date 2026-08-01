@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 
 const cwd: any = process.argv[2] || process.cwd();
 const rosterPath: any = join(cwd, '.ai', 'agents', 'roster.json');

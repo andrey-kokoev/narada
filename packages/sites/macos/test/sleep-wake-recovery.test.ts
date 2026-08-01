@@ -12,7 +12,7 @@ import { join } from "node:path";
 import { DefaultMacosSiteRunner } from "../src/runner.js";
 import { SqliteSiteCoordinator, openCoordinatorDb } from "../src/coordinator.js";
 import type { MacosSiteConfig, CycleTraceRecord } from "../src/types.js";
-import { FileCursorStore } from "@narada2/control-plane";
+import { FileCursorStore } from "@narada-core/control-plane";
 import { resolveSiteRoot } from "../src/path-utils.js";
 
 describe("sleep-wake recovery fixtures", () => {
@@ -305,7 +305,7 @@ describe("sleep-wake recovery fixtures", () => {
       // detection: ageMs > staleAfterMs. No PID check is performed on macOS.
       // This is sufficient because mkdir-based locking is atomic on Unix,
       // and a crashed process cannot update mtime.
-      const { FileLock } = await import("@narada2/control-plane");
+      const { FileLock } = await import("@narada-core/control-plane");
       const lock = new FileLock({
         rootDir: join(tempDir, "test-site"),
         lockName: "cycle.lock",
@@ -330,7 +330,7 @@ describe("sleep-wake recovery fixtures", () => {
     });
 
     it("does not treat a fresh lock as stale", async () => {
-      const { FileLock } = await import("@narada2/control-plane");
+      const { FileLock } = await import("@narada-core/control-plane");
       const lock = new FileLock({
         rootDir: join(tempDir, "test-site"),
         lockName: "cycle.lock",

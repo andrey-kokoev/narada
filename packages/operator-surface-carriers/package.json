@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/operator-surface-carriers",
+  "name": "@narada-core/operator-surface-carriers",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -9,13 +9,13 @@
     "test": "pnpm run build && node --import tsx --test src/operator-surface-carriers.test.ts"
   },
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "description": "Operator surface carrier templates",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-surface-carriers"
   },
   "engines": {

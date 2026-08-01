@@ -46,7 +46,7 @@ describe("hosted telemetry deploy readiness", () => {
     });
 
     expect(result.status).toBe("ready");
-    expect(result.build_command).toBe("pnpm --filter @narada2/site-registry-cloudflare build");
+    expect(result.build_command).toBe("pnpm --filter @narada-core/site-registry-cloudflare build");
     expect(result.deploy_command).toContain("wrangler deploy");
     expect(result.deploy_mutation_planned).toBe(false);
   });

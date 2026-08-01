@@ -6,7 +6,7 @@
  */
 
 import { join } from 'node:path';
-import { loadConfig } from '@narada2/control-plane';
+import { loadConfig } from '@narada-core/control-plane';
 import { SearchEngine } from './search-engine.js';
 import type { SearchQuery } from './types.js';
 

@@ -15,7 +15,7 @@ import {
   validateSiteContinuityBinding,
   validateSiteContinuityExchangePacket,
   validateSiteContinuityBindingRegistry,
-} from '@narada2/site-continuity';
+} from '@narada-core/site-continuity';
 
 const DEFAULT_PACKET_PATHS = ['.narada/site-continuity/local-windows-packet.json'];
 const DEFAULT_BINDING_REGISTRY_PATH = '.narada/site-continuity/bindings.json';
@@ -180,7 +180,7 @@ async function admitNextSiteContinuityBinding(plan: any) {
       operator_next_reason: health.operator_next_reason ?? null,
       cloudflare_site_projection_state: siteRecord ? 'found' : 'missing',
       cloudflare_site_ref_from_projection: siteRecord?.site_ref ?? null,
-      command_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute',
+      command_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute',
       embeds_credentials: false,
     };
   }
@@ -290,7 +290,7 @@ async function prepareNextSiteContinuityBindingPacket(plan: any) {
       operator_next_reason: health.operator_next_reason ?? null,
       cloudflare_site_projection_state: siteRecord ? 'found' : 'missing',
       cloudflare_site_ref_from_projection: siteRecord?.site_ref ?? null,
-      command_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref <file-or-site-ref> --cloudflare-site-ref <cloudflare-site-ref>',
+      command_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref <file-or-site-ref> --cloudflare-site-ref <cloudflare-site-ref>',
       embeds_credentials: false,
     };
   }
@@ -328,7 +328,7 @@ async function prepareNextSiteContinuityBindingPacket(plan: any) {
     relation_id: packet.relation_id,
     admission_action: admission.action,
     admission_reason: admission.reason,
-    materialize_hint: `pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet ${outputPath}`,
+    materialize_hint: `pnpm --filter @narada-core/cloudflare-carrier continuity:bindings -- --packet ${outputPath}`,
     embeds_credentials: false,
   };
 }
@@ -624,13 +624,13 @@ function formatSiteContinuityBindingWorkflowText(plan: any, result: any) {
       ?? null;
     if (targetSiteId) {
       const baseArgs = `-- --url ${plan.worker_url} --site ${targetSiteId} --operator-session-file ${plan.operator_session_file}`;
-      lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
-      lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
-      lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
-      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
-      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
+      lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text ${baseArgs}`);
+      lines.push(`Operation List: pnpm --filter @narada-core/cloudflare-carrier product:operation:list:text ${baseArgs}`);
+      lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
+      lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
     } else {
-      lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${plan.worker_url} --operator-session-file ${plan.operator_session_file}`);
+      lines.push(`Site List: pnpm --filter @narada-core/cloudflare-carrier product:site:list:text -- --url ${plan.worker_url} --operator-session-file ${plan.operator_session_file}`);
     }
   }
 

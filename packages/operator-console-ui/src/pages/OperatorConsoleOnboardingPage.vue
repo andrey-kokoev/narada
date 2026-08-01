@@ -7,7 +7,7 @@ import {
   type OperatorConsoleOnboardingProjection,
   type OperatorConsoleOnboardingSetupAction,
   type OperatorConsoleOnboardingUiState,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';
 

@@ -6,7 +6,7 @@
  */
 
 import { resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import {
@@ -33,7 +33,7 @@ import { operatorSurfaceTaskAuthorityRepair } from '../lib/operator-surface-task
 import { parseTaskSpecFromMarkdown } from '../lib/task-spec.js';
 import { checkLawAdmission } from '../lib/law-sync.js';
 import { evaluateSiteQualification, qualificationBlocksGovernedWork } from '../lib/site-qualification.js';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 
 export interface WorkNextOptions {
   agent?: string;

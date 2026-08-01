@@ -8,7 +8,7 @@ import { PassThrough } from 'node:stream';
 import test from 'node:test';
 import { tmpdir } from 'node:os';
 import postcss from 'postcss';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import {
   buildConversationSendFrame,
   buildConversationEnqueueFrame,
@@ -30,17 +30,17 @@ import {
   parseAgentWebUiArgs,
   startAgentWebUiServer,
 } from '../src/server.ts';
-import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
+import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada-core/nars-client-projection-contract';
 import { createSessionProjection } from '../src/session-projection.ts';
 import { summarizeSessionIdentity, summarizeSessionTitleParts } from '../src/session-identity.ts';
 import {
   createEventHub,
   startEventStreamProjection,
   startHealthProjection,
-} from '@narada2/agent-runtime-server/test-fixtures';
-import { createSessionCoreRuntimeService } from '@narada2/agent-runtime-server/session-core-runtime-service';
-import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
-import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada2/cloudflare-nars-projection/node';
+} from '@narada-core/agent-runtime-server/test-fixtures';
+import { createSessionCoreRuntimeService } from '@narada-core/agent-runtime-server/session-core-runtime-service';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
+import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada-core/cloudflare-nars-projection/node';
 import { appendEvent } from '../src/render.ts';
 import {
   AGENT_WEB_UI_PREFERENCE_KEYS,
@@ -149,8 +149,8 @@ function createFakeDocument() {
 }
 
 const AGENT_WEB_UI_CSS_IMPORTS = [
-  ['@narada2/ui/styles.css', 'narada-vendor'],
-  ['@narada2/ui-vue/components.css', 'narada-vue-primitives'],
+  ['@narada-core/ui/styles.css', 'narada-vendor'],
+  ['@narada-core/ui-vue/components.css', 'narada-vue-primitives'],
   ['styles/base.css', 'narada-base'],
   ['styles/operator-surfaces.css', 'narada-operator'],
   ['styles/shell-and-navigation.css', 'narada-shell'],
@@ -425,7 +425,7 @@ test('agent-web-ui entrypoints include Narada favicon fallback links', async () 
 test('production agent-web-ui README declares its production scope', async () => {
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
   assert.match(readme, /production Agent Web UI browser surface/);
-  assert.match(readme, /@narada2\/agent-web-ui\/server/);
+  assert.match(readme, /@narada-core\/agent-web-ui\/server/);
   assert.match(readme, /NARS remains the owner/);
   assert.doesNotMatch(readme, /agent-web-ui2|Deprecated migration predecessor/);
 });
@@ -484,7 +484,7 @@ test('Vue operator components expose composer without hidden privileged controls
   assert.match(commandController, /choose snippet to delete/);
   assert.match(commandController, /entry\.kind === 'snippet'/);
   assert.match(commandController, /command\.id === 'snippet'[\s\S]*draft: '\/snippet '/);
-  assert.match(commandPaletteComponent, /from '@narada2\/ui-vue'/);
+  assert.match(commandPaletteComponent, /from '@narada-core\/ui-vue'/);
   assert.match(commandPaletteComponent, /command-palette-header/);
   assert.match(commandPaletteComponent, /command-section/);
   assert.match(commandPaletteComponent, /role="group"/);
@@ -1210,9 +1210,9 @@ test('package server serves browser-loadable modules without workspace bare impo
     const runtimeModule = await fetch(new URL('/runtime-events.js', root)).then((response: any) => response.text());
     const vendorModule = await fetch(new URL('/vendor/nars-client-projection-contract.js', root)).then((response: any) => response.text());
     const vueVendorModule = await fetch(new URL('/vendor/vue.js', root)).then((response: any) => response.text());
-    assert.doesNotMatch(appModule, /from ['"]@narada2\//);
+    assert.doesNotMatch(appModule, /from ['"]@narada-core\//);
     assert.doesNotMatch(appModule, /vue-app/);
-    assert.doesNotMatch(runtimeModule, /from ['"]@narada2\//);
+    assert.doesNotMatch(runtimeModule, /from ['"]@narada-core\//);
     assert.match(appModule, /from ['"]\.\/vendor\/nars-client-projection-contract\.js['"]/);
     assert.match(runtimeModule, /from ['"]\.\/vendor\/nars-client-projection-contract\.js['"]/);
     assert.match(vendorModule, /export const AGENT_WEB_UI_NARS_METHOD_LIST/);

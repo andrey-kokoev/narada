@@ -6,8 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createServer, request as httpRequest } from 'node:http';
 import test from 'node:test';
-import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
-import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
+import { registerNarsArtifact } from '@narada-core/nars-session-core/artifacts';
+import { writeNarsSessionStartedIndex } from '@narada-core/nars-session-core/session-index';
 import {
   OPERATOR_ROUTER_IDENTITY,
   OPERATOR_ROUTER_VERSION,

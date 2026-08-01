@@ -90,7 +90,7 @@ These mechanics are not reusable as generic defaults:
   "site_ref": "narada-proper",
   "generated_at": "2026-05-17T00:00:00.000Z",
   "generator": {
-    "name": "@narada2/site-operational-dashboard",
+    "name": "@narada-core/site-operational-dashboard",
     "version": "0.1.0"
   },
   "authority_limits": [
@@ -327,7 +327,7 @@ Implementations must prove:
 
 Later tasks may implement:
 
-- a generic `@narada2/site-operational-dashboard` package;
+- a generic `@narada-core/site-operational-dashboard` package;
 - Narada proper row providers for task lifecycle, inbox, publication, and
   capability posture;
 - CLI generation for static HTML reports;

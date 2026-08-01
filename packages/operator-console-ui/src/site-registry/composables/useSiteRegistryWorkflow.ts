@@ -4,7 +4,7 @@ import type {
   RegistrySiteRecord,
   SiteRegistryManagementResponse,
   SiteRegistryMutationRequest,
-} from '@narada2/site-registry-contract';
+} from '@narada-core/site-registry-contract';
 import {
   availableSiteRegistryOperations,
   buildSiteRegistryMutationRequest,

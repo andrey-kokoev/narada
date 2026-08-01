@@ -17,7 +17,7 @@ test('parseTaskLifecycleReportArgs builds guarded task report params', () => {
     '--reporter-agent', 'agent_alpha',
     '--summary', 'Work completed.',
     '--changed-file', 'packages/cloudflare-carrier/src/cloudflare-worker.ts',
-    '--verification', '{"command":"pnpm --filter @narada2/cloudflare-carrier test","result":"passed"}',
+    '--verification', '{"command":"pnpm --filter @narada-core/cloudflare-carrier test","result":"passed"}',
     '--admission-id', 'admission_report_1',
     '--request-id', 'request_report_1',
     '--admit-cloudflare-task-report',
@@ -41,7 +41,7 @@ test('parseTaskLifecycleReportArgs builds guarded task report params', () => {
     reporter_agent_id: 'agent_alpha',
     summary: 'Work completed.',
     changed_files: ['packages/cloudflare-carrier/src/cloudflare-worker.ts'],
-    verification: [{ command: 'pnpm --filter @narada2/cloudflare-carrier test', result: 'passed' }],
+    verification: [{ command: 'pnpm --filter @narada-core/cloudflare-carrier test', result: 'passed' }],
     cloudflare_task_report_cutover: true,
     report_authority_ref: 'report-authority:report:v1',
     report_schema_ref: 'schema:work-result-report:v1',
@@ -144,7 +144,7 @@ test('reportCloudflareTaskLifecycleTask posts the task report envelope and redac
       reporter_agent_id: 'agent_alpha',
       summary: 'Work completed.',
       changed_files: ['packages/cloudflare-carrier/src/cloudflare-worker.ts'],
-      verification: [{ command: 'pnpm --filter @narada2/cloudflare-carrier test', result: 'passed' }],
+      verification: [{ command: 'pnpm --filter @narada-core/cloudflare-carrier test', result: 'passed' }],
       cloudflare_task_report_cutover: true,
       report_authority_ref: 'report-authority:report:v1',
       report_schema_ref: 'schema:work-result-report:v1',
@@ -176,7 +176,7 @@ test('reportCloudflareTaskLifecycleTask posts the task report envelope and redac
         changed_files: ['packages/cloudflare-carrier/src/cloudflare-worker.ts'],
         changed_file_evidence_boundary_ref: 'boundary:changed-file-evidence:not-admitted',
         changed_file_evidence_admission: 'not_admitted',
-        verification: [{ command: 'pnpm --filter @narada2/cloudflare-carrier test', result: 'passed' }],
+        verification: [{ command: 'pnpm --filter @narada-core/cloudflare-carrier test', result: 'passed' }],
         report_status: 'submitted',
         previous_status: 'claimed',
         resulting_status: 'closed',
@@ -201,7 +201,7 @@ test('reportCloudflareTaskLifecycleTask posts the task report envelope and redac
       reporter_agent_id: 'agent_alpha',
       summary: 'Work completed.',
       changed_files: ['packages/cloudflare-carrier/src/cloudflare-worker.ts'],
-      verification: [{ command: 'pnpm --filter @narada2/cloudflare-carrier test', result: 'passed' }],
+      verification: [{ command: 'pnpm --filter @narada-core/cloudflare-carrier test', result: 'passed' }],
       cloudflare_task_report_cutover: true,
       report_authority_ref: 'report-authority:report:v1',
       report_schema_ref: 'schema:work-result-report:v1',
@@ -301,15 +301,15 @@ test('formatTaskLifecycleReportText renders admitted and refused summaries witho
   assert.match(admitted, /Report: report-1/);
   assert.match(admitted, /Reporter: agent_alpha/);
   assert.match(admitted, /Changed File Evidence: not_admitted/);
-  assert.match(admitted, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(admitted, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(admitted, /Posture Coherence Review:/);
   assert.match(admitted, /Durability Coherence Review:/);
   assert.match(admitted, /Session Evidence:/);
   assert.match(admitted, /Operation Review:/);
   assert.match(admitted, /Operation Next Workflow:/);
-  assert.match(admitted, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
-  assert.match(admitted, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(admitted, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
+  assert.match(admitted, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(admitted.includes('secret-token'), false);
 
   const noWorker = formatTaskLifecycleReportText({
@@ -362,8 +362,8 @@ test('formatTaskLifecycleReportText renders admitted and refused summaries witho
   assert.match(refused, /Task Lifecycle Report: refused/);
   assert.match(refused, /Code: task_lifecycle_report_not_admitted/);
   assert.match(refused, /Decision: action=refuse reason=windows_task_lifecycle_mutation_authority_retained/);
-  assert.match(refused, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
-  assert.match(refused, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(refused, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --operator-session-file <operator-session-file>/);
+  assert.match(refused, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id cloudflare-task-7 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.equal(refused.includes('operator-session-cookie'), false);
 });
 

@@ -11,10 +11,10 @@ import type {
   RegisteredSite,
   SiteObservationApi,
   SiteControlClientFactory,
-} from '@narada2/windows-site';
-import { windowsSiteAdapter } from '@narada2/windows-site';
-import { cloudflareSiteAdapter } from '@narada2/cloudflare-site';
-import { linuxSiteAdapter } from '@narada2/linux-site';
+} from '@narada-core/windows-site';
+import { windowsSiteAdapter } from '@narada-core/windows-site';
+import { cloudflareSiteAdapter } from '@narada-core/cloudflare-site';
+import { linuxSiteAdapter } from '@narada-core/linux-site';
 
 export const ADAPTERS: ConsoleSiteAdapter[] = [windowsSiteAdapter, cloudflareSiteAdapter, linuxSiteAdapter];
 
@@ -55,7 +55,7 @@ export async function openRegistry() {
     resolveRegistryDbPath,
     openRegistryDb,
     SiteRegistry,
-  } = await import('@narada2/windows-site');
+  } = await import('@narada-core/windows-site');
   const dbPath = resolveRegistryDbPath();
   const db = await openRegistryDb(dbPath);
   return new SiteRegistry(db);

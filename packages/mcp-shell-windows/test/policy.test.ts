@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 import { buildWindowsShellEnvelope, decideWindowsShellPolicy } from '../src/index.js';
 import { resolveAgentPathPolicy } from '../support/path-policy.ts';
 

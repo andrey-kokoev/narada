@@ -1,12 +1,12 @@
 import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
-import { JsonPrincipalRuntimeRegistry, type PrincipalRuntimeSnapshot } from '@narada2/control-plane';
+import { JsonPrincipalRuntimeRegistry, type PrincipalRuntimeSnapshot } from '@narada-core/control-plane';
 import {
   defaultSessionAuthorityDbPath,
   normalizeSessionPrincipal,
   openLocalSessionAuthority,
-} from '@narada2/nars-session-authority';
+} from '@narada-core/nars-session-authority';
 import type {
   OperatorSessionWireRecord,
   OperatorSiteAgentGroupId,
@@ -15,12 +15,12 @@ import type {
   OperatorSiteAgentWireRecord,
   OperatorSiteAgentRuntimeWireState,
   OperatorSiteKind,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   normalizeRuntimeAlias,
   operatorSurfaceKindsForRuntimeHost,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { readWorkspaceLaunchRecords } from './workspace-launch-registry.js';
 import type { WorkspaceLaunchRecord } from './workspace-launch-types.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';

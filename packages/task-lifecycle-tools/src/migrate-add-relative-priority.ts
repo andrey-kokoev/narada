@@ -14,7 +14,7 @@
 
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 
 const cwd: any = process.argv[2] || process.cwd();
 const dryRun: any = process.argv.includes('--dry-run');

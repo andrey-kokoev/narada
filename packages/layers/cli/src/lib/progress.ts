@@ -3,7 +3,7 @@
  */
 
 import { MultiBar, SingleBar, Presets } from 'cli-progress';
-import type { ProgressEvent, SyncPhase } from '@narada2/control-plane';
+import type { ProgressEvent, SyncPhase } from '@narada-core/control-plane';
 
 interface BarState {
   phase: SyncPhase;

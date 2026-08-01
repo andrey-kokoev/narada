@@ -3,9 +3,9 @@ import { readFile } from 'node:fs/promises';
 import * as nodeModule from 'node:module';
 import { extname, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada2/cloudflare-nars-projection';
-import { readProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '@narada2/cloudflare-nars-projection/node';
-import { AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST, AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada-core/cloudflare-nars-projection';
+import { readProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '@narada-core/cloudflare-nars-projection/node';
+import { AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST, AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada-core/nars-client-projection-contract';
 import { isRecord, type UnknownRecord } from './types.ts';
 
 // Node 22 provides this runtime API, but older installed @types/node versions
@@ -79,7 +79,7 @@ const CONTENT_TYPES = new Map([
   ['.svg', 'image/svg+xml; charset=utf-8'],
 ]);
 const BROWSER_IMPORT_REWRITES = new Map([
-  ['@narada2/nars-client-projection-contract', './vendor/nars-client-projection-contract.js'],
+  ['@narada-core/nars-client-projection-contract', './vendor/nars-client-projection-contract.js'],
   ['vue', './vendor/vue.js'],
 ]);
 

@@ -4,8 +4,8 @@ import { mkdir, readFile, stat } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import type { ResourceRef } from "@narada2/invokable-intelligence-contract";
-import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
+import type { ResourceRef } from "@narada-core/invokable-intelligence-contract";
+import { SqliteRegistryStore } from "@narada-core/invokable-intelligence-registry";
 
 import { parseLegacyRegistry } from "./legacy.js";
 import { applyMigration, buildMigrationPlan, dryRunMigration } from "./migrate.js";

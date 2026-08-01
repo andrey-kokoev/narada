@@ -17,7 +17,7 @@ import {
   FileTombstoneStore,
   FileMessageStore,
   FileViewStore,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 export interface CleanupOptions {
   config?: string;

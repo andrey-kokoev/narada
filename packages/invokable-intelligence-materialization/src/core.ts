@@ -5,7 +5,7 @@ import {
   applyMaterializedProjection,
   materializationProjectionKey,
   revokeMaterializedProjection,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   MaterializationAdmission,
   MaterializationAuditEvent,
@@ -15,7 +15,7 @@ import type {
   MaterializedProjection,
   ResolverMaterializationContext,
   ResolverMaterializedInputs,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   IntelligenceMaterializationStore,
   MaterializationAuditFilter,

@@ -1,7 +1,7 @@
 import {
   OPERATOR_CONSOLE_AGENTS_API_PATH,
   type OperatorSiteAgentAdmissionWireRequest,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 
 export type SiteAgentsFetch = (input: string, init?: RequestInit) => Promise<Response>;
 

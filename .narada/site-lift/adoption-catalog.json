@@ -3,7 +3,7 @@
   "site_id": "narada-proper",
   "target_site_root": "D:\\code\\narada",
   "carrier_id": "site_lift_local_adoption",
-  "package_name": "@narada2/site-lift",
+  "package_name": "@narada-core/site-lift",
   "source_state_imported": false,
   "adoption_candidates": [],
   "refused_nonportable_state": [

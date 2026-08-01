@@ -39,7 +39,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/site-inbox now includes descriptor-only Canonical Inbox first-slice admission and portable artifact contracts with refusal guards.",
+  "terminal_claim": "@narada-core/site-inbox now includes descriptor-only Canonical Inbox first-slice admission and portable artifact contracts with refusal guards.",
   "refused_imports": [
     ".ai/inbox.db",
     "source inbox envelope history",
@@ -61,5 +61,5 @@
     "receiving Site inbox carrier admission"
   ],
   "rollback": "Remove the packages/site-inbox directory and task/capability/admission evidence for task-0036. No source runtime state was imported or mutated.",
-  "next_smallest_slice": "Extract @narada2/site-config descriptor contracts after reconciling existing create-site/site registry artifacts, or deepen site-inbox with descriptor-only disposition/admission-log contracts."
+  "next_smallest_slice": "Extract @narada-core/site-config descriptor contracts after reconciling existing create-site/site registry artifacts, or deepen site-inbox with descriptor-only disposition/admission-log contracts."
 }

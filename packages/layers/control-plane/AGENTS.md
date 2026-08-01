@@ -18,7 +18,7 @@ packages/layers/control-plane/
 │   │   ├── auth.ts              # Token providers
 │   │   ├── client.ts            # HTTP client
 │   │   └── delta.ts             # Delta pagination
-│   ├── cli/                     # CLI commands (DEPRECATED - use @narada2/cli package)
+│   ├── cli/                     # CLI commands (DEPRECATED - use @narada-core/cli package)
 │   │   ├── integrity-check.ts   # Integrity check command
 │   │   ├── main.ts              # Entry point (basic implementation)
 │   │   └── rebuild-views.ts     # View rebuild command

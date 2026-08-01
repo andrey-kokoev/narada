@@ -1,4 +1,4 @@
-# @narada2/site-config
+# @narada-core/site-config
 
 Descriptor contracts for Site registry awareness and read-only registered Site probe reports.
 

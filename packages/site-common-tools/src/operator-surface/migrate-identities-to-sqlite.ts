@@ -2,7 +2,7 @@
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 const siteRoot: any = resolve(__dirname, '..', '..');

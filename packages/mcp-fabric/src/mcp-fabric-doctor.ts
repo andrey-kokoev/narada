@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, isAbsolute, join, relative, resolve } from 'node:path';
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
-import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '@narada2/carrier-action-admission/tool-metadata';
+import { spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
+import { loadMcpSurfaceRegistry, registrySurfaces, siteControlRoot } from '@narada-core/carrier-action-admission/tool-metadata';
 import { projectServerEnvironment } from './mcp-fabric-projection.js';
 import { renderTable } from './mcp-fabric-table.js';
 import { loadSiteMcpFabric } from './mcp-fabric-loader.js';
@@ -414,7 +414,7 @@ function surfaceProvenance(surface: AnyRecord, registryPath: string | null): Any
 function surfaceRegeneration(surface: AnyRecord, siteRoot: string): AnyRecord {
   return {
     command: stringOrNull(surface?.client_config?.regeneration_command ?? surface?.regeneration_command)
-      ?? `pnpm --filter @narada2/typed-mcp-surface exec node src/generate-carrier-mcp-config.js --site-root ${siteRoot} --carrier all --write`,
+      ?? `pnpm --filter @narada-core/typed-mcp-surface exec node src/generate-carrier-mcp-config.js --site-root ${siteRoot} --carrier all --write`,
     source_file: stringOrNull(surface?.client_config?.regeneration_source_file ?? surface?.client_config?.source_file ?? surface?.source_file)
       ?? stringOrNull(surface?.client_config?.generated_from)
       ?? '.narada/capabilities/mcp-surfaces.json',

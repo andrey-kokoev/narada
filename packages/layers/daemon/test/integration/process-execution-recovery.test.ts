@@ -17,7 +17,7 @@ import {
   type NormalizedBatch,
   type NormalizedEvent,
   type GraphAdapter,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-process-recovery-"));

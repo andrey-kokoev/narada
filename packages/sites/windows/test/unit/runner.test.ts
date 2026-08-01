@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DefaultWindowsSiteRunner } from "../../src/runner.js";
 import { SqliteSiteCoordinator, openCoordinatorDb } from "../../src/coordinator.js";
-import { MockCharterRunner } from "@narada2/control-plane";
+import { MockCharterRunner } from "@narada-core/control-plane";
 import type { WindowsSiteConfig } from "../../src/types.js";
 
 describe("DefaultWindowsSiteRunner", () => {
@@ -845,7 +845,7 @@ describe("DefaultWindowsSiteRunner", () => {
 
     it("returns false when lock is not stale", async () => {
       // Acquire a lock
-      const { FileLock } = await import("@narada2/control-plane");
+      const { FileLock } = await import("@narada-core/control-plane");
       const lock = new FileLock({
         rootDir: join(tempDir, "test-site"),
         lockName: "cycle.lock",

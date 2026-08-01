@@ -15,7 +15,7 @@ import {
   type StepTiming,
 } from "./test-telemetry.js";
 
-const HEAVY_PACKAGES = ["@narada2/control-plane", "@narada2/daemon"];
+const HEAVY_PACKAGES = ["@narada-core/control-plane", "@narada-core/daemon"];
 
 const startedAt = new Date().toISOString();
 const stepTimings: StepTiming[] = [];
@@ -51,7 +51,7 @@ for (const pkg of HEAVY_PACKAGES) {
 console.log(`\n▶ Remaining packages`);
 const result = runStep({
   name: "Remaining packages",
-  command: `pnpm --recursive --filter='!.' --filter='!@narada2/control-plane' --filter='!@narada2/daemon' test`,
+  command: `pnpm --recursive --filter='!.' --filter='!@narada-core/control-plane' --filter='!@narada-core/daemon' test`,
   stdio: "pipe",
 });
 if (result.stdout) console.log(result.stdout);

@@ -4,7 +4,7 @@ This package carries the reusable descriptor and contract portion of the admitte
 
 ## Package Boundary
 
-`@narada2/site-task-lifecycle` remains adapter-interface-only:
+`@narada-core/site-task-lifecycle` remains adapter-interface-only:
 
 - no SQLite dependency;
 - no direct DB mutation;

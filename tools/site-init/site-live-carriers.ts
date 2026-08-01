@@ -580,7 +580,7 @@ function buildAgentContextMemoryPlan(context: any, options: any) {
       plan_id: stablePlanId(context, 'agent-context-memory'),
       memory_store_path: relativeToTarget(context, context.paths.agentContextMemoryStore),
       hydration_policy_path: relativeToTarget(context, context.paths.agentContextHydrationPolicy),
-      package_name: '@narada2/agent-context-memory',
+      package_name: '@narada-core/agent-context-memory',
       package_owns_sqlite_dependency: false,
       source_state_imported: false,
       refused_non_portable_classes: NON_PORTABLE_CLASSES,
@@ -620,7 +620,7 @@ function verifyAgentContextMemoryPlan(context: any, plan: any, result: any) {
   const ok = store.status === 'json'
     && store.value?.site_id === context.siteId
     && store.value?.target_site_root === context.targetSiteRoot
-    && store.value?.package_name === '@narada2/agent-context-memory'
+    && store.value?.package_name === '@narada-core/agent-context-memory'
     && store.value?.source_state_imported === false
     && policy.status === 'json'
     && policy.value?.site_id === context.siteId
@@ -687,7 +687,7 @@ function buildSiteInboxPlan(context: any, options: any) {
       plan_id: stablePlanId(context, 'site-inbox'),
       inbox_index_path: relativeToTarget(context, context.paths.siteInboxIndex),
       publication_policy_path: relativeToTarget(context, context.paths.siteInboxPublicationPolicy),
-      package_name: '@narada2/site-inbox',
+      package_name: '@narada-core/site-inbox',
       source_state_imported: false,
       refused_non_portable_classes: NON_PORTABLE_CLASSES,
     },
@@ -790,7 +790,7 @@ function buildSiteConfigPlan(context: any, options: any) {
       plan_id: stablePlanId(context, 'site-config'),
       registry_path: relativeToTarget(context, context.paths.siteConfigRegistry),
       probe_policy_path: relativeToTarget(context, context.paths.siteConfigProbePolicy),
-      package_name: '@narada2/site-config',
+      package_name: '@narada-core/site-config',
       source_state_imported: false,
       external_probe_executed: false,
       refused_non_portable_classes: NON_PORTABLE_CLASSES,
@@ -893,7 +893,7 @@ function buildSiteLiftPlan(context: any, options: any) {
       plan_id: stablePlanId(context, 'site-lift'),
       adoption_catalog_path: relativeToTarget(context, context.paths.siteLiftAdoptionCatalog),
       materialization_policy_path: relativeToTarget(context, context.paths.siteLiftMaterializationPolicy),
-      package_name: '@narada2/site-lift',
+      package_name: '@narada-core/site-lift',
       source_state_imported: false,
       files_copied: false,
       packages_installed: false,
@@ -1054,7 +1054,7 @@ function siteLiftAdoptionCatalog(context: any) {
     site_id: context.siteId,
     target_site_root: context.targetSiteRoot,
     carrier_id: SITE_LIFT_CARRIER_ID,
-    package_name: '@narada2/site-lift',
+    package_name: '@narada-core/site-lift',
     source_state_imported: false,
     adoption_candidates: [],
     refused_nonportable_state: NON_PORTABLE_CLASSES,
@@ -1086,7 +1086,7 @@ function siteConfigRegistry(context: any) {
     site_id: context.siteId,
     target_site_root: context.targetSiteRoot,
     carrier_id: SITE_CONFIG_CARRIER_ID,
-    package_name: '@narada2/site-config',
+    package_name: '@narada-core/site-config',
     source_state_imported: false,
     known_sites: [],
     capability_edges: [],
@@ -1118,7 +1118,7 @@ function siteInboxIndex(context: any) {
     site_id: context.siteId,
     target_site_root: context.targetSiteRoot,
     carrier_id: SITE_INBOX_CARRIER_ID,
-    package_name: '@narada2/site-inbox',
+    package_name: '@narada-core/site-inbox',
     source_state_imported: false,
     envelopes: [],
     decisions: [],
@@ -1149,7 +1149,7 @@ function agentContextMemoryStore(context: any) {
     site_id: context.siteId,
     target_site_root: context.targetSiteRoot,
     carrier_id: AGENT_CONTEXT_MEMORY_CARRIER_ID,
-    package_name: '@narada2/agent-context-memory',
+    package_name: '@narada-core/agent-context-memory',
     package_owns_sqlite_dependency: false,
     source_state_imported: false,
     named_agents: [],

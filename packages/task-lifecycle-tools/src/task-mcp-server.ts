@@ -1,14 +1,14 @@
 #!/usr/bin/env node
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { evaluateTaskDependencySatisfaction } from '@narada2/task-governance/task-dependency-satisfaction';
-import { finishTaskService } from '@narada2/task-governance/task-finish-service';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { evaluateTaskDependencySatisfaction } from '@narada-core/task-governance/task-dependency-satisfaction';
+import { finishTaskService } from '@narada-core/task-governance/task-finish-service';
 import { classifyPostCloseoutContinuation, evaluatePostTransitionFollowups } from './follow-up-policy-service.js';
-import { closeTaskService } from '@narada2/task-governance/task-close-service';
-import { searchTasksService } from '@narada2/task-governance/task-search-service';
-import { reviewTaskService } from '@narada2/task-governance/task-review-service';
-import { continueTaskService } from '@narada2/task-governance/task-assignment-lifecycle-service';
-import { inspectTaskEvidence, findTaskFile, readTaskFile, writeTaskProjection, allocateTaskNumbers } from '@narada2/task-governance/task-governance';
-import { renderTaskBodyFromSpec } from '@narada2/task-governance/task-spec';
+import { closeTaskService } from '@narada-core/task-governance/task-close-service';
+import { searchTasksService } from '@narada-core/task-governance/task-search-service';
+import { reviewTaskService } from '@narada-core/task-governance/task-review-service';
+import { continueTaskService } from '@narada-core/task-governance/task-assignment-lifecycle-service';
+import { inspectTaskEvidence, findTaskFile, readTaskFile, writeTaskProjection, allocateTaskNumbers } from '@narada-core/task-governance/task-governance';
+import { renderTaskBodyFromSpec } from '@narada-core/task-governance/task-spec';
 import { buildWorkboard } from './workboard.js';
 import { buildUnifiedWorkboard, deriveNextRecommendation } from './unified-workboard.js';
 import {
@@ -17,14 +17,14 @@ import {
   deriveCorrectiveDebtRecommendation,
   selectWorkboardRecommendation,
 } from './corrective-debt-workboard.js';
-import { admitTaskEvidence } from '@narada2/task-governance/evidence-admission';
+import { admitTaskEvidence } from '@narada-core/task-governance/evidence-admission';
 import { randomUUID } from 'crypto';
 import { relative, resolve, join } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { runGovernedCommandSync, spawnMcpServer } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync, spawnMcpServer } from '@narada-core/process-launch-posture';
 import { pollInboxBridge, targetInboxEnvelope, readUnprocessedEnvelopes, evaluateEnvelopeSeverity } from './inbox-bridge.js';
-import { readAdmissionLog, resolveEnvelopeStatus } from '@narada2/task-governance/runtime/inbox/admission-log';
-import { refreshInboxIndex } from '@narada2/task-governance/runtime/inbox/inbox-index';
+import { readAdmissionLog, resolveEnvelopeStatus } from '@narada-core/task-governance/runtime/inbox/admission-log';
+import { refreshInboxIndex } from '@narada-core/task-governance/runtime/inbox/inbox-index';
 import { emitCheckpoint } from './emit-checkpoint.js';
 import {
   buildReviewAcceptanceProvenanceAnnotation,
@@ -63,8 +63,8 @@ import {
   payloadValidate,
   resultShow,
   resolveToolPayloadArgs,
-} from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
-import { genericCommandRegistrySummary } from '@narada2/site-common-tools/generic-command-registry';
+} from '@narada-core/site-common-tools/compat/mcp-payload-file.legacy-site';
+import { genericCommandRegistrySummary } from '@narada-core/site-common-tools/generic-command-registry';
 import {
   acknowledgeMcpRestartRequest,
   buildMcpFreshnessStatus,
@@ -74,7 +74,7 @@ import {
   readJsonFile as readMcpFreshnessJsonFile,
   writeMcpRuntimeInstanceObservation,
   writeMcpRestartRequest,
-} from '@narada2/task-governance/runtime/mcp-freshness-service';
+} from '@narada-core/task-governance/runtime/mcp-freshness-service';
 import { agentExistsWithRole, checkTaskRoleEligibilityLocal, resolveAgentRole, resolveAgentRoleWithDiagnostics, roleExistsInRoster } from './agent-role-resolution.js';
 import { resolveTaskRolePolicy } from './task-role-policy.js';
 

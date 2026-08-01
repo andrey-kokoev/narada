@@ -4,7 +4,7 @@ import {
   evaluateExecutionTopologyFeasibility,
   evaluateRouteAccess,
   resolveRouteCapabilities,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   CatalogAccessRecord,
   CapabilityKey,
@@ -26,7 +26,7 @@ import type {
   ResolvedRouteCapability,
   RouteAccessFacts,
   RouteCapabilityAssertion,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 import type { Candidate, CandidateEvaluation, EliminationReasonCode, ResolverContext } from "./types.js";
 

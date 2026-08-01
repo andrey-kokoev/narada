@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import { createScopeService, createSyncService } from "../../src/service.js";
 import { createLogger } from "../../src/lib/logger.js";
 import {
@@ -12,7 +12,7 @@ import {
   type NormalizedEvent,
   type ScopeConfig,
   type ExchangeFsSyncConfig,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-shutdown-"));

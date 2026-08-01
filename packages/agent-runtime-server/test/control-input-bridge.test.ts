@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import test from 'node:test';
-import { createControlInputRecord, createInputEvent } from '@narada2/carrier-protocol';
+import { createControlInputRecord, createInputEvent } from '@narada-core/carrier-protocol';
 import { createControlInputBridge } from '../src/control-input-bridge.js';
 
 function waitFor(predicate: any, timeoutMs: any = 1500) {

@@ -77,7 +77,7 @@ test('site agents transport carries the selected operator surface explicitly', a
 test('site agents admission transport and adapter preserve authoritative choices', async () => {
   const authority = {
     schema: 'narada.invokable-intelligence.selection-authority.v1',
-    owner: '@narada2/invokable-intelligence-runtime',
+    owner: '@narada-core/invokable-intelligence-runtime',
     resolution_phase: 'runtime-invocation',
     authority_scope: { kind: 'site', site_id: 'sonar' },
     catalog: { store_kind: 'node:sqlite', locator: 'D:/code/sonar/.ai/intelligence-registry.db' },

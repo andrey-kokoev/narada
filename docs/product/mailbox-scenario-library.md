@@ -95,7 +95,7 @@ Fixtures are stored in:
 The scenario library is mechanically exercised by:
 
 ```bash
-pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/scenario-library.test.ts"
+pnpm test:focused "pnpm --filter @narada-core/control-plane exec vitest run test/integration/live-operation/scenario-library.test.ts"
 ```
 
 This test proves that each scenario fixture, when evaluated by its scenario-appropriate charter runner, produces the expected `recommended_action_class`, confidence level, escalation state, and foreman resolution outcome.

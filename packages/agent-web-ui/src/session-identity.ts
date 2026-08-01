@@ -1,5 +1,5 @@
 import { unwrapRuntimeEvent } from './runtime-events.ts';
-import { agentIdentityDisplay, normalizeAgentIdentityRef } from '@narada2/agent-identity';
+import { agentIdentityDisplay, normalizeAgentIdentityRef } from '@narada-core/agent-identity';
 import { isRecord, type UnknownRecord } from './types.ts';
 
 export type SessionIdentityFallback = {

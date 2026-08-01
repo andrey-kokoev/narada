@@ -2,7 +2,7 @@
 
 Status: Chapter G implementation, Task 2377, submitted for review after local verification.
 
-The shared policy contract lives in `@narada2/narada-policy-contract`. It is a
+The shared policy contract lives in `@narada-core/narada-policy-contract`. It is a
 cross-domain contract, not a replacement for the authorities that execute each
 domain. It owns the vocabulary, decision shape, refusal gates, and evidence
 requirements. Site governance, NARS execution, task storage, projection

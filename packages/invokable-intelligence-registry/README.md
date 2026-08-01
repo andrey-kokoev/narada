@@ -1,11 +1,11 @@
-# @narada2/invokable-intelligence-registry
+# @narada-core/invokable-intelligence-registry
 
 Portable persistence for the invokable-intelligence ontology (#2181).
 One storage contract, two embodiments — `node:sqlite` for local authority
 loci and Cloudflare D1 for remote ones — over a normalized relational
 schema, with a shared conformance suite both adapters must pass.
 
-Built on `@narada2/invokable-intelligence-contract` (#2180): every write
+Built on `@narada-core/invokable-intelligence-contract` (#2180): every write
 is validated against the contract before it touches the store.
 
 ## Design
@@ -54,7 +54,7 @@ transactions, and this is documented rather than hidden.
 ## Usage
 
 ```ts
-import { SqliteRegistryStore, D1RegistryStore, createFakeD1 } from "@narada2/invokable-intelligence-registry";
+import { SqliteRegistryStore, D1RegistryStore, createFakeD1 } from "@narada-core/invokable-intelligence-registry";
 
 const local = await SqliteRegistryStore.open(".ai/intelligence-registry.db");
 const remote = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB); // D1 binding

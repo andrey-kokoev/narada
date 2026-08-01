@@ -2,7 +2,7 @@ import type { CommanderOptionValues } from '../lib/command-wrapper.js';
 import type { Command } from 'commander';
 import { createHash, randomUUID } from 'node:crypto';
 import { resolve } from 'node:path';
-import { DEFAULT_OPERATOR_ROUTER_PORT, ensureOperatorRouter, inspectOperatorRouterRouteSet, readOperatorRouterRoutes, reconstructOperatorRouteSet } from '@narada2/operator-router';
+import { DEFAULT_OPERATOR_ROUTER_PORT, ensureOperatorRouter, inspectOperatorRouterRouteSet, readOperatorRouterRoutes, reconstructOperatorRouteSet } from '@narada-core/operator-router';
 import { createWorkbenchServer, workbenchDiagnoseCommand } from './workbench-server.js';
 import {
   emitFiniteCommandResult,

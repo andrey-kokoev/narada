@@ -226,7 +226,7 @@ Example request shape:
 ```
 
 An automation caller that owns retry, resume, or replay semantics uses the
-top-level `@narada2/invokable-intelligence-contract` control under
+top-level `@narada-core/invokable-intelligence-contract` control under
 `params.intelligence_invocation`:
 
 ```json
@@ -367,7 +367,7 @@ model conversation != Agent identity
 
 ## First Implementation Direction
 
-The implementation is the Narada-owned `@narada2/agent-runtime-server` package. It provides the `narada-agent-runtime-server` entrypoint and runs carrier execution in-process through `@narada2/carrier-runtime`.
+The implementation is the Narada-owned `@narada-core/agent-runtime-server` package. It provides the `narada-agent-runtime-server` entrypoint and runs carrier execution in-process through `@narada-core/carrier-runtime`.
 
 Reason: NARS owns identity binding, session persistence, and event/session evidence for the live carrier runtime, while its provider-runtime and capability-gateway packages own provider turns, MCP discovery, tool dispatch, and tool-attempt evidence. `agent-cli` owns terminal/client projection and attach/session utilities only.
 

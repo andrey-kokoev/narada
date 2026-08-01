@@ -13,7 +13,7 @@
 
 import { readFileSync, existsSync } from 'fs';
 import { join, resolve, basename } from 'path';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 
 type AnyRecord = Record<string, any>;
 type WorkloopArgs = {

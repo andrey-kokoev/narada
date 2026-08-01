@@ -307,7 +307,7 @@ Proposal requiring repository write:
     "capability_requirements": [
       {
         "capability_kind": "github.repo",
-        "scope": { "repo": "andrey-kokoev/narada" },
+        "scope": { "repo": "narada-core/narada" },
         "actions": ["commit", "push"]
       }
     ]

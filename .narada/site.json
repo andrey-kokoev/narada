@@ -13,7 +13,7 @@
   "execution_surface": "windows_native",
   "sync_posture": "git_private_repo",
   "repository": {
-    "remote": "https://github.com/andrey-kokoev/narada",
+    "remote": "https://github.com/narada-core/narada",
     "visibility": "public"
   },
   "lineage": {
@@ -216,7 +216,7 @@
       {
         "surface_id": "narada-proper.surface.task-0001.live-task-lifecycle-mcp-registration.v0",
         "kind": "mcp_surface",
-        "package": "@narada2/site-task-lifecycle",
+        "package": "@narada-core/site-task-lifecycle",
         "transport": "narada-mcp_stdio",
         "tools": [
           "site_task_lifecycle.plan_init",
@@ -227,7 +227,7 @@
       {
         "surface_id": "narada-proper.surface.agent-context-memory.live-first-slice-mcp.v0",
         "kind": "mcp_surface",
-        "package": "@narada2/agent-context-memory",
+        "package": "@narada-core/agent-context-memory",
         "transport": "narada-mcp_stdio",
         "tools": [
           "agent_context_memory.plan_hydration",

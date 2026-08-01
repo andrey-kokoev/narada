@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-operational-dashboard",
+  "name": "@narada-core/site-operational-dashboard",
   "version": "0.1.0",
   "description": "Domain-agnostic static HTML renderer for bounded Site operational dashboard snapshots",
   "type": "module",
@@ -31,7 +31,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-operational-dashboard"
   }
 }

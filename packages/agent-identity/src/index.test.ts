@@ -137,7 +137,7 @@ test('agent identity display has one source implementation', () => {
     }
   }
 
-  assert.deepEqual(matches, [], 'agentIdentityDisplay must be implemented only by @narada2/agent-identity');
+  assert.deepEqual(matches, [], 'agentIdentityDisplay must be implemented only by @narada-core/agent-identity');
 });
 
 test('operator renderable values avoid object-object leakage', () => {
@@ -166,7 +166,7 @@ test('operator identity rendering does not hand-roll identity-ref fallback chain
     matches.push(relative(repoRoot, filePath).replaceAll('\\', '/'));
   }
 
-  assert.deepEqual(matches, [], 'identity-ref display fallback chains must use @narada2/agent-identity');
+  assert.deepEqual(matches, [], 'identity-ref display fallback chains must use @narada-core/agent-identity');
 });
 
 function* sourceFiles(root: string): Generator<string, void, unknown> {

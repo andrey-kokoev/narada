@@ -49,7 +49,7 @@ describe('verification-state', () => {
         classification: 'success',
       },
       {
-        command: 'pnpm --filter @narada2/cli exec vitest run test/commands/foo.test.ts',
+        command: 'pnpm --filter @narada-core/cli exec vitest run test/commands/foo.test.ts',
         startedAt: new Date(now - 20 * 60 * 1000).toISOString(),
         finishedAt: new Date(now - 19 * 60 * 1000).toISOString(),
         durationMs: 60000,

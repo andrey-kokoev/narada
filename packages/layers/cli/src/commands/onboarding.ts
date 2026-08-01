@@ -3,9 +3,9 @@ import { mkdir, rename, rm, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import * as prompts from '@clack/prompts';
-import { ensureIntelligenceCatalog } from '@narada2/invokable-intelligence-management';
-import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
-import { readNarsEventLogTail } from '@narada2/nars-session-core/event-log';
+import { ensureIntelligenceCatalog } from '@narada-core/invokable-intelligence-management';
+import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
+import { readNarsEventLogTail } from '@narada-core/nars-session-core/event-log';
 import { defaultLaunchRegistryPath } from '../lib/site-root-resolver.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -14,7 +14,7 @@ import type { WorkspaceLaunchPlanOptions, WorkspaceLaunchRecord } from './worksp
 import { readWorkspaceLaunchRecords, readLaunchRegistryRaw, rawLaunchRegistryAgents, type RawAgentRecord } from './workspace-launch-registry.js';
 import { narsSessionsCommand } from './nars.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
-import type { OperatorConsoleOnboardingHandoff } from '@narada2/operator-console-contract';
+import type { OperatorConsoleOnboardingHandoff } from '@narada-core/operator-console-contract';
 
 export interface OnboardingStartOptions {
   platform?: string;

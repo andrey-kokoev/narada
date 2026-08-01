@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/agent-start-bootstrap",
+  "name": "@narada-core/agent-start-bootstrap",
   "version": "0.1.0",
   "type": "module",
   "private": true,
@@ -23,7 +23,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/agent-start-bootstrap"
   },
   "engines": {

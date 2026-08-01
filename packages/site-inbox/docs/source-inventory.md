@@ -29,4 +29,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/site-inbox` now carries descriptor/contracts/tests for receiving-Site Canonical Inbox first-slice admission planning. Receiving Sites still own their local inbox DB, portable envelope writes, publication, import/replay, task promotion, and evidence storage.
+`@narada-core/site-inbox` now carries descriptor/contracts/tests for receiving-Site Canonical Inbox first-slice admission planning. Receiving Sites still own their local inbox DB, portable envelope writes, publication, import/replay, task promotion, and evidence storage.

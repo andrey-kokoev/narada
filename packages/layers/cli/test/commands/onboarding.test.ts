@@ -17,7 +17,7 @@ vi.mock('../../src/commands/nars.js', () => ({ narsSessionsCommand: narsSessions
 // provisioning boundary here.
 vi.mock('../../src/commands/sites.js', () => ({ sitesInitCommand: sitesInitMock }));
 
-vi.mock('@narada2/invokable-intelligence-management', () => ({
+vi.mock('@narada-core/invokable-intelligence-management', () => ({
   ensureIntelligenceCatalog: vi.fn(async ({ siteRoot, targetSiteId, userSiteId, hostSiteId }: {
     siteRoot: string;
     targetSiteId: string;

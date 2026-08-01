@@ -1,8 +1,8 @@
-# @narada2/agent-web-ui
+# @narada-core/agent-web-ui
 
 The production Agent Web UI browser surface for one NARS session.
 
-The Narada CLI resolves `@narada2/agent-web-ui/server` for local and Cloudflare
+The Narada CLI resolves `@narada-core/agent-web-ui/server` for local and Cloudflare
 projection launch. The package owns browser transport, session projections,
 operator rendering, and browser-local input behavior; NARS remains the owner of
 session state, event ordering, health, authority, and command admission.
@@ -10,9 +10,9 @@ session state, event ordering, health, authority, and command admission.
 Bounded checks:
 
 ```text
-pnpm --filter @narada2/agent-web-ui typecheck
-pnpm --filter @narada2/agent-web-ui test
-pnpm --filter @narada2/agent-web-ui build
+pnpm --filter @narada-core/agent-web-ui typecheck
+pnpm --filter @narada-core/agent-web-ui test
+pnpm --filter @narada-core/agent-web-ui build
 ```
 
 Verification ownership:
@@ -20,9 +20,9 @@ Verification ownership:
 - `test/agent-web-ui-projection.test.ts` proves event/session projection behavior.
 - `test/agent-web-ui-protocol.test.ts` proves protocol framing and attachment boundaries.
 - `test/agent-web-ui.test.ts` proves browser preference serialization, content and panel feature seams, package wiring, and bounded UI contracts.
-- `pnpm --filter @narada2/agent-web-ui test:e2e` is an explicit browser boundary suite; it builds first and is not part of the default test command.
+- `pnpm --filter @narada-core/agent-web-ui test:e2e` is an explicit browser boundary suite; it builds first and is not part of the default test command.
 - `test:live:*` and `test:browser:cdp` are explicit live-smoke suites and require an operator-supplied runtime or projection.
-- `pnpm --filter @narada2/agent-web-ui test:live:delegated-task` is the controlled L5 launcher proof. It starts a real launcher/carrier/Site MCP fabric, delivers input through `nars-session-mcp`, exercises `delegated-task-mcp` and a worker carrier, and verifies durable task and worker evidence.
+- `pnpm --filter @narada-core/agent-web-ui test:live:delegated-task` is the controlled L5 launcher proof. It starts a real launcher/carrier/Site MCP fabric, delivers input through `nars-session-mcp`, exercises `delegated-task-mcp` and a worker carrier, and verifies durable task and worker evidence.
 - From the Narada repository root, the same proof is available as `pnpm test:agent-web-ui:live:delegated-task`.
 
 Browser-local preferences are owned by their feature and use the registry in

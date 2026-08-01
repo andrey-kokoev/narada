@@ -7,12 +7,12 @@ import { mkdir, readFile, readdir, rm, stat, writeFile, mkdtemp } from 'node:fs/
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { createHash, createDecipheriv } from 'node:crypto';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 import { pipeline } from 'node:stream/promises';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
-import { loadConfig } from '@narada2/control-plane';
+import { loadConfig } from '@narada-core/control-plane';
 import type { BackupManifest } from './backup.js';
 
 export interface RestoreOptions {

@@ -9,15 +9,15 @@ export default defineConfig({
   resolve: {
     alias: [
       {
-        find: '@narada2/ui-vue/styles.css',
+        find: '@narada-core/ui-vue/styles.css',
         replacement: fileURLToPath(new URL('../src/styles.css', import.meta.url)),
       },
       {
-        find: '@narada2/ui-vue',
+        find: '@narada-core/ui-vue',
         replacement: fileURLToPath(new URL('../src/index.ts', import.meta.url)),
       },
       {
-        find: '@narada2/ui/styles.css',
+        find: '@narada-core/ui/styles.css',
         replacement: fileURLToPath(new URL('../../ui/dist/styles.css', import.meta.url)),
       },
     ],

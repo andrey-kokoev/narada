@@ -73,8 +73,8 @@ by the local Operator Console:
 - session artifacts;
 - the workspace route directory and health projections.
 
-The Cloudflare browser uses the same `@narada2/operator-console-ui` build and
-the same `@narada2/operator-console-contract` schemas as the local console.
+The Cloudflare browser uses the same `@narada-core/operator-console-ui` build and
+the same `@narada-core/operator-console-contract` schemas as the local console.
 Local Narada remains the authority for host-local reads and every host-local
 mutation.
 
@@ -263,7 +263,7 @@ Access service token or an exported CF_Authorization cookie. The credential
 value is supplied only through a bounded stdin handoff; it is not accepted in
 argv, an environment variable, or a persisted secret file:
 
-    Get-Secret -Name <temporary-access-secret> -AsPlainText | pnpm --filter @narada2/cloudflare-nars-projection test:operator-console-mirror-live -- --url https://<worker-host> --access-client-id <client-id> --access-client-secret-stdin --turn-content LIVE_E2E_OK --artifact-id <artifact-id> --artifact-sha256 <artifact-content-sha256>
+    Get-Secret -Name <temporary-access-secret> -AsPlainText | pnpm --filter @narada-core/cloudflare-nars-projection test:operator-console-mirror-live -- --url https://<worker-host> --access-client-id <client-id> --access-client-secret-stdin --turn-content LIVE_E2E_OK --artifact-id <artifact-id> --artifact-sha256 <artifact-content-sha256>
 
 The gate proves Access admission, complete route-directory parity, mirror health, and
 browser rendering of the principal Console pages. When the route directory
@@ -284,9 +284,9 @@ only `generatedAt` and recording SHA-256 contract digests;
 The runner commands have distinct meanings:
 
 - `pnpm test` runs offline Vitest tests and does not claim live acceptance;
-- `pnpm --filter @narada2/cloudflare-nars-projection plan:operator-console-mirror-live`
+- `pnpm --filter @narada-core/cloudflare-nars-projection plan:operator-console-mirror-live`
   records an explicit plan without contacting the Worker;
-- `pnpm --filter @narada2/cloudflare-nars-projection test:operator-console-mirror-live`
+- `pnpm --filter @narada-core/cloudflare-nars-projection test:operator-console-mirror-live`
   runs the full browser/UI profile and fails rather than silently skipping
   required journeys;
 - `test:operator-console-mirror-live:tunnel-loss`,
@@ -340,7 +340,7 @@ overwrite another run's record. The generated Wrangler binding declaration
 `packages/cloudflare-nars-projection/worker-configuration.d.ts` is ignored by
 Git and must be recreated with:
 
-    pnpm --filter @narada2/cloudflare-nars-projection generate:types
+    pnpm --filter @narada-core/cloudflare-nars-projection generate:types
 
 ## Authority
 

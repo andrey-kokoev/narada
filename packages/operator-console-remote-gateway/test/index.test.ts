@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createServer } from 'node:http';
 import { connect as connectTcp } from 'node:net';
-import { OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA, type OperatorConsoleHttpRouteParityEntry } from '@narada2/operator-console-contract';
+import { OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA, type OperatorConsoleHttpRouteParityEntry } from '@narada-core/operator-console-contract';
 import { createOperatorConsoleRemoteGateway, operatorConsoleRemoteGatewayPathDisposition } from '../src/index.js';
 
 const bridgeToken = 'bridge-token-0123456789';

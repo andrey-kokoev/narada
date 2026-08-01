@@ -24,7 +24,7 @@
     "Added descriptor-only sitesCreateCommand for narada sites create --dry-run --config <path> --format json.",
     "Added optional --output-plan artifact write, bounded to explicit dry-run plan output.",
     "Expanded minimal, agent-memory, and task-lifecycle greenfield presets into structured plan JSON.",
-    "Expanded @narada2/site-task-lifecycle and @narada2/agent-context-memory package selections as descriptor-only template components.",
+    "Expanded @narada-core/site-task-lifecycle and @narada-core/agent-context-memory package selections as descriptor-only template components.",
     "Refused full operator-surface-aware preset as fixture-only until live surfaces are separately admitted.",
     "Added refusal guards for source Site runtime state, secrets/credentials, PC/operator-surface runtime state, live adapter/MCP/profile/hydration admissions, implicit live capability grants, unknown packages, and identity/role authority smear.",
     "Registered narada sites create in the CLI command tree."

@@ -40,8 +40,8 @@ const mockCloudflareControlClient = {
   executeControlRequest: vi.fn(),
 };
 
-vi.mock('@narada2/windows-site', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/windows-site')>();
+vi.mock('@narada-core/windows-site', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/windows-site')>();
   return {
     ...mod,
     Database: vi.fn(() => mockDb),
@@ -94,7 +94,7 @@ vi.mock('@narada2/windows-site', async (importOriginal) => {
   };
 });
 
-vi.mock('@narada2/cloudflare-site', () => ({
+vi.mock('@narada-core/cloudflare-site', () => ({
   cloudflareSiteAdapter: {
     supports: vi.fn((site: { variant: string; substrate: string }) =>
       site.variant === 'cloudflare' || site.substrate === 'cloudflare'

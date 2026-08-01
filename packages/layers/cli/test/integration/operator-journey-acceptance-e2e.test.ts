@@ -8,12 +8,12 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
-import { createAgentWebUiServer } from '@narada2/agent-web-ui/server';
-import { registerNarsArtifact } from '@narada2/nars-session-core/artifacts';
-import { writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
-import { OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS } from '@narada2/operator-console-contract';
-import { SiteRegistry, openRegistryDb, resolveRegistryDbPathByLocus } from '@narada2/windows-site';
-import { ensureOperatorRouter, registerOperatorRouteSet } from '@narada2/operator-router';
+import { createAgentWebUiServer } from '@narada-core/agent-web-ui/server';
+import { registerNarsArtifact } from '@narada-core/nars-session-core/artifacts';
+import { writeNarsSessionStartedIndex } from '@narada-core/nars-session-core/session-index';
+import { OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS } from '@narada-core/operator-console-contract';
+import { SiteRegistry, openRegistryDb, resolveRegistryDbPathByLocus } from '@narada-core/windows-site';
+import { ensureOperatorRouter, registerOperatorRouteSet } from '@narada-core/operator-router';
 import { createConsoleServer } from '../../dist/commands/console-server.js';
 import { createWorkbenchServer } from '../../dist/commands/workbench-server.js';
 

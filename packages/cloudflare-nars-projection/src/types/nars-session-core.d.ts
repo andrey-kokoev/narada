@@ -1,4 +1,4 @@
-declare module '@narada2/nars-session-core/artifacts' {
+declare module '@narada-core/nars-session-core/artifacts' {
   export interface NarsArtifactIndexResult {
     artifacts: Array<Record<string, unknown>>;
   }

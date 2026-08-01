@@ -43,8 +43,8 @@ remaining boundary gap visible instead of allowing a direct fixture to be
 reported as full production coverage.
 
 Kernel implementation/substitutability ownership is in
-`@narada2/agent-runtime-server` and `@narada2/nars-pi-kernel`, not in
-`@narada2/agent-pi-tui`. The moved runtime-server probe is run by the root
+`@narada-core/agent-runtime-server` and `@narada-core/nars-pi-kernel`, not in
+`@narada-core/agent-pi-tui`. The moved runtime-server probe is run by the root
 gated live command.
 
 ## What counts as genuine
@@ -154,11 +154,11 @@ that every listed probe remains explicitly opt-in.
 The gated commands are:
 
 ```powershell
-pnpm --filter @narada2/agent-pi-tui test:live:guard
+pnpm --filter @narada-core/agent-pi-tui test:live:guard
 pnpm test:agent-pi-tui:live:fixture
 pnpm test:agent-pi-tui:live
-pnpm --filter @narada2/agent-pi-tui test:live:production-binding
-pnpm --filter @narada2/agent-runtime-server test:live:pi-client-kernel
+pnpm --filter @narada-core/agent-pi-tui test:live:production-binding
+pnpm --filter @narada-core/agent-runtime-server test:live:pi-client-kernel
 ```
 
 On 2026-07-22, isolated Windows runs passed the default and `--pi-rpc`

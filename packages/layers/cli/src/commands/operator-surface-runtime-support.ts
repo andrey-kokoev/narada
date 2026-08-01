@@ -1,4 +1,4 @@
-import { agentIdentityDisplay } from '@narada2/agent-identity';
+import { agentIdentityDisplay } from '@narada-core/agent-identity';
 import type { OperatorSurfaceRuntimeStartOptions } from './operator-surface-runtime-start.js';
 import { getOperatorSurfaceRuntimeStatus } from '../lib/launcher-runtime.js';
 

@@ -2,12 +2,12 @@
 
 This checklist names the external executions required before Narada proper can claim a live receiving Site task-lifecycle setup.
 
-`@narada2/site-task-lifecycle` remains descriptor-only for this surface. It does not execute initializer writes, admit a concrete adapter, mutate SQLite, or register live MCP transport.
+`@narada-core/site-task-lifecycle` remains descriptor-only for this surface. It does not execute initializer writes, admit a concrete adapter, mutate SQLite, or register live MCP transport.
 
 ## Required External Admissions
 
 - Initializer execution under receiving Site authority.
-- Real adapter admission outside `@narada2/site-task-lifecycle`.
+- Real adapter admission outside `@narada-core/site-task-lifecycle`.
 - DB mutation execution under receiving Site task DB authority.
 - Live MCP registration under Narada proper MCP/runtime authority.
 

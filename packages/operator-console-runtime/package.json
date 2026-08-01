@@ -1,11 +1,11 @@
 {
-  "name": "@narada2/operator-console-runtime",
+  "name": "@narada-core/operator-console-runtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "narada": {
     "package_role": "operator_console_runtime_lifecycle",
-    "authority_owner": "@narada2/operator-console-runtime",
+    "authority_owner": "@narada-core/operator-console-runtime",
     "surface": "operator_console",
     "presentation_only": false
   },
@@ -26,8 +26,8 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@narada2/operator-router": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/operator-router": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -38,7 +38,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-console-runtime"
   },
   "engines": {

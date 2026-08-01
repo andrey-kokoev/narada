@@ -98,12 +98,12 @@ test('readOperationEvidence preserves product read envelope and text formatting 
   const text = formatOperationEvidenceReadText(result);
   assert.match(text, /Operation Evidence Read: ok/);
   assert.match(text, /Carrier Sessions: session_1/);
-  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_live_smoke --carrier-session-id session_1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(text, /tool_result_received/);
-  assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Recovery Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Persistence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatOperationEvidenceReadText emits direct workflow handoff when the workflow route is explicit', () => {
@@ -127,10 +127,10 @@ test('formatOperationEvidenceReadText emits direct workflow handoff when the wor
     },
   });
 
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
-  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --carrier-session-id session_1 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 });
 
 test('formatOperationEvidenceReadText recognizes Windows fallback evidence as reviewable focus', () => {
@@ -162,7 +162,7 @@ test('formatOperationEvidenceReadText recognizes Windows fallback evidence as re
     },
   });
 
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text/);
   assert.match(text, /--focus-kind resident_dispatch_windows_fallback_evidence/);
   assert.match(text, /Local Resident Evidence: sessions=1 bridge=not_admitted_to_cloudflare_carrier_session/);
   assert.match(text, /Local Resident Sessions: windows-session:\/\/operation_alpha\/1/);
@@ -196,12 +196,12 @@ test('formatOperationEvidenceReadText distinguishes current reviewable focus fro
 
   assert.match(text, /Reviewable Focus: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:newer/);
   assert.match(text, /Latest Review: site_continuity_reconciliation_execution:site-continuity-reconciliation-execution:site_alpha:older status=acknowledged/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
-  assert.match(text, /Recovery Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Persistence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(text, /Recovery Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Persistence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatOperationEvidenceReadText omits synthetic operation ids from review ack', () => {
@@ -219,7 +219,7 @@ test('formatOperationEvidenceReadText omits synthetic operation ids from review 
     },
   });
 
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:current --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
 

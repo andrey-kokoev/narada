@@ -12,7 +12,7 @@
  *   node tools/incubation/dry-run-agent-start.ts --identity andrey-user.architect --runtime kimi --write
  */
 
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import { readFileSync, existsSync, mkdirSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

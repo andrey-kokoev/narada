@@ -9,7 +9,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { basename, delimiter, dirname, join, posix, resolve, win32 } from 'node:path';
 import { hostname } from 'node:os';
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { createHash, randomUUID } from 'node:crypto';
 import * as p from '@clack/prompts';
 import type { CommandContext } from '../lib/command-wrapper.js';
@@ -27,8 +27,8 @@ import {
 } from '../lib/site-relation-registry.js';
 import { inspectDelegatedCliHealth } from '../lib/delegated-cli-health.js';
 import { assessSiteReadiness } from '../lib/site-readiness.js';
-import type { RegistryManagementRequest } from '@narada2/windows-site';
-import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import type { RegistryManagementRequest } from '@narada-core/windows-site';
+import { siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 import { sitesRegistryStateCommand } from './site-registry-management.js';
 import {
   createSiteRegistryBootstrapLifecycle,
@@ -498,7 +498,7 @@ export async function sitesSupervisorCommand(
       resolveSiteRoot,
       siteConfigPath,
       DefaultLinuxSiteSupervisor,
-    } = await import('@narada2/linux-site');
+    } = await import('@narada-core/linux-site');
     const mode = resolveLinuxSiteMode(siteId);
     if (!mode) {
       return {
@@ -781,7 +781,7 @@ async function openRegistry(registryDbPath?: string) {
     resolveRegistryDbPathByLocus,
     openRegistryDb,
     SiteRegistry,
-  } = await import('@narada2/windows-site');
+  } = await import('@narada-core/windows-site');
   const dbPath = registryDbPath ?? resolveRegistryDbPathByLocus({ authorityLocus: 'user' });
   const db = await openRegistryDb(dbPath);
   return new SiteRegistry(db);
@@ -796,7 +796,7 @@ export async function sitesListCommand(
   try {
     const {
       getWindowsSiteStatus,
-    } = await import('@narada2/windows-site');
+    } = await import('@narada-core/windows-site');
 
     const sites = registry.listSites();
     const entries: SiteListEntry[] = [];
@@ -805,11 +805,11 @@ export async function sitesListCommand(
         let health: { status: string; last_cycle_at: string | null; consecutive_failures: number };
         if (site.variant === 'linux-user' || site.variant === 'linux-system') {
           const mode = site.variant === 'linux-system' ? 'system' : 'user';
-          const { getSiteHealth } = await import('@narada2/linux-site');
+          const { getSiteHealth } = await import('@narada-core/linux-site');
           const h = await getSiteHealth(site.siteId, mode);
           health = { status: h.status, last_cycle_at: h.last_cycle_at, consecutive_failures: h.consecutive_failures };
         } else {
-          const status = await getWindowsSiteStatus(site.siteId, site.variant as import('@narada2/windows-site').WindowsSiteVariant);
+          const status = await getWindowsSiteStatus(site.siteId, site.variant as import('@narada-core/windows-site').WindowsSiteVariant);
           health = { status: status.health.status, last_cycle_at: status.health.last_cycle_at, consecutive_failures: status.health.consecutive_failures };
         }
         entries.push({
@@ -834,7 +834,7 @@ export async function sitesListCommand(
 
     // Also discover macOS sites
     try {
-      const { discoverMacosSites, getMacosSiteStatus } = await import('@narada2/macos-site');
+      const { discoverMacosSites, getMacosSiteStatus } = await import('@narada-core/macos-site');
       const macosSites = discoverMacosSites();
       for (const site of macosSites) {
         // Avoid duplicates
@@ -905,7 +905,7 @@ export async function sitesDiscoverCommand(
   const compatibilityObservations: Array<Record<string, unknown>> = [];
 
   try {
-    const { discoverMacosSites } = await import('@narada2/macos-site');
+    const { discoverMacosSites } = await import('@narada-core/macos-site');
     for (const site of discoverMacosSites()) {
       compatibilityObservations.push({
         site_id: site.siteId,
@@ -920,7 +920,7 @@ export async function sitesDiscoverCommand(
   }
 
   try {
-    const { listAllSites } = await import('@narada2/linux-site');
+    const { listAllSites } = await import('@narada-core/linux-site');
     for (const site of listAllSites()) {
       additionalCandidates.push({
         operation: 'add',
@@ -1407,10 +1407,10 @@ export function createSiteConfigForCapabilitySelection(input: CreateSiteCapabili
       ? { enable: 'canonical_envelope_intake' }
       : { enable: 'drop_only' },
     task_lifecycle: capabilitySet.has('task_lifecycle')
-      ? { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' }
+      ? { enable: 'descriptor_only', package: '@narada-core/site-task-lifecycle' }
       : { enable: false },
     agent_context: capabilitySet.has('agent_context_memory')
-      ? { enable: 'descriptor_only', package: '@narada2/agent-context-memory' }
+      ? { enable: 'descriptor_only', package: '@narada-core/agent-context-memory' }
       : { enable: false },
     operator_surface: { intent: 'none' },
     windows_pwsh: { profile: 'emit_example', path_style: 'windows' },
@@ -1476,19 +1476,19 @@ function createSiteConfigForPreset(input: {
       denied: ['source_task_db_import', 'source_checkpoint_import', 'source_inbox_history_import'],
     };
     config.inbox = { enable: 'canonical_envelope_intake' };
-    config.task_lifecycle = { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' };
-    config.agent_context = { enable: 'descriptor_only', package: '@narada2/agent-context-memory' };
+    config.task_lifecycle = { enable: 'descriptor_only', package: '@narada-core/site-task-lifecycle' };
+    config.agent_context = { enable: 'descriptor_only', package: '@narada-core/agent-context-memory' };
   } else if (input.preset === 'task-lifecycle') {
     config.storage = { intent: 'descriptor_only', driver_preference: 'sqlite3-cli', mutation_mode: 'none' };
     config.mcp = { intent: 'descriptor_only', surfaces: ['site_task_lifecycle'] };
     config.capabilities = { policy: 'declare_required', required: ['task_lifecycle'], denied: ['source_task_db_import'] };
     config.inbox = { enable: 'canonical_envelope_intake' };
-    config.task_lifecycle = { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' };
+    config.task_lifecycle = { enable: 'descriptor_only', package: '@narada-core/site-task-lifecycle' };
   } else if (input.preset === 'agent-memory') {
     config.storage = { intent: 'descriptor_only', driver_preference: 'sqlite3-cli', mutation_mode: 'none' };
     config.mcp = { intent: 'descriptor_only', surfaces: ['agent_context_memory'] };
     config.capabilities = { policy: 'declare_required', required: ['agent_context_memory'], denied: ['source_checkpoint_import'] };
-    config.agent_context = { enable: 'descriptor_only', package: '@narada2/agent-context-memory' };
+    config.agent_context = { enable: 'descriptor_only', package: '@narada-core/agent-context-memory' };
   } else if (input.preset === 'site-machinery') {
     config.capabilities = {
       policy: 'declare_required',
@@ -1532,11 +1532,11 @@ function templateIdForCapabilitySelection(preset: string, capabilities: Set<Crea
 
 function packagesForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabilityChoiceId>): Array<Record<string, unknown>> {
   const packages: Array<Record<string, unknown>> = [];
-  if (capabilities.has('task_lifecycle')) packages.push({ name: '@narada2/site-task-lifecycle' });
-  if (capabilities.has('agent_context_memory')) packages.push({ name: '@narada2/agent-context-memory' });
-  if (capabilities.has('canonical_inbox')) packages.push({ name: '@narada2/site-inbox' });
-  if (capabilities.has('site_config_awareness')) packages.push({ name: '@narada2/site-config' });
-  if (capabilities.has('site_lift_adoption')) packages.push({ name: '@narada2/site-lift' });
+  if (capabilities.has('task_lifecycle')) packages.push({ name: '@narada-core/site-task-lifecycle' });
+  if (capabilities.has('agent_context_memory')) packages.push({ name: '@narada-core/agent-context-memory' });
+  if (capabilities.has('canonical_inbox')) packages.push({ name: '@narada-core/site-inbox' });
+  if (capabilities.has('site_config_awareness')) packages.push({ name: '@narada-core/site-config' });
+  if (capabilities.has('site_lift_adoption')) packages.push({ name: '@narada-core/site-lift' });
   return packages;
 }
 
@@ -1570,18 +1570,18 @@ function mcpSurfacesForCreateSiteCapabilities(capabilities: Set<CreateSiteCapabi
 function packagesForCreateSitePreset(preset: string): Array<Record<string, unknown>> {
   if (preset === 'agent-site-core') {
     return [
-      { name: '@narada2/site-task-lifecycle' },
-      { name: '@narada2/agent-context-memory' },
-      { name: '@narada2/site-inbox' },
+      { name: '@narada-core/site-task-lifecycle' },
+      { name: '@narada-core/agent-context-memory' },
+      { name: '@narada-core/site-inbox' },
     ];
   }
-  if (preset === 'task-lifecycle') return [{ name: '@narada2/site-task-lifecycle' }];
-  if (preset === 'agent-memory') return [{ name: '@narada2/agent-context-memory' }];
+  if (preset === 'task-lifecycle') return [{ name: '@narada-core/site-task-lifecycle' }];
+  if (preset === 'agent-memory') return [{ name: '@narada-core/agent-context-memory' }];
   if (preset === 'site-machinery') {
     return [
-      { name: '@narada2/site-inbox' },
-      { name: '@narada2/site-config' },
-      { name: '@narada2/site-lift' },
+      { name: '@narada-core/site-inbox' },
+      { name: '@narada-core/site-config' },
+      { name: '@narada-core/site-lift' },
     ];
   }
   return [];
@@ -1658,7 +1658,7 @@ async function executeCreateSiteLiveCarriers(
     liveCarriers.push(agentContext.result);
     if (agentContext.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, agentContext.result);
   }
-  if (config.packages?.some((pkg) => String(pkg.name) === '@narada2/site-inbox')) {
+  if (config.packages?.some((pkg) => String(pkg.name) === '@narada-core/site-inbox')) {
     const siteInbox = await sitesLiveCarrierCommand({
       carrier: 'site_inbox_local_substrate',
       mode: 'apply',
@@ -1672,7 +1672,7 @@ async function executeCreateSiteLiveCarriers(
     liveCarriers.push(siteInbox.result);
     if (siteInbox.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, siteInbox.result);
   }
-  if (config.packages?.some((pkg) => String(pkg.name) === '@narada2/site-config')) {
+  if (config.packages?.some((pkg) => String(pkg.name) === '@narada-core/site-config')) {
     const siteConfig = await sitesLiveCarrierCommand({
       carrier: 'site_config_local_registry',
       mode: 'apply',
@@ -1686,7 +1686,7 @@ async function executeCreateSiteLiveCarriers(
     liveCarriers.push(siteConfig.result);
     if (siteConfig.exitCode !== ExitCode.SUCCESS) return createLiveCarrierFailure(created, liveCarriers, siteConfig.result);
   }
-  if (config.packages?.some((pkg) => String(pkg.name) === '@narada2/site-lift')) {
+  if (config.packages?.some((pkg) => String(pkg.name) === '@narada-core/site-lift')) {
     const siteLift = await sitesLiveCarrierCommand({
       carrier: 'site_lift_local_adoption',
       mode: 'apply',
@@ -2093,14 +2093,14 @@ function buildCreateSiteDryRunPlan(config: CreateSiteConfig, configPath: string)
       message: 'create site does not assume PC-locus authority; PC setup requires separate admission.',
     });
   }
-  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-task-lifecycle')
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada-core/site-task-lifecycle')
     && config.task_lifecycle?.enable !== 'descriptor_only') {
     warnings.push({
       code: 'task_lifecycle_package_selected_without_descriptor_enablement',
       message: 'The site-task-lifecycle package contributes descriptors only in this slice.',
     });
   }
-  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/agent-context-memory')
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada-core/agent-context-memory')
     && config.agent_context?.enable !== 'descriptor_only') {
     warnings.push({
       code: 'agent_context_package_selected_without_descriptor_enablement',
@@ -2254,13 +2254,13 @@ function buildCreateSiteRequiredAdmissions(
   if (config.mcp?.intent && config.mcp.intent !== 'none') {
     admissions.push({ admission: 'live_mcp_registration', status: 'separate_admission_required' });
   }
-  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-inbox')) {
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada-core/site-inbox')) {
     admissions.push({ admission: 'site_inbox_local_substrate_and_publication', status: 'separate_admission_required' });
   }
-  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-config')) {
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada-core/site-config')) {
     admissions.push({ admission: 'site_config_registry_probe_execution', status: 'separate_admission_required' });
   }
-  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada2/site-lift')) {
+  if (packageDescriptors.some((descriptor) => descriptor.package_name === '@narada-core/site-lift')) {
     admissions.push({ admission: 'site_lift_adoption_materialization', status: 'separate_admission_required' });
   }
   if (packageDescriptors.length > 0) {
@@ -2307,7 +2307,7 @@ function buildCreateSitePlannedFiles(
     });
   }
   for (const descriptor of packageDescriptors.filter((entry) => entry.posture === 'descriptor_only')) {
-    const safeName = descriptor.package_name.replace('@narada2/', '').replace(/[^a-z0-9_.-]/gi, '-');
+    const safeName = descriptor.package_name.replace('@narada-core/', '').replace(/[^a-z0-9_.-]/gi, '-');
     files.push({
       path: `${siteRoot}\\.narada\\admission\\package-slices\\${safeName}.json`,
       purpose: `${descriptor.package_name} descriptor package slice`,
@@ -2632,7 +2632,7 @@ function minimalCreateSiteWrites(
     },
   ];
   for (const descriptor of packageDescriptors.filter((entry) => entry.posture === 'descriptor_only')) {
-    const safeName = descriptor.package_name.replace('@narada2/', '').replace(/[^a-z0-9_.-]/gi, '-');
+    const safeName = descriptor.package_name.replace('@narada-core/', '').replace(/[^a-z0-9_.-]/gi, '-');
     writes.push({
       path: join(siteAuthorityRoot, 'admission', 'package-slices', `${safeName}.json`),
       dir: join(siteAuthorityRoot, 'admission', 'package-slices'),
@@ -3195,16 +3195,16 @@ export async function sitesShowCommand(
 
     const {
       getWindowsSiteStatus,
-    } = await import('@narada2/windows-site');
+    } = await import('@narada-core/windows-site');
 
     let health = null;
     try {
       if (site.variant === 'linux-user' || site.variant === 'linux-system') {
         const mode = site.variant === 'linux-system' ? 'system' : 'user';
-        const { getSiteHealth } = await import('@narada2/linux-site');
+        const { getSiteHealth } = await import('@narada-core/linux-site');
         health = await getSiteHealth(siteId, mode);
       } else {
-        health = (await getWindowsSiteStatus(siteId, site.variant as import('@narada2/windows-site').WindowsSiteVariant)).health;
+        health = (await getWindowsSiteStatus(siteId, site.variant as import('@narada-core/windows-site').WindowsSiteVariant)).health;
       }
     } catch {
       // health stays null
@@ -3305,19 +3305,19 @@ const AGENT_CLI_WRAPPER_TEMPLATE_HASH_PLACEHOLDER = '__NARADA_TEMPLATE_HASH__';
 const AGENT_CLI_WRAPPER_TEMPLATE_HASH_LINE = /^# narada_template_hash: .*$/m;
 const SHARED_SITE_PACKAGES = [
   {
-    package_name: '@narada2/agent-cli',
+    package_name: '@narada-core/agent-cli',
     source_locus: fileURLToPath(new URL('../../../../../../agent-cli', import.meta.url)),
   },
   {
-    package_name: '@narada2/mcp-transport',
+    package_name: '@narada-core/mcp-transport',
     source_locus: fileURLToPath(new URL('../../../../../../mcp-surfaces/packages/shared/mcp-transport', import.meta.url)),
   },
   {
-    package_name: '@narada2/task-governance-core',
+    package_name: '@narada-core/task-governance-core',
     source_locus: fileURLToPath(new URL('../../../../../../narada-core/packages/task-governance-core', import.meta.url)),
   },
   {
-    package_name: '@narada2/task-lifecycle-mcp',
+    package_name: '@narada-core/task-lifecycle-mcp',
     source_locus: fileURLToPath(new URL('../../../../../../mcp-surfaces/packages/task-lifecycle-mcp', import.meta.url)),
   },
 ] as const;
@@ -3457,7 +3457,7 @@ function assertContainedPackageInstallPath(siteRoot: string, packageName: string
   const expected = packageInstallPath(siteRoot, packageName);
   const normalizedInstall = normalizeNativePath(resolve(installPath));
   const normalizedExpected = normalizeNativePath(resolve(expected));
-  const normalizedScopeRoot = normalizeNativePath(resolve(siteRoot, 'node_modules', '@narada2'));
+  const normalizedScopeRoot = normalizeNativePath(resolve(siteRoot, 'node_modules', '@narada-core'));
   if (normalizedInstall !== normalizedExpected || !normalizedInstall.startsWith(`${normalizedScopeRoot}${win32.sep}`)) {
     throw new Error(`refusing_uncontained_package_link_path: ${installPath}`);
   }
@@ -3604,7 +3604,7 @@ async function inspectAgentCliWrapper(siteRoot: string): Promise<{
   const wrapperText = await readFile(wrapperPath, 'utf8');
   const normalizedWrapper = normalizeAgentCliWrapperTemplateText(wrapperText);
   const existingHash = sha256Text(normalizedWrapper);
-  const hasTemplateEvidence = wrapperText.includes('narada_template_source: @narada2/agent-runtime-server')
+  const hasTemplateEvidence = wrapperText.includes('narada_template_source: @narada-core/agent-runtime-server')
     && wrapperText.includes('narada_template_id:')
     && wrapperText.includes('narada_template_version:')
     && wrapperText.includes('narada_template_hash:');
@@ -3724,7 +3724,7 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
   if (existsSync(bootstrapPath)) {
     await addCanonicalHash({
       path: 'tools/agent-start/synthesize-bootstrap.ts',
-      packageName: '@narada2/agent-start-bootstrap',
+      packageName: '@narada-core/agent-start-bootstrap',
       version: '0.1.0',
       surface: 'agent-start',
       fileUrl: new URL('../../../../../packages/agent-start-bootstrap/src/synthesize-bootstrap.ts', import.meta.url),
@@ -3741,7 +3741,7 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     if (existsSync(scriptPath)) {
       await addCanonicalHash({
         path: `tools/window-surface-overlay/${script}`,
-        packageName: '@narada2/window-surface-overlay',
+        packageName: '@narada-core/window-surface-overlay',
         version: '0.1.0',
         surface: 'window-surface-overlay',
         fileUrl: new URL(`../../../../../packages/window-surface-overlay/src/${script}`, import.meta.url),
@@ -3764,7 +3764,7 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
     if (existsSync(scriptPath)) {
       await addCanonicalHash({
         path: `tools/typed-mcp/${script}`,
-        packageName: '@narada2/typed-mcp-surface',
+        packageName: '@narada-core/typed-mcp-surface',
         version: '0.1.0',
         surface: 'typed-mcp',
         fileUrl: new URL(`../../../../../packages/typed-mcp-surface/src/${script}`, import.meta.url),
@@ -3773,41 +3773,41 @@ async function loadCanonicalToolSurfaceEntries(): Promise<Map<string, Record<str
   }
   await addCanonicalHash({
     path: 'tools/typed-mcp/inbox-mcp-server.ts',
-    packageName: '@narada2/typed-mcp-surface',
+    packageName: '@narada-core/typed-mcp-surface',
     version: '0.1.0',
     surface: 'typed-mcp',
     fileUrl: new URL('../../../../../packages/typed-mcp-surface/compat/inbox-mcp-server.legacy-site.ts', import.meta.url),
   });
   await addCanonicalPackageTree({
-    packageName: '@narada2/operator-surface-carriers',
+    packageName: '@narada-core/operator-surface-carriers',
     version: '0.1.0',
     surface: 'operator-surface',
     relativeToolRoot: 'tools/operator-surface-carriers',
     packageSrcUrl: new URL('../../../../../packages/operator-surface-carriers/src', import.meta.url),
   });
   await addCanonicalPackageTree({
-    packageName: '@narada2/agent-context-tools',
+    packageName: '@narada-core/agent-context-tools',
     version: '0.1.0',
     surface: 'site-tools',
     relativeToolRoot: 'tools/agent-context',
     packageSrcUrl: new URL('../../../../../packages/agent-context-tools/src', import.meta.url),
   });
   await addCanonicalPackageTree({
-    packageName: '@narada2/task-lifecycle-mcp',
+    packageName: '@narada-core/task-lifecycle-mcp',
     version: '0.1.0',
     surface: 'task-lifecycle',
     relativeToolRoot: 'tools/task-lifecycle-mcp',
     packageSrcUrl: new URL('../../../../../../mcp-surfaces/packages/task-lifecycle-mcp/src', import.meta.url),
   });
   await addCanonicalPackageTree({
-    packageName: '@narada2/local-filesystem-mcp',
+    packageName: '@narada-core/local-filesystem-mcp',
     version: '0.1.0',
     surface: 'local-filesystem',
     relativeToolRoot: 'tools/local-filesystem-mcp',
     packageSrcUrl: new URL('../../../../../../mcp-surfaces/packages/local-filesystem-mcp/src', import.meta.url),
   });
   await addCanonicalPackageTree({
-    packageName: '@narada2/site-common-tools',
+    packageName: '@narada-core/site-common-tools',
     version: '0.1.0',
     surface: 'site-tools',
     relativeToolRoot: 'tools',
@@ -3831,7 +3831,7 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
       class: 'generated_wrapper',
       owner: 'narada-proper',
       surface: 'agent-cli',
-      package: '@narada2/agent-cli',
+      package: '@narada-core/agent-cli',
       version,
       hash: templateHash,
       allowed_root_refs: allowedRootRefs,
@@ -4091,7 +4091,7 @@ async function addSiteToolSurfaceChecks(checks: SiteDoctorCheck[], siteRoot: str
       'agent_cli_package_wrapper',
       wrapper.current ? 'pass' : 'fail',
       wrapper.current
-        ? `agent-cli client/projection wrapper matches @narada2/agent-cli template hash ${wrapper.templateHash}`
+        ? `agent-cli client/projection wrapper matches @narada-core/agent-cli template hash ${wrapper.templateHash}`
         : `agent-cli client/projection wrapper is stale or lacks package template evidence; existing_hash=${wrapper.existingHash ?? 'missing'} expected_hash=${wrapper.templateHash}`,
       'Run narada sites reconcile agent-cli-wrapper --root <site-root-or-workspace> --apply.',
     );
@@ -4759,7 +4759,7 @@ async function sitesLinuxDoctorCommand(
   let siteRoot = options.root;
 
   try {
-    const { checkSite, resolveLinuxSiteMode, resolveSiteRoot } = await import('@narada2/linux-site');
+    const { checkSite, resolveLinuxSiteMode, resolveSiteRoot } = await import('@narada-core/linux-site');
     mode = mode ?? resolveLinuxSiteMode(siteId);
 
     if (!mode) {
@@ -4862,7 +4862,7 @@ export async function sitesDoctorCommand(
       resolveRegistryDbPathByLocus,
       openRegistryDb,
       SiteRegistry,
-    } = await import('@narada2/windows-site');
+    } = await import('@narada-core/windows-site');
 
     if (!siteRoot) {
       siteRoot = resolveWindowsSiteRootByLocus({
@@ -5074,7 +5074,7 @@ export async function sitesDoctorCommand(
     if (existsSync(lifecycleDbPath)) {
       addCheck(checks, 'task_lifecycle_db_exists', 'pass', `Task lifecycle DB exists: ${lifecycleDbPath}`);
       try {
-        const { Database } = await import('@narada2/control-plane');
+        const { Database } = await import('@narada-core/control-plane');
         const db = new Database(lifecycleDbPath);
         try {
           const rows = db.prepare("select name from sqlite_master where type = 'table' and name in ('task_lifecycle', 'task_number_sequence')").all() as Array<{ name: string }>;
@@ -5927,7 +5927,7 @@ export async function sitesInitCommand(
       const variant = substrate === 'windows-native' ? 'native' : 'wsl';
       const {
         resolveWindowsSiteRootByLocus,
-      } = await import('@narada2/windows-site');
+      } = await import('@narada-core/windows-site');
       const authorityLocus = options.authorityLocus ?? 'user';
       if (!validAuthorityLoci.includes(authorityLocus)) {
         return {
@@ -6043,7 +6043,7 @@ export async function sitesInitCommand(
         resolveSiteRoot,
         ensureSiteDir,
         siteConfigPath,
-      } = await import('@narada2/macos-site');
+      } = await import('@narada-core/macos-site');
 
       siteRoot = options.root ?? resolveSiteRoot(siteId);
       configPath = siteConfigPath(siteId);
@@ -6081,7 +6081,7 @@ export async function sitesInitCommand(
         resolveSiteRoot,
         ensureSiteDir,
         siteConfigPath,
-      } = await import('@narada2/linux-site');
+      } = await import('@narada-core/linux-site');
 
       siteRoot = options.root ?? resolveSiteRoot(siteId, mode);
       configPath = siteConfigPath(siteId, mode);
@@ -6442,7 +6442,7 @@ function resolveCliReadinessCoordinates(): {
     package_root: packageRoot,
     dist_entrypoint: join(packageRoot, 'dist', 'main.js'),
     shell_shim: process.env.HOME ? join(process.env.HOME, '.local', 'bin', 'narada') : null,
-    repair_command: 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim',
+    repair_command: 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim',
   };
 }
 
@@ -6854,14 +6854,14 @@ export async function sitesEnableCommand(
   try {
     // Try macOS first
     try {
-      const { isMacosSite } = await import('@narada2/macos-site');
+      const { isMacosSite } = await import('@narada-core/macos-site');
       if (isMacosSite(siteId)) {
         substrate = 'macos';
         const {
           resolveSiteRoot,
           siteConfigPath,
           writeLaunchAgentFiles,
-        } = await import('@narada2/macos-site');
+        } = await import('@narada-core/macos-site');
 
         const siteRoot = resolveSiteRoot(siteId);
         const configPath = siteConfigPath(siteId);
@@ -6924,7 +6924,7 @@ export async function sitesEnableCommand(
 
     // Try Linux next
     try {
-      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada-core/linux-site');
       const linuxMode = resolveLinuxSiteMode(siteId);
       if (linuxMode) {
         substrate = `linux-${linuxMode}`;
@@ -6932,7 +6932,7 @@ export async function sitesEnableCommand(
           resolveSiteRoot,
           siteConfigPath,
           DefaultLinuxSiteSupervisor,
-        } = await import('@narada2/linux-site');
+        } = await import('@narada-core/linux-site');
 
         const siteRoot = resolveSiteRoot(siteId, linuxMode);
         const configPath = siteConfigPath(siteId, linuxMode);
@@ -7001,7 +7001,7 @@ export async function sitesEnableCommand(
 
     // Fallback to Windows
     try {
-      const { resolveSiteVariant, resolveSiteRoot, siteConfigPath } = await import('@narada2/windows-site');
+      const { resolveSiteVariant, resolveSiteRoot, siteConfigPath } = await import('@narada-core/windows-site');
       const variant = resolveSiteVariant(siteId);
       if (!variant) {
         return {
@@ -7036,7 +7036,7 @@ export async function sitesEnableCommand(
       }
 
       if (variant === 'native') {
-        const { generateRegisterTaskScript } = await import('@narada2/windows-site');
+        const { generateRegisterTaskScript } = await import('@narada-core/windows-site');
         const script = generateRegisterTaskScript({
           siteId,
           siteRoot,
@@ -7073,7 +7073,7 @@ export async function sitesEnableCommand(
         };
       } else {
         // WSL
-        const { writeSystemdUnits, writeShellScript } = await import('@narada2/windows-site');
+        const { writeSystemdUnits, writeShellScript } = await import('@narada-core/windows-site');
         if (!dryRun) {
           const systemdPaths = await writeSystemdUnits(config);
           const scriptPath = await writeShellScript(config);

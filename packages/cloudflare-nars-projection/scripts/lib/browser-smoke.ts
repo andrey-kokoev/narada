@@ -2,7 +2,7 @@ import { existsSync, mkdtempSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+import { spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 
 type AnyRecord = Record<string, any>;
 type AnyPage = any;

@@ -25,7 +25,7 @@ import {
   generateChallengeTokens,
   type TokenExchangeClient,
   type TokenDecoder,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 
 export interface ConfirmationRouteOptions {
   tokenExchange?: TokenExchangeClient;
@@ -102,7 +102,7 @@ export function createConfirmationRoutes(
           return;
         }
 
-        const { createConfirmationChallenge, buildConfirmationUrl } = await import("@narada2/control-plane");
+        const { createConfirmationChallenge, buildConfirmationUrl } = await import("@narada-core/control-plane");
         const { challenge, state_token } = createConfirmationChallenge({
           scope_id: scope.scope_id,
           operator_action_request_id: requestId,
@@ -137,7 +137,7 @@ export function createConfirmationRoutes(
           return;
         }
 
-        let challenge: import("@narada2/control-plane").ConfirmationChallenge | undefined;
+        let challenge: import("@narada-core/control-plane").ConfirmationChallenge | undefined;
         let scope: ObservationApiScope | undefined;
         for (const [, s] of scopeApis) {
           const c = s.coordinatorStore.getConfirmationChallenge(challengeId);
@@ -206,7 +206,7 @@ export function createConfirmationRoutes(
         const challengeId = stateParts[0]!;
         const oauthState = stateParts[1]!;
 
-        let challenge: import("@narada2/control-plane").ConfirmationChallenge | undefined;
+        let challenge: import("@narada-core/control-plane").ConfirmationChallenge | undefined;
         let scope: ObservationApiScope | undefined;
         for (const [, s] of scopeApis) {
           const c = s.coordinatorStore.getConfirmationChallenge(challengeId);
@@ -334,7 +334,7 @@ export function createConfirmationRoutes(
               : undefined,
           },
           {
-            action_type: actionType as import("@narada2/control-plane").OperatorActionType,
+            action_type: actionType as import("@narada-core/control-plane").OperatorActionType,
             ...(targetId ? { target_id: targetId } : {}),
             ...(payloadJson ? { payload_json: payloadJson } : {}),
           },

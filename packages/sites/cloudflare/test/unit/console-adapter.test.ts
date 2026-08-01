@@ -4,7 +4,7 @@ import {
   CloudflareSiteObservationApi,
   CloudflareSiteControlClient,
 } from "../../src/console-adapter.js";
-import type { RegisteredSite } from "@narada2/windows-site";
+import type { RegisteredSite } from "@narada-core/windows-site";
 
 function makeSite(overrides: Partial<RegisteredSite> = {}): RegisteredSite {
   return {

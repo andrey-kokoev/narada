@@ -17,8 +17,8 @@ writeLaunchArtifactManifest({ siteRoot, target: 'narada-cli', packageRoot });
 const manifestPath = join(siteRoot, BUILD_MANIFEST_PATH);
 const manifest = {
   schema: BUILD_MANIFEST_SCHEMA,
-  package: '@narada2/cli',
-  build_command: 'pnpm --filter @narada2/cli build',
+  package: '@narada-core/cli',
+  build_command: 'pnpm --filter @narada-core/cli build',
   built_at: new Date().toISOString(),
   ...current,
 };

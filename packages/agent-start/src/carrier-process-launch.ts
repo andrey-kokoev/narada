@@ -1,8 +1,8 @@
 import { closeSync, mkdirSync, openSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { createInterface } from 'node:readline/promises';
-import { AiProcessInvocationRefusalError, spawnAiProcessInvocation } from '@narada2/carrier-provider-support/ai-process-invocation';
-import { spawnHiddenPostureProcess, spawnOperatorTerminal } from '@narada2/process-launch-posture';
+import { AiProcessInvocationRefusalError, spawnAiProcessInvocation } from '@narada-core/carrier-provider-support/ai-process-invocation';
+import { spawnHiddenPostureProcess, spawnOperatorTerminal } from '@narada-core/process-launch-posture';
 
 export function resolveAgentStartExecutionPosture({ runtime, exec, wait, visibleRuntimeTerminal = false }: any = {}) : any{
   const detachRefusalReasons: any = [];

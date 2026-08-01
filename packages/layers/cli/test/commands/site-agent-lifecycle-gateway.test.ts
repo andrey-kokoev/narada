@@ -2,7 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import type { OperatorSiteAgentOverviewWireResponse } from '@narada2/operator-console-contract';
+import type { OperatorSiteAgentOverviewWireResponse } from '@narada-core/operator-console-contract';
 import { createSiteAgentLifecycleGateway } from '../../src/commands/site-agent-lifecycle-gateway.js';
 import type { WorkspaceLaunchRecord } from '../../src/commands/workspace-launch-types.js';
 

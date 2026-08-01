@@ -3,7 +3,7 @@ import {
   NARS_CLIENT_CONFORMANCE_FIXTURES,
   classifyNarsClientEventProjection,
   projectNarsClientEvent,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import { NarsProjectionAdapter } from '../src/projection/projection-adapter.js';
 import { TranscriptModel } from '../src/projection/transcript-model.js';
 

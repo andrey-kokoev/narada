@@ -27,7 +27,7 @@ function makeInvocation(
 }
 
 // Mock the process posture helper so tests never invoke a real CLI.
-vi.mock("@narada2/process-launch-posture", () => ({
+vi.mock("@narada-core/process-launch-posture", () => ({
   spawnProviderSubprocess: vi.fn(),
 }));
 
@@ -43,7 +43,7 @@ vi.mock("node:fs", async () => {
 import * as os from "node:os";
 import { join } from "node:path";
 
-import { spawnProviderSubprocess as spawn } from "@narada2/process-launch-posture";
+import { spawnProviderSubprocess as spawn } from "@narada-core/process-launch-posture";
 import {
   existsSync,
   mkdtempSync,

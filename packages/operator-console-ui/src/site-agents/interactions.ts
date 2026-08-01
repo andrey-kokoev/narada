@@ -1,4 +1,4 @@
-import type { OperatorSiteAgentWireRecord } from '@narada2/operator-console-contract';
+import type { OperatorSiteAgentWireRecord } from '@narada-core/operator-console-contract';
 
 export type AgentPrimaryDecision =
   | { kind: 'ensure-running' }

@@ -1,5 +1,5 @@
-import type { SiteRegistryMutationRequest } from '@narada2/site-registry-contract';
-import { OPERATOR_CONSOLE_REGISTRY_API_PATH } from '@narada2/operator-console-contract';
+import type { SiteRegistryMutationRequest } from '@narada-core/site-registry-contract';
+import { OPERATOR_CONSOLE_REGISTRY_API_PATH } from '@narada-core/operator-console-contract';
 
 export type SiteRegistryFetch = (input: string, init?: RequestInit) => Promise<Response>;
 

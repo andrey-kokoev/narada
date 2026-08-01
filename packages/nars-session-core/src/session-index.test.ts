@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
+import { buildNarsRuntimeSurfaceContract } from '@narada-core/nars-runtime-contract/runtime-surface-contract';
 
 import {
   readNarsSessionIndex,

@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { NarsSessionObservation } from '@narada2/nars-session-core/session-index';
+import type { NarsSessionObservation } from '@narada-core/nars-session-core/session-index';
 import { executeWorkspaceLaunchPlan } from '../../src/commands/workspace-launch-executor.js';
 import {
   awaitWorkspaceLaunchSessionAttachments,

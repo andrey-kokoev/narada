@@ -8,11 +8,11 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium } from '@playwright/test';
-import { buildCanonicalLocalTestSeed, canonicalSha256, CANONICAL_LOCAL_TEST_IDS } from '@narada2/invokable-intelligence-contract';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
-import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
-import { SiteRegistry, openRegistryDb, resolveRegistryDbPathByLocus } from '@narada2/windows-site';
-import { ensureOperatorRouter, registerOperatorRouteSet } from '@narada2/operator-router';
+import { buildCanonicalLocalTestSeed, canonicalSha256, CANONICAL_LOCAL_TEST_IDS } from '@narada-core/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
+import { discoverNarsSessions } from '@narada-core/nars-session-core/session-index';
+import { SiteRegistry, openRegistryDb, resolveRegistryDbPathByLocus } from '@narada-core/windows-site';
+import { ensureOperatorRouter, registerOperatorRouteSet } from '@narada-core/operator-router';
 import { createConsoleServer } from '../../dist/commands/console-server.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

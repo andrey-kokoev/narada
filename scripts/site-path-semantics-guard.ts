@@ -68,7 +68,7 @@ walk(packagesRoot, (filePath: any) => {
 
 if (findings.length > 0) {
   console.error('manual_nars_session_path_derivation_detected');
-  console.error('Use @narada2/site-paths resolveNaradaSitePaths() instead of join(siteRoot, \'.narada\', ...).');
+  console.error('Use @narada-core/site-paths resolveNaradaSitePaths() instead of join(siteRoot, \'.narada\', ...).');
   for (const finding of findings) {
     console.error(`${finding.path}:${finding.line}: ${finding.text}`);
   }

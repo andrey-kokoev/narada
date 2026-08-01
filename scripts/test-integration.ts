@@ -13,7 +13,7 @@ import {
   type StepTiming,
 } from "./test-telemetry.js";
 
-const INTEGRATION_PACKAGES = ["@narada2/control-plane", "@narada2/daemon"];
+const INTEGRATION_PACKAGES = ["@narada-core/control-plane", "@narada-core/daemon"];
 
 const startedAt = new Date().toISOString();
 const stepTimings: StepTiming[] = [];

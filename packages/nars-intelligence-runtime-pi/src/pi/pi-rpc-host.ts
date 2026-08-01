@@ -2,7 +2,7 @@ import { spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
+import { NarsKernelContractError } from '@narada-core/nars-intelligence-kernel-contract';
 import { createPiRuntimeIsolationConfig, assertPiRuntimeIsolation } from './pi-runtime-isolation.ts';
 import { negotiatePiCapabilities } from './pi-version-capabilities.ts';
 

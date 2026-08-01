@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/cloudflare-carrier",
+  "name": "@narada-core/cloudflare-carrier",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -296,28 +296,28 @@
     "continuity:last": "node --import tsx scripts/workflows/cloudflare-site-continuity-scheduler.ts --action read-last",
     "continuity:health:last": "node --import tsx scripts/workflows/cloudflare-site-continuity-scheduler.ts --action read-health-last",
     "site-registry:projection": "node --import tsx scripts/read-models/cloudflare-carrier-site-registry-projection.ts",
-    "ship": "pnpm --filter @narada2/cloudflare-site-registry ship && pnpm test && pnpm deploy:check && pnpm deploy:dry-run",
+    "ship": "pnpm --filter @narada-core/cloudflare-site-registry ship && pnpm test && pnpm deploy:check && pnpm deploy:dry-run",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "build": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/carrier-command-contract": "workspace:*",
-    "@narada2/carrier-protocol": "workspace:*",
-    "@narada2/cloudflare-site-registry": "workspace:*",
-    "@narada2/invokable-intelligence-contract": "workspace:*",
-    "@narada2/invokable-intelligence-management": "workspace:*",
-    "@narada2/invokable-intelligence-materialization": "workspace:*",
-    "@narada2/invokable-intelligence-registry": "workspace:*",
-    "@narada2/invokable-intelligence-resolver": "workspace:*",
-    "@narada2/invokable-intelligence-runtime": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/site-authority-map": "workspace:*",
-    "@narada2/site-continuity": "workspace:*"
+    "@narada-core/carrier-command-contract": "workspace:*",
+    "@narada-core/carrier-protocol": "workspace:*",
+    "@narada-core/cloudflare-site-registry": "workspace:*",
+    "@narada-core/invokable-intelligence-contract": "workspace:*",
+    "@narada-core/invokable-intelligence-management": "workspace:*",
+    "@narada-core/invokable-intelligence-materialization": "workspace:*",
+    "@narada-core/invokable-intelligence-registry": "workspace:*",
+    "@narada-core/invokable-intelligence-resolver": "workspace:*",
+    "@narada-core/invokable-intelligence-runtime": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/site-authority-map": "workspace:*",
+    "@narada-core/site-continuity": "workspace:*"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/cloudflare-carrier"
   },
   "engines": {

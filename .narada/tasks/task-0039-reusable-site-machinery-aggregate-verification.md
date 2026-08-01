@@ -12,14 +12,14 @@ Verify the reusable Site machinery descriptor package set that now covers the ex
 
 ## Verified Packages
 
-- `@narada2/site-task-lifecycle`
-- `@narada2/agent-context-memory`
-- `@narada2/site-inbox`
-- `@narada2/site-config`
-- `@narada2/site-lift`
-- `@narada2/mcp-shell-windows`
-- `@narada2/mcp-test-windows`
-- `@narada2/windows-operator-surface`
+- `@narada-core/site-task-lifecycle`
+- `@narada-core/agent-context-memory`
+- `@narada-core/site-inbox`
+- `@narada-core/site-config`
+- `@narada-core/site-lift`
+- `@narada-core/mcp-shell-windows`
+- `@narada-core/mcp-test-windows`
+- `@narada-core/windows-operator-surface`
 
 ## Verification
 

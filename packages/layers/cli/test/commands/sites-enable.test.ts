@@ -29,8 +29,8 @@ const mockSupervisor = {
   register: vi.fn(async () => ({ servicePath: '/tmp/linux/test-site.service', timerPath: '/tmp/linux/test-site.timer' })),
 };
 
-vi.mock('@narada2/macos-site', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/macos-site')>();
+vi.mock('@narada-core/macos-site', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/macos-site')>();
   return {
     ...mod,
     isMacosSite: vi.fn((_siteId: string) => _siteId.startsWith('macos-')),
@@ -40,8 +40,8 @@ vi.mock('@narada2/macos-site', async (importOriginal) => {
   };
 });
 
-vi.mock('@narada2/linux-site', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/linux-site')>();
+vi.mock('@narada-core/linux-site', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/linux-site')>();
   return {
     ...mod,
     isLinuxSite: vi.fn((_siteId: string) => _siteId.startsWith('linux-')),
@@ -56,8 +56,8 @@ vi.mock('@narada2/linux-site', async (importOriginal) => {
   };
 });
 
-vi.mock('@narada2/windows-site', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/windows-site')>();
+vi.mock('@narada-core/windows-site', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/windows-site')>();
   return {
     ...mod,
     resolveSiteVariant: vi.fn((_siteId: string) => {
@@ -192,7 +192,7 @@ describe('sitesEnableCommand', () => {
   });
 
   it('dry run does not call macOS supervisor', async () => {
-    const { writeLaunchAgentFiles } = await import('@narada2/macos-site');
+    const { writeLaunchAgentFiles } = await import('@narada-core/macos-site');
     const ctx = createMockContext();
     const result = await sitesEnableCommand('macos-test', {
       dryRun: true,
@@ -205,7 +205,7 @@ describe('sitesEnableCommand', () => {
   });
 
   it('dry run does not call Windows native supervisor', async () => {
-    const { generateRegisterTaskScript } = await import('@narada2/windows-site');
+    const { generateRegisterTaskScript } = await import('@narada-core/windows-site');
     const ctx = createMockContext();
     const result = await sitesEnableCommand('win-native-test', {
       dryRun: true,
@@ -220,7 +220,7 @@ describe('sitesEnableCommand', () => {
   });
 
   it('dry run does not call Windows WSL supervisor', async () => {
-    const { writeSystemdUnits, writeShellScript } = await import('@narada2/windows-site');
+    const { writeSystemdUnits, writeShellScript } = await import('@narada-core/windows-site');
     const ctx = createMockContext();
     const result = await sitesEnableCommand('win-wsl-test', {
       dryRun: true,

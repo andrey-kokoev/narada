@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import { agentWebUiAttachCommand } from '../../src/commands/agent-web-ui.js';
 import { narsAttachCommandCommand, narsAuthorityTransitionExecuteCommand, narsAuthorityTransitionPlanCommand, narsSessionsCommand } from '../../src/commands/nars.js';
 import type { CommandContext } from '../../src/lib/command-wrapper.js';
@@ -10,7 +10,7 @@ import { ExitCode } from '../../src/lib/exit-codes.js';
 
 const registrySites: Array<{ siteId: string; siteRoot: string }> = [];
 
-vi.mock('@narada2/windows-site', () => ({
+vi.mock('@narada-core/windows-site', () => ({
   resolveRegistryDbPath: () => 'mock-registry.db',
   resolveRegistryDbPathByLocus: () => 'mock-registry.db',
   openRegistryDb: vi.fn(async () => ({ close: vi.fn() })),

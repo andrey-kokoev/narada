@@ -1,8 +1,8 @@
 ---
-"@narada2/cli": minor
-"@narada2/daemon": minor
-"@narada2/control-plane": patch
-"@narada2/ops-kit": patch
+"@narada-core/cli": minor
+"@narada-core/daemon": minor
+"@narada-core/control-plane": patch
+"@narada-core/ops-kit": patch
 ---
 
 Product Surface Coherence chapter (Tasks 252, 254–257)

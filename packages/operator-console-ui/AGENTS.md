@@ -1,6 +1,6 @@
-# AGENTS.md - @narada2/operator-console-ui
+# AGENTS.md - @narada-core/operator-console-ui
 
-The browser Operator Console UI: cross-Site observation and audited-control pages served by the Narada CLI console server. Package metadata in `package.json` (`narada` block) is authoritative: `package_role: private_operator_surface_ui`, `surface: operator_console`, `presentation_only: true`, `authority_owner: @narada2/cli`.
+The browser Operator Console UI: cross-Site observation and audited-control pages served by the Narada CLI console server. Package metadata in `package.json` (`narada` block) is authoritative: `package_role: private_operator_surface_ui`, `surface: operator_console`, `presentation_only: true`, `authority_owner: @narada-core/cli`.
 
 For kernel and workspace rules, read the parent authorities first:
 
@@ -18,8 +18,8 @@ It owns:
 
 It does not own:
 
-- the surface catalog, route directory contract, or wire records — `@narada2/operator-console-contract` owns those; never keep a second surface list here;
-- the HTTP API, Site Registry, or any mutation authority — `@narada2/cli` (`console-server*.ts`) owns those;
+- the surface catalog, route directory contract, or wire records — `@narada-core/operator-console-contract` owns those; never keep a second surface list here;
+- the HTTP API, Site Registry, or any mutation authority — `@narada-core/cli` (`console-server*.ts`) owns those;
 - Site, session, or artifact state; this package is presentation-only.
 
 ## Boundary Rules
@@ -33,8 +33,8 @@ It does not own:
 ## Verification
 
 ```text
-pnpm --filter @narada2/operator-console-ui test
-pnpm --filter @narada2/operator-console-ui typecheck
+pnpm --filter @narada-core/operator-console-ui test
+pnpm --filter @narada-core/operator-console-ui typecheck
 ```
 
 `test` runs `vue-tsc` first, then node:test suites including `test/architecture-boundary.test.ts`, which enforces the presentation-only boundary. Build (`vite build`) produces the `operator-console` launch artifact in `dist/`; `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.mjs`.

@@ -156,7 +156,7 @@ export function generateRegisterTaskScript(
 
   const execCommand = scriptPath
     ? `"${nodePath}" "${scriptPath}" --site ${siteId}`
-    : `"${nodePath}" -e "require('@narada2/cli').cycle({ site: '${siteId}' })"`;
+    : `"${nodePath}" -e "require('@narada-core/cli').cycle({ site: '${siteId}' })"`;
 
   const logDir = join(siteRoot, "logs");
 

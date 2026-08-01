@@ -1,6 +1,6 @@
 /** Cloudflare-native transport and gateway wiring for invokable intelligence. */
 
-import { D1MaterializationStore } from "@narada2/invokable-intelligence-materialization/d1";
+import { D1MaterializationStore } from "@narada-core/invokable-intelligence-materialization/d1";
 import {
   latestCatalogRecords,
   type AuthoritativeDecisionClock,
@@ -8,8 +8,8 @@ import {
   type InferenceAdapter as CatalogInferenceAdapter,
   type InvocationAuthorityBinding,
   type ResourceRef,
-} from "@narada2/invokable-intelligence-contract";
-import { D1RegistryStore } from "@narada2/invokable-intelligence-registry/d1";
+} from "@narada-core/invokable-intelligence-contract";
+import { D1RegistryStore } from "@narada-core/invokable-intelligence-registry/d1";
 import {
   buildResolverContext,
   createLocalInvocationGateway,

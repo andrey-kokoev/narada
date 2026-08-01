@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { createProjectedTerminalBridge } from '@narada2/carrier-terminal-projection/projected-terminal';
+import { createProjectedTerminalBridge } from '@narada-core/carrier-terminal-projection/projected-terminal';
 import { createControlInputBridge } from './control-input-bridge.js';
 import {
   createRuntimeCapabilityGateway,
@@ -47,7 +47,7 @@ import { handleArtifactHttpRequest } from './runtime-server-artifacts.js';
 import { createNarsRuntimeHostStateMachine } from './runtime-host-state.js';
 import { createNarsHealthProjectionRequestStateMachine } from './health-projection-request-state.js';
 import { parseEndpointOptions, valueAfterFlag } from './runtime-server-options.js';
-import { createSessionAuthorityRuntimeBinding } from '@narada2/nars-session-authority';
+import { createSessionAuthorityRuntimeBinding } from '@narada-core/nars-session-authority';
 
 export { formatHostStatusEvent } from './runtime-server-events.js';
 

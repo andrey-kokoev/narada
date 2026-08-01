@@ -8,7 +8,7 @@ import {
   validateCanonicalCatalogRecord,
   validateMaterializationAdmission,
   validateMaterializationEnvelope,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   CanonicalCatalogRecord,
   CanonicalCatalogSeed,
@@ -27,15 +27,15 @@ import type {
   MaterializationRevocation,
   ResourceKind,
   ResourceRef,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   IntelligenceMaterializationStore,
   StoredMaterializationResult,
-} from "@narada2/invokable-intelligence-materialization";
-import { RegistryError } from "@narada2/invokable-intelligence-registry/store";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
-import { resolveInvocation } from "@narada2/invokable-intelligence-resolver";
-import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+} from "@narada-core/invokable-intelligence-materialization";
+import { RegistryError } from "@narada-core/invokable-intelligence-registry/store";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
+import { resolveInvocation } from "@narada-core/invokable-intelligence-resolver";
+import type { ResolverContext } from "@narada-core/invokable-intelligence-resolver";
 import { inspectLocalIntelligenceReadiness } from "./local-readiness.js";
 import type { LocalReadinessContext } from "./local-readiness.js";
 import { observeCatalog as observeCatalogThroughAdapter } from "./catalog-observation.js";

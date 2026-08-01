@@ -3,7 +3,7 @@
   "site_id": "narada-proper",
   "target_site_root": "D:\\code\\narada",
   "carrier_id": "site_inbox_local_substrate",
-  "package_name": "@narada2/site-inbox",
+  "package_name": "@narada-core/site-inbox",
   "source_state_imported": false,
   "envelopes": [],
   "decisions": [],

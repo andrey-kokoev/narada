@@ -26,7 +26,7 @@
   "db_mutation_execution": "completed",
   "mcp_transport_smoke": "generic_transport_passed_site_task_lifecycle_tools_missing",
   "terminal_live_site_setup_claimable": false,
-  "no_import_evidence": "The harness used empty sourceImportRefs, neutral Narada proper identities, Windows sqlite3.exe outside @narada2/site-task-lifecycle, and no narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity/source-history inputs. Result evidence reports sourceStateImported=false, packageOwnsSqliteDependency=false, and packageExecutedSqliteMutation=false.",
+  "no_import_evidence": "The harness used empty sourceImportRefs, neutral Narada proper identities, Windows sqlite3.exe outside @narada-core/site-task-lifecycle, and no narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity/source-history inputs. Result evidence reports sourceStateImported=false, packageOwnsSqliteDependency=false, and packageExecutedSqliteMutation=false.",
   "verification": [
     {
       "command": "pnpm exec tsx .narada\\execution\\task-0003\\live-setup.ts",

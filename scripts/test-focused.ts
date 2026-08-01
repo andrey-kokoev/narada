@@ -7,9 +7,9 @@
  * visible alongside broad wrapper commands.
  *
  * Usage:
- *   pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/unit/ids/event-id.test.ts"
- *   ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/a.test.ts test/commands/b.test.ts"
- *   ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"
+ *   pnpm test:focused "pnpm --filter @narada-core/control-plane exec vitest run test/unit/ids/event-id.test.ts"
+ *   ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada-core/cli exec vitest run test/commands/a.test.ts test/commands/b.test.ts"
+ *   ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada-core/charters test"
  */
 
 import {
@@ -33,7 +33,7 @@ function normalizeFocusedCommand(command: string): string {
   const promoteSuite = "test/commands/task-promote-recommendation.test.ts";
   const rosterSuite = "test/commands/task-roster.test.ts";
   if (
-    /@narada2\/cli/.test(command) &&
+    /@narada-core\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
     command.includes(promoteSuite)
   ) {
@@ -45,7 +45,7 @@ function normalizeFocusedCommand(command: string): string {
     return `${envPrefix}node scripts/cli-focused-proof.ts task-promote-recommendation`;
   }
   if (
-    /@narada2\/cli/.test(command) &&
+    /@narada-core\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
     command.includes(rosterSuite)
   ) {
@@ -58,7 +58,7 @@ function normalizeFocusedCommand(command: string): string {
   }
 
   const isCliVitestSingleFile =
-    /@narada2\/cli/.test(command) &&
+    /@narada-core\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
     (command.match(/\S+\.(?:test|spec)\.[cm]?[tj]sx?/g) ?? []).length === 1;
 
@@ -166,9 +166,9 @@ if (!rawCommand) {
   console.error(`${colors.red}Usage: pnpm test:focused "<command>"${colors.reset}`);
   console.error("");
   console.error("Examples:");
-  console.error('  pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/unit/ids/event-id.test.ts"');
-  console.error('  ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/cli exec vitest run test/commands/a.test.ts test/commands/b.test.ts"');
-  console.error('  ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada2/charters test"');
+  console.error('  pnpm test:focused "pnpm --filter @narada-core/control-plane exec vitest run test/unit/ids/event-id.test.ts"');
+  console.error('  ALLOW_MULTI_FILE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada-core/cli exec vitest run test/commands/a.test.ts test/commands/b.test.ts"');
+  console.error('  ALLOW_PACKAGE_FOCUSED=1 pnpm test:focused "pnpm --filter @narada-core/charters test"');
   process.exit(1);
 }
 

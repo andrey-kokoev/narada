@@ -22,11 +22,11 @@ import {
 } from './workspace-directory.js';
 import {
   OPERATOR_CONSOLE_PATH,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import type {
   OperatorConsoleHttpRouteParityEntry,
   OperatorWorkspaceRouteDirectory,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import { renderCloudflareWorkspacePage } from './cloudflare-workspace-page.js';
 import { handleCloudflareHostFleetRequest, isCloudflareHostFleetPath } from './cloudflare-host-fleet.js';
 

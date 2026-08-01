@@ -9,7 +9,7 @@
  */
 
 import { createServer, type IncomingMessage, type ServerResponse, type Server } from "http";
-import type { GraphNotification } from "@narada2/control-plane";
+import type { GraphNotification } from "@narada-core/control-plane";
 import {
   extractValidationToken,
   extractSignature,

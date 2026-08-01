@@ -28,7 +28,7 @@ The receiving Site then imports descriptor/contract APIs such as:
 The receiving Site must create and admit its own local runtime state:
 
 - local initializer execution;
-- local concrete adapter outside `@narada2/site-task-lifecycle`;
+- local concrete adapter outside `@narada-core/site-task-lifecycle`;
 - local DB mutation through that admitted adapter;
 - local MCP registration or transport.
 

@@ -12,11 +12,11 @@ import {
   OPERATOR_CONSOLE_LAUNCH_PATH,
   OPERATOR_CONSOLE_ONBOARDING_PATH,
   OPERATOR_CONSOLE_REGISTRY_PATH,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import {
   restartOperatorConsoleRuntime,
   serveOperatorConsoleRuntime,
-} from '@narada2/operator-console-runtime';
+} from '@narada-core/operator-console-runtime';
 import {
   consoleMirrorRotateCommand,
   consoleMirrorRunCommand,

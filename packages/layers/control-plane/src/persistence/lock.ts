@@ -7,7 +7,7 @@
 
 import { mkdir, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
-import { execFileGoverned } from "@narada2/process-launch-posture";
+import { execFileGoverned } from "@narada-core/process-launch-posture";
 import { isWindows } from "../utils/platform.js";
 
 // Simple implementation that works on both platforms

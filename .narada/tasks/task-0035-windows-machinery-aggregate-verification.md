@@ -12,13 +12,13 @@ Run an aggregate verification pass across the adopted Windows machinery descript
 
 ## Verified Packages
 
-- `@narada2/windows-machinery-capability-exchange`
-- `@narada2/mcp-shell-windows`
-- `@narada2/mcp-test-windows`
-- `@narada2/windows-operator-surface`
-- `@narada2/windows-osl`
-- `@narada2/windows-pc-site-template`
-- `@narada2/windows-komorebi-yasb-kit`
+- `@narada-core/windows-machinery-capability-exchange`
+- `@narada-core/mcp-shell-windows`
+- `@narada-core/mcp-test-windows`
+- `@narada-core/windows-operator-surface`
+- `@narada-core/windows-osl`
+- `@narada-core/windows-pc-site-template`
+- `@narada-core/windows-komorebi-yasb-kit`
 
 ## Verification
 

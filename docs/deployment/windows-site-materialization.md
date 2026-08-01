@@ -35,7 +35,7 @@ Variant and authority locus are independent. `native` vs `wsl` answers how the S
 >
 > This chapter documents two concrete Windows materializations. A generic `Site` abstraction (interface, base class, or shared package) is **not justified yet**. The Cloudflare and Windows families differ in lock mechanism, secret binding, and process lifecycle enough that premature abstraction would hide real substrate constraints.
 >
-> If Tasks 372–377 reveal substantial commonality (e.g., identical health schema, identical cycle-step pipeline, identical trace format), a shared `@narada2/site-core` package may be proposed in the closure review (Task 377). Until then, each substrate keeps its own package or module.
+> If Tasks 372–377 reveal substantial commonality (e.g., identical health schema, identical cycle-step pipeline, identical trace format), a shared `@narada-core/site-core` package may be proposed in the closure review (Task 377). Until then, each substrate keeps its own package or module.
 
 ---
 
@@ -192,7 +192,7 @@ Both variants share these Narada concerns, even though the Windows substrate dif
 | **Site identity** | `site_id` string, config-declared authority locus, root under `%USERPROFILE%\Narada` or `%ProgramData%\Narada\sites\pc\` | `site_id` string, directory name under `/var/lib/narada/` |
 | **Cycle trigger** | Task Scheduler task → PowerShell → Node.js | systemd timer / cron → shell → Node.js |
 | **Coordinator/storage** | `better-sqlite3` file at `{siteRoot}\coordinator.db` | `better-sqlite3` file at `{siteRoot}/coordinator.db` |
-| **Lock/recovery model** | `FileLock` from `@narada2/control-plane` (cross-platform, handles Windows via `tasklist` PID check) | Same `FileLock` |
+| **Lock/recovery model** | `FileLock` from `@narada-core/control-plane` (cross-platform, handles Windows via `tasklist` PID check) | Same `FileLock` |
 | **Health/trace location** | SQLite `site_health` + `cycle_traces` tables | Identical SQLite tables (same schema) |
 | **Trace artifacts** | NTFS `{siteRoot}\traces\` | ext4 `{siteRoot}/traces/` |
 | **Secret binding** | Windows Credential Manager or env | Linux env or `.env` file |
@@ -211,7 +211,7 @@ The Cycle explicitly avoids long-running daemon assumptions.
 
 ### Steps
 
-1. **Acquire Site/Cycle lock** — Claim exclusive coordination authority via `FileLock` from `@narada2/control-plane`. Fail fast if another Cycle is active.
+1. **Acquire Site/Cycle lock** — Claim exclusive coordination authority via `FileLock` from `@narada-core/control-plane`. Fail fast if another Cycle is active.
 2. **Sync source deltas** — Pull new facts from the Source. Write cursor and apply-log updates.
 3. **Derive / admit work** — Run context formation + foreman admission over new facts. Open or supersede work items.
 4. **Run charter evaluation** — Lease runnable work, execute charters, persist evaluations.
@@ -238,7 +238,7 @@ The Cycle explicitly avoids long-running daemon assumptions.
 | `/var/lib/narada/` machine state | `%ProgramData%\Narada\sites\pc\{site_id}` | Native PC-locus |
 | Legacy Windows local app data | `%LOCALAPPDATA%\Narada\{site_id}\` | Native compatibility |
 | Unix domain sockets for inter-process communication | Named pipes or localhost TCP | Native |
-| `flock()` / `fcntl()` file locking | `FileLock` from `@narada2/control-plane` (mkdir-based, cross-platform, handles Windows via `tasklist` PID check) | Both |
+| `flock()` / `fcntl()` file locking | `FileLock` from `@narada-core/control-plane` (mkdir-based, cross-platform, handles Windows via `tasklist` PID check) | Both |
 | systemd / cron for scheduling | Task Scheduler | Native |
 | systemd / cron for scheduling | systemd (if available) or cron | WSL |
 | POSIX path separators (`/`) | Windows path separators (`\\`) | Native |
@@ -419,7 +419,7 @@ The boundary contract (Task 372) proposed modules named `credential-resolver.ts`
 
 | Contract Name | Actual Name | Rationale |
 |---------------|-------------|-----------|
-| `credential-resolver.ts` | `credentials.ts` | Shorter; aligns with `@narada2/control-plane` naming conventions |
+| `credential-resolver.ts` | `credentials.ts` | Shorter; aligns with `@narada-core/control-plane` naming conventions |
 | `operator-surface.ts` | `observability.ts` | Explicitly read-only; mirrors control-plane `observability/` boundary |
 | `WindowsSiteSupervisor` | `supervisor.ts` (functions, not class) | Template generators are pure functions; no mutable state needed |
 | — | `router.ts` (new) | `ControlRequestRouter` provides the audited console→Site control boundary |

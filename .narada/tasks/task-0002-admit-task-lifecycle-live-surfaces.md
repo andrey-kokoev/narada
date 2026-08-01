@@ -25,7 +25,7 @@ Update `.narada/capabilities/mcp-surfaces.json` so site-local task lifecycle MCP
 ## Non-Goals
 
 - No live initializer execution.
-- No concrete SQLite dependency admission inside `@narada2/site-task-lifecycle`.
+- No concrete SQLite dependency admission inside `@narada-core/site-task-lifecycle`.
 - No SQLite mutation.
 - No live MCP transport registration.
 - No narada-andrey DB, task history, inbox history, roster, checkpoint, operator-surface, PC-locus, secret, identity-specific state, or source history import.

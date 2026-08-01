@@ -1,4 +1,4 @@
-import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
+import { NarsKernelContractError } from '@narada-core/nars-intelligence-kernel-contract';
 
 const NATIVE_TOOL_NAMES: any = new Set([
   'read', 'write', 'edit', 'bash', 'shell', 'exec', 'process', 'filesystem',

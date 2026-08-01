@@ -11,7 +11,7 @@ One green browser test is not sufficient. The test must exercise the same author
 Run the focused deterministic readiness slice from the Narada repository:
 
 ```text
-pnpm --filter @narada2/cli test:operator-console-production-readiness
+pnpm --filter @narada-core/cli test:operator-console-production-readiness
 ```
 
 The command builds the CLI and the agent-web-ui artifact before starting tests. This build dependency is intentional: the real launch path starts the materialized agent-web-ui bundle, so a stale or absent bundle is a launch failure and must not depend on an unrelated manual build. It then runs the focused admission, gateway-diagnostics, and workspace-boundary Vitest suites. Programmatic Operator Console launches request a User Site-owned workspace-result artifact, so a failed launch has both the console diagnostic and the nested workspace evidence available for correlation.
@@ -20,7 +20,7 @@ The command builds the CLI and the agent-web-ui artifact before starting tests. 
 
 ### 1. Artifact materialization gate
 
-Setup: build every artifact consumed by the launch command, including `@narada2/agent-web-ui`.
+Setup: build every artifact consumed by the launch command, including `@narada-core/agent-web-ui`.
 
 Proof:
 

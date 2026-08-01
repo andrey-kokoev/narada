@@ -1,15 +1,15 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { finishTaskService } from '@narada2/task-governance/task-finish-service';
+import { finishTaskService } from '@narada-core/task-governance/task-finish-service';
 import { rosterOnFinish, withAuthoredRosterJsonPreserved } from './update-roster-agent.js';
-import { taskGovernance, taskLifecycleStore } from '@narada2/task-governance';
+import { taskGovernance, taskLifecycleStore } from '@narada-core/task-governance';
 import { emitCheckpoint } from './emit-checkpoint.js';
 import { validateFollowUpLedger } from './follow-up-ledger-validation.js';
 import { validateRecoveryTruthfulnessBody } from './recovery-truthfulness-guard.js';
 import { readFileSync, existsSync, unlinkSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { execGovernedSync } from '@narada2/process-launch-posture';
+import { execGovernedSync } from '@narada-core/process-launch-posture';
 
 function parseArgs(argv: any) : any {
   const args: any = { positional: [], close: false };

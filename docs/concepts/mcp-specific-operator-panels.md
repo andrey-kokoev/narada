@@ -1,7 +1,7 @@
 # MCP-Specific Operator Panels
 
 This document defines the boundary for operator panels that display MCP-backed
-or operational data in `@narada2/agent-web-ui`.
+or operational data in `@narada-core/agent-web-ui`.
 
 ## Current Contract
 
@@ -24,7 +24,7 @@ projections, not MCP clients and not runtime authorities.
 
 ## Transport Split
 
-`@narada2/agent-web-ui` has two transport paths:
+`@narada-core/agent-web-ui` has two transport paths:
 
 | Path | Admitted controls | Panel-summary behavior |
 | --- | --- | --- |

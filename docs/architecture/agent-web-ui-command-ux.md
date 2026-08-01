@@ -212,7 +212,7 @@ Owns Agent Web UI command definitions, parsing, action construction, validation,
 
 `packages/agent-web-ui`
 
-Owns palette rendering, keyboard interaction, local UI command effects, panel rendering, and browser-level accessibility tests. Browser E2E for ordinary Agent Web UI UX uses Playwright-managed browsers through `pnpm --filter @narada2/agent-web-ui test:e2e`; `pnpm --filter @narada2/agent-web-ui test:browser` is an alias for that path. `src/app/components/OperatorComposer.vue` stays a thin render/wiring surface; command palette state lives in the operator composables and command controller.
+Owns palette rendering, keyboard interaction, local UI command effects, panel rendering, and browser-level accessibility tests. Browser E2E for ordinary Agent Web UI UX uses Playwright-managed browsers through `pnpm --filter @narada-core/agent-web-ui test:e2e`; `pnpm --filter @narada-core/agent-web-ui test:browser` is an alias for that path. `src/app/components/OperatorComposer.vue` stays a thin render/wiring surface; command palette state lives in the operator composables and command controller.
 
 The browser test split is intentional:
 
@@ -228,7 +228,7 @@ Own protocol endpoints and server-side command execution. They should not own br
 
 ## Implementation Plan
 
-1. Add static command registry to `@narada2/nars-client-projection-contract`.
+1. Add static command registry to `@narada-core/nars-client-projection-contract`.
 2. Refactor existing operator input parsing to resolve through the registry.
 3. Add generated help text from the registry.
 4. Add focused parser tests for aliases, missing arguments, unknown commands, and unavailable commands.

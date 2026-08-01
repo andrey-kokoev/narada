@@ -1,6 +1,6 @@
-# AGENTS.md - @narada2/agent-web-ui
+# AGENTS.md - @narada-core/agent-web-ui
 
-The production Agent Web UI browser surface for one NARS session. The Narada CLI resolves `@narada2/agent-web-ui/server` for local and Cloudflare projection launch.
+The production Agent Web UI browser surface for one NARS session. The Narada CLI resolves `@narada-core/agent-web-ui/server` for local and Cloudflare projection launch.
 
 Package metadata in `package.json` (`narada` block) is authoritative for role and admission: `package_role: production_web_ui`, `production_admission: allowed`.
 
@@ -23,11 +23,11 @@ It does not own:
 - runtime dependency construction, provider turn execution, MCP fabric hosting, slash command execution;
 - session state, event ordering, health, authority, or command admission — NARS owns those. The UI never becomes hidden authority: every operator effect crosses NARS admission.
 
-Protocol method shapes come from `@narada2/nars-client-projection-contract`; do not redefine them locally.
+Protocol method shapes come from `@narada-core/nars-client-projection-contract`; do not redefine them locally.
 
 ## Layout
 
-- `src/server.ts` — server entry resolved by the Narada CLI (`@narada2/agent-web-ui/server`).
+- `src/server.ts` — server entry resolved by the Narada CLI (`@narada-core/agent-web-ui/server`).
 - `src/protocol/` — transports (`localSessionTransport.ts`, `cloudflareSessionTransport.ts`, `sessionTransportAdapters.ts`), `narsClient.ts`, operator input framing/lifecycle.
 - `src/session-projection*.ts`, `src/event-stream.ts`, `src/runtime-events.ts` — session store and projection.
 - `classifyRuntimeMessage()` in `session-projection.ts` separates `operation_fact` evidence (control, request-state, input lifecycle) from `conversation_fact`; `session-projection-boundaries.ts` merges assistant-message streaming boundaries.
@@ -50,9 +50,9 @@ Protocol method shapes come from `@narada2/nars-client-projection-contract`; do 
 Default bounded checks (node:test + Vitest, typecheck, build):
 
 ```text
-pnpm --filter @narada2/agent-web-ui test
-pnpm --filter @narada2/agent-web-ui typecheck
-pnpm --filter @narada2/agent-web-ui build
+pnpm --filter @narada-core/agent-web-ui test
+pnpm --filter @narada-core/agent-web-ui typecheck
+pnpm --filter @narada-core/agent-web-ui build
 ```
 
 Escalation:
@@ -62,4 +62,4 @@ Escalation:
 
 Test ownership map: `agent-web-ui-projection.test.ts` (event/session projection), `agent-web-ui-protocol.test.ts` (protocol framing and attachment boundaries), `agent-web-ui.test.ts` (preferences, feature seams, package wiring, bounded UI contracts).
 
-Build produces the launch artifact in `dist/` (`index.html` + `assets/**`); `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.ts`. `prebuild`/`pretest` build `@narada2/ui` and `@narada2/cloudflare-nars-projection` first — a bare `vite build` or test run without them is not the canonical path.
+Build produces the launch artifact in `dist/` (`index.html` + `assets/**`); `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.ts`. `prebuild`/`pretest` build `@narada-core/ui` and `@narada-core/cloudflare-nars-projection` first — a bare `vite build` or test run without them is not the canonical path.

@@ -1,4 +1,4 @@
-declare module '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site' {
+declare module '@narada-core/site-common-tools/compat/mcp-payload-file.legacy-site' {
   export const attachPayloadSource: any;
   export const buildOutputRefToolContent: any;
   export const commandCreate: any;
@@ -18,7 +18,7 @@ declare module '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site' 
   export const resolveToolPayloadArgs: any;
 }
 
-declare module '@narada2/site-common-tools/mcp-freshness-service' {
+declare module '@narada-core/site-common-tools/mcp-freshness-service' {
   export const acknowledgeMcpRestartRequest: any;
   export const buildMcpFreshnessStatus: any;
   export const readJsonFile: any;
@@ -27,19 +27,19 @@ declare module '@narada2/site-common-tools/mcp-freshness-service' {
   export const writeMcpRuntimeInstanceObservation: any;
 }
 
-declare module '@narada2/site-common-tools/operator-surface/mcp-runtime-instance-registry' {
+declare module '@narada-core/site-common-tools/operator-surface/mcp-runtime-instance-registry' {
   export const buildMcpRuntimeRegistryStatus: any;
 }
 
-declare module '@narada2/site-common-tools/site-locus-shim' {
+declare module '@narada-core/site-common-tools/site-locus-shim' {
   export const NARADA_PC_SITE_LOCUS: any;
   export const NARADA_USER_SITE_LOCUS: any;
 }
 
-declare module '@narada2/task-lifecycle-tools/src/task-mcp-tool-registry.js' {
+declare module '@narada-core/task-lifecycle-tools/src/task-mcp-tool-registry.js' {
   export const taskLifecycleTools: any;
 }
 
-declare module '@narada2/site-common-tools/task-lifecycle-mcp-resolution' {
+declare module '@narada-core/site-common-tools/task-lifecycle-mcp-resolution' {
   export const resolveTaskLifecycleMcpServer: any;
 }

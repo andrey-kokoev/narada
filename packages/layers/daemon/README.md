@@ -1,4 +1,4 @@
-# @narada2/daemon
+# @narada-core/daemon
 
 Long-running daemon for the Narada deterministic state compiler and control plane.
 
@@ -6,7 +6,7 @@ Long-running daemon for the Narada deterministic state compiler and control plan
 
 ## Overview
 
-This package provides a daemon/service that continuously polls sources, dispatches `SyncCompletionSignal` to the foreman, schedules work via leases, and executes chartered effects. It is built on the core `@narada2/control-plane` library.
+This package provides a daemon/service that continuously polls sources, dispatches `SyncCompletionSignal` to the foreman, schedules work via leases, and executes chartered effects. It is built on the core `@narada-core/control-plane` library.
 
 ## Usage
 

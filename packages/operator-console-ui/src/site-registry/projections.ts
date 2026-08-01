@@ -1,5 +1,5 @@
-import type { RegistrySiteRecord } from '@narada2/site-registry-contract';
-import { OPERATOR_CONSOLE_REGISTRY_PATH } from '@narada2/operator-console-contract';
+import type { RegistrySiteRecord } from '@narada-core/site-registry-contract';
+import { OPERATOR_CONSOLE_REGISTRY_PATH } from '@narada-core/operator-console-contract';
 
 export type SiteProjectionTone = 'positive' | 'neutral' | 'warning' | 'danger';
 

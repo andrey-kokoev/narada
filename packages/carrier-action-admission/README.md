@@ -15,7 +15,7 @@ Canonical source:
 D:\code\narada\packages\carrier-action-admission\src\
 ```
 
-`@narada2/agent-cli` and Agent Runtime Server use this package to keep model-selected MCP calls
+`@narada-core/agent-cli` and Agent Runtime Server use this package to keep model-selected MCP calls
 from becoming authority merely because a tool exists.
 
 ## Invariant
@@ -32,13 +32,13 @@ No carrier should bypass this boundary for non-read-only MCP calls.
 
 ## Relationship To MCP Fabric
 
-`@narada2/mcp-fabric` projects the Site MCP fabric and tool metadata.
-`@narada2/carrier-action-admission` decides whether a carrier request against
+`@narada-core/mcp-fabric` projects the Site MCP fabric and tool metadata.
+`@narada-core/carrier-action-admission` decides whether a carrier request against
 that fabric may execute, must be refused, or must be routed as evidence.
 
 ## Verification
 
 ```powershell
-pnpm --filter @narada2/carrier-action-admission test
-pnpm --filter @narada2/carrier-action-admission typecheck
+pnpm --filter @narada-core/carrier-action-admission test
+pnpm --filter @narada-core/carrier-action-admission typecheck
 ```

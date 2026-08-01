@@ -2,7 +2,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import type { OperatorSiteAgentLaunchWireResponse } from '@narada2/operator-console-contract';
+import type { OperatorSiteAgentLaunchWireResponse } from '@narada-core/operator-console-contract';
 
 interface AdmissionLease {
   token: string;

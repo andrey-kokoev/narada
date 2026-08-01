@@ -1,4 +1,4 @@
-# @narada2/intent-zones
+# @narada-core/intent-zones
 
 This package owns Narada's reusable intent-zone contracts for local command and test execution.
 

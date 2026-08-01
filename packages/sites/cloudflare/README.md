@@ -1,4 +1,4 @@
-# @narada2/cloudflare-site
+# @narada-core/cloudflare-site
 
 Cloudflare Worker entrypoint for Narada Site materialization and bounded Cycle execution.
 
@@ -13,10 +13,10 @@ Cloudflare Worker entrypoint for Narada Site materialization and bounded Cycle e
 
 | Concern | Owner | Task |
 |---------|-------|------|
-| Durable Object implementation | `@narada2/cloudflare-site` (future module) | Task 322 |
-| Bounded Cycle execution logic | `@narada2/cloudflare-site` (future module) | Task 325 |
-| R2 read/write adapters | `@narada2/cloudflare-site` (future module) | Task 323 |
-| KV caching layer | `@narada2/cloudflare-site` (future module) | Task 324 |
+| Durable Object implementation | `@narada-core/cloudflare-site` (future module) | Task 322 |
+| Bounded Cycle execution logic | `@narada-core/cloudflare-site` (future module) | Task 325 |
+| R2 read/write adapters | `@narada-core/cloudflare-site` (future module) | Task 323 |
+| KV caching layer | `@narada-core/cloudflare-site` (future module) | Task 324 |
 | Deployment config (Wrangler.toml) | Ops / CI | Future |
 
 ## Cloudflare Bindings
@@ -53,11 +53,11 @@ export default {
 ## Build
 
 ```bash
-pnpm --filter @narada2/cloudflare-site typecheck
+pnpm --filter @narada-core/cloudflare-site typecheck
 ```
 
 ```bash
-pnpm --filter @narada2/cloudflare-site build
+pnpm --filter @narada-core/cloudflare-site build
 ```
 
 ## Status

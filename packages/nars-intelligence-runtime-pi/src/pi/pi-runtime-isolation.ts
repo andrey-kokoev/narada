@@ -1,4 +1,4 @@
-import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
+import { NarsKernelContractError } from '@narada-core/nars-intelligence-kernel-contract';
 
 export const PI_RUNTIME_ISOLATION_POSTURE: any = Object.freeze({
   schema: 'narada.nars.pi.runtime_isolation.v1',

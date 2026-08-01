@@ -13,9 +13,9 @@ import type {
   NarsKernelStartContext,
   NarsKernelStartEvidence,
   NarsKernelTurnResult,
-} from '@narada2/nars-intelligence-kernel-contract';
+} from '@narada-core/nars-intelligence-kernel-contract';
 
-export * from '@narada2/nars-intelligence-kernel-contract';
+export * from '@narada-core/nars-intelligence-kernel-contract';
 
 export interface NarsPiProviderAdapter {
   invoke(input: Record<string, unknown>): Promise<Record<string, unknown>>;

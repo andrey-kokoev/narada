@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@narada2/ui-vue';
+} from '@narada-core/ui-vue';
 import { describeFacets, type ProjectionViewDraft, type ProjectionViewFacetOption, type ProjectionViewOption } from '../lib/projectionViews';
 import type { CustomProjectionView } from '../composables/useProjectionVerbosity';
 

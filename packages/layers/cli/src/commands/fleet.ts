@@ -13,7 +13,7 @@ import {
   type HostGatewayTransport,
   type HostGatewayCredentialClass,
   type HostFleetGatewayObservation,
-} from '@narada2/host-fleet';
+} from '@narada-core/host-fleet';
 import type { Command } from 'commander';
 import { directCommandAction, type CommanderOptionValues } from '../lib/command-wrapper.js';
 import { emitCommandResult, formattedResult, resolveCommandFormat, type CliFormat } from '../lib/cli-output.js';

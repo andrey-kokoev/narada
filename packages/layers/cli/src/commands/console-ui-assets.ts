@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, extname, resolve, sep } from 'node:path';
-import { OPERATOR_CONSOLE_ASSET_PATH } from '@narada2/operator-console-contract';
+import { OPERATOR_CONSOLE_ASSET_PATH } from '@narada-core/operator-console-contract';
 
 const require = createRequire(import.meta.url);
 
@@ -11,7 +11,7 @@ interface ConsoleUiAsset {
 }
 
 function packageIndexPath(artifactRoot?: string | null): string {
-  return artifactRoot ? resolve(artifactRoot, 'index.html') : require.resolve('@narada2/operator-console-ui/dist/index.html');
+  return artifactRoot ? resolve(artifactRoot, 'index.html') : require.resolve('@narada-core/operator-console-ui/dist/index.html');
 }
 
 export function readOperatorConsoleUiDocument(artifactRoot?: string | null): string {

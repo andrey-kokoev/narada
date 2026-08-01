@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { resolve } from 'node:path';
 import { resolveSingleScopeSyncRoot } from '../../src/commands/sync.js';
-import type { ScopeConfig } from '@narada2/control-plane';
+import type { ScopeConfig } from '@narada-core/control-plane';
 
 function makeScope(rootDir: string): ScopeConfig {
   return {

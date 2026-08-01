@@ -43,7 +43,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/windows-osl now includes read-only OSL WebView2 panel payload contracts, builder, validation, refusal guards, and source inventory documentation.",
+  "terminal_claim": "@narada-core/windows-osl now includes read-only OSL WebView2 panel payload contracts, builder, validation, refusal guards, and source inventory documentation.",
   "refused_imports": [
     "live WebView2 host runtime",
     "runtime payload files",
@@ -65,5 +65,5 @@
     "runtime projection authority for any receiving Site"
   ],
   "rollback": "Remove OSL panel payload source, tests, source inventory doc, README section, and this task evidence. No runtime state was mutated or imported.",
-  "next_smallest_slice": "Deepen @narada2/mcp-shell-windows with typed command-intent/refusal descriptors or expose package-local OSL payload validation through a read-only descriptor surface."
+  "next_smallest_slice": "Deepen @narada-core/mcp-shell-windows with typed command-intent/refusal descriptors or expose package-local OSL payload validation through a read-only descriptor surface."
 }

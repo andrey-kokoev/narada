@@ -5,7 +5,7 @@ import {
   classifyNarsClientEventProjection,
   operatorViewAllowsProjection,
   operatorViewPolicyFor,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import { classifyRuntimeMessage, createSessionProjection } from '../src/session-projection.ts';
 
 const providerAgent = {

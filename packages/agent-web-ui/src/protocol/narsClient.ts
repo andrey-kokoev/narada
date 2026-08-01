@@ -1,4 +1,4 @@
-import { buildAgentWebUiEventsReadFrame, isAgentWebUiCloudflareProtocolFrame, isAgentWebUiNarsMethod, normalizeNarsClientProjectionVerbosity } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiEventsReadFrame, isAgentWebUiCloudflareProtocolFrame, isAgentWebUiNarsMethod, normalizeNarsClientProjectionVerbosity } from '@narada-core/nars-client-projection-contract';
 import { isProjectionInputAdmissionAccepted, sessionIdFromTransportMessage, toSessionProtocolFrame, type SessionProtocolFrame, type SessionTransport, type SessionTransportCorrelation } from './sessionTransport';
 import { startCloudflareSessionTransport } from './cloudflareSessionTransport';
 import { startLocalSessionTransport } from './localSessionTransport';

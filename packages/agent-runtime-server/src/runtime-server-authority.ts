@@ -23,11 +23,11 @@ export function createDelegatedAuthorityHandoff({ args = [], env = process.env, 
     schema: 'narada.nars.delegated_authority_handoff.v1',
     crossing_regime: 'nars_runtime_server_to_carrier_substrate',
     source: {
-      package: '@narada2/agent-runtime-server',
+      package: '@narada-core/agent-runtime-server',
       entrypoint: 'narada-agent-runtime-server',
     },
     target: {
-      package: '@narada2/carrier-runtime',
+      package: '@narada-core/carrier-runtime',
       mode: 'in-process',
     },
     generated_at: generatedAt,

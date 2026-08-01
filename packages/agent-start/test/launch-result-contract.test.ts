@@ -17,7 +17,7 @@ import {
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 
 test('resolves the canonical contract through the package export', async () => {
-  const contract: any = await import('@narada2/agent-start/launch-result-v0-contract');
+  const contract: any = await import('@narada-core/agent-start/launch-result-v0-contract');
   assert.equal(contract.AGENT_START_RESULT_SCHEMA, 'narada.agent_start.result.v0');
   assert.equal(typeof contract.assertAgentStartResultV0, 'function');
 });

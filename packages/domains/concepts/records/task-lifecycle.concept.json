@@ -17,7 +17,7 @@
     { "kind": "governs", "concept_id": "task_executability_assessment" },
     { "kind": "projects_to", "concept_id": "delegation_dag_template" }
   ],
-  "owner_surface": "@narada2/task-governance-core task lifecycle authority",
+  "owner_surface": "@narada-core/task-governance-core task lifecycle authority",
   "authority": {
     "kind": "package",
     "ref": "narada-core/packages/task-governance-core",

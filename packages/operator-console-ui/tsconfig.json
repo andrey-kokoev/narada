@@ -21,16 +21,16 @@
       "@/*": [
         "src/*"
       ],
-      "@narada2/site-registry-contract": [
+      "@narada-core/site-registry-contract": [
         "../site-registry-contract/src/index.ts"
       ],
-      "@narada2/host-fleet/contract": [
+      "@narada-core/host-fleet/contract": [
         "../host-fleet/src/contract.ts"
       ],
-      "@narada2/ui-vue": [
+      "@narada-core/ui-vue": [
         "../ui-vue/src/index.ts"
       ],
-      "@narada2/ui-vue/styles.css": [
+      "@narada-core/ui-vue/styles.css": [
         "../ui-vue/src/styles.css"
       ]
     }

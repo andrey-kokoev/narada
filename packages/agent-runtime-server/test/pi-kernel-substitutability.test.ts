@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { mkdtempSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { createNarsNativeKernel } from '@narada2/nars-intelligence-kernel-contract/native-kernel';
-import { createNarsPiSdkKernel } from '@narada2/nars-pi-kernel';
-import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
+import { createNarsNativeKernel } from '@narada-core/nars-intelligence-kernel-contract/native-kernel';
+import { createNarsPiSdkKernel } from '@narada-core/nars-pi-kernel';
+import { readNarsEventLog } from '@narada-core/nars-session-core/event-log';
 import { createRuntimeSessionBinding } from '../src/runtime-session-binding.js';
 
 function providerResponse(content: any) {

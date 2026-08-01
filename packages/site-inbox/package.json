@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-inbox",
+  "name": "@narada-core/site-inbox",
   "version": "0.1.0",
   "description": "Descriptor contracts for receiving-Site canonical inbox intake and portable envelope artifacts",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-inbox"
   }
 }

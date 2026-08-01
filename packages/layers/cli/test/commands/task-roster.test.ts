@@ -44,7 +44,7 @@ import {
   saveReport,
 } from '../../src/lib/task-governance.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
-import { Database } from '@narada2/control-plane';
+import { Database } from '@narada-core/control-plane';
 import { openTaskLifecycleStore, SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

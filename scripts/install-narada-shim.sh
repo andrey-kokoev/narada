@@ -39,7 +39,7 @@ CONTROL_PLANE_SRC_DIR="${CONTROL_PLANE_SRC_DIR}"
 CONTROL_PLANE_DIST_BIN="${CONTROL_PLANE_DIST_BIN}"
 TASK_GOVERNANCE_SRC_DIR="${TASK_GOVERNANCE_SRC_DIR}"
 TASK_GOVERNANCE_DIST_BIN="${TASK_GOVERNANCE_DIST_BIN}"
-BUILD_COMMAND='pnpm --filter @narada2/control-plane build && pnpm --filter @narada2/task-governance build && pnpm --filter @narada2/cli build'
+BUILD_COMMAND='pnpm --filter @narada-core/control-plane build && pnpm --filter @narada-core/task-governance build && pnpm --filter @narada-core/cli build'
 ALLOW_STALE_REASON="\${NARADA_SHIM_ALLOW_STALE_AUTHORITY_MUTATION_REASON:-}"
 SANITIZED_ARGS=()
 while [[ \$# -gt 0 ]]; do
@@ -119,9 +119,9 @@ find_stale_sources() {
       find "\${source_dir}" -type f \\( -name '*.ts' -o -name '*.tsx' \\) -newer "\${dist_bin}" -print | sed "s#^#\${package_name}:#"
     fi
   done <<PAIRS
-@narada2/control-plane|\${CONTROL_PLANE_SRC_DIR}|\${CONTROL_PLANE_DIST_BIN}
-@narada2/task-governance|\${TASK_GOVERNANCE_SRC_DIR}|\${TASK_GOVERNANCE_DIST_BIN}
-@narada2/cli|\${SRC_DIR}|\${DIST_BIN}
+@narada-core/control-plane|\${CONTROL_PLANE_SRC_DIR}|\${CONTROL_PLANE_DIST_BIN}
+@narada-core/task-governance|\${TASK_GOVERNANCE_SRC_DIR}|\${TASK_GOVERNANCE_DIST_BIN}
+@narada-core/cli|\${SRC_DIR}|\${DIST_BIN}
 PAIRS
 }
 print_readiness() {
@@ -158,9 +158,9 @@ if [[ -n "\${stale_sources}" ]]; then
         exit 1
       fi
       print_readiness "stale_dist_auto_build_admitted" "\${command_class}" "Source is stale; rebuilding because NARADA_SHIM_AUTO_BUILD=1."
-      pnpm --dir "\${ROOT_DIR}" --filter @narada2/control-plane build >&2
-      pnpm --dir "\${ROOT_DIR}" --filter @narada2/task-governance build >&2
-      pnpm --dir "\${ROOT_DIR}" --filter @narada2/cli build >&2
+      pnpm --dir "\${ROOT_DIR}" --filter @narada-core/control-plane build >&2
+      pnpm --dir "\${ROOT_DIR}" --filter @narada-core/task-governance build >&2
+      pnpm --dir "\${ROOT_DIR}" --filter @narada-core/cli build >&2
     elif [[ "\${command_class}" == "read_only" ]]; then
       print_readiness "stale_dist_read_only_admitted" "\${command_class}" "Source is stale relative to dist: \${stale_sources}"
     elif [[ "\${command_class}" == "authority_mutation" && "\${NARADA_SHIM_ALLOW_STALE_AUTHORITY_MUTATION:-0}" == "1" && -n "\${ALLOW_STALE_REASON}" ]]; then

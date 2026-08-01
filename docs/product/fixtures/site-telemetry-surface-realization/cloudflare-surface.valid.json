@@ -4,7 +4,7 @@
   "owning_site_id": "narada-andrey",
   "realization_kind": "cloudflare_worker_kv_d1",
   "surface_role": "user_site_awareness_surface",
-  "package_ref": "@narada2/site-registry-cloudflare",
+  "package_ref": "@narada-core/site-registry-cloudflare",
   "routes": [
     { "method": "GET", "path": "/health", "purpose": "readiness" },
     { "method": "POST", "path": "/webhook", "purpose": "telemetry_event_receive" },
@@ -31,8 +31,8 @@
     "admin": "capability:site_telemetry.admin.narada-proper"
   },
   "readiness_evidence_refs": [
-    "pnpm --filter @narada2/site-registry-cloudflare test",
-    "pnpm --filter @narada2/site-registry-cloudflare build"
+    "pnpm --filter @narada-core/site-registry-cloudflare test",
+    "pnpm --filter @narada-core/site-registry-cloudflare build"
   ],
   "projection_models": [
     "site_registry_read_model.v0"

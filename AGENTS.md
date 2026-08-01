@@ -102,48 +102,48 @@ Cross-cutting runtime, contract, MCP, carrier, NARS, agent, operator, and UI pac
 
 | Package | Path | Responsibility |
 |---------|------|----------------|
-| `@narada2/control-plane` | `packages/layers/control-plane` | Deterministic compiler, control plane, coordinator, foreman, scheduler, outbound workers, persistence, Graph adapter, observability, configuration, secure storage |
-| `@narada2/cli` | `packages/layers/cli` | `narada` and `narada-mcp` binaries; all CLI commands |
-| `@narada2/daemon` | `packages/layers/daemon` | Long-running polling loop, HTTP observation UI, webhook server |
-| `@narada2/charters` | `packages/domains/charters` | Charter contracts, policy types, tool catalog, knowledge sources |
-| `@narada2/search` | `packages/verticals/search` | SQLite FTS5 search index |
-| `@narada2/mailbox` | `packages/verticals/mailbox` | Mailbox vertical specifics |
-| `@narada2/ops-kit` | `packages/ops-kit` | Operation shaping, repo bootstrapping, preflight |
-| `@narada2/site-config` | `packages/site-config` | Site configuration contracts |
-| `@narada2/site-task-lifecycle` | `packages/site-task-lifecycle` | Task lifecycle bindings for Sites |
-| `@narada2/task-lifecycle-kernel` | `packages/task-lifecycle-kernel` | Lightweight MCP-style task lifecycle kernel (`.mjs`) |
-| `@narada2/task-governance` | `packages/task-governance` | Task governance primitives |
-| `@narada2/agent-context-memory` | `packages/agent-context-memory` | Agent checkpoint memory contracts |
-| `@narada2/narada-proper-mcp` | `packages/narada-proper-mcp` | Target-local Narada MCP facade |
-| `@narada2/mcp-fabric` / `@narada2/typed-mcp-surface` | `packages/mcp-fabric`, `packages/typed-mcp-surface` | MCP surface plumbing |
-| `@narada2/windows-site` / `@narada2/macos-site` / `@narada2/linux-site` / `@narada2/cloudflare-site` | `packages/sites/*` | Per-substrate Site materialization |
-| `@narada2/cloudflare-carrier` | `packages/cloudflare-carrier` | Cloudflare carrier runtime |
-| `@narada2/cloudflare-site-registry` | `packages/cloudflare-site-registry` | Carrier-embedded Cloudflare D1 site registry runtime |
-| `@narada2/site-registry-cloudflare` | `packages/site-registry-cloudflare` | Hosted Cloudflare Worker read-model surface for Site Registry and telemetry |
-| `@narada2/operator-surface-carriers` / `@narada2/window-surface-overlay` / `@narada2/windows-operator-surface` | `packages/operator-surface-carriers`, `packages/window-surface-overlay`, `packages/windows-operator-surface` | Windows operator-surface machinery |
-| `@narada2/window-overlay-core` | `packages/window-overlay-core` | Reusable WPF overlay process, persisted window preferences, versioned document renderer, and safe overlay actions |
-| `@narada2/operator-console-runtime` | `packages/operator-console-runtime` | Readiness, singleton start/stop/restart, process identity, bounded waits, and diagnostics for the local Operator Console runtime |
-| `@narada2/operator-console-remote-gateway` | `packages/operator-console-remote-gateway` | Authenticated loopback crossing boundary for remote Operator Console requests; forwards only admitted `/console` routes to the stable Operator Router |
-| `@narada2/operator-console-mirror-runtime` | `packages/operator-console-mirror-runtime` | Governed detached lifecycle for the local Operator Console Cloudflare mirror, including tunnel health, credential rotation, and durable diagnostics |
-| `@narada2/operator-console-overlay` | `packages/operator-console-overlay` | Operator Console specialization of the generic overlay; delegates local runtime readiness/lifecycle to `operator-console-runtime` |
-| `@narada2/mcp-shell-windows` | `packages/mcp-shell-windows` | Packaged shell MCP server |
-| `@narada2/invokable-intelligence-contract` | `packages/invokable-intelligence-contract` | Versioned invokable-intelligence ontology: typed resources, qualified capability assertions, typed policies, invocation Intent→Plan→Attempt→Evidence contracts (#2180) |
-| `@narada2/invokable-intelligence-registry` | `packages/invokable-intelligence-registry` | Portable intelligence registry storage: one store contract over node:sqlite and Cloudflare D1, typed relational schema, supersession history, shared conformance suite (#2181) |
-| `@narada2/invokable-intelligence-resolver` | `packages/invokable-intelligence-resolver` | Deterministic hierarchical resolver: cumulative hard eligibility across target/User/Host loci, preference ranking with stable tie-breakers, explainable plans and typed refusals (#2182) |
-| `@narada2/invokable-intelligence-management` | `packages/invokable-intelligence-management` | Intelligence catalog/policy management: `narada-intelligence` CLI, host-agnostic MCP tools, idempotent legacy provider-registry migration, temporary read-only compat projection (#2183) |
-| `@narada2/invokable-intelligence-runtime` | `packages/invokable-intelligence-runtime` | Local invocation gateway and evidence recorder: per-invocation resolution, injected adapter dispatch, Intent→Plan→Attempt→Evidence persistence with replay/restart idempotency, legacy binding bridge (#2184) |
+| `@narada-core/control-plane` | `packages/layers/control-plane` | Deterministic compiler, control plane, coordinator, foreman, scheduler, outbound workers, persistence, Graph adapter, observability, configuration, secure storage |
+| `@narada-core/cli` | `packages/layers/cli` | `narada` and `narada-mcp` binaries; all CLI commands |
+| `@narada-core/daemon` | `packages/layers/daemon` | Long-running polling loop, HTTP observation UI, webhook server |
+| `@narada-core/charters` | `packages/domains/charters` | Charter contracts, policy types, tool catalog, knowledge sources |
+| `@narada-core/search` | `packages/verticals/search` | SQLite FTS5 search index |
+| `@narada-core/mailbox` | `packages/verticals/mailbox` | Mailbox vertical specifics |
+| `@narada-core/ops-kit` | `packages/ops-kit` | Operation shaping, repo bootstrapping, preflight |
+| `@narada-core/site-config` | `packages/site-config` | Site configuration contracts |
+| `@narada-core/site-task-lifecycle` | `packages/site-task-lifecycle` | Task lifecycle bindings for Sites |
+| `@narada-core/task-lifecycle-kernel` | `packages/task-lifecycle-kernel` | Lightweight MCP-style task lifecycle kernel (`.mjs`) |
+| `@narada-core/task-governance` | `packages/task-governance` | Task governance primitives |
+| `@narada-core/agent-context-memory` | `packages/agent-context-memory` | Agent checkpoint memory contracts |
+| `@narada-core/narada-proper-mcp` | `packages/narada-proper-mcp` | Target-local Narada MCP facade |
+| `@narada-core/mcp-fabric` / `@narada-core/typed-mcp-surface` | `packages/mcp-fabric`, `packages/typed-mcp-surface` | MCP surface plumbing |
+| `@narada-core/windows-site` / `@narada-core/macos-site` / `@narada-core/linux-site` / `@narada-core/cloudflare-site` | `packages/sites/*` | Per-substrate Site materialization |
+| `@narada-core/cloudflare-carrier` | `packages/cloudflare-carrier` | Cloudflare carrier runtime |
+| `@narada-core/cloudflare-site-registry` | `packages/cloudflare-site-registry` | Carrier-embedded Cloudflare D1 site registry runtime |
+| `@narada-core/site-registry-cloudflare` | `packages/site-registry-cloudflare` | Hosted Cloudflare Worker read-model surface for Site Registry and telemetry |
+| `@narada-core/operator-surface-carriers` / `@narada-core/window-surface-overlay` / `@narada-core/windows-operator-surface` | `packages/operator-surface-carriers`, `packages/window-surface-overlay`, `packages/windows-operator-surface` | Windows operator-surface machinery |
+| `@narada-core/window-overlay-core` | `packages/window-overlay-core` | Reusable WPF overlay process, persisted window preferences, versioned document renderer, and safe overlay actions |
+| `@narada-core/operator-console-runtime` | `packages/operator-console-runtime` | Readiness, singleton start/stop/restart, process identity, bounded waits, and diagnostics for the local Operator Console runtime |
+| `@narada-core/operator-console-remote-gateway` | `packages/operator-console-remote-gateway` | Authenticated loopback crossing boundary for remote Operator Console requests; forwards only admitted `/console` routes to the stable Operator Router |
+| `@narada-core/operator-console-mirror-runtime` | `packages/operator-console-mirror-runtime` | Governed detached lifecycle for the local Operator Console Cloudflare mirror, including tunnel health, credential rotation, and durable diagnostics |
+| `@narada-core/operator-console-overlay` | `packages/operator-console-overlay` | Operator Console specialization of the generic overlay; delegates local runtime readiness/lifecycle to `operator-console-runtime` |
+| `@narada-core/mcp-shell-windows` | `packages/mcp-shell-windows` | Packaged shell MCP server |
+| `@narada-core/invokable-intelligence-contract` | `packages/invokable-intelligence-contract` | Versioned invokable-intelligence ontology: typed resources, qualified capability assertions, typed policies, invocation Intent→Plan→Attempt→Evidence contracts (#2180) |
+| `@narada-core/invokable-intelligence-registry` | `packages/invokable-intelligence-registry` | Portable intelligence registry storage: one store contract over node:sqlite and Cloudflare D1, typed relational schema, supersession history, shared conformance suite (#2181) |
+| `@narada-core/invokable-intelligence-resolver` | `packages/invokable-intelligence-resolver` | Deterministic hierarchical resolver: cumulative hard eligibility across target/User/Host loci, preference ranking with stable tie-breakers, explainable plans and typed refusals (#2182) |
+| `@narada-core/invokable-intelligence-management` | `packages/invokable-intelligence-management` | Intelligence catalog/policy management: `narada-intelligence` CLI, host-agnostic MCP tools, idempotent legacy provider-registry migration, temporary read-only compat projection (#2183) |
+| `@narada-core/invokable-intelligence-runtime` | `packages/invokable-intelligence-runtime` | Local invocation gateway and evidence recorder: per-invocation resolution, injected adapter dispatch, Intent→Plan→Attempt→Evidence persistence with replay/restart idempotency, legacy binding bridge (#2184) |
 
 Operator-facing browser UI stack:
 
 | Package | Path | Responsibility |
 |---------|------|----------------|
-| `@narada2/ui` | `packages/ui` | Renderer-neutral design tokens and compiled UI foundation |
-| `@narada2/ui-vue` | `packages/ui-vue` | Vue renderer primitives built on `@narada2/ui` |
-| `@narada2/operator-console-ui` | `packages/operator-console-ui` | Browser Operator Console UI (`/console/registry` and related pages); presentation-only |
-| `@narada2/operator-console-contract` | `packages/operator-console-contract` | Shared operator surface catalog, v3 route directory, redacted session wire records |
-| `@narada2/agent-web-ui` | `packages/agent-web-ui` | Production per-session browser UI for one NARS session |
+| `@narada-core/ui` | `packages/ui` | Renderer-neutral design tokens and compiled UI foundation |
+| `@narada-core/ui-vue` | `packages/ui-vue` | Vue renderer primitives built on `@narada-core/ui` |
+| `@narada-core/operator-console-ui` | `packages/operator-console-ui` | Browser Operator Console UI (`/console/registry` and related pages); presentation-only |
+| `@narada-core/operator-console-contract` | `packages/operator-console-contract` | Shared operator surface catalog, v3 route directory, redacted session wire records |
+| `@narada-core/agent-web-ui` | `packages/agent-web-ui` | Production per-session browser UI for one NARS session |
 
-The workspace landing page (`/`) and console HTTP server live in `@narada2/cli` (`packages/layers/cli/src/commands/operator-workspace-page.ts`, `console-server.ts`, `console-server-routes.ts`, `console-register.ts`).
+The workspace landing page (`/`) and console HTTP server live in `@narada-core/cli` (`packages/layers/cli/src/commands/operator-workspace-page.ts`, `console-server.ts`, `console-server-routes.ts`, `console-register.ts`).
 
 Archived packages live under `packages/_archive/`. Contract, carrier, MCP, NARS, agent, operator, and UI packages live flat under `packages/*`. Treat each as a focused package with its own `package.json`, `tsconfig.json`, and `vitest.config.ts` where present; use its `description` and role-catalog entry to determine responsibility and authority.
 
@@ -258,7 +258,7 @@ pnpm typecheck        # tsc --noEmit across all packages
 Control-plane build also regenerates `config.schema.json`:
 
 ```bash
-pnpm --filter @narada2/control-plane generate:config-schema
+pnpm --filter @narada-core/control-plane generate:config-schema
 ```
 
 ### Multi-repo workspace state (accepted fragility, guarded)
@@ -330,13 +330,13 @@ Focused test examples:
 
 ```bash
 # Single control-plane test file
-pnpm test:focused "pnpm --filter @narada2/control-plane exec vitest run test/unit/ids/event-id.test.ts"
+pnpm test:focused "pnpm --filter @narada-core/control-plane exec vitest run test/unit/ids/event-id.test.ts"
 
 # Single CLI test file
 pnpm --dir packages/layers/cli exec vitest run test/commands/task-report.test.ts
 
 # Launcher verification: typecheck first, then one focused launcher test
-pnpm --filter @narada2/cli test:launcher:focused -- test/commands/workspace-launch-admission.test.ts
+pnpm --filter @narada-core/cli test:launcher:focused -- test/commands/workspace-launch-admission.test.ts
 
 # Inbox tests (integration-heavy; keep bounded)
 pnpm --dir packages/layers/cli exec vitest run test/commands/inbox.test.ts test/commands/inbox-mutation-evidence.test.ts
@@ -345,7 +345,7 @@ pnpm --dir packages/layers/cli exec vitest run test/commands/inbox.test.ts test/
 `pnpm test:focused` records timing and classification to `.ai/metrics/test-runtimes.json`.
 
 For launcher work, direct Vitest invocation is behavioral exploration only. Use
-`pnpm --filter @narada2/cli test:launcher:focused -- <one-test-file>` when the
+`pnpm --filter @narada-core/cli test:launcher:focused -- <one-test-file>` when the
 result must count as verification; this command runs CLI typecheck first and
 does not start the behavioral test if compilation fails. The broad
 `test:launcher` command remains the launcher suite and includes the workspace
@@ -652,7 +652,7 @@ This is a summary. The full contract is in [`.ai/task-contracts/agent-task-execu
 1. Create `packages/layers/cli/src/commands/{command}.ts`.
 2. Register it in `packages/layers/cli/src/main.ts` (or the appropriate `*-register.ts`).
 3. Export types from `packages/layers/cli/src/index.ts`.
-4. Use `loadConfig()` from `@narada2/control-plane` for config handling.
+4. Use `loadConfig()` from `@narada-core/control-plane` for config handling.
 
 ### 5. Add a New Non-Mail Vertical
 

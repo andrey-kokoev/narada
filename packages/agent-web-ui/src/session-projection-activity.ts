@@ -1,5 +1,5 @@
 import { unwrapRuntimeEvent } from './runtime-events.ts';
-import { agentIdentityDisplay } from '@narada2/agent-identity';
+import { agentIdentityDisplay } from '@narada-core/agent-identity';
 import { isRecord, type UnknownRecord } from './types.ts';
 
 export const TURN_ACTIVITY_PHASES = Object.freeze({

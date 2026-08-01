@@ -10,7 +10,7 @@
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 
 export async function withAuthoredRosterJsonPreserved(cwd: any, fn: any) : Promise<any> {
   const rosterPath: any = join(resolve(cwd), '.ai', 'agents', 'roster.json');

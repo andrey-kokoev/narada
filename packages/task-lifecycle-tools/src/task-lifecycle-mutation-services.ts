@@ -1,8 +1,8 @@
 import { randomUUID } from 'crypto';
 import { resolve } from 'path';
 import { readFileSync, writeFileSync } from 'node:fs';
-import { findTaskFile, readTaskFile, writeTaskProjection, isValidTransition } from '@narada2/task-governance/task-governance';
-import { admitTaskEvidence } from '@narada2/task-governance/evidence-admission';
+import { findTaskFile, readTaskFile, writeTaskProjection, isValidTransition } from '@narada-core/task-governance/task-governance';
+import { admitTaskEvidence } from '@narada-core/task-governance/evidence-admission';
 import { deriveClosureAuthority } from './closure-authority.js';
 
 export async function claimLifecycleTask({ siteRoot, store, taskNumber, agentId }: any) : Promise<any> {

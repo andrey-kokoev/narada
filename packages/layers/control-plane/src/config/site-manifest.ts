@@ -7,7 +7,7 @@
  */
 
 import { z } from "zod";
-import { AllowedActionSchema } from "@narada2/charters";
+import { AllowedActionSchema } from "@narada-core/charters";
 
 // ---------------------------------------------------------------------------
 // Re-use existing source config shape for Site bindings

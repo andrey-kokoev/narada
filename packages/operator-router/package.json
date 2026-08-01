@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/operator-router",
+  "name": "@narada-core/operator-router",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -40,8 +40,8 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
-    "@narada2/nars-session-core": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/nars-session-core": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -54,7 +54,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/operator-router"
   }
 }

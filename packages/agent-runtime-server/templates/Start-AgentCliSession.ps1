@@ -1,7 +1,7 @@
 # Start-AgentCliSession.ps1
 # narada_template_id: narada.agent_cli.windows_wrapper
 # narada_template_version: 2
-# narada_template_source: @narada2/agent-runtime-server ./agent-cli-windows-wrapper-template
+# narada_template_source: @narada-core/agent-runtime-server ./agent-cli-windows-wrapper-template
 # narada_template_hash: __NARADA_TEMPLATE_HASH__
 
 param(
@@ -102,7 +102,7 @@ function Resolve-NaradaPackageRoot {
         throw "narada_package_not_resolvable: $PackageName; set NARADA_PROPER_ROOT or install the package where Node can resolve it"
     }
 
-    if ($PackageName -eq '@narada2/agent-cli') {
+    if ($PackageName -eq '@narada-core/agent-cli') {
         $agentCliRoot = if ($env:NARADA_AGENT_CLI_ROOT) { $env:NARADA_AGENT_CLI_ROOT } else { 'D:\code\agent-cli' }
         $agentCliPackageJson = Join-Path $agentCliRoot 'package.json'
         if (Test-Path -LiteralPath $agentCliPackageJson -PathType Leaf) {
@@ -143,8 +143,8 @@ function Resolve-NaradaPackageBin {
     return Join-Path $package.Root $target
 }
 
-$AgentCliPath = Resolve-NaradaPackageBin -PackageName '@narada2/agent-cli' -BinName 'narada-agent-cli'
-$AgentRuntimeServerPath = Resolve-NaradaPackageBin -PackageName '@narada2/agent-runtime-server' -BinName 'narada-agent-runtime-server'
+$AgentCliPath = Resolve-NaradaPackageBin -PackageName '@narada-core/agent-cli' -BinName 'narada-agent-cli'
+$AgentRuntimeServerPath = Resolve-NaradaPackageBin -PackageName '@narada-core/agent-runtime-server' -BinName 'narada-agent-runtime-server'
 
 function Import-DotEnvFile {
     param([Parameter(Mandatory)][string]$Path)

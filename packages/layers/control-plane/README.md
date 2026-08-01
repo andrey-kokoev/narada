@@ -1,4 +1,4 @@
-# @narada2/control-plane
+# @narada-core/control-plane
 
 Core library for the Narada deterministic state compiler and control plane.
 
@@ -17,9 +17,9 @@ Core library for the Narada deterministic state compiler and control plane.
 ## Installation
 
 ```bash
-npm install @narada2/control-plane
+npm install @narada-core/control-plane
 # or
-pnpm add @narada2/control-plane
+pnpm add @narada-core/control-plane
 ```
 
 ## Usage (Mailbox Vertical)
@@ -31,7 +31,7 @@ import {
   DefaultSyncRunner,
   FileCursorStore,
   FileApplyLogStore,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 // Load configuration
 const config = await loadConfig({ path: './config.json' });

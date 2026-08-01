@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-common-tools",
+  "name": "@narada-core/site-common-tools",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,15 +11,15 @@
     "LICENSE"
   ],
   "dependencies": {
-    "@narada2/mcp-transport": "workspace:*",
-    "@narada2/mcp-fabric-contracts": "workspace:*",
-    "@narada2/nars-session-core": "workspace:*",
-    "@narada2/site-paths": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/sqlite": "workspace:*",
-    "@narada2/agent-context-mcp": "workspace:*",
-    "@narada2/task-governance": "workspace:*",
-    "@narada2/task-governance-core": "workspace:*",
+    "@narada-core/mcp-transport": "workspace:*",
+    "@narada-core/mcp-fabric-contracts": "workspace:*",
+    "@narada-core/nars-session-core": "workspace:*",
+    "@narada-core/site-paths": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/sqlite": "workspace:*",
+    "@narada-core/agent-context-mcp": "workspace:*",
+    "@narada-core/task-governance": "workspace:*",
+    "@narada-core/task-governance-core": "workspace:*",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1"
   },
@@ -44,7 +44,7 @@
     "./inbox/inbox-index": "./src/inbox/inbox-index.ts"
   },
   "scripts": {
-    "prebuild": "pnpm --filter @narada2/task-governance build",
+    "prebuild": "pnpm --filter @narada-core/task-governance build",
     "test": "node --import tsx --test src/site-common-tools.test.ts src/task-lifecycle-mcp-resolution.test.ts src/operator-surface/carrier-restart-supervisor.test.ts src/site-init/site-live-carrier-state.test.ts src/site-init/site-init-lifecycle.test.ts src/site-init/site-init.test.ts src/site-lift/site-lift-lifecycle.test.ts src/site-lift/site-lift.test.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -54,7 +54,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-common-tools"
   }
 }

@@ -63,14 +63,14 @@ test('formatOperationNextWorkflowLiveText renders direct follow-on reads and wor
   assert.match(text, /Selected Operation: operation_alpha/);
   assert.match(text, /Delegated Workflow: session route=start_or_select_session/);
   assert.match(text, /Post Action: review_site_continuity_reconciliation_execution/);
-  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_live_smoke:2026-06-14T00:17:12\.374Z:completed --operator-session-file <operator-session-file>/);
-  assert.match(text, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text/);
-  assert.match(text, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text/);
-  assert.match(text, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text/);
+  assert.match(text, /Operation List: pnpm --filter @narada-core\/cloudflare-carrier product:operation:list:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_live_smoke --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_live_smoke:2026-06-14T00:17:12\.374Z:completed --operator-session-file <operator-session-file>/);
+  assert.match(text, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text/);
+  assert.match(text, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text/);
+  assert.match(text, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text/);
 });
 
 test('formatOperationNextWorkflowLiveText suppresses guarded links without site id', () => {

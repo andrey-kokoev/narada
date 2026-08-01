@@ -15,26 +15,26 @@ the packaged Narada proper binary.
 Executable entrypoint:
 
 ```text
-package: @narada2/agent-cli
+package: @narada-core/agent-cli
 bin:     narada-agent-cli
 ```
 
 Agent Runtime Server entrypoint:
 
 ```text
-package: @narada2/agent-runtime-server
+package: @narada-core/agent-runtime-server
 bin:     narada-agent-runtime-server
 ```
 
 Launch/materialization code must resolve `narada-agent-runtime-server` from
-`@narada2/agent-runtime-server`. The unqualified `agent-runtime-server` alias is
+`@narada-core/agent-runtime-server`. The unqualified `agent-runtime-server` alias is
 not an admitted package bin.
 
 Invokable-intelligence authority:
 
 ```text
-contract:   @narada2/invokable-intelligence-contract
-management: @narada2/invokable-intelligence-management
+contract:   @narada-core/invokable-intelligence-contract
+management: @narada-core/invokable-intelligence-management
 persistence: node:sqlite locally, Cloudflare D1 remotely
 ```
 
@@ -43,9 +43,9 @@ prompts, directives, and runtime state. They must not own carrier implementation
 provider resolution, streaming behavior, slash commands, or directive sideband
 semantics.
 
-`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but machine-addressable carrier execution delegates to Narada proper's packaged `narada-agent-runtime-server` entrypoint. The runtime server uses `@narada2/carrier-runtime` only for stateless turn adaptation and constructs session control through `@narada2/nars-session-core`; `agent-cli` remains a client/projection package rather than a runtime helper source.
+`C:\Users\Andrey\Narada` is the operator/user-site control surface. It may contain launchers, registry configuration, and operator affordances, but machine-addressable carrier execution delegates to Narada proper's packaged `narada-agent-runtime-server` entrypoint. The runtime server uses `@narada-core/carrier-runtime` only for stateless turn adaptation and constructs session control through `@narada-core/nars-session-core`; `agent-cli` remains a client/projection package rather than a runtime helper source.
 
-Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada2/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
+Site-local `start-agent.mjs` files are no longer admitted compatibility shims. Agent startup authority is the packaged `@narada-core/agent-start` TypeScript entrypoint, reached through the site PowerShell surface or package bin metadata.
 
 ## Client Wrapper Boundary
 
@@ -69,7 +69,7 @@ It must not:
 - fork provider metadata or provider resolution;
 - bypass the package-owned carrier queue, directive sideband, or MCP fabric loading.
 - start or substitute the `Carrier=agent-cli` runtime server path;
-- resolve the runtime server from `@narada2/agent-cli` or any agent-cli compatibility shim.
+- resolve the runtime server from `@narada-core/agent-cli` or any agent-cli compatibility shim.
 
 ## Dry-Run Invariant
 
@@ -88,12 +88,12 @@ reports no more selected records. The verifier also bounds each launch dry-run
 with `--launch-timeout-ms`, defaulting to 8500 ms.
 
 ```powershell
-pnpm --filter @narada2/agent-start test
-pnpm --filter @narada2/cli run test:launcher
-pnpm --filter @narada2/cli build
-pnpm --filter @narada2/agent-cli test
-pnpm --filter @narada2/agent-cli typecheck
-pnpm --filter @narada2/agent-runtime-server test
+pnpm --filter @narada-core/agent-start test
+pnpm --filter @narada-core/cli run test:launcher
+pnpm --filter @narada-core/cli build
+pnpm --filter @narada-core/agent-cli test
+pnpm --filter @narada-core/agent-cli typecheck
+pnpm --filter @narada-core/agent-runtime-server test
 node packages/agent-start/bin/verify-registered-site-launchers.ts --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy default-only --record-offset 0 --record-limit 1
 node packages/agent-start/bin/verify-registered-site-launchers.ts --registry C:/Users/Andrey/Narada/config/launch/agents.psd1 --start-agent C:/Users/Andrey/Narada/Start-NaradaAgent.ps1 --runtime-policy agent-tui-only --record-offset 0 --record-limit 1
 ```

@@ -2,7 +2,7 @@
  * FTS5 Indexer - builds and maintains the search index
  */
 
-import type Database from '@narada2/sqlite';
+import type Database from '@narada-core/sqlite';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { SearchDocument, IndexerStats } from './types.js';

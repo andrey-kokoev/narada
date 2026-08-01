@@ -1,4 +1,4 @@
-import { OPERATOR_CONSOLE_SESSIONS_API_PATH } from '@narada2/operator-console-contract';
+import { OPERATOR_CONSOLE_SESSIONS_API_PATH } from '@narada-core/operator-console-contract';
 
 export type AgentSessionsFetch = (input: string, init?: RequestInit) => Promise<Response>;
 

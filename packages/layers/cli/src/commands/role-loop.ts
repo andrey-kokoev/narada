@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { workNextCommand } from './work-next.js';

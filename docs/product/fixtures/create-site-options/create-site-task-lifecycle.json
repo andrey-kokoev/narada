@@ -4,7 +4,7 @@
   "preset": "task-lifecycle",
   "template_catalog": {
     "template_id": "narada-proper.templates.site.task-lifecycle.v0",
-    "template_components": ["@narada2/site-task-lifecycle"]
+    "template_components": ["@narada-core/site-task-lifecycle"]
   },
   "site": {
     "site_id": "project-alpha",
@@ -18,7 +18,7 @@
   },
   "packages": [
     {
-      "name": "@narada2/site-task-lifecycle",
+      "name": "@narada-core/site-task-lifecycle",
       "include_contracts": true,
       "include_docs": true,
       "include_schema_descriptors": true,
@@ -39,13 +39,13 @@
   "inbox": { "enable": "canonical_envelope_intake" },
   "task_lifecycle": {
     "enable": "descriptor_only",
-    "package": "@narada2/site-task-lifecycle"
+    "package": "@narada-core/site-task-lifecycle"
   },
   "agent_context": { "enable": false },
   "operator_surface": { "intent": "none" },
   "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
   "evidence": {
-    "template_refs": ["narada-proper.templates.site.task-lifecycle.v0", "package:@narada2/site-task-lifecycle"],
+    "template_refs": ["narada-proper.templates.site.task-lifecycle.v0", "package:@narada-core/site-task-lifecycle"],
     "refused_imports": []
   }
 }

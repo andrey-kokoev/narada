@@ -1,7 +1,7 @@
 import { closeSync, existsSync, mkdirSync, openSync } from 'node:fs';
 import { appendFile, readFile, unlink } from 'node:fs/promises';
 import { dirname, isAbsolute } from 'node:path';
-import { runGovernedCommandSync, spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync, spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 import type { WorkspaceLaunchProcessLaunch } from './workspace-launch-types.js';
 import type { WorkspaceLaunchRollbackEvidence, WorkspaceLaunchRollbackTargetEvidence } from './workspace-launch-contracts.js';
 

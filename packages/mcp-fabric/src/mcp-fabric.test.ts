@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import {
   McpFabricError,
   codexMcpEnvVarNames,
@@ -562,7 +562,7 @@ writeFileSync(join(legacyRegistrySite, '.narada', 'capabilities', 'mcp-surfaces.
   mcp_surfaces: [{
     surface_id: 'legacy.surface',
     server_name: 'narada-legacy',
-    package: '@narada2/legacy-mcp',
+    package: '@narada-core/legacy-mcp',
     registered_live_tools: [
       'agent_context_hydrate_current',
       'agent_context_memory.record_checkpoint',
@@ -733,7 +733,7 @@ writeFileSync(join(missingEntrypointSite, '.narada', 'capabilities', 'mcp-surfac
       generated_path: '.ai/mcp/missing-mcp.json',
       source_file: 'packages/site-common-tools/src/missing-surface.js',
       generated_by: 'surface-registry-test',
-      regeneration_command: 'pnpm --filter @narada2/typed-mcp-surface generate:test --write',
+      regeneration_command: 'pnpm --filter @narada-core/typed-mcp-surface generate:test --write',
     },
     tool_contract: { read_only_tools: ['missing_read'] },
   }],
@@ -749,7 +749,7 @@ assert.equal(missingReport.generated_config_diagnostics.status, 'stale_entrypoin
 assert.equal(missingReport.generated_config_diagnostics.generated_configs[0].config_ignored, true);
 assert.equal(missingReport.generated_config_diagnostics.generated_configs[0].repair_scope, 'ignored_local_projection_repair');
 assert.equal(missingReport.generated_config_diagnostics.stale_entrypoints[0].provenance.generated_by, 'surface-registry-test');
-assert.equal(missingReport.generated_config_diagnostics.stale_entrypoints[0].regeneration.command, 'pnpm --filter @narada2/typed-mcp-surface generate:test --write');
+assert.equal(missingReport.generated_config_diagnostics.stale_entrypoints[0].regeneration.command, 'pnpm --filter @narada-core/typed-mcp-surface generate:test --write');
 assert.equal(missingReport.rows[0].diagnostics[0].details.config_provenance.source_file, 'packages/site-common-tools/src/missing-surface.js');
 assert.equal(missingReport.rows[0].diagnostics[0].repair_plan.repair_scope, 'ignored_local_projection_repair');
 assert.match(missingReport.rows[0].diagnostics[0].repair_plan.recommended_actions.join('\n'), /ignored local MCP client config/);

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolveAuth } from '../shared/cloudflare-carrier-auth-http.ts';
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { stdin, stdout, stderr } from 'node:process';
@@ -715,32 +715,32 @@ function formatSiteContinuitySyncText(commandName: any, result: any, { operatorS
 
   if (worker && sessionFile && siteId && siteId !== 'unknown') {
     const baseArgs = `-- --url ${worker} --site ${siteId} --operator-session-file ${sessionFile}`;
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${baseArgs}`);
-    lines.push(`Operation List: pnpm --filter @narada2/cloudflare-carrier product:operation:list:text ${baseArgs}`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
-    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
-    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text ${baseArgs}`);
+    lines.push(`Operation List: pnpm --filter @narada-core/cloudflare-carrier product:operation:list:text ${baseArgs}`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text ${baseArgs} --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text ${baseArgs}`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text ${baseArgs}`);
     if (commandName=== 'sync-once' && result?.local_inbound_artifact?.artifact_path) {
-      lines.push(`Inbound Packet Materialize: pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet ${result.local_inbound_artifact.artifact_path}`);
+      lines.push(`Inbound Packet Materialize: pnpm --filter @narada-core/cloudflare-carrier continuity:bindings -- --packet ${result.local_inbound_artifact.artifact_path}`);
     }
     if (commandName=== 'sync-once' && result?.continuity_loop_report_artifact?.artifact_path) {
-      lines.push(`Loop Report Publish: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${baseArgs} --report-file ${result.continuity_loop_report_artifact.artifact_path}`);
+      lines.push(`Loop Report Publish: pnpm --filter @narada-core/cloudflare-carrier product:site-continuity:loop-report:text ${baseArgs} --report-file ${result.continuity_loop_report_artifact.artifact_path}`);
     }
     if (commandName=== 'repository-publication-execute-pending') {
       const firstResult = Array.isArray(result?.results) ? result.results[0] ?? null : null;
       if (firstResult?.request_id) {
-        lines.push(`Publication Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text ${baseArgs} --repository-publication-request-id ${firstResult.request_id}`);
+        lines.push(`Publication Request Review: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:request:review:text ${baseArgs} --repository-publication-request-id ${firstResult.request_id}`);
       }
       if (firstResult?.evidence?.publication_execution_id) {
-        lines.push(`Publication Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text ${baseArgs} --repository-publication-execution-id ${firstResult.evidence.publication_execution_id}`);
+        lines.push(`Publication Execution Read: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text ${baseArgs} --repository-publication-execution-id ${firstResult.evidence.publication_execution_id}`);
       }
-      lines.push(`Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text ${baseArgs}`);
+      lines.push(`Publication Provider Liveness: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:provider-liveness:text ${baseArgs}`);
     } else if (commandName=== 'repository-publication-evidence-put') {
       if (result?.repository_publication_request_id) {
-        lines.push(`Publication Request Review: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:review:text ${baseArgs} --repository-publication-request-id ${result.repository_publication_request_id}`);
+        lines.push(`Publication Request Review: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:request:review:text ${baseArgs} --repository-publication-request-id ${result.repository_publication_request_id}`);
       }
       if (result?.publication_execution_id) {
-        lines.push(`Publication Execution Read: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text ${baseArgs} --repository-publication-execution-id ${result.publication_execution_id}`);
+        lines.push(`Publication Execution Read: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text ${baseArgs} --repository-publication-execution-id ${result.publication_execution_id}`);
       }
     }
   }

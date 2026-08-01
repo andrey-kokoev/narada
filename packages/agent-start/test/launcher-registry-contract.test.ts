@@ -5,13 +5,13 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import {
   ADMITTED_LAUNCH_SELECTION_KINDS,
   operatorSurfaceLaunchMatrixRow,
   defaultRuntimeForOperatorSurface,
   NARADA_AGENT_RUNTIME_SERVER_KIND,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 const require: any = createRequire(import.meta.url);
 const __dirname: any = dirname(fileURLToPath(import.meta.url));

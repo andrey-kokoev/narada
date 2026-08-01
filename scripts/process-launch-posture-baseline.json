@@ -2,7 +2,7 @@
   "schema": "narada.process_launch_posture.baseline.v2",
   "generated_at": "2026-07-19T04:28:29.054Z",
   "id_basis": "file + child-process api + local source context sha256/16; line is metadata only",
-  "note": "Migration baseline for raw process launch sites. New sites must use @narada2/process-launch-posture wrappers or be intentionally added here.",
+  "note": "Migration baseline for raw process launch sites. New sites must use @narada-core/process-launch-posture wrappers or be intentionally added here.",
   "entries": [
     {
       "id": "packages/agent-start/test/provider-module-contract.test.ts:child_process.spawnSync:260cba6339b915a5",
@@ -914,7 +914,7 @@
       "line": 32,
       "api": "child_process.spawnSync",
       "posture": "governed_command_execution",
-      "text": "const result = spawnSync('pnpm', ['--filter', '@narada2/windows-site', 'continuity:windows', ...commandArgs], {"
+      "text": "const result = spawnSync('pnpm', ['--filter', '@narada-core/windows-site', 'continuity:windows', ...commandArgs], {"
     },
     {
       "id": "scripts/site-continuity-loop.test.ts:child_process.spawn:6a707f66756719b2",

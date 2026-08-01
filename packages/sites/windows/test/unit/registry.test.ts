@@ -8,8 +8,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "@narada2/sqlite";
-import { createSiteContinuityExchangePacket } from "@narada2/site-continuity";
+import Database from "@narada-core/sqlite";
+import { createSiteContinuityExchangePacket } from "@narada-core/site-continuity";
 import {
   SiteRegistry,
   openRegistryDb,

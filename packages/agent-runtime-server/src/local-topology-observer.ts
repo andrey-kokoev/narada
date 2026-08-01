@@ -4,7 +4,7 @@ import { request as httpsRequest } from 'node:https';
 import {
   canonicalJson,
   validateCanonicalCatalogRecord,
-} from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/invokable-intelligence-contract';
 
 const SOURCE_SCHEMA: any = 'narada.invokable-intelligence.local-topology-observation-source.v1';
 const ROUTE_SCHEMA: any = 'narada.invokable-intelligence.invocation-route-candidate.v1';

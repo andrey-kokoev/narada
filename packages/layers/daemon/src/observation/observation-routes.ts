@@ -45,7 +45,7 @@ import {
   getStuckOutboundCommands,
   getStuckOutboundSummary,
   type WorkItemLifecycleSummary,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type { RouteHandler } from "./routes.js";
 import type { ObservationApiScope } from "./observation-server.js";
 import { OUTBOUND_WORKER_IDS } from "../lib/workers.js";

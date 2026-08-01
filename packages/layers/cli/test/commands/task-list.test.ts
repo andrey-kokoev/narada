@@ -5,7 +5,7 @@ vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { taskListCommand } from '../../src/commands/task-list.js';
-import { Database } from '@narada2/control-plane';
+import { Database } from '@narada-core/control-plane';
 import { SqliteTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';

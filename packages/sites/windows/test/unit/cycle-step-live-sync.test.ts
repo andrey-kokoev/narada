@@ -5,8 +5,8 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import Database from "@narada2/sqlite";
-import type { Source, SourceBatch, SourceRecord } from "@narada2/control-plane";
+import Database from "@narada-core/sqlite";
+import type { Source, SourceBatch, SourceRecord } from "@narada-core/control-plane";
 import { WindowsCycleCoordinator } from "../../src/cycle-coordinator.js";
 import { createLiveSyncStepHandler } from "../../src/cycle-step.js";
 import { createGraphSource } from "../../src/graph-source.js";

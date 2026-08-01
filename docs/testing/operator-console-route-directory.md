@@ -41,13 +41,13 @@ and operator recovery steps are in
 Run from `D:\code\narada`:
 
 ```powershell
-pnpm --filter @narada2/operator-console-contract test
-pnpm --filter @narada2/operator-console-ui test
+pnpm --filter @narada-core/operator-console-contract test
+pnpm --filter @narada-core/operator-console-ui test
 node --test --test-name-pattern "Sites and Agents" packages/layers/cli/test/integration/operator-console-ui-e2e.test.ts
-pnpm --filter @narada2/cloudflare-nars-projection test
-pnpm --filter @narada2/cloudflare-nars-projection typecheck
-pnpm --filter @narada2/cli exec vitest run --silent=true test/commands/console-server.test.ts
-pnpm --filter @narada2/cli build
+pnpm --filter @narada-core/cloudflare-nars-projection test
+pnpm --filter @narada-core/cloudflare-nars-projection typecheck
+pnpm --filter @narada-core/cli exec vitest run --silent=true test/commands/console-server.test.ts
+pnpm --filter @narada-core/cli build
 ```
 
 Do not substitute a broad repository test as the only verification for this

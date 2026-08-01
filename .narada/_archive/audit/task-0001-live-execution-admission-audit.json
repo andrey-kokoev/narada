@@ -51,7 +51,7 @@
   ],
   "remaining_blockers": [
     "receiving-Site initializer execution admission",
-    "real concrete adapter admission outside @narada2/site-task-lifecycle",
+    "real concrete adapter admission outside @narada-core/site-task-lifecycle",
     "receiving-Site DB mutation execution admission",
     "Narada proper live MCP registration/admission surface",
     "neutral legacy role-preference migration fixture"

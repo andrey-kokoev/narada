@@ -1,4 +1,4 @@
-# @narada2/operator-console-mirror-runtime
+# @narada-core/operator-console-mirror-runtime
 
 Owns the process lifecycle for the local Operator Console Cloudflare mirror.
 

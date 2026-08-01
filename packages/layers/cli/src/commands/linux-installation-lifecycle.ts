@@ -6,7 +6,7 @@ import {
   buildLinuxInstallationLifecyclePlan,
   readLinuxInstallationState,
   type LinuxInstallationLifecycleOperation,
-} from "@narada2/linux-site";
+} from "@narada-core/linux-site";
 
 export interface LinuxInstallationLifecycleCommandOptions {
   siteId: string;

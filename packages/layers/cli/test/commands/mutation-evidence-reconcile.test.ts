@@ -10,8 +10,8 @@ import { join } from 'node:path';
 import {
   buildMutationEvidenceRecord,
   serializeMutationEvidenceRecord,
-} from '@narada2/task-governance-core/mutation-evidence';
-import { SqliteInboxStore, type InboxEnvelope } from '@narada2/control-plane';
+} from '@narada-core/task-governance-core/mutation-evidence';
+import { SqliteInboxStore, type InboxEnvelope } from '@narada-core/control-plane';
 import { mutationEvidenceReconcileCommand } from '../../src/commands/mutation-evidence.js';
 import { openTaskLifecycleStore } from '../../src/lib/task-lifecycle-store.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';

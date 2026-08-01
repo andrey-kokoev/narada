@@ -1,4 +1,4 @@
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 

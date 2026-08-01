@@ -1,1 +1,1 @@
-export * from '@narada2/task-governance-core/task-lifecycle-mcp-contract';
+export * from '@narada-core/task-governance-core/task-lifecycle-mcp-contract';

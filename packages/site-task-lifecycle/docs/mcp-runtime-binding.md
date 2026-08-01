@@ -6,7 +6,7 @@ The binding is descriptor/request/result oriented:
 
 - tools expose package-local planning and projection surfaces;
 - task DB writes are adapter-bound;
-- SQLite dependency ownership stays outside `@narada2/site-task-lifecycle`;
+- SQLite dependency ownership stays outside `@narada-core/site-task-lifecycle`;
 - SQLite mutation stays outside this package;
 - live MCP registration requires a separate Narada proper authority admission.
 

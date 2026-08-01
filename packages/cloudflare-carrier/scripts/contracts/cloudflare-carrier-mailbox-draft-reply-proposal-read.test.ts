@@ -262,13 +262,13 @@ test('formatMailboxDraftReplyProposalReadText surfaces review ack command', () =
   assert.match(text, /Workflow Route: action=review_mailbox_draft_reply_proposal/);
   assert.match(text, /Body Preview: Draft reply preview text\./);
   assert.match(text, /Rationale: prove Cloudflare can hold draft reply proposal authority/);
-  assert.match(text, /Draft Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Accepted Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_send_accepted_live_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Confirmation Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_send_confirmation_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Draft Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Accepted Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_send_accepted_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Confirmation Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-ref mailbox_send_confirmation_live_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Review: mailbox_draft_reply_proposal:mailbox_draft_reply_proposal_live_1 status=acknowledged/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
 test('formatMailboxDraftReplyProposalReadText suppresses next workflow for passive routes', () => {
@@ -285,7 +285,7 @@ test('formatMailboxDraftReplyProposalReadText suppresses next workflow for passi
     },
   });
 
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
   assert.doesNotMatch(text, /Operation Next Workflow:/);
 });
 
@@ -302,12 +302,12 @@ test('formatMailboxDraftReplyProposalReadText omits synthetic operation ids from
     },
   });
 
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind mailbox_draft_reply_proposal --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind mailbox_draft_reply_proposal --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
 });
 
 test('formatMailboxDraftReplyProposalReadText suppresses mailbox handoff without a real site id', () => {

@@ -24,7 +24,7 @@ import BoxVisibilitySelector, { type BoxVisibilitySelectorItem } from './BoxVisi
 import SurfaceNavigator from './SurfaceNavigator.vue';
 import SurfaceFeedbackPanel from './SurfaceFeedbackPanel.vue';
 import TaskLifecyclePanel from './TaskLifecyclePanel.vue';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@narada2/ui-vue';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@narada-core/ui-vue';
 import { summarizeSessionTitleParts } from '../../session-identity.ts';
 import { isOperatorInputTransportReady, operatorInputNotReadyReason } from '../lib/operatorInputReadiness';
 import { useBoxVisibilityPreference } from '../composables/useBoxVisibilityPreference';

@@ -21,13 +21,13 @@
       "@/*": [
         "src/*"
       ],
-      "@narada2/ui-vue": [
+      "@narada-core/ui-vue": [
         "src/index.ts"
       ],
-      "@narada2/ui-vue/styles.css": [
+      "@narada-core/ui-vue/styles.css": [
         "src/styles.css"
       ],
-      "@narada2/ui/styles.css": [
+      "@narada-core/ui/styles.css": [
         "../ui/src/styles.css"
       ]
     }

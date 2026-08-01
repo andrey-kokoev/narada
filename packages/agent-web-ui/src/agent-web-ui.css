@@ -1,5 +1,5 @@
-@import "@narada2/ui/styles.css" layer(narada-vendor);
-@import "@narada2/ui-vue/components.css" layer(narada-vue-primitives);
+@import "@narada-core/ui/styles.css" layer(narada-vendor);
+@import "@narada-core/ui-vue/components.css" layer(narada-vue-primitives);
 @import "./styles/base.css" layer(narada-base);
 @import "./styles/operator-surfaces.css" layer(narada-operator);
 @import "./styles/shell-and-navigation.css" layer(narada-shell);

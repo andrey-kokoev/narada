@@ -1,4 +1,4 @@
-# @narada2/mcp-surface-carrier-supervisor
+# @narada-core/mcp-surface-carrier-supervisor
 
 Read-only descriptor contracts for observing MCP surface carrier lifecycle without letting a stdio MCP server restart itself.
 
@@ -35,7 +35,7 @@ Capability maturity is projected separately under
 
 `blocked -> observed` is the documented recovery path. `admitted` here is
 lifecycle evidence, not a runtime grant. Runtime capability admission remains
-owned by `@narada2/nars-capability-gateway`.
+owned by `@narada-core/nars-capability-gateway`.
 
 Restart/rebind is represented as request/evidence data only. The package is
 read-only: it never kills processes, restarts carriers, rebinds surfaces, or

@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/control-plane",
+  "name": "@narada-core/control-plane",
   "version": "0.1.0",
   "description": "Deterministic kernel for compiling remote source deltas into local state and durable side-effect intents",
   "main": "./dist/index.js",
@@ -26,7 +26,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/layers/control-plane"
   },
   "keywords": [
@@ -60,8 +60,8 @@
     "profile": "node --inspect --expose-gc ../scripts/profile.ts"
   },
   "dependencies": {
-    "@narada2/charters": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
+    "@narada-core/charters": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
     "zod": "^3.22.0"
   },
   "devDependencies": {
@@ -73,8 +73,8 @@
     "vitest": "^4.1.10",
     "zod-to-json-schema": "^3.25.2"
   },
-  "homepage": "https://github.com/andrey-kokoev/narada",
+  "homepage": "https://github.com/narada-core/narada",
   "bugs": {
-    "url": "https://github.com/andrey-kokoev/narada/issues"
+    "url": "https://github.com/narada-core/narada/issues"
   }
 }

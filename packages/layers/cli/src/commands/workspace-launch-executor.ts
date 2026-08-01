@@ -1,6 +1,6 @@
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { ensureIntelligenceCatalog } from '@narada2/invokable-intelligence-management';
+import { ensureIntelligenceCatalog } from '@narada-core/invokable-intelligence-management';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { WorkspaceLaunchContractError, advanceWorkspaceLaunchTransaction, createWorkspaceLaunchTransaction, failWorkspaceLaunchTransaction } from './workspace-launch-contracts.js';
@@ -20,7 +20,7 @@ import {
 } from './workspace-launch-process.js';
 import { captureWorkspaceLaunchTerminalInvocation, startWorkspaceLaunchWindowsTerminal, workspaceLaunchTerminalArgs } from './workspace-launch-terminal.js';
 import { runAgentStartCommand, isAgentStartAcceptedStatus } from '../lib/launcher-runtime.js';
-import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type {
   WorkspaceLaunchAgentPlan,
   WorkspaceLaunchAttachmentEvidence,

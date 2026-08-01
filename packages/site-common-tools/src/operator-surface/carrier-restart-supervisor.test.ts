@@ -4,12 +4,12 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import {
   authorityTransitionStatePathFromSessionPath,
   readAuthorityTransitionSourceState,
   writeNarsSessionStartedIndex,
-} from '@narada2/nars-session-core';
+} from '@narada-core/nars-session-core';
 import {
   carrierRestartOperationPath,
   readCarrierRestartOutcome,

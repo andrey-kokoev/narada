@@ -8,7 +8,7 @@ import {
   planTargetAuthorityTransition,
   prepareTargetAuthority,
   sealSourceAuthority,
-} from '@narada2/nars-session-core/authority-transition-state';
+} from '@narada-core/nars-session-core/authority-transition-state';
 import {
   createCloudflareNarsAuthorityService as createCloudflareNarsAuthorityServiceCore,
   createCloudflareNarsTestRuntimeExecutor,

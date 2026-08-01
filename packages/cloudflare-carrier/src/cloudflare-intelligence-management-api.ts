@@ -5,12 +5,12 @@ import {
   ManagementError,
   deployManagementBundle,
   managementErrorResult,
-} from '@narada2/invokable-intelligence-management/worker';
-import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization/d1';
-import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
-import { siteMatchesRegistryIdentity } from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/invokable-intelligence-management/worker';
+import { D1MaterializationStore } from '@narada-core/invokable-intelligence-materialization/d1';
+import { D1RegistryStore } from '@narada-core/invokable-intelligence-registry/d1';
+import { siteMatchesRegistryIdentity } from '@narada-core/invokable-intelligence-contract';
 
-import { createCloudflareSiteRegistryAdapter } from '@narada2/cloudflare-site-registry';
+import { createCloudflareSiteRegistryAdapter } from '@narada-core/cloudflare-site-registry';
 
 export const CLOUDFLARE_INTELLIGENCE_MANAGEMENT_API_REQUEST_SCHEMA =
   'narada.cloudflare.invokable-intelligence.management-api-request.v1';

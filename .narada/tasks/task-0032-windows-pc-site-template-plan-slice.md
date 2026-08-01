@@ -15,7 +15,7 @@ The source files are external orientation evidence only. Narada proper admits de
 
 ## Goal
 
-Deepen `@narada2/windows-pc-site-template` with:
+Deepen `@narada-core/windows-pc-site-template` with:
 
 - typed greenfield template plan descriptors;
 - slice selection for operator surface, shell MCP, test MCP, OSL, and Komorebi/YASB;

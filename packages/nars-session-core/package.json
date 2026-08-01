@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/nars-session-core",
+  "name": "@narada-core/nars-session-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -62,16 +62,16 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/agent-identity": "workspace:*",
-    "@narada2/carrier-protocol": "workspace:*",
-    "@narada2/nars-runtime-contract": "workspace:*",
-    "@narada2/site-paths": "workspace:*"
+    "@narada-core/agent-identity": "workspace:*",
+    "@narada-core/carrier-protocol": "workspace:*",
+    "@narada-core/nars-runtime-contract": "workspace:*",
+    "@narada-core/site-paths": "workspace:*"
   },
   "description": "NARS session core",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/nars-session-core"
   },
   "engines": {

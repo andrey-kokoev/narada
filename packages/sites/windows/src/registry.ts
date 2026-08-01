@@ -12,7 +12,7 @@ import { win32, posix } from "node:path";
 import { homedir } from "node:os";
 import { readdirSync, existsSync, readFileSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
-import type { Database } from "@narada2/control-plane";
+import type { Database } from "@narada-core/control-plane";
 import type { WindowsAuthorityLocus, WindowsSiteVariant } from "./types.js";
 import type {
   RegisteredSite,
@@ -27,7 +27,7 @@ import type {
   RegistrySiteRecord,
   RegistrySourceObservation,
   SiteVariant,
-} from "@narada2/site-registry-contract";
+} from "@narada-core/site-registry-contract";
 export type {
   RegisteredSite,
   RegistryAlias,
@@ -40,13 +40,13 @@ export type {
   RegistryObservationStatus,
   RegistrySiteRecord,
   RegistrySourceObservation,
-} from "@narada2/site-registry-contract";
+} from "@narada-core/site-registry-contract";
 import {
   classifySiteContinuityExchangePacket,
   createSiteContinuityPacketId,
   type SiteContinuityDecision,
   type SiteContinuityExchangePacket,
-} from "@narada2/site-continuity";
+} from "@narada-core/site-continuity";
 
 function getPathLib(variant: WindowsSiteVariant) {
   return variant === "native" ? win32 : posix;
@@ -1321,6 +1321,6 @@ export class SiteRegistry {
 export async function openRegistryDb(dbPath: string): Promise<Database> {
   const { dirname } = await import("node:path");
   await mkdir(dirname(dbPath), { recursive: true });
-  const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+  const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
   return new DatabaseCtor(dbPath) as Database;
 }

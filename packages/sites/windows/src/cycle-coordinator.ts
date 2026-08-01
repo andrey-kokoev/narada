@@ -8,7 +8,7 @@
  * All stores share one SQLite database.
  */
 
-import type { Database } from "@narada2/control-plane";
+import type { Database } from "@narada-core/control-plane";
 import {
   SqliteCoordinatorStore,
   SqliteOutboundStore,
@@ -16,12 +16,12 @@ import {
   SqliteIntentStore,
   DefaultForemanFacade,
   CampaignRequestContextFormation,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type {
   SiteHealthRecord,
   CycleTraceRecord,
 } from "./types.js";
-import type { OutboundStatus, OutboundActionType } from "@narada2/control-plane";
+import type { OutboundStatus, OutboundActionType } from "@narada-core/control-plane";
 
 export interface FactRecord {
   factId: string;
@@ -303,7 +303,7 @@ export class WindowsCycleCoordinator {
   insertFact(fact: Omit<FactRecord, "createdAt">): void {
     this.factStore.ingest({
       fact_id: fact.factId,
-      fact_type: fact.factType as import("@narada2/control-plane").FactType,
+      fact_type: fact.factType as import("@narada-core/control-plane").FactType,
       provenance: {
         source_id: fact.sourceId,
         source_record_id: fact.factId,
@@ -438,8 +438,8 @@ export class WindowsCycleCoordinator {
     workItemId: string,
     executionId: string,
     evaluationId: string,
-    getRuntimePolicy?: (scopeId: string) => import("@narada2/control-plane").RuntimePolicy,
-  ): Promise<import("@narada2/control-plane").ResolutionResult> {
+    getRuntimePolicy?: (scopeId: string) => import("@narada-core/control-plane").RuntimePolicy,
+  ): Promise<import("@narada-core/control-plane").ResolutionResult> {
     const foreman = new DefaultForemanFacade(
       {
         coordinatorStore: this.coordinatorStore,
@@ -496,7 +496,7 @@ export class WindowsCycleCoordinator {
       work_item_id: workItemId,
       context_id: contextId,
       scope_id: scopeId,
-      status: status as import("@narada2/control-plane").WorkItemStatus,
+      status: status as import("@narada-core/control-plane").WorkItemStatus,
       priority: 0,
       opened_for_revision_id: `${contextId}:rev:0`,
       resolved_revision_id: null,
@@ -692,7 +692,7 @@ export class WindowsCycleCoordinator {
   updateOutboundCommandStatus(outboundId: string, status: string): void {
     this.outboundStore.updateCommandStatus(
       outboundId,
-      status as import("@narada2/control-plane").OutboundStatus
+      status as import("@narada-core/control-plane").OutboundStatus
     );
   }
 

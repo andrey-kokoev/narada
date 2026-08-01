@@ -9,7 +9,7 @@
  *   node tools/incubation/verify-agent-context-schema.ts
  */
 
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

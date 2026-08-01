@@ -27,7 +27,7 @@ $ErrorActionPreference = 'Stop'
 
 $narada = Get-Command narada -ErrorAction SilentlyContinue
 if ($null -eq $narada) {
-  throw 'narada_cli_not_found: install @narada2/cli globally, then rerun this launcher'
+  throw 'narada_cli_not_found: install @narada-core/cli globally, then rerun this launcher'
 }
 
 if ($Onboarding) {

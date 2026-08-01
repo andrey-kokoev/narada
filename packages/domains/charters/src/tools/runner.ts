@@ -7,7 +7,7 @@
  * Spec: .ai/do-not-open/tasks/20260414-007-assignment-agent-c-tool-binding-runtime.md
  */
 
-import { runGovernedCommand } from "@narada2/process-launch-posture";
+import { runGovernedCommand } from "@narada-core/process-launch-posture";
 import type { ToolInvocationRequest } from "../runtime/envelope.js";
 import type { ToolDefinition } from "../types/coordinator.js";
 import type { ToolCatalogEntry } from "../runtime/envelope.js";

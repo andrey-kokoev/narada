@@ -21,7 +21,7 @@ import type {
   TopologyFeasibilityResult,
   ProvenanceEntry,
   ResourceRef,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 export const RESOLVER_VERSION = "invokable-intelligence-resolver/0.1.0" as const;
 

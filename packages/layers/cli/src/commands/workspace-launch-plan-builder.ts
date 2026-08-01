@@ -1,9 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada2/launch-process-ownership';
-import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
-import { createIntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
+import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada-core/launch-process-ownership';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { createIntelligenceSelectionAuthority } from '@narada-core/invokable-intelligence-contract';
 import type {
   WorkspaceLaunchAgentPlan,
   WorkspaceLaunchOperatorProjectionOpenRequest,
@@ -380,7 +380,7 @@ function plannedAgentWebUiProjectionOpenRequest(record: WorkspaceLaunchRecord): 
     target_ref: null,
     target_ref_resolution: 'agent-web-ui attach resolves local URL after NARS session attach and server start',
     purpose: 'agent_web_ui_attach',
-    caller: { package: '@narada2/cli', command: 'workspace launch', module: 'commands/launcher' },
+    caller: { package: '@narada-core/cli', command: 'workspace launch', module: 'commands/launcher' },
     mode: 'execute',
     policy: { allow_visible_host_effect: true, suppress_reason: null },
     mutation_performed: false,

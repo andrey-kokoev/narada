@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/windows-komorebi-yasb-kit",
+  "name": "@narada-core/windows-komorebi-yasb-kit",
   "version": "0.1.0",
   "description": "Descriptor templates for Windows Komorebi/YASB Site materialization",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/windows-komorebi-yasb-kit"
   }
 }

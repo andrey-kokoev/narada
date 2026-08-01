@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/nars-session-authority",
+  "name": "@narada-core/nars-session-authority",
   "version": "0.1.0",
   "type": "module",
   "private": true,

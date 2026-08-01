@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNarsNativeKernel } from '@narada2/nars-intelligence-kernel-contract/native-kernel';
+import { createNarsNativeKernel } from '@narada-core/nars-intelligence-kernel-contract/native-kernel';
 import { createNarsPiRpcKernel, createNarsPiSdkKernel } from './kernel.js';
 
 function providerOutcome(content: any = 'contract-ok') {

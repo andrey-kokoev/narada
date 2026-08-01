@@ -1,4 +1,4 @@
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 import { readdir } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 

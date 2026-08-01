@@ -9,8 +9,8 @@
  */
 
 import { readFileSync } from 'node:fs';
-import { assertKnownInboxEnvelopeKind } from '@narada2/site-common-tools/inbox/envelope-kinds';
-import { admitEnvelope } from '@narada2/site-common-tools/inbox/admission-log';
+import { assertKnownInboxEnvelopeKind } from '@narada-core/site-common-tools/inbox/envelope-kinds';
+import { admitEnvelope } from '@narada-core/site-common-tools/inbox/admission-log';
 
 const cwd = process.argv[2] || process.cwd();
 const envelopeFile = process.argv[3];

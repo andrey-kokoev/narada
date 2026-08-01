@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 
 const require: any = createRequire(import.meta.url);
 const __dirname: any = dirname(fileURLToPath(import.meta.url));

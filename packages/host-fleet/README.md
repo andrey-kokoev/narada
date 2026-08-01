@@ -1,6 +1,6 @@
 # Host Fleet
 
-`@narada2/host-fleet` owns the substrate-neutral contracts for operating more
+`@narada-core/host-fleet` owns the substrate-neutral contracts for operating more
 than one Narada host:
 
 - durable `HostKey` and `RuntimeTarget` identity;

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted } from 'vue';
 import { Check, Eye, RotateCcw, Save, Search, ShieldAlert } from 'lucide-vue-next';
-import type { SiteRegistryManagementResponse } from '@narada2/site-registry-contract';
+import type { SiteRegistryManagementResponse } from '@narada-core/site-registry-contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import { useSiteRegistryWorkflow } from '../site-registry/composables/useSiteRegistryWorkflow';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';

@@ -1,8 +1,8 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { releaseTaskService } from '@narada2/task-governance/task-assignment-lifecycle-service';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { releaseTaskService } from '@narada-core/task-governance/task-assignment-lifecycle-service';
 import { readFileSync } from 'fs';
 import { rosterOnUnclaim, withAuthoredRosterJsonPreserved } from './update-roster-agent.js';
 

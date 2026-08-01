@@ -11,7 +11,7 @@ import {
   activate,
   initRepo,
   type PosturePreset,
-} from '@narada2/ops-kit';
+} from '@narada-core/ops-kit';
 import {directCommandAction, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { attachFormattedOutput, emitCommandResult, resolveCommandFormat, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';

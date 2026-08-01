@@ -26,7 +26,7 @@
   "blocker": "Prepared live-execution packet does not admit concrete execution carriers/surfaces; existing admitted carrier is package-implementation only.",
   "exact_admissions_needed": [
     "initializer execution carrier/tool and receiving Site write root",
-    "concrete adapter implementation outside @narada2/site-task-lifecycle",
+    "concrete adapter implementation outside @narada-core/site-task-lifecycle",
     "DB mutation carrier through admitted adapter",
     "Narada proper live MCP registration tool/transport"
   ],

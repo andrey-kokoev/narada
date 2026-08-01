@@ -170,7 +170,7 @@ describe("observability", () => {
       });
 
       // Seed work_items via raw SQL (schema init happens in SqliteCoordinatorStore)
-      const { SqliteCoordinatorStore } = await import("@narada2/control-plane");
+      const { SqliteCoordinatorStore } = await import("@narada-core/control-plane");
       const coordStore = new SqliteCoordinatorStore({ db });
       coordStore.initSchema();
       db.prepare(
@@ -204,7 +204,7 @@ describe("observability", () => {
         updated_at: new Date().toISOString(),
       });
 
-      const { SqliteOutboundStore } = await import("@narada2/control-plane");
+      const { SqliteOutboundStore } = await import("@narada-core/control-plane");
       const outboundStore = new SqliteOutboundStore({ db });
       outboundStore.initSchema();
       db.prepare(
@@ -233,7 +233,7 @@ describe("observability", () => {
         updated_at: new Date().toISOString(),
       });
 
-      const { SqliteOutboundStore } = await import("@narada2/control-plane");
+      const { SqliteOutboundStore } = await import("@narada-core/control-plane");
       const outboundStore = new SqliteOutboundStore({ db });
       outboundStore.initSchema();
       db.prepare(
@@ -306,7 +306,7 @@ describe("observability", () => {
         updated_at: "2026-04-20T10:00:00Z",
       });
 
-      const { SqliteCoordinatorStore } = await import("@narada2/control-plane");
+      const { SqliteCoordinatorStore } = await import("@narada-core/control-plane");
       const coordStore = new SqliteCoordinatorStore({ db });
       coordStore.initSchema();
       db.prepare(

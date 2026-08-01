@@ -13,8 +13,8 @@ import {
   type NormalizedBatch,
   type NormalizedEvent,
   type GraphAdapter,
-} from "@narada2/control-plane";
-import type { CharterRunner } from "@narada2/charters";
+} from "@narada-core/control-plane";
+import type { CharterRunner } from "@narada-core/charters";
 
 function createTempDir(): string {
   return mkdtempSync(join(tmpdir(), "efs-daemon-dispatch-"));
@@ -400,7 +400,7 @@ describe("daemon dispatch phase integration", { timeout: 30000 }, () => {
   it("passes a real SyncCompletionSignal to afterSyncCompleted hook", async () => {
     const conversationId = "conv-signal-001";
     const mockAdapter = createMockAdapterForConversation(conversationId);
-    let capturedSignal: import("@narada2/control-plane").SyncCompletionSignal | null = null;
+    let capturedSignal: import("@narada-core/control-plane").SyncCompletionSignal | null = null;
 
     const charterRunner = new MockCharterRunner({
       output: {

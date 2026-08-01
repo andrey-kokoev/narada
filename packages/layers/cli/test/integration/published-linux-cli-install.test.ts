@@ -88,8 +88,8 @@ function parseJsonOutput(stdout: string, label: string): Record<string, any> {
 function packCli(packRoot: string): string {
   mkdirSync(packRoot, { recursive: true });
   const build = run(packageManager, packageManagerArgs([
-    '--filter', '@narada2/cli...',
-    '--filter', '!@narada2/cli',
+    '--filter', '@narada-core/cli...',
+    '--filter', '!@narada-core/cli',
     'build',
   ]), { cwd: naradaProperRoot, timeout: 300_000 });
   assert.equal(build.status, 0, 'published Linux CLI dependency build failed\n' + outputOf(build));
@@ -127,7 +127,7 @@ function assertInstalledCliArtifact(cliRoot: string): void {
   const packageJsonPath = join(cliRoot, 'package.json');
   assert.equal(existsSync(packageJsonPath), true, 'published CLI package.json is missing');
   const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { name?: string; version?: string };
-  assert.equal(packageJson.name, '@narada2/cli');
+  assert.equal(packageJson.name, '@narada-core/cli');
   assert.ok(packageJson.version, 'published CLI version is missing');
   for (const relativePath of ['dist/main.js', 'dist/index.js', 'dist/mcp-main.js', 'dist/ui/workbench.html']) {
     assert.equal(
@@ -139,17 +139,17 @@ function assertInstalledCliArtifact(cliRoot: string): void {
 }
 
 function assertPublishedAdmissionClosure(cliRoot: string): void {
-  const admissionRoot = join(cliRoot, 'node_modules', '@narada2', 'carrier-action-admission');
+  const admissionRoot = join(cliRoot, 'node_modules', '@narada-core', 'carrier-action-admission');
   const admissionManifest = JSON.parse(
     readFileSync(join(admissionRoot, 'package.json'), 'utf8'),
   ) as {
     dependencies?: Record<string, unknown>;
     peerDependencies?: Record<string, unknown>;
   };
-  const siteToolsSpec = admissionManifest.dependencies?.['@narada2/site-common-tools']
-    ?? admissionManifest.peerDependencies?.['@narada2/site-common-tools'];
+  const siteToolsSpec = admissionManifest.dependencies?.['@narada-core/site-common-tools']
+    ?? admissionManifest.peerDependencies?.['@narada-core/site-common-tools'];
   assert.notEqual(
-    admissionManifest.dependencies?.['@narada2/site-common-tools'],
+    admissionManifest.dependencies?.['@narada-core/site-common-tools'],
     'workspace:*',
     'published carrier-action-admission retains a workspace-only dependency',
   );
@@ -187,7 +187,7 @@ function assertPublishedWorkspaceDependencyClosure(cliRoot: string, packageRoot:
   const packageJson = JSON.parse(readFileSync(join(packageRoot, 'package.json'), 'utf8')) as {
     dependencies?: Record<string, unknown>;
   };
-  for (const dependencyName of Object.keys(packageJson.dependencies ?? {}).filter((name) => name.startsWith('@narada2/'))) {
+  for (const dependencyName of Object.keys(packageJson.dependencies ?? {}).filter((name) => name.startsWith('@narada-core/'))) {
     assert.ok(
       findInstalledPackageRoot(join(cliRoot, 'node_modules'), dependencyName),
       'published_workspace_dependency_missing: ' + dependencyName,
@@ -224,15 +224,15 @@ test('published Linux CLI installs independently and reports the resident intell
     const install = installTarball(consumerRoot, tarball, env);
     assert.equal(install.status, 0, 'published Linux CLI install failed\n' + outputOf(install));
 
-    const installedCliRoot = join(consumerRoot, 'node_modules', '@narada2', 'cli');
+    const installedCliRoot = join(consumerRoot, 'node_modules', '@narada-core', 'cli');
     const installedCliEntrypoint = join(installedCliRoot, 'dist', 'main.js');
     assertInstalledCliArtifact(installedCliRoot);
     assertPublishedAdmissionClosure(installedCliRoot);
-    const siteToolsRoot = join(installedCliRoot, 'node_modules', '@narada2', 'site-common-tools');
+    const siteToolsRoot = join(installedCliRoot, 'node_modules', '@narada-core', 'site-common-tools');
     assert.equal(existsSync(join(siteToolsRoot, 'dist', 'compat', 'mcp-payload-file.legacy-site.js')), true);
     assertPublishedRuntimeExports(siteToolsRoot);
     assertPublishedWorkspaceDependencyClosure(installedCliRoot, siteToolsRoot);
-    const fabricContractsRoot = join(installedCliRoot, 'node_modules', '@narada2', 'mcp-fabric-contracts');
+    const fabricContractsRoot = join(installedCliRoot, 'node_modules', '@narada-core', 'mcp-fabric-contracts');
     const fabricZod = JSON.parse(readFileSync(join(fabricContractsRoot, 'node_modules', 'zod', 'package.json'), 'utf8')) as { version?: string };
     assert.match(fabricZod.version ?? '', /^4\\./, 'published_mcp_fabric_contracts_requires_zod_4');
     assert.notEqual(resolve(installedCliRoot), resolve(cliPackageRoot));

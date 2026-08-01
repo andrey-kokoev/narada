@@ -5,7 +5,7 @@ import {
   projectNarsClientEvent,
   shouldProjectNarsClientProjection,
   unwrapNarsClientEvent,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import { isRecord, type UnknownRecord } from './types.ts';
 
 export {

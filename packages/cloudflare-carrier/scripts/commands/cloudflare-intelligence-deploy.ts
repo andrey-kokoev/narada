@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA } from '@narada2/invokable-intelligence-management';
+import { MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA } from '@narada-core/invokable-intelligence-management';
 
 import { authHeaders } from '../shared/cloudflare-carrier-auth-http.ts';
 

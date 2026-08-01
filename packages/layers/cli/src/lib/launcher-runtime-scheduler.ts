@@ -1,6 +1,6 @@
 import { accessSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import type { CommandExecutionResult } from './launcher-contracts.js';
 import {
   runPowerShell,

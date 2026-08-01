@@ -7,7 +7,7 @@ import type {
   SiteTaskLifecycleAdmissionContractOptions,
 } from './types.js';
 
-const PACKAGE_NAME = '@narada2/site-task-lifecycle';
+const PACKAGE_NAME = '@narada-core/site-task-lifecycle';
 const LEGACY_SOURCE_TABLE = 'narada_andrey_task_role_preferences';
 
 export class NonNeutralProjectionPolicyError extends Error {

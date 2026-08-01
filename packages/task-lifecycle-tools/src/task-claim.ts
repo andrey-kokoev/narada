@@ -1,9 +1,9 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { claimTaskService } from '@narada2/task-governance/task-assignment-lifecycle-service';
-import { findTaskFile, readTaskFile } from '@narada2/task-governance/task-governance';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { claimTaskService } from '@narada-core/task-governance/task-assignment-lifecycle-service';
+import { findTaskFile, readTaskFile } from '@narada-core/task-governance/task-governance';
 import { checkTaskRoleEligibilityLocal, resolveAgentRoleWithDiagnostics } from './agent-role-resolution.js';
 import { resolveTaskRolePolicy, roleMismatchSeverity } from './task-role-policy.js';
 import { rosterOnClaim, withAuthoredRosterJsonPreserved } from './update-roster-agent.js';

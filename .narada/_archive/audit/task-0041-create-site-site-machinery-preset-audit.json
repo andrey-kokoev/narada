@@ -24,9 +24,9 @@
     "preset_added": "site-machinery",
     "template_id": "narada-proper.templates.site.site-machinery.v0",
     "template_components": [
-      "@narada2/site-inbox",
-      "@narada2/site-config",
-      "@narada2/site-lift"
+      "@narada-core/site-inbox",
+      "@narada-core/site-config",
+      "@narada-core/site-lift"
     ],
     "exposure_class": "descriptor_only",
     "operational_command": "narada sites create --dry-run --config docs/product/fixtures/create-site-options/create-site-site-machinery.json --format json"

@@ -7,16 +7,16 @@
  */
 import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
-import { allocateTaskNumbers } from '@narada2/task-governance/task-governance';
-import { renderTaskBodyFromSpec } from '@narada2/task-governance/task-spec';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { readAdmissionLog, getLatestEventsByEnvelope, appendAdmissionEvent, acknowledgeEnvelope, dismissEnvelope } from '@narada2/task-governance/runtime/inbox/admission-log';
+import { allocateTaskNumbers } from '@narada-core/task-governance/task-governance';
+import { renderTaskBodyFromSpec } from '@narada-core/task-governance/task-spec';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { readAdmissionLog, getLatestEventsByEnvelope, appendAdmissionEvent, acknowledgeEnvelope, dismissEnvelope } from '@narada-core/task-governance/runtime/inbox/admission-log';
 import {
   evaluateEnvelopeSeverity,
   findDuplicateTaskRows,
   hasEnvelopeCoverageEvidence,
   levenshteinDistance,
-} from '@narada2/task-governance/runtime/inbox/inbox-policy';
+} from '@narada-core/task-governance/runtime/inbox/inbox-policy';
 
 const INBOX_DIR: any = '.ai/inbox-envelopes';
 const TASKS_DIR: any = '.ai/do-not-open/tasks';

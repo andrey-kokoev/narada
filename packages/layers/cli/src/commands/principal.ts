@@ -16,7 +16,7 @@ import {
   canClaimWork,
   canExecute,
   type PrincipalRuntimeSnapshot,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type { CommandContext } from "../lib/command-wrapper.js";
 import { attachFormattedOutput } from "../lib/cli-output.js";
 

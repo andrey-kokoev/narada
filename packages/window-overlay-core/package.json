@@ -1,11 +1,11 @@
 {
-  "name": "@narada2/window-overlay-core",
+  "name": "@narada-core/window-overlay-core",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "narada": {
     "package_role": "reusable_windows_overlay_mechanics",
-    "authority_owner": "@narada2/window-overlay-core",
+    "authority_owner": "@narada-core/window-overlay-core",
     "presentation_only": false
   },
   "bin": {"narada-window-overlay-core": "./dist/cli.js"},
@@ -31,7 +31,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/window-overlay-core"
   },
   "devDependencies": {

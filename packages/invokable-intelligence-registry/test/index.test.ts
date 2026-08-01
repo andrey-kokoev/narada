@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
-import { BATCH_OFFPEAK, CLOUDFLARE_KIMI, fixtureBundle } from "@narada2/invokable-intelligence-contract";
+import { BATCH_OFFPEAK, CLOUDFLARE_KIMI, fixtureBundle } from "@narada-core/invokable-intelligence-contract";
 
 import { defineRegistryConformanceSuite } from "../src/conformance.js";
 import { D1RegistryStore } from "../src/d1-store.js";

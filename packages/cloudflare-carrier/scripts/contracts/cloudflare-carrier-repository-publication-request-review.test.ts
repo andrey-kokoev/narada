@@ -55,7 +55,7 @@ test('readRepositoryPublicationRequestReview summarizes focused request and link
           {
             repository_publication_request_id: 'repository_publication_request_live_1',
             publication_ref: 'repository-publication:live-smoke:1',
-            repository_ref: 'github:andrey-kokoev/narada',
+            repository_ref: 'github:narada-core/narada',
             branch_ref: 'cloudflare-publication',
             source_change_ref: 'git:commit:abc',
             requested_action_summary: 'request governed Cloudflare GitHub repository publication execution',
@@ -146,7 +146,7 @@ test('readRepositoryPublicationRequestReview supports direct request review with
           repository_publication_request_id: 'repository_publication_request_live_1',
           operation_id: 'operation_site_read',
           publication_ref: 'repository-publication:live-smoke:1',
-          repository_ref: 'github:andrey-kokoev/narada',
+          repository_ref: 'github:narada-core/narada',
           branch_ref: 'cloudflare-publication',
           requested_action_summary: 'request governed Cloudflare GitHub repository publication execution',
           request_posture: 'cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence',
@@ -160,7 +160,7 @@ test('readRepositoryPublicationRequestReview supports direct request review with
           repository_publication_request_id: 'repository_publication_request_live_2',
           operation_id: 'operation_other',
           publication_ref: 'repository-publication:live-smoke:20260611060000',
-          repository_ref: 'github:andrey-kokoev/narada',
+          repository_ref: 'github:narada-core/narada',
           branch_ref: 'main',
           source_change_ref: 'cloudflare-local-change:site_narada_cloudflare:20260611060000',
           requested_action_summary: 'request governed Cloudflare GitHub repository publication execution',
@@ -343,7 +343,7 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
       request_count: 1,
       focused_repository_publication_request_id: 'repository_publication_request_live_1',
       focused_publication_ref: 'repository-publication:live-smoke:1',
-      focused_repository_ref: 'github:andrey-kokoev/narada',
+      focused_repository_ref: 'github:narada-core/narada',
       focused_branch_ref: 'cloudflare-publication',
       focused_source_change_ref: 'git:commit:abc',
       focused_requested_action_summary: 'request governed Cloudflare GitHub repository publication execution',
@@ -383,17 +383,17 @@ test('formatRepositoryPublicationRequestReviewText surfaces review ack command',
   assert.match(text, /Requested Posture: cloudflare_queued_repository_publication_request_windows_must_admit_publish_and_return_evidence/);
   assert.match(text, /Current Admissions: request=admitted_by_cloudflare_repository_publication cloudflare_git_push=not_admitted direct_cloudflare_repo_mutation=admitted_by_cloudflare_github_repository_publication/);
   assert.match(text, /Current Execution: execution_1 status=completed source=cloudflare_execution/);
-  assert.match(text, /Admission Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:admission:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-admission-id admission_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-execution-id execution_1 --operator-session-file <operator-session-file>/);
-  assert.match(text, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-evidence-id evidence_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Admission Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:admission:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-admission-id admission_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-execution-id execution_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --repository-publication-evidence-id evidence_1 --operator-session-file <operator-session-file>/);
   assert.match(text, /Focused Review: repository_publication_request:repository_publication_request_live_1 status=acknowledged/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file>/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
 test('formatRepositoryPublicationRequestReviewText surfaces current execution from evidence when no Cloudflare execution record exists', () => {
@@ -418,7 +418,7 @@ test('formatRepositoryPublicationRequestReviewText surfaces current execution fr
   });
 
   assert.match(text, /Current Execution: publication-execution-1 status=refused source=windows_evidence reason=repository_publication_push_not_enabled/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file>/);
   assert.equal(text.includes('Operation Next Workflow:'), false);
 });
 
@@ -441,7 +441,7 @@ test('formatRepositoryPublicationRequestReviewText makes missing evidence explic
   });
 
   assert.match(text, /Linked Evidence: none status=unknown/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operation-id operation_site_read --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('formatRepositoryPublicationRequestReviewText omits synthetic operation ids from review ack', () => {
@@ -457,7 +457,7 @@ test('formatRepositoryPublicationRequestReviewText omits synthetic operation ids
     },
   });
 
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind repository_publication_request --focus-ref repository_publication_request_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --focus-kind repository_publication_request --focus-ref repository_publication_request_live_1 --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(text, /Review Ack:.*<operation-id>/);
 });
 

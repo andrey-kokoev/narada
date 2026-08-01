@@ -39,7 +39,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/site-lift now includes descriptor-only advisory catalog and receiving-Site adoption packet contracts with refusal guards.",
+  "terminal_claim": "@narada-core/site-lift now includes descriptor-only advisory catalog and receiving-Site adoption packet contracts with refusal guards.",
   "refused_imports": [
     "source runtime databases",
     "source task or inbox history",

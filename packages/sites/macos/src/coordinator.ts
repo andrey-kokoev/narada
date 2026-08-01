@@ -1,4 +1,4 @@
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import type { SiteHealthRecord, CycleTraceRecord } from "./types.js";

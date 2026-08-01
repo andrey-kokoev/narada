@@ -7,7 +7,7 @@ import test from 'node:test';
 import {
   createOperatorRouterServer,
   registerOperatorRoute,
-} from '@narada2/operator-router';
+} from '@narada-core/operator-router';
 import { stopOperatorConsoleProjection } from '../../src/commands/console-projection-lifecycle.ts';
 
 test('console stop terminates the registered projection owner and removes its route', async () => {

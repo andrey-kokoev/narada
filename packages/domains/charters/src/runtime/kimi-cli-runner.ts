@@ -10,7 +10,7 @@
  * child-process `cwd` option, then captures stdout with a timeout.
  */
 
-import { spawnProviderSubprocess } from "@narada2/process-launch-posture";
+import { spawnProviderSubprocess } from "@narada-core/process-launch-posture";
 import { existsSync, mkdirSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";

@@ -1,11 +1,11 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { allocateTaskNumbers } from '@narada2/task-governance/task-governance';
-import { renderTaskBodyFromSpec } from '@narada2/task-governance/task-spec';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { allocateTaskNumbers } from '@narada-core/task-governance/task-governance';
+import { renderTaskBodyFromSpec } from '@narada-core/task-governance/task-spec';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 import { existsSync, readFileSync } from 'fs';
-import { writeFileUtf8, writeJsonFile } from '@narada2/site-common-tools/incubation/write-file-utf8.ts';
+import { writeFileUtf8, writeJsonFile } from '@narada-core/site-common-tools/incubation/write-file-utf8.ts';
 import { join, resolve } from 'path';
 
 const cwd: any = process.argv[2] || process.cwd();

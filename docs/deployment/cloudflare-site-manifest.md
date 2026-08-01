@@ -162,7 +162,7 @@ Source bindings that feed facts into the Site. At least one source is required.
 ## Validation API
 
 ```typescript
-import { validateSiteManifest, validateSiteManifestOrThrow } from "@narada2/control-plane";
+import { validateSiteManifest, validateSiteManifestOrThrow } from "@narada-core/control-plane";
 
 // Safe validation
 const result = validateSiteManifest(raw);

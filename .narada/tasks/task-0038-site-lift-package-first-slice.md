@@ -11,7 +11,7 @@ The source map and Site-lift tools/docs are external orientation evidence only. 
 
 ## Goal
 
-Create `@narada2/site-lift` with:
+Create `@narada-core/site-lift` with:
 
 - advisory artifact descriptor contracts;
 - adoption plan contracts;

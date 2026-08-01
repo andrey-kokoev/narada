@@ -117,7 +117,7 @@ describe('command-run CEIZ surface', () => {
 
   it('declares bounded diagnostic presets for build, graph, and workbench surfaces', () => {
     const build = resolveCommandRunPreset('cli-build', tempDir);
-    expect(build.argv).toEqual(['pnpm', '--filter', '@narada2/cli', 'build']);
+    expect(build.argv).toEqual(['pnpm', '--filter', '@narada-core/cli', 'build']);
     expect(build.sideEffect).toBe('workspace_write');
 
     const graph = resolveCommandRunPreset('task-graph-json', tempDir);

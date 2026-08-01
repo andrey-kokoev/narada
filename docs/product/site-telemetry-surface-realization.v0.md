@@ -79,7 +79,7 @@ A local realization declares:
 
 ## Residual Implementation Tasks
 
-- Rename or layer `@narada2/site-registry-cloudflare` docs so the package is
+- Rename or layer `@narada-core/site-registry-cloudflare` docs so the package is
   presented as one Telemetry Surface realization with SiteRegistry as a read
   model.
 - Add package-level surface realization types and validation.

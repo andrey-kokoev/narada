@@ -45,7 +45,7 @@ import {
   JsonPrincipalRuntimeRegistry,
   canClaimWork,
   canExecute,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 export interface RouteHandler {
   method: string;

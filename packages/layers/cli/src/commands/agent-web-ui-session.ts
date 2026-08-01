@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { evaluateAgentStartHandoff } from '@narada2/agent-start/launch-result-v0-contract';
+import { evaluateAgentStartHandoff } from '@narada-core/agent-start/launch-result-v0-contract';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult } from '../lib/cli-output.js';
 import {

@@ -185,7 +185,7 @@ cloudflare-host epoch 4 -> local epoch 5
 Differences from local-to-Cloudflare:
 
 - Target preparation creates or resumes a local NARS authority process instead of a Cloudflare authority object.
-- Local storage paths must be resolved through `@narada2/site-paths`.
+- Local storage paths must be resolved through `@narada-core/site-paths`.
 - Artifact handoff may be a local materialization from Cloudflare authority artifacts, never direct Cloudflare cache promotion.
 - Local MCP fabric compatibility must be checked against the target Site fabric.
 - Source Cloudflare endpoints must report sealed/superseded after target activation.

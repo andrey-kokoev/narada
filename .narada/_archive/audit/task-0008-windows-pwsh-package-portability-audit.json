@@ -34,7 +34,7 @@
     }
   ],
   "shell_carrier_note": "Package-local pnpm verification ran through the current PowerShell shell as bounded task-0008 verification under the admitted implementation root. No raw shell search was used after checkpoint clarification.",
-  "portable_package_claim": "A future Windows PowerShell Narada Site can consume @narada2/site-task-lifecycle from the repo package/contracts/docs/tests and then admit its own local adapter/runtime state.",
+  "portable_package_claim": "A future Windows PowerShell Narada Site can consume @narada-core/site-task-lifecycle from the repo package/contracts/docs/tests and then admit its own local adapter/runtime state.",
   "excluded_live_state": [
     ".ai/task-lifecycle.db",
     ".ai/site-task-lifecycle-admission.json",

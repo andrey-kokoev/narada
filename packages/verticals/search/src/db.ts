@@ -2,7 +2,7 @@
  * Database connection management for FTS5 search
  */
 
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import { join } from 'node:path';
 
 export interface DatabaseOptions {

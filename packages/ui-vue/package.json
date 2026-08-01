@@ -1,7 +1,7 @@
 {
-  "name": "@narada2/ui-vue",
+  "name": "@narada-core/ui-vue",
   "version": "0.1.0",
-  "description": "Narada-owned Vue renderer primitives built on the renderer-neutral @narada2/ui foundation",
+  "description": "Narada-owned Vue renderer primitives built on the renderer-neutral @narada-core/ui foundation",
   "type": "module",
   "private": true,
   "narada": {
@@ -22,11 +22,11 @@
   ],
   "scripts": {
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
-    "pretest": "pnpm --filter @narada2/ui build",
-    "test": "pnpm run typecheck && pnpm --filter @narada2/ui build && vite build --config test/vite.config.ts && node --import tsx --test test/ui-vue.test.ts"
+    "pretest": "pnpm --filter @narada-core/ui build",
+    "test": "pnpm run typecheck && pnpm --filter @narada-core/ui build && vite build --config test/vite.config.ts && node --import tsx --test test/ui-vue.test.ts"
   },
   "dependencies": {
-    "@narada2/ui": "workspace:*",
+    "@narada-core/ui": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-vue-next": "^0.563.0",
@@ -46,7 +46,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/ui-vue"
   },
   "engines": {

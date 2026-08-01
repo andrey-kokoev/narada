@@ -68,15 +68,15 @@ export function formatProviderLivenessRefreshText(result: any) {
     lines.push(`- ${provider.provider}: status=${provider.status ?? 'unknown'} http=${provider.http_status ?? 'unknown'}`);
   }
   if (workerUrl && siteId) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
-    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
-    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
     if ((result.providers ?? []).some((provider: any) => provider.provider === 'local_ingress')) {
-      lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+      lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada-core/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
     }
     if ((result.providers ?? []).some((provider: any) => provider.provider === 'repository_publication')) {
-      lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+      lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
     }
   }
   return `${lines.join('\n')}\n`;

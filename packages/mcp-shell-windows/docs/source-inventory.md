@@ -27,4 +27,4 @@ This inventory records external orientation evidence used for the package-local 
 
 ## Package Claim
 
-`@narada2/mcp-shell-windows` now carries descriptor/contracts/tests for deciding shell MCP boundary posture. A receiving Site must still admit its own live shell carrier, path policy, Git mutation authority, and audit mechanism.
+`@narada-core/mcp-shell-windows` now carries descriptor/contracts/tests for deciding shell MCP boundary posture. A receiving Site must still admit its own live shell carrier, path policy, Git mutation authority, and audit mechanism.

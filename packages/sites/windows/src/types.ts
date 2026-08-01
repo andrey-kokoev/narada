@@ -6,7 +6,7 @@ export type WindowsSiteVariant = "native" | "wsl";
 /**
  * All Site variants known to the registry, including remote substrates.
  */
-export type { SiteVariant } from "@narada2/site-registry-contract";
+export type { SiteVariant } from "@narada-core/site-registry-contract";
 
 /**
  * Windows authority locus represented by a Site.

@@ -1,8 +1,8 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { reviewTaskService } from '@narada2/task-governance/task-review-service';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { reviewTaskService } from '@narada-core/task-governance/task-review-service';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 import {
   buildReviewAcceptanceProvenanceAnnotation,
   detectSameOperatorReview,

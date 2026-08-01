@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { PassThrough } from 'node:stream';
 import { expect, test } from '@playwright/test';
-import { createEventHub, startEventStreamProjection } from '@narada2/agent-runtime-server/test-fixtures';
-import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada2/nars-client-projection-contract';
+import { createEventHub, startEventStreamProjection } from '@narada-core/agent-runtime-server/test-fixtures';
+import { AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada-core/nars-client-projection-contract';
 import { startAgentWebUiServer } from '../../src/server.ts';
 
 function listen(server: any, host: any= '127.0.0.1') {

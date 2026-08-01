@@ -1,7 +1,7 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 import { buildUnifiedWorkboard } from './unified-workboard.js';
 import { resolveAgentRole } from './agent-role-resolution.js';
 

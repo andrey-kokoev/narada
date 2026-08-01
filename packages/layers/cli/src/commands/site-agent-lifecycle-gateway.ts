@@ -2,12 +2,12 @@ import { randomUUID } from 'node:crypto';
 import { appendFile, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { dirname } from 'node:path';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import type {
   OperatorSiteAgentDeleteWireResponse,
   OperatorSiteAgentOverviewWireResponse,
   OperatorSiteAgentStopWireResponse,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import { silentCommandContext } from '../lib/command-wrapper.js';
 import { operatorSurfaceIdentityRemoveCommand } from './operator-surface.js';
 import {

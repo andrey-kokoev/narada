@@ -1,4 +1,4 @@
-# @narada2/local-history
+# @narada-core/local-history
 
 Site-owned local work history for Narada.
 

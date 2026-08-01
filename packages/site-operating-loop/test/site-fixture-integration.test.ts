@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 
 const packageRoot = new URL('..', import.meta.url);
 const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.ts', import.meta.url));

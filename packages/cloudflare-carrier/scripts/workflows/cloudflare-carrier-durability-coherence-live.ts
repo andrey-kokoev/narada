@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -263,25 +263,25 @@ export function formatDurabilityCoherenceLiveText(result: any) {
     `Site Route: ${result?.site_list?.route_next_action ?? 'unknown'}`,
   ];
   if (workerUrl && isActionableSiteRoute(result?.site_list?.route_next_action) && routeSiteId) {
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${routeSiteId} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${routeSiteId} --operator-session-file <operator-session-file> --execute-site-next`);
   }
   for (const site of result?.sites ?? []) {
     lines.push(
       `- ${site.site_id}: persistence=${site.site_read?.persistence_state ?? 'unknown'} recovery=${site.site_read?.recovery_state ?? 'unknown'} op=${site.selected_operation_id ?? 'none'} op_recovery=${site.operation_recovery?.recovery_state ?? 'none'} gaps=${site.operation_recovery?.recovery_gap_count ?? 0}`,
     );
     if (workerUrl && typeof site.site_id=== 'string' && site.site_id.length > 0) {
-      lines.push(`  Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${site.site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`  Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${site.site_id} --operator-session-file <operator-session-file>`);
     }
     if (workerUrl && typeof site.site_id=== 'string' && site.site_id.length > 0 && isActionableSiteNextAction(site.site_read?.next_action)) {
-      lines.push(`  Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${site.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
+      lines.push(`  Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${site.site_id} --operator-session-file <operator-session-file> --execute-site-next`);
     }
     if (workerUrl && typeof site.site_id=== 'string' && site.site_id.length > 0 && typeof site.selected_operation_id === 'string' && site.selected_operation_id.length > 0) {
-      lines.push(`  Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`  Operation Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
       if (isActionableOperationNextAction(site.operation_read?.workflow_next_action)) {
-        lines.push(`  Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+        lines.push(`  Operation Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
       }
-      lines.push(`  Recovery Review: pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
-      lines.push(`  Persistence Review: pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`  Recovery Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:recovery:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
+      lines.push(`  Persistence Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:persistence:text -- --url ${workerUrl} --site ${site.site_id} --operation-id ${site.selected_operation_id} --operator-session-file <operator-session-file>`);
     }
   }
   if ((result?.issues?.length ?? 0) > 0) {

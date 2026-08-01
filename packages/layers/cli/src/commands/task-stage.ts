@@ -1,11 +1,11 @@
 import { existsSync } from 'node:fs';
 import { isAbsolute, relative, resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 import {
   findTaskFile,
   listReportsForTask,
   type WorkResultReport,
-} from '@narada2/task-governance-core/task-governance';
+} from '@narada-core/task-governance-core/task-governance';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { relative } from 'node:path';
-import { findTaskFile, readTaskFile, writeTaskProjection } from '@narada2/task-governance/task-governance';
+import { findTaskFile, readTaskFile, writeTaskProjection } from '@narada-core/task-governance/task-governance';
 
 export function planBulkTaskRouting({ store, args }: any) : any {
   ensureTaskRoutingTables(store);

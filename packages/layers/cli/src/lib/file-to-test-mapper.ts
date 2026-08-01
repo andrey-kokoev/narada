@@ -59,7 +59,7 @@ function mapSingleFile(sourcePath: string, cwd: string): Suggestion | null {
     const testRel = slashPath(relative(cwd, mirrored));
     // Determine package for the pnpm --filter command
     const pkgMatch = rel.match(/^packages\/layers\/([^/]+)\//);
-    const filter = pkgMatch ? `--filter @narada2/${pkgMatch[1]} ` : '';
+    const filter = pkgMatch ? `--filter @narada-core/${pkgMatch[1]} ` : '';
     return {
       command: `pnpm ${filter}exec vitest run ${testRel}`,
       scope: 'single-file',
@@ -79,7 +79,7 @@ function mapSingleFile(sourcePath: string, cwd: string): Suggestion | null {
     if (candidates.length === 1) {
       const testRel = slashPath(relative(cwd, candidates[0]));
       return {
-        command: `pnpm --filter @narada2/control-plane exec vitest run ${testRel}`,
+        command: `pnpm --filter @narada-core/control-plane exec vitest run ${testRel}`,
         scope: 'single-file',
         confidence: 'high',
         explanation: `Found exactly one matching test for ${name} in control-plane.`,
@@ -149,7 +149,7 @@ export function suggestVerification(files: string[], cwd: string): Suggestion {
     const pkgGroups = new Map<string, string[]>();
     for (const t of uniqueTests) {
       const pkgMatch = t.match(/^packages\/layers\/([^/]+)\//);
-      const pkg = pkgMatch ? `@narada2/${pkgMatch[1]}` : 'unknown';
+      const pkg = pkgMatch ? `@narada-core/${pkgMatch[1]}` : 'unknown';
       const arr = pkgGroups.get(pkg) ?? [];
       arr.push(t);
       pkgGroups.set(pkg, arr);

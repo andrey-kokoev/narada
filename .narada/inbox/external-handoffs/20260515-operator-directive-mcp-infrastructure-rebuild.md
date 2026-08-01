@@ -27,7 +27,7 @@
 Replace the current Narada proper MCP infrastructure shape. Treat the existing `narada-mcp` usage in Narada proper as a temporary bootstrapping surface that has now shown the wrong coupling:
 
 - Narada proper carrier startup currently points Codex at `node_modules/.bin/narada-mcp.cmd`.
-- That command resolves into `@narada2/cli` under `packages/layers/cli/dist`.
+- That command resolves into `@narada-core/cli` under `packages/layers/cli/dist`.
 - The MCP facade is therefore operationally coupled to Narada proper's own package build/dist state.
 - This differs from the User Site MCP pattern, where agent-facing MCP servers are explicit local surfaces with clear command, args, site root, identity environment, and restart/readiness boundaries.
 
@@ -52,7 +52,7 @@ The Operator wants the Narada proper MCP infrastructure blown up in the engineer
 
 3. Retire or quarantine the current coupled facade.
    - Make the old `narada-mcp` facade either a compatibility shim or a non-agent-facing internal command.
-   - Prevent future Narada proper launches from silently inheriting stale or wrong MCP behavior from `@narada2/cli`.
+   - Prevent future Narada proper launches from silently inheriting stale or wrong MCP behavior from `@narada-core/cli`.
    - Keep a compatibility path only if it is named, tested, and clearly non-authoritative for the new carrier.
 
 4. Repopulate the MCP-related package/lift with the right shape.

@@ -29,7 +29,7 @@ The binding is descriptor-only and may not mutate task lifecycle state.
 - No MCP DB mutation tool in this increment.
 - No source Site DB/history import.
 - No narada-andrey runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity state import.
-- No SQLite dependency added to `@narada2/site-task-lifecycle`.
+- No SQLite dependency added to `@narada-core/site-task-lifecycle`.
 
 ## Terminal Criterion
 

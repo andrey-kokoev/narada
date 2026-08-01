@@ -34,7 +34,7 @@ describe('site task lifecycle admission contract', () => {
     });
 
     expect(contract.schema).toBe('narada.site_task_lifecycle.admission_contract.v0');
-    expect(contract.packageName).toBe('@narada2/site-task-lifecycle');
+    expect(contract.packageName).toBe('@narada-core/site-task-lifecycle');
     expect(contract.mcpTransportRegistration.status).toBe('snippet_ready');
     expect(contract.rejectedSourceFindings.map((finding) => finding.reason)).toEqual([
       'source task lifecycle database',
@@ -48,7 +48,7 @@ describe('site task lifecycle admission contract', () => {
     const snippet = createMcpRegistrationSnippet('D:\\code\\narada');
 
     expect(snippet.status).toBe('snippet_ready');
-    expect(snippet.packageName).toBe('@narada2/site-task-lifecycle');
+    expect(snippet.packageName).toBe('@narada-core/site-task-lifecycle');
     expect(snippet.args).toContain('--site-root');
     expect(snippet.args).toContain('D:\\code\\narada');
   });

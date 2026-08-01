@@ -7,7 +7,7 @@ Source packet: `.narada/admission/candidates/task-0001-live-execution-admission-
 
 ## Purpose
 
-This carrier admits the shape of a future initializer execution for task-0001. It is the Narada proper surface that can later own an admitted call to `initializeSiteTaskLifecycle(options)` from `@narada2/site-task-lifecycle`.
+This carrier admits the shape of a future initializer execution for task-0001. It is the Narada proper surface that can later own an admitted call to `initializeSiteTaskLifecycle(options)` from `@narada-core/site-task-lifecycle`.
 
 ## Mutation Mechanism
 
@@ -24,7 +24,7 @@ A later live execution task must name:
 ## Allowed Future Scope
 
 - Create task-lifecycle directories and a local admission manifest under a separately admitted receiving Site root.
-- Use only neutral initializer options produced by `@narada2/site-task-lifecycle`.
+- Use only neutral initializer options produced by `@narada-core/site-task-lifecycle`.
 
 ## Denied Scope
 

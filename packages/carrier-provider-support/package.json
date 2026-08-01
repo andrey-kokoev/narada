@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/carrier-provider-support",
+  "name": "@narada-core/carrier-provider-support",
   "version": "0.1.0",
   "description": "Provider command resolution support for carrier surfaces",
   "private": true,
@@ -52,12 +52,12 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/carrier-provider-support"
   },
   "engines": {

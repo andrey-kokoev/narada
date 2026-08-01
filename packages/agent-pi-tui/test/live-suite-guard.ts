@@ -25,20 +25,20 @@ const missingFromSuite: any = requiredLiveTests.filter((file: any) => !scriptTex
 assert.deepEqual(missingFromSuite, [], 'a live test must not silently disappear from the package suite');
 const aggregateLiveScript: any = rootPackageJson.scripts?.['test:agent-pi-tui:live'] ?? '';
 assert.ok(
-  aggregateLiveScript.includes('@narada2/agent-pi-tui test:live:e2e')
-    && aggregateLiveScript.includes('@narada2/agent-runtime-server test:live:pi-client-kernel'),
+  aggregateLiveScript.includes('@narada-core/agent-pi-tui test:live:e2e')
+    && aggregateLiveScript.includes('@narada-core/agent-runtime-server test:live:pi-client-kernel'),
   'the root agent-pi-tui live aggregate must include both the client suite and kernel substitutability probe',
 );
 const fixtureAggregateLiveScript: any = rootPackageJson.scripts?.['test:agent-pi-tui:live:fixture'] ?? '';
 assert.ok(
-  fixtureAggregateLiveScript.includes('@narada2/agent-pi-tui test:live:local')
-    && fixtureAggregateLiveScript.includes('@narada2/agent-runtime-server test:live:pi-client-kernel'),
+  fixtureAggregateLiveScript.includes('@narada-core/agent-pi-tui test:live:local')
+    && fixtureAggregateLiveScript.includes('@narada-core/agent-runtime-server test:live:pi-client-kernel'),
   'the CI fixture aggregate must include the local client suite and kernel substitutability probe',
 );
 const productionAggregateLiveScript: any = rootPackageJson.scripts?.['test:agent-pi-tui:live:production-binding'] ?? '';
 assert.ok(
-  productionAggregateLiveScript.includes('@narada2/agent-pi-tui test:live:production-binding')
-    && productionAggregateLiveScript.includes('@narada2/agent-runtime-server test:live:pi-client-kernel'),
+  productionAggregateLiveScript.includes('@narada-core/agent-pi-tui test:live:production-binding')
+    && productionAggregateLiveScript.includes('@narada-core/agent-runtime-server test:live:pi-client-kernel'),
   'the opt-in production-binding aggregate must include the launcher gap probes and kernel substitutability probe',
 );
 

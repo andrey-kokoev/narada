@@ -287,7 +287,7 @@ export type {
   PreviewDerivationResult,
   PreviewGovernanceResult,
 } from "./foreman/types.js";
-export { validateCharterOutput } from "@narada2/charters";
+export { validateCharterOutput } from "@narada-core/charters";
 export { arbitrateEvaluations } from "./foreman/validation.js";
 export { OutboundHandoff } from "./foreman/handoff.js";
 

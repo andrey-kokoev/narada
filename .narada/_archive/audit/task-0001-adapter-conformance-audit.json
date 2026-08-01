@@ -51,7 +51,7 @@
     "treating the neutral in-memory fixture as a runtime adapter"
   ],
   "remaining_blockers": [
-    "receiving-Site admission of a real concrete adapter outside @narada2/site-task-lifecycle",
+    "receiving-Site admission of a real concrete adapter outside @narada-core/site-task-lifecycle",
     "live Narada proper MCP registration/admission surface",
     "actual receiving-Site setup flow that composes initializer, adapter, and MCP surfaces",
     "neutral legacy role-preference migration fixture"

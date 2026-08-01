@@ -11,7 +11,7 @@ import { DefaultForemanFacade } from "../../../src/foreman/facade.js";
 import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
 import { buildEvaluationRecord, persistEvaluation } from "../../../src/charter/envelope.js";
 import type { Fact } from "../../../src/facts/types.js";
-import type { CharterRunner, CharterInvocationEnvelope, CharterOutputEnvelope } from "@narada2/charters";
+import type { CharterRunner, CharterInvocationEnvelope, CharterOutputEnvelope } from "@narada-core/charters";
 
 interface ScenarioDef {
   name: string;

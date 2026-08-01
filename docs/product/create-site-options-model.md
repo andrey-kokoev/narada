@@ -2,7 +2,7 @@
 
 This document designs an agent-ergonomic option model for future `narada cli create site` behavior. The current CLI family is `narada sites init`; this design should be implemented as an evolution or facade over that Site bootstrap path, not as a second authority model.
 
-The primary model is greenfield Site creation from Narada proper templates/catalog. Reusable packages such as `@narada2/site-task-lifecycle` and `@narada2/agent-context-memory` are template components and capability slices, not source-Site exports.
+The primary model is greenfield Site creation from Narada proper templates/catalog. Reusable packages such as `@narada-core/site-task-lifecycle` and `@narada-core/agent-context-memory` are template components and capability slices, not source-Site exports.
 
 Normal `create site` takes no source Site input. Existing Sites may provide learning or evidence for template design, but they are not runtime inputs to creation. Migration, lift, clone, absorb, import, or Site-to-Site transfer belongs to separate command/design families.
 
@@ -45,8 +45,8 @@ Refusal rule: `authority_locus=pc` must not be inferred from a Windows path alon
 
 Package selection admits only template components: contracts, descriptors, docs, and tests:
 
-- `@narada2/site-task-lifecycle`
-- `@narada2/agent-context-memory`
+- `@narada-core/site-task-lifecycle`
+- `@narada-core/agent-context-memory`
 
 Package slice options:
 
@@ -154,7 +154,7 @@ Options:
 
 - `inbox.enable`: `false`, `drop_only`, `canonical_envelope_intake`
 - `task_lifecycle.enable`: `false`, `descriptor_only`, `local_adapter_planned`, `local_adapter_admitted`
-- `task_lifecycle.package`: `@narada2/site-task-lifecycle`
+- `task_lifecycle.package`: `@narada-core/site-task-lifecycle`
 - `task_lifecycle.role_enforcement`: `off`, `warn`, `strict`
 
 Rules:
@@ -168,7 +168,7 @@ Rules:
 Options:
 
 - `agent_context.enable`: `false`, `descriptor_only`, `local_adapter_planned`, `local_adapter_admitted`
-- `agent_context.package`: `@narada2/agent-context-memory`
+- `agent_context.package`: `@narada-core/agent-context-memory`
 - `agent_context.checkpoint_policy`: `none`, `manual_descriptor`, `local_persistence_admitted`
 
 Rules:
@@ -241,7 +241,7 @@ Purpose: Site can later admit agent-context checkpoint memory.
 
 Includes:
 
-- `@narada2/agent-context-memory` descriptors/docs/tests;
+- `@narada-core/agent-context-memory` descriptors/docs/tests;
 - named-agent registry fragment;
 - session/checkpoint/hydration contracts;
 - schema descriptors;
@@ -256,7 +256,7 @@ Purpose: Site can later admit local task lifecycle.
 
 Includes:
 
-- `@narada2/site-task-lifecycle` descriptors/docs/tests;
+- `@narada-core/site-task-lifecycle` descriptors/docs/tests;
 - task lifecycle setup plan;
 - adapter conformance contract;
 - DB write request shape;
@@ -270,9 +270,9 @@ Purpose: Site can later admit Canonical Inbox, Site configuration awareness, and
 
 Includes:
 
-- `@narada2/site-inbox` descriptors/docs/tests;
-- `@narada2/site-config` descriptors/docs/tests;
-- `@narada2/site-lift` descriptors/docs/tests;
+- `@narada-core/site-inbox` descriptors/docs/tests;
+- `@narada-core/site-config` descriptors/docs/tests;
+- `@narada-core/site-lift` descriptors/docs/tests;
 - inbox admission request and portable artifact contracts;
 - known-Site registry and probe descriptor contracts;
 - adoption plan and command packet contracts.
@@ -445,9 +445,9 @@ Terminal assessment after `narada-proper.task-0052`: the current first greenfiel
 
 Task-lifecycle live carrier orchestration creates target-root local artifacts for local DB init, storage hydration, MCP registration descriptor/manifest, and Windows profile binding artifact. It does not mutate private MCP client config or a real Windows profile outside the target Site.
 
-Agent-memory live carrier orchestration creates target-root local artifacts for local DB init, storage hydration, an empty `@narada2/agent-context-memory` store, hydration policy, MCP registration descriptor/manifest, and Windows profile binding artifact. It does not import checkpoint history, execute runtime hydration, persist secrets, mutate private MCP client config, or mutate a real Windows profile outside the target Site.
+Agent-memory live carrier orchestration creates target-root local artifacts for local DB init, storage hydration, an empty `@narada-core/agent-context-memory` store, hydration policy, MCP registration descriptor/manifest, and Windows profile binding artifact. It does not import checkpoint history, execute runtime hydration, persist secrets, mutate private MCP client config, or mutate a real Windows profile outside the target Site.
 
-Site-machinery inbox/config/lift live carrier orchestration creates target-root local artifacts for local DB init, storage hydration, an empty `@narada2/site-inbox` index, inbox publication policy, empty `@narada2/site-config` known-Site registry, site-config probe policy, empty `@narada2/site-lift` adoption catalog, site-lift materialization policy, and Windows profile binding artifact. It does not import inbox history, scan external roots, mutate another Site, admit trust records, copy files, install packages, write portable envelope files, promote tasks, publish Git artifacts, register MCP, mutate private MCP client config, or mutate a real Windows profile outside the target Site.
+Site-machinery inbox/config/lift live carrier orchestration creates target-root local artifacts for local DB init, storage hydration, an empty `@narada-core/site-inbox` index, inbox publication policy, empty `@narada-core/site-config` known-Site registry, site-config probe policy, empty `@narada-core/site-lift` adoption catalog, site-lift materialization policy, and Windows profile binding artifact. It does not import inbox history, scan external roots, mutate another Site, admit trust records, copy files, install packages, write portable envelope files, promote tasks, publish Git artifacts, register MCP, mutate private MCP client config, or mutate a real Windows profile outside the target Site.
 
 Blockers before broader live execution:
 

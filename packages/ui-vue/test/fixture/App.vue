@@ -12,7 +12,7 @@ import {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@narada2/ui-vue';
+} from '@narada-core/ui-vue';
 </script>
 
 <template>

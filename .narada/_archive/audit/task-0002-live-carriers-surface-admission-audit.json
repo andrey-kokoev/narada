@@ -56,7 +56,7 @@
   "rollback_notes": "Remove the task-0002 descriptor files and revert the mcp-surfaces.json entry if this admission is superseded. Preserve ledger/audit entries as superseded evidence. No package files, DBs, runtime registrations, or source Site state were changed.",
   "remaining_blockers": [
     "separate live execution task for receiving Site root initialization",
-    "concrete adapter implementation/activation outside @narada2/site-task-lifecycle",
+    "concrete adapter implementation/activation outside @narada-core/site-task-lifecycle",
     "DB mutation execution through admitted adapter",
     "live MCP registration transport/tool execution and smoke test"
   ],

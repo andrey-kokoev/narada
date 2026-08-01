@@ -12,7 +12,7 @@ Client surfaces render that projection in their own medium. They do not own even
 
 ## Authority Boundary
 
-`@narada2/nars-client-projection-contract` owns:
+`@narada-core/nars-client-projection-contract` owns:
 
 - unwrapping NARS event envelopes such as `session_event.payload`;
 - recognizing nested provider events;
@@ -24,9 +24,9 @@ Client surfaces render that projection in their own medium. They do not own even
 
 Client packages own only medium-specific rendering:
 
-- `@narada2/agent-web-ui` owns DOM/Vue layout, markdown rendering, artifact iframe rendering, input controls, and browser state.
-- `@narada2/carrier-terminal-projection` owns terminal formatting, colors, wrapping, and prompt behavior.
-- `@narada2/cloudflare-nars-projection` owns Cloudflare registration, bridge publication, redaction, bounded caches, credentials, and transport policy enforcement.
+- `@narada-core/agent-web-ui` owns DOM/Vue layout, markdown rendering, artifact iframe rendering, input controls, and browser state.
+- `@narada-core/carrier-terminal-projection` owns terminal formatting, colors, wrapping, and prompt behavior.
+- `@narada-core/cloudflare-nars-projection` owns Cloudflare registration, bridge publication, redaction, bounded caches, credentials, and transport policy enforcement.
 
 Cloudflare may filter and redact, but it must filter by the shared projection class rather than by its own regex event classifier.
 
@@ -49,12 +49,12 @@ Non-slash input follows that surface's ordinary conversation delivery policy, ex
 | Stratum | Meaning | Current examples | Target owner |
 |---|---|---|---|
 | Projection-local commands | Affect only the attached client projection. | `/help`, `/clear` | client projection contract plus surface renderer |
-| Direct NARS protocol commands | Map to stable local session-core methods. | `/status`, `/health`, `/events`, `/recovery`, `/interrupt`, `/exit`, `/quit`, `exit` | `@narada2/nars-client-projection-contract` for client action shape; `@narada2/agent-runtime-server` for method handling |
-| Shared carrier session commands | Resolve through the shared carrier-command contract and execute through the local `session.command.execute` method. | `/observers`, `/observer mute`, `/observer unmute`, `/goal`, `/stats`, `/model`, `/thinking`, `/tool-output`, `/tool-outputs`, `/tools`, `/tool`, `/queue` | `@narada2/carrier-command-contract` for vocabulary and `@narada2/agent-runtime-server` for execution |
+| Direct NARS protocol commands | Map to stable local session-core methods. | `/status`, `/health`, `/events`, `/recovery`, `/interrupt`, `/exit`, `/quit`, `exit` | `@narada-core/nars-client-projection-contract` for client action shape; `@narada-core/agent-runtime-server` for method handling |
+| Shared carrier session commands | Resolve through the shared carrier-command contract and execute through the local `session.command.execute` method. | `/observers`, `/observer mute`, `/observer unmute`, `/goal`, `/stats`, `/model`, `/thinking`, `/tool-output`, `/tool-outputs`, `/tools`, `/tool`, `/queue` | `@narada-core/carrier-command-contract` for vocabulary and `@narada-core/agent-runtime-server` for execution |
 | Adapter-only commands | Retained for the Cloudflare/deprecated adapter vocabulary and refused by the local session-core transport. | `/ops` | Explicit adapter only; no local runtime admission |
 | Raw protocol escape hatch | Explicit frame submission after local session-core admission. | `/json {"id":"...","method":"session.health","params":{}}` | client projection contract allowlist plus NARS protocol admission |
 
-`session.command.execute` is the local session-core method for the shared carrier-command vocabulary. The command payload is resolved against `@narada2/carrier-command-contract`; it is not provider prompt text.
+`session.command.execute` is the local session-core method for the shared carrier-command vocabulary. The command payload is resolved against `@narada-core/carrier-command-contract`; it is not provider prompt text.
 
 The executable inventories are explicit: `NARS_SESSION_CORE_METHOD_LIST` and
 `AGENT_WEB_UI_NARS_METHOD_LIST` are the local allowlist, while
@@ -103,7 +103,7 @@ When adding or changing a slash command, update the owning inventory first, then
 - Unknown slash commands must remain explicit validation failures or unsupported-command events.
 - A command visible in a palette or help screen must either execute, route to an admitted NARS method, or say that it is unavailable.
 - Direct NARS methods belong in the NARS protocol contract before becoming first-class slash commands.
-- Session command pass-through belongs in `@narada2/carrier-command-contract` before clients advertise it as a pass-through command.
+- Session command pass-through belongs in `@narada-core/carrier-command-contract` before clients advertise it as a pass-through command.
 - Local projection commands must not mutate NARS session state except through an explicit protocol frame.
 - Web, terminal, and future TUI surfaces may render differently, but must not disagree on the protocol method or local/server boundary for the same command.
 
@@ -146,7 +146,7 @@ Supported content part types at the projection boundary are:
 
 `intent_ref` is the canonical structured affordance shape. It is not hidden prose, and it is not a provider prompt. Clients may render it as a button, chip, or similar operator control. Clicking an `intent_ref` is a local reuse affordance unless a client explicitly documents a different local behavior; it does not itself imply NARS execution. In the current browser projection, the reuse action stages the intent token in the operator composer for explicit review and submission.
 
-Producers should construct canonical intent references with the shared contract helper `buildNarsIntentRefPart` from `@narada2/nars-client-projection-contract` rather than inventing an ad hoc shape.
+Producers should construct canonical intent references with the shared contract helper `buildNarsIntentRefPart` from `@narada-core/nars-client-projection-contract` rather than inventing an ad hoc shape.
 
 Compatibility bridge:
 
@@ -475,9 +475,9 @@ Cloudflare owns redaction and credential policy. It does not own the meaning of 
 
 ## Migration Arrows
 
-1. Expand `@narada2/nars-client-projection-contract` to classify nested provider events and expose a stable projection/classification API.
+1. Expand `@narada-core/nars-client-projection-contract` to classify nested provider events and expose a stable projection/classification API.
 2. Add contract tests for provider agent messages, provider tool events, lifecycle assistant messages, envelope unwrapping, and view eligibility.
-3. Make `@narada2/cloudflare-nars-projection` consume the shared classifier instead of local regex classification.
+3. Make `@narada-core/cloudflare-nars-projection` consume the shared classifier instead of local regex classification.
 4. Remove `agent-web-ui` promotion of provider `agent_message` events into `assistant_message` conversation rows.
 5. Reduce `agent-web-ui` lifecycle/provider string suppression to defensive duplicate guards only.
 6. Update tests that currently encode provider assistant rows as conversation rows.

@@ -4,7 +4,7 @@ import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   normalizeRuntimeAlias,
   operatorSurfaceKindsForRuntimeHost,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
 const NARS_OPERATOR_SURFACE_KINDS: any = new Set(operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND));
 
@@ -183,7 +183,7 @@ export function buildCarrierSpawnArgs(carrierName: any, {
     return [
       'run',
       '--manifest-path',
-      join(naradaPackageRoot('@narada2/agent-tui'), 'Cargo.toml'),
+      join(naradaPackageRoot('@narada-core/agent-tui'), 'Cargo.toml'),
       '--bin',
       'narada-agent-tui',
       '--',
@@ -565,7 +565,7 @@ export function buildNarsLaunchPacket(carrierName: any, {
     control_transport: 'jsonl_sideband_file',
     carrier_relation: 'narada_agent_runtime_server',
     runtime_server: {
-      package: '@narada2/agent-runtime-server',
+      package: '@narada-core/agent-runtime-server',
       entrypoint: 'narada-agent-runtime-server',
       runtime_kind: matrixRow.runtime_host_kind,
     },

@@ -4,7 +4,7 @@
   "preset": "full-operator-surface-aware-user-site",
   "template_catalog": {
     "template_id": "narada-proper.templates.site.user-surface-aware.v0",
-    "template_components": ["@narada2/site-task-lifecycle", "@narada2/agent-context-memory"]
+    "template_components": ["@narada-core/site-task-lifecycle", "@narada-core/agent-context-memory"]
   },
   "site": {
     "site_id": "ada-user",
@@ -17,8 +17,8 @@
     "sync_posture": "hybrid_capable_plain_folder"
   },
   "packages": [
-    { "name": "@narada2/site-task-lifecycle", "include_contracts": true, "include_docs": true, "include_schema_descriptors": true, "include_mcp_descriptors": true, "include_conformance_tests": true },
-    { "name": "@narada2/agent-context-memory", "include_contracts": true, "include_docs": true, "include_schema_descriptors": true, "include_mcp_descriptors": true, "include_conformance_tests": true }
+    { "name": "@narada-core/site-task-lifecycle", "include_contracts": true, "include_docs": true, "include_schema_descriptors": true, "include_mcp_descriptors": true, "include_conformance_tests": true },
+    { "name": "@narada-core/agent-context-memory", "include_contracts": true, "include_docs": true, "include_schema_descriptors": true, "include_mcp_descriptors": true, "include_conformance_tests": true }
   ],
   "identity": {
     "named_agents": [
@@ -43,8 +43,8 @@
     "denied": ["pc_locus_mutation", "source_runtime_state_import"]
   },
   "inbox": { "enable": "canonical_envelope_intake" },
-  "task_lifecycle": { "enable": "descriptor_only", "package": "@narada2/site-task-lifecycle" },
-  "agent_context": { "enable": "descriptor_only", "package": "@narada2/agent-context-memory", "checkpoint_policy": "manual_descriptor" },
+  "task_lifecycle": { "enable": "descriptor_only", "package": "@narada-core/site-task-lifecycle" },
+  "agent_context": { "enable": "descriptor_only", "package": "@narada-core/agent-context-memory", "checkpoint_policy": "manual_descriptor" },
   "operator_surface": {
     "intent": "declare_relation",
     "relation_refs": ["operator_surface:future-local"],
@@ -52,7 +52,7 @@
   },
   "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
   "evidence": {
-    "template_refs": ["narada-proper.templates.site.user-surface-aware.v0", "package:@narada2/site-task-lifecycle", "package:@narada2/agent-context-memory"],
+    "template_refs": ["narada-proper.templates.site.user-surface-aware.v0", "package:@narada-core/site-task-lifecycle", "package:@narada-core/agent-context-memory"],
     "refused_imports": []
   }
 }

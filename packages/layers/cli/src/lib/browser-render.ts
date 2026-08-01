@@ -11,7 +11,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
+import { executeOperatorProjectionOpenRequest } from '@narada-core/process-launch-posture';
 
 export interface RenderArtifacts {
   /** Directory containing the artifacts */
@@ -105,7 +105,7 @@ export function openBrowser(filePath: string): boolean {
     projection_kind: 'browser_url',
     target_ref: filePath,
     purpose: 'artifact_browser_render',
-    caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+    caller: { package: '@narada-core/cli', command: 'task graph view', module: 'lib/browser-render' },
     mode: 'execute',
     policy: { allow_visible_host_effect: true },
   }).catch(() => {});
@@ -117,7 +117,7 @@ async function requestOpenBrowser(filePath: string): Promise<Record<string, unkn
     projection_kind: 'browser_url',
     target_ref: filePath,
     purpose: 'artifact_browser_render',
-    caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+    caller: { package: '@narada-core/cli', command: 'task graph view', module: 'lib/browser-render' },
     mode: 'execute',
     policy: { allow_visible_host_effect: true },
   }) as unknown as Record<string, unknown>;
@@ -143,7 +143,7 @@ export async function renderAndMaybeOpen(
       projection_kind: 'browser_url',
       target_ref: htmlPath,
       purpose: 'artifact_browser_render',
-      caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+      caller: { package: '@narada-core/cli', command: 'task graph view', module: 'lib/browser-render' },
       mode: 'execute',
       policy: { allow_visible_host_effect: false, suppress_reason: 'operator_policy:no_open' },
     }) as unknown as Record<string, unknown>;
@@ -163,7 +163,7 @@ export async function renderAndMaybeOpen(
       projection_kind: 'browser_url',
       target_ref: htmlPath,
       purpose: 'artifact_browser_render',
-      caller: { package: '@narada2/cli', command: 'task graph view', module: 'lib/browser-render' },
+      caller: { package: '@narada-core/cli', command: 'task graph view', module: 'lib/browser-render' },
       mode: 'execute',
       policy: { allow_visible_host_effect: true, suppress_reason: 'headless_environment' },
     }) as unknown as Record<string, unknown>;

@@ -1,5 +1,5 @@
 # Setup vendor directory from Narada proper built packages
-# Run this after building @narada2/task-governance in D:\code\narada
+# Run this after building @narada-core/task-governance in D:\code\narada
 
 $ErrorActionPreference = "Stop"
 $vendor = Join-Path $PSScriptRoot "vendor"
@@ -23,12 +23,12 @@ foreach ($p in $pkgs) {
 
 # Rewrite workspace:* to file: references
 $tg = Get-Content (Join-Path $vendor "task-governance\package.json") | ConvertFrom-Json
-$tg.dependencies.'@narada2/control-plane' = 'file:' + (Join-Path $vendor 'control-plane').Replace('\', '/')
-$tg.dependencies.'@narada2/intent-zones' = 'file:' + (Join-Path $vendor 'intent-zones').Replace('\', '/')
+$tg.dependencies.'@narada-core/control-plane' = 'file:' + (Join-Path $vendor 'control-plane').Replace('\', '/')
+$tg.dependencies.'@narada-core/intent-zones' = 'file:' + (Join-Path $vendor 'intent-zones').Replace('\', '/')
 $tg | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $vendor "task-governance\package.json")
 
 $cp = Get-Content (Join-Path $vendor "control-plane\package.json") | ConvertFrom-Json
-$cp.dependencies.'@narada2/charters' = 'file:' + (Join-Path $vendor 'charters').Replace('\', '/')
+$cp.dependencies.'@narada-core/charters' = 'file:' + (Join-Path $vendor 'charters').Replace('\', '/')
 $cp | ConvertTo-Json -Depth 10 | Set-Content (Join-Path $vendor "control-plane\package.json")
 
 Write-Host "Vendor setup complete. Run 'pnpm install' in tools/task-lifecycle/"

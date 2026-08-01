@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
-import { siteControlRoot } from '@narada2/site-common-tools/site-layout';
+import { siteControlRoot } from '@narada-core/site-common-tools/site-layout';
 
 type JsonRecord = Record<string, any>;
 

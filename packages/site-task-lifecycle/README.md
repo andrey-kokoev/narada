@@ -1,4 +1,4 @@
-# @narada2/site-task-lifecycle
+# @narada-core/site-task-lifecycle
 
 First slice for a receiving-Site task lifecycle package.
 

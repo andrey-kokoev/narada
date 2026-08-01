@@ -6,11 +6,11 @@ import type {
   RegistrySourceObservation,
   SiteRegistry,
   SiteVariant,
-} from "@narada2/windows-site";
+} from "@narada-core/windows-site";
 import {
   openRegistryDb,
   resolveRegistryDbPathByLocus,
-} from "@narada2/windows-site";
+} from "@narada-core/windows-site";
 import { listLaunchRegistrySites } from "../lib/site-root-resolver.js";
 import type { CommandContext } from "../lib/command-wrapper.js";
 import { ExitCode } from "../lib/exit-codes.js";
@@ -96,7 +96,7 @@ interface OpenRegistryResult {
 async function openUserRegistry(): Promise<OpenRegistryResult> {
   const registryPath = resolveRegistryDbPathByLocus({ authorityLocus: "user" });
   const db = await openRegistryDb(registryPath);
-  const { SiteRegistry } = await import("@narada2/windows-site");
+  const { SiteRegistry } = await import("@narada-core/windows-site");
   return { registry: new SiteRegistry(db), registryPath };
 }
 

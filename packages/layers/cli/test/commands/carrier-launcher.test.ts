@@ -8,7 +8,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Command } from 'commander';
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import {
   carrierControlPathCommand,
   carrierDrainCommand,
@@ -372,7 +372,7 @@ describe('carrier launcher CLI commands', () => {
     expect((start.result as { workspace_root: string }).workspace_root).toBe(workspaceRoot);
     expect((start.result as { intelligence_selection_authority: unknown }).intelligence_selection_authority).toEqual({
       schema: 'narada.invokable-intelligence.selection-authority.v1',
-      owner: '@narada2/invokable-intelligence-runtime',
+      owner: '@narada-core/invokable-intelligence-runtime',
       resolution_phase: 'runtime-invocation',
       authority_scope: { kind: 'site', site_id: 'narada-proper' },
       catalog: { store_kind: 'node:sqlite', locator: join(siteRoot, '.ai', 'intelligence-registry.db') },

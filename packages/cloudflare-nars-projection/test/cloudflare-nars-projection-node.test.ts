@@ -2,7 +2,7 @@ import { appendFileSync, mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, expect, test } from 'vitest';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
 import { buildProjectionInputForNars } from '../src/nars-session-input-client.js';
 import { deliverRemoteProjectionInputsOnce, preflightCloudflareProjectionRegistration, publishWorkspaceRouteRemotely, registerProjectionRemotely, revokeWorkspaceRouteRemotely, writeProjectionRegistrationPlan, readProjectionRegistration, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '../src/node.js';

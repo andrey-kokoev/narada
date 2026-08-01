@@ -29,7 +29,7 @@ async function writeLoopPacketFile(registryPathValue: any, packetSiteId: any, pa
 }
 
 function runWindowsContinuityCommand(commandArgs: any) {
-  const result = spawnSync('pnpm', ['--filter', '@narada2/windows-site', 'continuity:windows', ...commandArgs], {
+  const result = spawnSync('pnpm', ['--filter', '@narada-core/windows-site', 'continuity:windows', ...commandArgs], {
     cwd: new URL('..', import.meta.url),
     encoding: 'utf8',
     shell: process.platform === 'win32',

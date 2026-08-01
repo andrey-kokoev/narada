@@ -12,7 +12,7 @@ Cloudflare deployment record, Site configuration mutation, or capability grant.
 | Owning Site | `narada-proper` |
 | Initial publisher Site | `narada-proper` |
 | Initial target Site for remote candidates | `narada-proper` |
-| Surface realization | Cloudflare Worker package `@narada2/site-registry-cloudflare` |
+| Surface realization | Cloudflare Worker package `@narada-core/site-registry-cloudflare` |
 | Read model component | SiteRegistry projection |
 | Readiness target before deploy | `smoke_ready` -> `hosted_deployed` -> `receiving_verified` |
 

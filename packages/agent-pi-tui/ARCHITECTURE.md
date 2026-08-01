@@ -19,7 +19,7 @@ the terminal projection shown in the final branch above.
 | Tool and MCP execution | NARS admission/runtime boundary |
 | Input admission and idempotency | NARS session core |
 | Replay, cursor, and attachment | `agent-pi-tui` NARS client adapter |
-| Event meaning and projection classes | `@narada2/nars-client-projection-contract` |
+| Event meaning and projection classes | `@narada-core/nars-client-projection-contract` |
 | Pi-style rows, theme, focus, and scroll | `agent-pi-tui` presentation layer |
 | Terminal differential rendering | `@earendil-works/pi-tui` |
 

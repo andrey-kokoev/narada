@@ -1,7 +1,7 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 import { resolveTaskRolePolicy } from './task-role-policy.js';
 
 const cwd: any = process.argv[2] || process.cwd();

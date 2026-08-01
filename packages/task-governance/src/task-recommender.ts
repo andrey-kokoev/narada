@@ -1,1 +1,1 @@
-export * from '@narada2/task-governance-core/task-recommender';
+export * from '@narada-core/task-governance-core/task-recommender';

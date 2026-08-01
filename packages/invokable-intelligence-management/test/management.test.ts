@@ -14,7 +14,7 @@ import {
   MATERIALIZATION_ENVELOPE_SCHEMA,
   MATERIALIZATION_REVOCATION_SCHEMA,
   materializationProjectionKey,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   CanonicalCatalogRecord,
   IntelligenceAuthorityStatement,
@@ -23,17 +23,17 @@ import type {
   MaterializationEnvelope,
   MaterializationRevocation,
   MaterializationStoreKind,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import {
   D1MaterializationStore,
   SqliteMaterializationStore,
-} from "@narada2/invokable-intelligence-materialization";
+} from "@narada-core/invokable-intelligence-materialization";
 import {
   createFakeD1,
   D1RegistryStore,
   SqliteRegistryStore,
-} from "@narada2/invokable-intelligence-registry";
-import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+} from "@narada-core/invokable-intelligence-registry";
+import type { ResolverContext } from "@narada-core/invokable-intelligence-resolver";
 
 import { main } from "../src/cli.js";
 import {

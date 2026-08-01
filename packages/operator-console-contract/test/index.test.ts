@@ -63,7 +63,7 @@ test('live route binding derives scoped authority without changing surface owner
   });
   assert.deepEqual(binding.authority, { kind: 'site', id: 'site-demo' });
   assert.deepEqual(binding.authorityHost, { kind: 'local', id: 'operator-console', origin: null });
-  assert.equal(binding.projection.owner, '@narada2/cli');
+  assert.equal(binding.projection.owner, '@narada-core/cli');
   assert.equal(binding.intent.kind, 'site-control');
   assert.equal(binding.diagnosticOnly, false);
 });
@@ -93,7 +93,7 @@ test('navigation projection follows descriptor availability and labels', () => {
 test('launcher descriptor projection is owned by the console UI, not the grouping-era package', () => {
   const launcher = operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')!;
   assert.equal(launcher.name, 'Site Runtime');
-  assert.equal(launcher.projection.owner, '@narada2/operator-console-ui');
+  assert.equal(launcher.projection.owner, '@narada-core/operator-console-ui');
 });
 
 test('navigation projection excludes routes that are unavailable within an available surface', () => {

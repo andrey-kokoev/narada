@@ -277,9 +277,9 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(siteListText, /Sites: count=2/);
   assert.match(siteListText, /Overview Candidate: site=site_alpha health=attention action=bind_cloudflare_product_next_site_locally reason=continuity_direction/);
   assert.match(siteListText, /Site Route: domain=site_posture state=site_posture_ready action=return_local_windows_continuity_packet target=site_alpha status=ready reason=continuity_direction/);
-  assert.match(siteListText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(siteListText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListText, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(siteListText, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListText, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const siteListNoWorkerText = formatProductSurfaceText({
     operation: 'site.list',
@@ -340,30 +340,30 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       route_reason: 'operation_posture',
     },
   });
-  assert.match(siteListFocusText, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(siteListFocusText, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(siteListFocusText, /Candidate Operation Route: operation=operation_alpha action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
   assert.match(siteListFocusText, /Candidate Operation Focus: kind=site_continuity_loop ref=site_alpha/);
-  assert.match(siteListFocusText, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
-  assert.match(siteListFocusText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(siteListFocusText, /Persistence Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Recovery Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Local Ingress: requests=7 evidence=4 heartbeats=20/);
-  assert.match(siteListFocusText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Local Ingress Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Local Ingress Evidence Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Local Ingress Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteListFocusText, /Repository Publication: requests=25 executions=25 evidence=13 heartbeats=20/);
-  assert.match(siteListFocusText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteListFocusText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:focus:workflow:live:text -- --url https:\/\/carrier\.example\.test --focused-site-id site_alpha --operator-session-file <operator-session-file> --execute-site-focus/);
-  assert.match(siteListFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
-  assert.match(siteListFocusText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(siteListFocusText, /Repository Publication Review: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Repository Publication Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Repository Publication Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Repository Publication Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteListFocusText, /Focus Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:focus:workflow:live:text -- --url https:\/\/carrier\.example\.test --focused-site-id site_alpha --operator-session-file <operator-session-file> --execute-site-focus/);
+  assert.match(siteListFocusText, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(siteListFocusText, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
 
   const siteListContinuityReviewText = formatProductSurfaceText({
     operation: 'site.list',
@@ -391,7 +391,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(siteListContinuityReviewText, /Candidate Operation Focus: kind=site_continuity_reconciliation_execution ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed/);
-  assert.match(siteListContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed --operator-session-file <operator-session-file>/);
+  assert.match(siteListContinuityReviewText, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed --operator-session-file <operator-session-file>/);
 
   const operationFallbackText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -412,7 +412,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationFallbackText, /Resident Dispatch Windows Fallback Request: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --dispatch-decision-id resident_dispatch_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationFallbackText, /Resident Dispatch Windows Fallback Request: pnpm --filter @narada-core\/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --dispatch-decision-id resident_dispatch_alpha --operator-session-file <operator-session-file>/);
 
   const operationFallbackWithoutDecisionText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -452,8 +452,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationFallbackPendingText, /Resident Dispatch Windows Fallback Execute: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback:execute:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-windows-fallback/);
-  assert.match(operationFallbackPendingText, /Resident Dispatch Windows Fallback Read: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch\.windows_fallback_request\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationFallbackPendingText, /Resident Dispatch Windows Fallback Execute: pnpm --filter @narada-core\/cloudflare-carrier product:resident-dispatch:windows-fallback:execute:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-windows-fallback/);
+  assert.match(operationFallbackPendingText, /Resident Dispatch Windows Fallback Read: pnpm --filter @narada-core\/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch\.windows_fallback_request\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 
   const operationFallbackEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -473,8 +473,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --operation resident_dispatch\.windows_fallback_evidence\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence Review: pnpm --filter @narada-core\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationFallbackEvidenceText, /Resident Dispatch Windows Fallback Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --operation resident_dispatch\.windows_fallback_evidence\.list --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 
   const operationResidentDispatchText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -494,7 +494,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationResidentDispatchText, /Resident Dispatch Workflow: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationResidentDispatchText, /Resident Dispatch Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:resident-dispatch:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 
   const operationTaskFocusText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -514,7 +514,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 1,
     },
   });
-  assert.match(operationTaskFocusText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id task_123 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(operationTaskFocusText, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --task-id task_123 --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 
   const operationTaskFocusWithoutTargetText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -571,24 +571,24 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       session_count: 3,
     },
   });
-  assert.match(siteReadText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Site Action Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-site-action/);
+  assert.match(siteReadText, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Site Action Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:action:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-site-action/);
   assert.match(siteReadText, /Active Operation Route: operation=operation_live action=refresh_site_continuity_loop reason=operation_lifecycle_continuity_loop_stale/);
   assert.match(siteReadText, /Durability: persistence=durable recovery=reconstructable/);
-  assert.match(siteReadText, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-next/);
-  assert.match(siteReadText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(siteReadText, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(siteReadText, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
   assert.match(siteReadText, /Local Ingress: requests=7 evidence=4 heartbeats=20/);
-  assert.match(siteReadText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Local Ingress Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Local Ingress Evidence Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Local Ingress Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(siteReadText, /Repository Publication: requests=25 executions=25 evidence=13 heartbeats=20/);
-  assert.match(siteReadText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(siteReadText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication Review: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(siteReadText, /Repository Publication Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider:liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const siteReadNoWorkerText = formatProductSurfaceText({
     operation: 'site.read',
@@ -658,17 +658,17 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationListText, /Operations: count=1 active=operation_live next=operation_live/);
   assert.match(operationListText, /Lifecycle Statuses: inactive=1/);
   assert.match(operationListText, /Next Operation Status: inactive/);
-  assert.match(operationListText, /Focused Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
-  assert.match(operationListText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(operationListText, /Focused Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(operationListText, /Persistence Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Recovery Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.match(operationListText, /Operation Route: domain=operation_posture state=operation_posture_attention action=focus_next_operation target=operation_live status=needs_attention reason=operation_needs_review/);
-  assert.match(operationListText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
+  assert.match(operationListText, /Focus Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
 
   const operationListEvidenceText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -694,8 +694,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       route_reason: 'evidence_review',
     },
   });
-  assert.match(operationListEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(operationListText, /Focus Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
+  assert.match(operationListEvidenceText, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListText, /Focus Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-focus/);
 
   const operationListNoWorkerText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -756,8 +756,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       route_reason: 'operation_lifecycle_continuity_loop_stale',
     },
   });
-  assert.match(operationListContinuityText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-next/);
-  assert.match(operationListContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(operationListContinuityText, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(operationListContinuityText, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
   assert.match(operationListContinuityText, /Next Operation Focus: kind=site_continuity_loop ref=site_alpha/);
 
   const operationListContinuityReviewText = formatProductSurfaceText({
@@ -780,7 +780,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationListContinuityReviewText, /Next Operation Focus: kind=site_continuity_reconciliation_execution ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed/);
-  assert.match(operationListContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed --operator-session-file <operator-session-file>/);
+  assert.match(operationListContinuityReviewText, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:54:54.778Z:completed --operator-session-file <operator-session-file>/);
 
   const continuationListText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -805,8 +805,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     auth: { kind: 'bearer', value: 'secret-token' },
   });
   assert.match(continuationListText, /Continuation: needed=1 next=operation_continue action=read_operation_for_continuation/);
-  assert.match(continuationListText, /Continuation Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continue --operator-session-file <operator-session-file>/);
-  assert.match(continuationListText, /Continuation Resume: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuation:resume:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continue --agent-id <agent-id> --operator-session-file <operator-session-file>/);
+  assert.match(continuationListText, /Continuation Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continue --operator-session-file <operator-session-file>/);
+  assert.match(continuationListText, /Continuation Resume: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuation:resume:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continue --agent-id <agent-id> --operator-session-file <operator-session-file>/);
   assert.match(continuationListText, /Continuation Resume Guard: operation\.read must route to resume_operation_continuation before mutation; use --skip-route-check only for explicit recovery\./);
   assert.equal(continuationListText.includes('secret-token'), false);
 
@@ -855,7 +855,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
   assert.match(operationReadText, /Workflow Focus: kind=site_continuity_reconciliation_execution ref=reconciliation_execution_failed/);
   assert.match(operationReadText, /Workflow Continuity: direction=cloudflare_to_local_windows_only missing=local_windows_to_cloudflare/);
   assert.match(operationReadText, /Workflow Command: kind=site_continuity_reconciliation_review command=pnpm site:continuity:reconciliation -- review --id reconciliation_execution_failed/);
-  assert.match(operationReadText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref reconciliation_execution_failed --operator-session-file <operator-session-file>/);
+  assert.match(operationReadText, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref reconciliation_execution_failed --operator-session-file <operator-session-file>/);
 
   const operationReadContinuityLoopText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -918,9 +918,9 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadLifecycleSurfaceText, /Task Review: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
-  assert.match(operationReadLifecycleSurfaceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationReadLifecycleSurfaceText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(operationReadLifecycleSurfaceText, /Task Review: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationReadLifecycleSurfaceText, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadLifecycleSurfaceText, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 
   const operationReadEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -943,7 +943,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_reason: 'use_focused_operation',
     },
   });
-  assert.match(operationReadEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationReadEvidenceText, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
 
   const operationListReplayText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -967,7 +967,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       health_counts: { needs_attention: 1 },
     },
   });
-  assert.match(operationListReplayText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListReplayText, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
 
   const operationListFocusEvidenceText = formatProductSurfaceText({
     operation: 'operation.list',
@@ -991,7 +991,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       health_counts: { needs_attention: 1 },
     },
   });
-  assert.match(operationListFocusEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationListFocusEvidenceText, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
 
   const operationReadReplayText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1008,7 +1008,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadReplayText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationReadReplayText, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
 
   const operationReadFocusEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1025,7 +1025,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadFocusEvidenceText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
+  assert.match(operationReadFocusEvidenceText, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file>/);
   assert.match(operationReadEvidenceText, /Posture Route: status=needs_attention action=focus_next_operation reason=use_focused_operation target=operation_focus_target/);
 
   const operationReadSessionPathEvidenceText = formatProductSurfaceText({
@@ -1044,7 +1044,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadSessionPathEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadSessionPathEvidenceText, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadSessionEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1062,7 +1062,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadSessionEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadSessionEvidenceText, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadInspectSessionEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1080,7 +1080,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadInspectSessionEvidenceText, /Session Evidence: pnpm --filter @narada2\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadInspectSessionEvidenceText, /Session Evidence: pnpm --filter @narada-core\/cloudflare-carrier product:session:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --carrier-session-id session_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadSessionPathTaskText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1098,7 +1098,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadSessionPathTaskText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(operationReadSessionPathTaskText, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --carrier-session-id session_alpha --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 
   const operationReadSessionPathTaskWithoutSessionText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1132,7 +1132,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       posture_next_action: 'monitor_operations',
     },
   });
-  assert.match(operationReadOperationPathTaskText, /Task Workflow: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
+  assert.match(operationReadOperationPathTaskText, /Task Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --agent-id <agent-id> --operator-session-file <operator-session-file> --execute-task-lifecycle-next/);
 
   const operationReadContinuityReviewWithoutKindText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1159,7 +1159,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadContinuityReviewWithoutKindText, /Next Action: review_site_continuity_reconciliation_execution/);
-  assert.match(operationReadContinuityReviewWithoutKindText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T21:59:01.308Z:completed --operator-session-file <operator-session-file>/);
+  assert.match(operationReadContinuityReviewWithoutKindText, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T21:59:01.308Z:completed --operator-session-file <operator-session-file>/);
 
   const operationReadContinuityReviewWithoutRefText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1199,7 +1199,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       workflow_reason: 'operation_lifecycle_missing_session',
     },
   });
-  assert.match(operationReadLifecycleSessionText, /Session Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:session:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-session/);
+  assert.match(operationReadLifecycleSessionText, /Session Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:session:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --operator-session-file <operator-session-file> --execute-operation-session/);
 
   const operationReadLifecycleContinuityText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1215,7 +1215,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       workflow_reason: 'operation_lifecycle_missing_continuity_packet',
     },
   });
-  assert.match(operationReadLifecycleContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --expected-pre-action focus_lifecycle_continuity --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(operationReadLifecycleContinuityText, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_live --expected-pre-action focus_lifecycle_continuity --operator-session-file <operator-session-file> --execute-operation-continuity/);
 
   const operationReadMailboxText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1240,7 +1240,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
-  assert.match(operationReadMailboxText, /Mailbox Proposal Read: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(operationReadMailboxText, /Mailbox Proposal Read: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_draft_reply_proposal_live_1 --operator-session-file <operator-session-file>/);
 
   const operationReadDirectiveText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1265,7 +1265,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
-  assert.match(operationReadDirectiveText, /Directive Delivery Review: pnpm --filter @narada2\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
+  assert.match(operationReadDirectiveText, /Directive Delivery Review: pnpm --filter @narada-core\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
 
   const operationReadDirectiveIntentFocusText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1287,7 +1287,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationReadDirectiveIntentFocusText, /Directive Delivery Review: pnpm --filter @narada2\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
+  assert.match(operationReadDirectiveIntentFocusText, /Directive Delivery Review: pnpm --filter @narada-core\/cloudflare-carrier product:directive:delivery:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_directive --operator-session-file <operator-session-file>/);
 
   const operationReadShadowText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1309,7 +1309,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationReadShadowText, /Webhook Delay Shadow Read: pnpm --filter @narada2\/cloudflare-carrier product:webhook-delay:shadow-read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_shadow --operator-session-file <operator-session-file>/);
+  assert.match(operationReadShadowText, /Webhook Delay Shadow Read: pnpm --filter @narada-core\/cloudflare-carrier product:webhook-delay:shadow-read:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_shadow --operator-session-file <operator-session-file>/);
 
   const operationReadOutlookDraftText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1331,7 +1331,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationReadOutlookDraftText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(operationReadOutlookDraftText, /Mailbox Outlook Draft Review: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_create_live_1 --operator-session-file <operator-session-file>/);
 
   const operationReadOutlookDraftEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1353,7 +1353,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationReadOutlookDraftEvidenceText, /Mailbox Outlook Draft Review: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_evidence_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(operationReadOutlookDraftEvidenceText, /Mailbox Outlook Draft Review: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:outlook-draft:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_outlook_draft_evidence_live_1 --operator-session-file <operator-session-file>/);
 
   const operationReadRepositoryPublicationText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1378,7 +1378,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
-  assert.match(operationReadRepositoryPublicationText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_repo_pub --operator-session-file <operator-session-file>/);
+  assert.match(operationReadRepositoryPublicationText, /Repository Publication Review: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_repo_pub --operator-session-file <operator-session-file>/);
 
   const operationReadRepositoryPublicationExecutionText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1402,7 +1402,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
-  assert.match(operationReadRepositoryPublicationExecutionText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadRepositoryPublicationExecutionText, /Repository Publication Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadRepositoryPublicationEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1425,7 +1425,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_boundary_count: 1,
     },
   });
-  assert.match(operationReadRepositoryPublicationEvidenceText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadRepositoryPublicationEvidenceText, /Repository Publication Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadProviderLifecycleSurfaceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1459,16 +1459,16 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
     },
   });
   assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress: requests=3 evidence=2 heartbeats=4/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Evidence Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Local Ingress Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication: requests=5 executions=6 evidence=7 heartbeats=8/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Review: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_lifecycle --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:evidence:list:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadProviderLifecycleSurfaceText, /Repository Publication Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadNoWorkerText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1530,7 +1530,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
-  assert.match(operationReadGenericFocusReviewText, /Evidence Read: pnpm --filter @narada2\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_focus_review --operator-session-file <operator-session-file>/);
+  assert.match(operationReadGenericFocusReviewText, /Evidence Read: pnpm --filter @narada-core\/cloudflare-carrier product:operation:evidence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_focus_review --operator-session-file <operator-session-file>/);
 
   const operationReadSiteFileProposalText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1555,7 +1555,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 0,
     },
   });
-  assert.match(operationReadSiteFileProposalText, /Site File Change Proposal Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_file --operator-session-file <operator-session-file>/);
+  assert.match(operationReadSiteFileProposalText, /Site File Change Proposal Review: pnpm --filter @narada-core\/cloudflare-carrier product:site-file-change:proposal:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_site_file --operator-session-file <operator-session-file>/);
 
   const operationReadSiteFileMaterializationText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1576,7 +1576,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       task_count: 0,
     },
   });
-  assert.match(operationReadSiteFileMaterializationText, /Site File Materialization Review: pnpm --filter @narada2\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadSiteFileMaterializationText, /Site File Materialization Review: pnpm --filter @narada-core\/cloudflare-carrier product:site-file:materialization:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const operationReadRecoveryText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1601,8 +1601,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 1,
     },
   });
-  assert.match(operationReadRecoveryText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
-  assert.match(operationReadRecoveryText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
+  assert.match(operationReadRecoveryText, /Recovery Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
+  assert.match(operationReadRecoveryText, /Persistence Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_recovery --operator-session-file <operator-session-file>/);
 
   const operationReadPersistenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1625,8 +1625,8 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_state: 'reconstructable',
     },
   });
-  assert.match(operationReadPersistenceText, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_persistence --operator-session-file <operator-session-file>/);
-  assert.match(operationReadPersistenceText, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_persistence --operator-session-file <operator-session-file>/);
+  assert.match(operationReadPersistenceText, /Persistence Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_persistence --operator-session-file <operator-session-file>/);
+  assert.match(operationReadPersistenceText, /Recovery Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_persistence --operator-session-file <operator-session-file>/);
 
   const operationReadContinuityText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1649,7 +1649,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_state: 'reconstructable',
     },
   });
-  assert.match(operationReadContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continuity --expected-pre-action review_continuity_loop_report --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(operationReadContinuityText, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continuity --expected-pre-action review_continuity_loop_report --operator-session-file <operator-session-file> --execute-operation-continuity/);
 
   const operationReadObserveContinuityText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1672,7 +1672,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_state: 'reconstructable',
     },
   });
-  assert.match(operationReadObserveContinuityText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continuity_observe --expected-pre-action observe_continuity_packet --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(operationReadObserveContinuityText, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_continuity_observe --expected-pre-action observe_continuity_packet --operator-session-file <operator-session-file> --execute-operation-continuity/);
   const operationReadLocalResidentBridgeText = formatProductSurfaceText({
     operation: 'operation.read',
     worker_url: 'https://carrier.example.test',
@@ -1696,7 +1696,7 @@ test('formatProductSurfaceText renders operator-readable summaries without auth 
       recovery_gap_count: 1,
     },
   });
-  assert.match(operationReadLocalResidentBridgeText, /Local Resident Carrier Bridge: pnpm --filter @narada2\/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_bridge --operator-session-file <operator-session-file>/);
+  assert.match(operationReadLocalResidentBridgeText, /Local Resident Carrier Bridge: pnpm --filter @narada-core\/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_bridge --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText renders refused product reads without auth material', () => {
@@ -1782,7 +1782,7 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
       task_count: 0,
     },
   });
-  assert.match(localIngressText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(localIngressText, /Local Ingress Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const localIngressRestoreText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1803,7 +1803,7 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
       task_count: 0,
     },
   });
-  assert.match(localIngressRestoreText, /Local Ingress Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(localIngressRestoreText, /Local Ingress Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const localIngressRequestText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1824,7 +1824,7 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
       task_count: 0,
     },
   });
-  assert.match(localIngressRequestText, /Local Ingress Request Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(localIngressRequestText, /Local Ingress Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:request:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const localIngressEvidenceText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1845,7 +1845,7 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
       task_count: 0,
     },
   });
-  assert.match(localIngressEvidenceText, /Local Ingress Evidence Review: pnpm --filter @narada2\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(localIngressEvidenceText, /Local Ingress Evidence Review: pnpm --filter @narada-core\/cloudflare-carrier product:local-ingress:evidence:review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const repositoryPublicationText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1866,7 +1866,7 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
       task_count: 0,
     },
   });
-  assert.match(repositoryPublicationText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(repositoryPublicationText, /Repository Publication Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const repositoryPublicationRestoreText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -1887,7 +1887,7 @@ test('formatProductSurfaceText emits provider liveness operator commands for ope
       task_count: 0,
     },
   });
-  assert.match(repositoryPublicationRestoreText, /Repository Publication Provider Liveness: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(repositoryPublicationRestoreText, /Repository Publication Provider Liveness: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:provider-liveness:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText emits site authority operator command for site authority route', () => {
@@ -1917,7 +1917,7 @@ test('formatProductSurfaceText emits site authority operator command for site au
     },
   });
 
-  assert.match(siteAuthorityText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteAuthorityText, /Site Authority: pnpm --filter @narada-core\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText emits site authority operator command for membership authority routes', () => {
@@ -1946,7 +1946,7 @@ test('formatProductSurfaceText emits site authority operator command for members
       session_count: 4,
     },
   });
-  assert.match(membershipAuthorityText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(membershipAuthorityText, /Site Authority: pnpm --filter @narada-core\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const inactiveMembershipText = formatProductSurfaceText({
     operation: 'site.read',
@@ -1973,7 +1973,7 @@ test('formatProductSurfaceText emits site authority operator command for members
       session_count: 4,
     },
   });
-  assert.match(inactiveMembershipText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(inactiveMembershipText, /Site Authority: pnpm --filter @narada-core\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const authorityTransferText = formatProductSurfaceText({
     operation: 'site.read',
@@ -2001,7 +2001,7 @@ test('formatProductSurfaceText emits site authority operator command for members
       session_count: 4,
     },
   });
-  assert.match(authorityTransferText, /Authority Transfer: pnpm --filter @narada2\/cloudflare-carrier product:authority-transfer:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(authorityTransferText, /Authority Transfer: pnpm --filter @narada-core\/cloudflare-carrier product:authority-transfer:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText emits site authority operator command for authority evidence routes', () => {
@@ -2025,7 +2025,7 @@ test('formatProductSurfaceText emits site authority operator command for authori
     },
   });
 
-  assert.match(authorityEvidenceText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(authorityEvidenceText, /Site Authority: pnpm --filter @narada-core\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText omits synthetic operation ids from authority transfer handoff', () => {
@@ -2055,7 +2055,7 @@ test('formatProductSurfaceText omits synthetic operation ids from authority tran
     },
   });
 
-  assert.match(authorityTransferText, /Authority Transfer: pnpm --filter @narada2\/cloudflare-carrier product:authority-transfer:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(authorityTransferText, /Authority Transfer: pnpm --filter @narada-core\/cloudflare-carrier product:authority-transfer:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
   assert.doesNotMatch(authorityTransferText, /Authority Transfer:.*<operation-id>/);
 });
 
@@ -2121,7 +2121,7 @@ test('formatProductSurfaceText emits site authority operator command for authori
     },
   });
 
-  assert.match(authorityPathText, /Site Authority: pnpm --filter @narada2\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(authorityPathText, /Site Authority: pnpm --filter @narada-core\/cloudflare-carrier product:site:authority:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText emits directive intent task create operator command', () => {
@@ -2145,7 +2145,7 @@ test('formatProductSurfaceText emits directive intent task create operator comma
     },
   });
 
-  assert.match(taskCreateText, /Task Create From Directive Intent: pnpm --filter @narada2\/cloudflare-carrier product:task-lifecycle:create-from-directive-intent:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(taskCreateText, /Task Create From Directive Intent: pnpm --filter @narada-core\/cloudflare-carrier product:task-lifecycle:create-from-directive-intent:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText emits mailbox send review operator commands for operation review routes', () => {
@@ -2169,7 +2169,7 @@ test('formatProductSurfaceText emits mailbox send review operator commands for o
       task_count: 0,
     },
   });
-  assert.match(confirmationText, /Mailbox Send Confirmation: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_confirmation_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(confirmationText, /Mailbox Send Confirmation: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:send-confirmation:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_confirmation_live_1 --operator-session-file <operator-session-file>/);
 
   const acceptedText = formatProductSurfaceText({
     operation: 'operation.read',
@@ -2191,7 +2191,7 @@ test('formatProductSurfaceText emits mailbox send review operator commands for o
       task_count: 0,
     },
   });
-  assert.match(acceptedText, /Mailbox Send Accepted: pnpm --filter @narada2\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_accepted_live_1 --operator-session-file <operator-session-file>/);
+  assert.match(acceptedText, /Mailbox Send Accepted: pnpm --filter @narada-core\/cloudflare-carrier product:mailbox:send-accepted:text -- --url https:\/\/carrier\.example\.test --site site_alpha --focus-ref mailbox_send_accepted_live_1 --operator-session-file <operator-session-file>/);
 });
 
 test('summarizeProductSurface summarizes site and operation reads', () => {
@@ -2529,7 +2529,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
     },
   });
   assert.match(siteReadScopeText, /Scope Loaded: no/);
-  assert.match(siteReadScopeText, /Site Scope: pnpm --filter @narada2\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(siteReadScopeText, /Site Scope: pnpm --filter @narada-core\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const membershipScopeText = formatProductSurfaceText({
     operation: 'site.read',
@@ -2556,7 +2556,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
       session_count: 0,
     },
   });
-  assert.match(membershipScopeText, /Site Scope: pnpm --filter @narada2\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(membershipScopeText, /Site Scope: pnpm --filter @narada-core\/cloudflare-carrier product:site:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file>/);
 
   const siteReadContinuityReviewText = formatProductSurfaceText({
     operation: 'site.read',
@@ -2590,7 +2590,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
   });
   assert.match(siteReadContinuityReviewText, /Active Operation Route: operation=operation_alpha action=review_site_continuity_reconciliation_execution reason=operation_operator_focus_needs_review/);
   assert.match(siteReadContinuityReviewText, /Active Operation Focus: kind=site_continuity_reconciliation_execution ref=site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed/);
-  assert.match(siteReadContinuityReviewText, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed --operator-session-file <operator-session-file>/);
+  assert.match(siteReadContinuityReviewText, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref site-continuity-reconciliation-execution:site_alpha:2026-06-13T23:19:01.404Z:completed --operator-session-file <operator-session-file>/);
 
   const siteReadContinuityRefreshText = formatProductSurfaceText({
     operation: 'site.read',
@@ -2622,7 +2622,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
       session_count: 4,
     },
   });
-  assert.match(siteReadContinuityRefreshText, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(siteReadContinuityRefreshText, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
 
   const siteReadMembershipPutText = formatProductSurfaceText({
     operation: 'site.read',
@@ -2678,7 +2678,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
       session_count: 0,
     },
   });
-  assert.match(siteReadMembershipPutReadyText, /Site Membership Put: pnpm --filter @narada2\/cloudflare-carrier product:site:membership:put:text -- --url https:\/\/carrier\.example\.test --site site_alpha --member-principal-id principal:alpha --role viewer --operator-session-file <operator-session-file>/);
+  assert.match(siteReadMembershipPutReadyText, /Site Membership Put: pnpm --filter @narada-core\/cloudflare-carrier product:site:membership:put:text -- --url https:\/\/carrier\.example\.test --site site_alpha --member-principal-id principal:alpha --role viewer --operator-session-file <operator-session-file>/);
 
 
   const siteReadFocusText = formatProductSurfaceText({
@@ -2706,7 +2706,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
       session_count: 0,
     },
   });
-  assert.match(siteReadFocusText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(siteReadFocusText, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 
   const siteReadNextOperationText = formatProductSurfaceText({
     operation: 'site.read',
@@ -2733,7 +2733,7 @@ test('formatProductSurfaceText surfaces site scope and site operation focus comm
       session_count: 2,
     },
   });
-  assert.match(siteReadNextOperationText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(siteReadNextOperationText, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
 });
 
 test('formatProductSurfaceText omits synthetic next operation ids from site list handoff', () => {
@@ -2757,7 +2757,7 @@ test('formatProductSurfaceText omits synthetic next operation ids from site list
     },
   });
 
-  assert.match(siteListText, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(siteListText, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
   assert.doesNotMatch(siteListText, /Operation Next Workflow:.*<operation-id>/);
 });
 
@@ -2825,7 +2825,7 @@ test('formatProductSurfaceText surfaces operation scope command', () => {
   });
 
   assert.match(operationReadScopeText, /Scope Loaded: no/);
-  assert.match(operationReadScopeText, /Operation Scope: pnpm --filter @narada2\/cloudflare-carrier product:operation:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(operationReadScopeText, /Operation Scope: pnpm --filter @narada-core\/cloudflare-carrier product:operation:scope:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('formatProductSurfaceText suppresses operation.read site-scoped handoff without a real site id', () => {

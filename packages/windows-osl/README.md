@@ -1,4 +1,4 @@
-# @narada2/windows-osl
+# @narada-core/windows-osl
 
 Descriptor contracts for Windows Operator Surface Label overlay package adoption.
 

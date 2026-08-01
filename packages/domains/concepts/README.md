@@ -1,4 +1,4 @@
-# @narada2/concepts
+# @narada-core/concepts
 
 ConceptRegistry storage, validation, and lookup for Narada concepts.
 
@@ -19,12 +19,12 @@ The Narada CLI exposes a human/operator-facing query surface via `narada concept
 ## Installation
 
 ```bash
-npm install @narada2/concepts
+npm install @narada-core/concepts
 # or
-pnpm add @narada2/concepts
+pnpm add @narada-core/concepts
 ```
 
 ## Related Packages
 
-- `@narada2/cli`: operator CLI query surface
-- `@narada2/charters`: adjacent policy/package pattern
+- `@narada-core/cli`: operator CLI query surface
+- `@narada-core/charters`: adjacent policy/package pattern

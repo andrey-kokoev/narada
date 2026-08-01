@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
+import { projectOperatorWorkspaceRouteDirectory } from '@narada-core/operator-console-contract';
 import {
   createOperatorWorkspaceRouteDirectoryTransport,
   createOperatorWorkspaceRouteDirectoryState,
@@ -33,7 +33,7 @@ const directoryPayload = {
     owner: 'Agent Web UI',
     authority: { kind: 'nars-session-index', id: null },
     authorityHost: { kind: 'cloudflare', id: 'worker', origin: 'https://workspace.example.test' },
-    projection: { kind: 'session-inventory', owner: '@narada2/operator-console-ui' },
+    projection: { kind: 'session-inventory', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] },
     diagnosticOnly: false,
     routes: [
@@ -45,8 +45,8 @@ const directoryPayload = {
     availability: 'available',
     projectedDetail: 'Route is available from this host.',
     projectedRoutes: [
-      { id: 'sessions', path: '/console/sessions', kind: 'page', label: 'Sessions', navigationKey: 'sessions', availability: 'available', projectedDetail: 'Route is available from this host.', authority: { kind: 'nars-session-index', id: null }, authorityHost: { kind: 'cloudflare', id: 'worker', origin: 'https://workspace.example.test' }, projection: { kind: 'session-inventory', owner: '@narada2/operator-console-ui' }, intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] }, diagnosticOnly: false },
-      { id: 'router-session-demo', path: '/sessions/session-demo', kind: 'page', label: 'Session session-demo', target: { kind: 'session', id: 'session-demo' }, availability: 'available', projectedDetail: 'Route is available from this host.', authority: { kind: 'nars-session-index', id: null }, authorityHost: { kind: 'cloudflare', id: 'worker', origin: 'https://workspace.example.test' }, projection: { kind: 'session-inventory', owner: '@narada2/operator-console-ui' }, intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] }, diagnosticOnly: false },
+      { id: 'sessions', path: '/console/sessions', kind: 'page', label: 'Sessions', navigationKey: 'sessions', availability: 'available', projectedDetail: 'Route is available from this host.', authority: { kind: 'nars-session-index', id: null }, authorityHost: { kind: 'cloudflare', id: 'worker', origin: 'https://workspace.example.test' }, projection: { kind: 'session-inventory', owner: '@narada-core/operator-console-ui' }, intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] }, diagnosticOnly: false },
+      { id: 'router-session-demo', path: '/sessions/session-demo', kind: 'page', label: 'Session session-demo', target: { kind: 'session', id: 'session-demo' }, availability: 'available', projectedDetail: 'Route is available from this host.', authority: { kind: 'nars-session-index', id: null }, authorityHost: { kind: 'cloudflare', id: 'worker', origin: 'https://workspace.example.test' }, projection: { kind: 'session-inventory', owner: '@narada-core/operator-console-ui' }, intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] }, diagnosticOnly: false },
     ],
   }],
 };

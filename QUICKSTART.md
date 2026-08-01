@@ -13,7 +13,7 @@ Prerequisite: Node.js 22 or newer.
 Install the published CLI, provision the User Site, then run the bounded bootstrap check:
 
 ```powershell
-npm install --global @narada2/cli
+npm install --global @narada-core/cli
 narada install windows-user-site
 narada doctor --bootstrap
 ```
@@ -67,7 +67,7 @@ narada install windows-user-site --repair
 Prerequisite: Node.js 22 or newer. PowerShell and WSL are not prerequisites:
 
 ```bash
-npm install --global @narada2/cli
+npm install --global @narada-core/cli
 narada doctor --bootstrap
 ```
 
@@ -80,7 +80,7 @@ for Linux Site roots, supervision, provider readiness, and recovery.
 The source checkout path is for Narada development, not required for ordinary User Site use:
 
 ```bash
-git clone https://github.com/andrey-kokoev/narada.git
+git clone https://github.com/narada-core/narada.git
 cd narada
 pnpm install
 pnpm build

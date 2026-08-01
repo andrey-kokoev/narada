@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from "vitest";
-import { Database } from "@narada2/control-plane";
+import { Database } from "@narada-core/control-plane";
 import {
   SqliteDirectiveRuntimeStore,
   directiveStatusForAgent,

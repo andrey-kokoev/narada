@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFileSync } from "node:fs";
-import { runGovernedCommandSync } from "@narada2/process-launch-posture";
+import { runGovernedCommandSync } from "@narada-core/process-launch-posture";
 import {
   planHostedTelemetryDeployPreflight,
   verifyHostedTelemetrySurface,

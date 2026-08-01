@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import { describe, expect, it } from 'vitest';
 
 const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -22,6 +22,6 @@ describe('task lifecycle MCP runtime cutover', () => {
 
     expect(result.status).toBe(64);
     expect(result.stderr).toContain('retired_task_lifecycle_mcp_entrypoint');
-    expect(result.stderr).toContain('@narada2/task-lifecycle-mcp');
+    expect(result.stderr).toContain('@narada-core/task-lifecycle-mcp');
   });
 });

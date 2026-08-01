@@ -4,7 +4,7 @@ import { computed, ref } from 'vue';
 import type {
   RegistrySiteRecord,
   SiteRegistryManagementResponse,
-} from '@narada2/site-registry-contract';
+} from '@narada-core/site-registry-contract';
 import { toSiteDetailProjection, toSiteListProjection, toSiteTileProjection } from '../src/site-registry/projections.ts';
 import type { UseSiteRegistryState } from '../src/site-registry/composables/useSiteRegistry.ts';
 import {

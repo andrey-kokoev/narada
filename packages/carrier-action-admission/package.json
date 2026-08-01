@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/carrier-action-admission",
+  "name": "@narada-core/carrier-action-admission",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -19,22 +19,22 @@
     "./classification-cases": "./fixtures/classification-cases.json"
   },
   "scripts": {
-    "prebuild": "pnpm --filter @narada2/site-common-tools build",
+    "prebuild": "pnpm --filter @narada-core/site-common-tools build",
     "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test src/carrier-action-admission.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "peerDependencies": {
-    "@narada2/site-common-tools": "0.1.0"
+    "@narada-core/site-common-tools": "0.1.0"
   },
   "devDependencies": {
-    "@narada2/site-common-tools": "workspace:*"
+    "@narada-core/site-common-tools": "workspace:*"
   },
   "description": "Carrier-neutral v0 implementation of the Carrier Action Admission Boundary",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/carrier-action-admission"
   },
   "engines": {

@@ -66,7 +66,7 @@ The current delegated-task validator accepts this shape under `workflow.work_ord
     "questions": ["Which MCP ergonomics slowed the work?"]
   },
   "verification": {
-    "focused_tests": ["pnpm --filter @narada2/cli typecheck"]
+    "focused_tests": ["pnpm --filter @narada-core/cli typecheck"]
   },
   "acceptance": {
     "residual_risk_policy": "allow"

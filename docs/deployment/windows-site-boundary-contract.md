@@ -20,10 +20,10 @@ The Windows Site materialization **must** provide:
 | 1 | **Site discovery** | Scan `%LOCALAPPDATA%\Narada\` for site directories | Scan `/var/lib/narada/` or `~/narada/` for site directories | Operator must be able to enumerate Sites without knowing IDs in advance |
 | 2 | **Site root resolution** | Resolve `{siteRoot}` from `%LOCALAPPDATA%\Narada\{site_id}` (overridable by `NARADA_SITE_ROOT`) | Resolve `{siteRoot}` from `/var/lib/narada/{site_id}` or `~/narada/{site_id}` (overridable by `NARADA_SITE_ROOT`) | Deterministic, documented path conventions |
 | 3 | **Config loading** | Load `config.json` from `{siteRoot}` using existing `loadConfig()` | Same | Reuse kernel config schema; no new config format |
-| 4 | **Lock acquisition** | `FileLock` from `@narada2/control-plane` (already cross-platform) | Same | Existing module handles Windows and Unix; no new lock implementation |
+| 4 | **Lock acquisition** | `FileLock` from `@narada-core/control-plane` (already cross-platform) | Same | Existing module handles Windows and Unix; no new lock implementation |
 | 5 | **Stuck-lock recovery** | TTL comparison on lock metadata + atomic steal | Same | Unattended operation layer §2.2 protocol |
 | 6 | **Bounded Cycle runner** | Execute 8-step pipeline (sync → derive → evaluate → handoff → reconcile → trace → health) | Same | Reuse `DefaultSyncRunner` for step 2; remaining steps use existing control-plane stores |
-| 7 | **Health transitions** | `computeHealthTransition()` from `@narada2/control-plane/src/health.ts` | Same | Existing state machine implements unattended layer §3 exactly |
+| 7 | **Health transitions** | `computeHealthTransition()` from `@narada-core/control-plane/src/health.ts` | Same | Existing state machine implements unattended layer §3 exactly |
 | 8 | **Health persistence** | SQLite `site_health` table in `{siteRoot}\coordinator.db` | Same table, POSIX path | DO SQLite on Cloudflare; local SQLite on Windows |
 | 9 | **Trace persistence** | SQLite `cycle_traces` table + NTFS `{siteRoot}\traces\` | SQLite table + ext4 `{siteRoot}/traces/` | Compact traces in SQLite; large artifacts on filesystem |
 | 10 | **Credential resolution** | Windows Credential Manager → env → `.env` → config | env → `.env` → config | Native uses Credential Manager; WSL uses Linux-native binding |
@@ -315,10 +315,10 @@ The following corrections were made to `docs/deployment/windows-site-materializa
 
 **Original (§3.3, §4):** Implied a new SQLite row-level lock would be implemented for Windows.
 
-**Correction:** The existing `FileLock` class from `@narada2/control-plane` already handles Windows (via `tasklist` PID check and `mkdir`-based locking). Windows Sites **must reuse `FileLock`**, not invent a SQLite-based lock. The `FileLock` metadata already contains `acquired_at` and `pid`, satisfying the TTL and stuck-detection requirements.
+**Correction:** The existing `FileLock` class from `@narada-core/control-plane` already handles Windows (via `tasklist` PID check and `mkdir`-based locking). Windows Sites **must reuse `FileLock`**, not invent a SQLite-based lock. The `FileLock` metadata already contains `acquired_at` and `pid`, satisfying the TTL and stuck-detection requirements.
 
 **Updated text in §3.3:**
-> Lock/recovery model: `FileLock` from `@narada2/control-plane` (cross-platform, handles Windows via `tasklist` PID check). Same code for native and WSL.
+> Lock/recovery model: `FileLock` from `@narada-core/control-plane` (cross-platform, handles Windows via `tasklist` PID check). Same code for native and WSL.
 
 ### 7.2 Health Transition Correction
 
@@ -327,7 +327,7 @@ The following corrections were made to `docs/deployment/windows-site-materializa
 **Correction:** `computeHealthTransition()` in `packages/layers/control-plane/src/health.ts` already implements the exact unattended operation layer state machine. Windows Sites must call this function, not reimplement it.
 
 **Updated text in §3.3:**
-> Health/trace location: SQLite `site_health` table + `cycle_traces` table, populated via `computeHealthTransition()` from `@narada2/control-plane`.
+> Health/trace location: SQLite `site_health` table + `cycle_traces` table, populated via `computeHealthTransition()` from `@narada-core/control-plane`.
 
 ### 7.3 CLI Reuse Clarification
 

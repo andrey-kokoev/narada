@@ -24,10 +24,10 @@ The target does not require a global daemon. It requires durable Site-local proj
 | Concern | Owner |
 | --- | --- |
 | Public session-management schema | NARS contract, documented under `docs/concepts/`. |
-| Runtime process binding and event emission | `@narada2/agent-runtime-server`. |
-| Session state, indexing, and recovery implementation | `@narada2/nars-session-core`; transport binding and event projection remain in `@narada2/agent-runtime-server`. |
-| Launch materialization and initial session id | `@narada2/agent-start`. |
-| Client attach commands and projection capabilities | `@narada2/nars-client-projection-contract`. |
+| Runtime process binding and event emission | `@narada-core/agent-runtime-server`. |
+| Session state, indexing, and recovery implementation | `@narada-core/nars-session-core`; transport binding and event projection remain in `@narada-core/agent-runtime-server`. |
+| Launch materialization and initial session id | `@narada-core/agent-start`. |
+| Client attach commands and projection capabilities | `@narada-core/nars-client-projection-contract`. |
 | Terminal/browser/TUI rendering | Client projection packages. |
 | Known Site root enumeration | Narada CLI using User Site launch registry, known-site registry, explicit config, or explicit CLI arguments. |
 
@@ -58,7 +58,7 @@ Renderers should surface the canonical session field first, then show any legacy
 
 ## Site-Local Storage
 
-NARS session storage is derived from the Site authority root, not by clients appending path strings ad hoc. The canonical resolver is `@narada2/site-paths` and its `resolveNaradaSitePaths` API.
+NARS session storage is derived from the Site authority root, not by clients appending path strings ad hoc. The canonical resolver is `@narada-core/site-paths` and its `resolveNaradaSitePaths` API.
 
 Path vocabulary:
 
@@ -69,7 +69,7 @@ Path vocabulary:
 | `workspaceRoot` | The containing project/workspace root when distinguishable. For an embedded `.narada` Site root, this is the parent directory. |
 | `narsSessionsRoot` | The canonical NARS session storage root: `<siteAuthorityRoot>/crew/nars-sessions`. |
 
-Production code must consume named paths from `@narada2/site-paths` instead of reconstructing NARS session paths with `join(siteRoot, '.narada', ...)`.
+Production code must consume named paths from `@narada-core/site-paths` instead of reconstructing NARS session paths with `join(siteRoot, '.narada', ...)`.
 
 Each Site stores NARS session evidence under:
 
@@ -85,7 +85,7 @@ Each Site stores NARS session evidence under:
   artifacts/index.json
 ```
 
-`control.jsonl` is the canonical path reserved by `@narada2/site-paths` for admitted control-sideband records (`narsControlSidebandPath`; legacy alias `narsControlPath`). The current runtime persists durable queued operator input in `operator-input-queue.json` (`narsOperatorInputQueuePath`); docs and readers must not assume queued input is recoverable from `control.jsonl` alone.
+`control.jsonl` is the canonical path reserved by `@narada-core/site-paths` for admitted control-sideband records (`narsControlSidebandPath`; legacy alias `narsControlPath`). The current runtime persists durable queued operator input in `operator-input-queue.json` (`narsOperatorInputQueuePath`); docs and readers must not assume queued input is recoverable from `control.jsonl` alone.
 
 `session.jsonl` is materialized with the launch record as a compatibility and attachment path. The current runtime does not append the durable session transcript there; `events.jsonl` is the authoritative ordered event journal.
 
@@ -350,7 +350,7 @@ Projection attach by agent id is an index lookup, not a string-appending path he
 
 Attach refusals should be concise for humans and structured for tools. When no matching session is found but the selected Site has indexed sessions, the refusal should include bounded candidate summaries (`session_id`, `agent_id`, `site_id`/`site_root`, display state, health status, and start time) plus the next action: start the runtime host for that agent or pass an explicit `--session <id>`.
 
-Both workspace-style roots such as `D:/code/narada.sonar` and embedded `.narada` roots such as `D:/code/narada.staccato/.narada` are valid `siteRoot` values. Callers must pass the authority root they were given through the resolver and let `@narada2/site-paths` derive `narsSessionsRoot`; they must not append `.narada` again.
+Both workspace-style roots such as `D:/code/narada.sonar` and embedded `.narada` roots such as `D:/code/narada.staccato/.narada` are valid `siteRoot` values. Callers must pass the authority root they were given through the resolver and let `@narada-core/site-paths` derive `narsSessionsRoot`; they must not append `.narada` again.
 
 Session listings should show Site, agent id, role, started time, liveness state, and launch surface. The explicit `latest` selector only chooses active/running sessions; closed or superseded sessions require an explicit id and, when appropriate, `--inspect-stale-session`.
 
@@ -375,7 +375,7 @@ Agent Web UI keeps the active view as a browser projection choice, requests that
 
 ## Implementation Slices
 
-1. Keep the NARS session-index helper in `@narada2/nars-session-core/src/session-index.mjs`, writing `session-index-record.json` from the `session_started` payload.
+1. Keep the NARS session-index helper in `@narada-core/nars-session-core/src/session-index.mjs`, writing `session-index-record.json` from the `session_started` payload.
 2. Update the Site-local aggregate on `session_started` and `session_closed` only, with optional coalesced refresh after heartbeat.
 3. Keep heartbeat writes per-session and cheap.
 4. Add an index reader that falls back from aggregate to per-session records.
@@ -388,6 +388,6 @@ Agent Web UI keeps the active view as a browser projection choice, requests that
 
 - Renaming physical session directories away from `carrier_...`.
 - Removing `NARADA_CARRIER_SESSION_ID`.
-- Reintroducing session, provider, MCP, or transport helpers into `@narada2/carrier-runtime`.
+- Reintroducing session, provider, MCP, or transport helpers into `@narada-core/carrier-runtime`.
 - Inferring attached clients from process lists or terminal windows.
 - Creating a global always-running discovery daemon.

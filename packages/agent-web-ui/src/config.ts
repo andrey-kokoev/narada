@@ -1,5 +1,5 @@
-import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada2/cloudflare-nars-projection';
-import { buildNarsCapabilityProfile, deriveNarsRuntimeQuadrant } from '@narada2/nars-runtime-contract/runtime-surface-contract';
+import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada-core/cloudflare-nars-projection';
+import { buildNarsCapabilityProfile, deriveNarsRuntimeQuadrant } from '@narada-core/nars-runtime-contract/runtime-surface-contract';
 import { isRecord, stringValue, type UnknownRecord } from './types.ts';
 
 type RemoteConfig = {

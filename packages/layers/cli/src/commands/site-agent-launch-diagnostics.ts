@@ -6,7 +6,7 @@ import type {
   OperatorSiteAgentLaunchFailurePhase,
   OperatorSiteAgentLaunchDiagnosticSummary,
   OperatorSiteAgentLaunchFailureWireRecord,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import { redactWorkspaceLaunchText } from './workspace-launch-process.js';
 import type { WorkspaceLaunchTerminalFailure } from './workspace-launch-types.js';
 

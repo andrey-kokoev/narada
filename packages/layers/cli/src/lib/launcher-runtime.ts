@@ -2,14 +2,14 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, parse, resolve } from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
-import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '@narada2/launch-process-ownership';
+import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { buildLaunchProcessOwnership, launchSessionIdFromToken, type LaunchProcessOwnership } from '@narada-core/launch-process-ownership';
 import type {
   AgentStartCommandResult,
   AgentStartExecutionResult,
   AgentStartOptions,
 } from './launcher-contracts.js';
-import type { AgentStartResultV0 } from '@narada2/agent-start/launch-result-v0-contract';
+import type { AgentStartResultV0 } from '@narada-core/agent-start/launch-result-v0-contract';
 import {
   runProcess,
   runProcessDetachedUntilJson,
@@ -18,8 +18,8 @@ import {
 } from './launcher-runtime-process.js';
 import { readJsonFile, stringValue } from './launcher-runtime-results.js';
 import { tryParseAgentStartResultArtifact } from './agent-start-result-reader.js';
-import { resolveAgentStartSessionProjection } from '@narada2/agent-start/launch-result-v0-contract';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveAgentStartSessionProjection } from '@narada-core/agent-start/launch-result-v0-contract';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import {
   classifyAgentStartLaunchBindingStatus,
   getOperatorSurfaceRuntimeControlPath,
@@ -332,7 +332,7 @@ function isPublishedCliInstallation(): boolean {
 
 function resolveCliPackageRoot(): string | null {
   try {
-    return dirname(requireFromLauncherRuntime.resolve('@narada2/cli/package.json'));
+    return dirname(requireFromLauncherRuntime.resolve('@narada-core/cli/package.json'));
   } catch {
     return null;
   }
@@ -356,7 +356,7 @@ function resolveAgentStartEntrypoint(workspaceRoot: string): string {
   const workspaceEntrypoint = join(naradaRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
   if (existsSync(workspaceEntrypoint)) return workspaceEntrypoint;
   try {
-    return requireFromLauncherRuntime.resolve('@narada2/agent-start/narada-agent-start');
+    return requireFromLauncherRuntime.resolve('@narada-core/agent-start/narada-agent-start');
   } catch {
     return resolvePackagedAgentStartEntrypoint() ?? workspaceEntrypoint;
   }
@@ -364,7 +364,7 @@ function resolveAgentStartEntrypoint(workspaceRoot: string): string {
 
 function resolvePackagedAgentStartEntrypoint(): string | null {
   try {
-    const packageJsonPath = requireFromLauncherRuntime.resolve('@narada2/agent-start/package.json');
+    const packageJsonPath = requireFromLauncherRuntime.resolve('@narada-core/agent-start/package.json');
     const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as {
       bin?: string | Record<string, string>;
     };

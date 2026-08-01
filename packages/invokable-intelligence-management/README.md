@@ -1,4 +1,4 @@
-# @narada2/invokable-intelligence-management
+# @narada-core/invokable-intelligence-management
 
 Canonical application-service boundary for managing Narada's invokable-intelligence catalog, policy, access, topology, and cross-Site materializations.
 
@@ -117,9 +117,9 @@ cutover evidence.
 ## Verification
 
 ```sh
-pnpm --filter @narada2/invokable-intelligence-management typecheck
-pnpm --filter @narada2/invokable-intelligence-management test
-pnpm --filter @narada2/invokable-intelligence-management build
+pnpm --filter @narada-core/invokable-intelligence-management typecheck
+pnpm --filter @narada-core/invokable-intelligence-management test
+pnpm --filter @narada-core/invokable-intelligence-management build
 ```
 
 The focused suite covers SQLite and D1 parity, library/CLI/MCP semantics, list/show/validate/mutate/explain, every materialization transition, replay idempotency, cross-locus refusal, explicit time, secret refusal, and evidence/audit readback.

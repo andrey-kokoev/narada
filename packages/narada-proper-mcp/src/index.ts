@@ -62,7 +62,7 @@ export interface NaradaProperMcpArgs {
 export const NARADA_PROPER_MCP_SURFACE = {
   schema: 'narada.mcp_surface.v0',
   surface_id: 'narada-proper.surface.agent-facing-mcp.v1',
-  package_name: '@narada2/narada-proper-mcp',
+  package_name: '@narada-core/narada-proper-mcp',
   command_name: 'narada-proper-mcp',
   authority_posture: 'target_local_agent_facing_mcp',
   source_site_runtime_imported: false,

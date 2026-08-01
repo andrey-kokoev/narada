@@ -6,8 +6,8 @@ import {
   isMultiMailboxConfig,
   FileViewStore,
   ProjectionRebuildRegistry,
-} from '@narada2/control-plane';
-import { SearchEngine } from '@narada2/search';
+} from '@narada-core/control-plane';
+import { SearchEngine } from '@narada-core/search';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';

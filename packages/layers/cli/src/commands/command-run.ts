@@ -8,7 +8,7 @@
 import { mkdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { runGovernedCommand } from '@narada2/process-launch-posture';
+import { runGovernedCommand } from '@narada-core/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
@@ -100,7 +100,7 @@ export function resolveCommandRunPreset(name: CommandRunPresetName, cwd: string)
   switch (name) {
     case 'cli-build':
       return {
-        argv: ['pnpm', '--filter', '@narada2/cli', 'build'],
+        argv: ['pnpm', '--filter', '@narada-core/cli', 'build'],
         sideEffect: 'workspace_write',
         timeoutSeconds: 180,
         outputProfile: 'bounded_excerpt',

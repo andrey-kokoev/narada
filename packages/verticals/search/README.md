@@ -1,4 +1,4 @@
-# @narada2/search
+# @narada-core/search
 
 Full-text search index for Narada compiled local state.
 

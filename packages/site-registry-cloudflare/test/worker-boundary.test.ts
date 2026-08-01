@@ -305,7 +305,7 @@ function siteCommunicationPayload(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("@narada2/site-registry-cloudflare scaffold", () => {
+describe("@narada-core/site-registry-cloudflare scaffold", () => {
   it("declares Cloudflare bindings without raw ids or secrets", () => {
     expect(SITE_REGISTRY_CLOUDFLARE_BINDINGS).toEqual({
       kv: "NARADA_SITE_REGISTRY_KV",

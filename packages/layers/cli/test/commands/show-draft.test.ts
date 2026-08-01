@@ -11,7 +11,7 @@ import type { CommandContext } from '../../src/lib/command-wrapper.js';
 import { mkdtempSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Database, SqliteOutboundStore, SqliteCoordinatorStore } from '@narada2/control-plane';
+import { Database, SqliteOutboundStore, SqliteCoordinatorStore } from '@narada-core/control-plane';
 
 function createMockLogger() {
   return {

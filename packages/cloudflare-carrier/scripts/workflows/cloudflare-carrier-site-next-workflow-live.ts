@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -62,24 +62,24 @@ export function formatSiteNextWorkflowLiveText(result: any) {
     lines.push(`Operation Focus: kind=${result.delegated_operation_focus_kind ?? 'unknown'} ref=${result.delegated_operation_focus_ref}`);
   }
   if (result.worker_url) {
-    lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url ${result.worker_url} --operator-session-file <operator-session-file>`);
+    lines.push(`Site List: pnpm --filter @narada-core/cloudflare-carrier product:site:list:text -- --url ${result.worker_url} --operator-session-file <operator-session-file>`);
   }
   if (result.worker_url && result.selected_site_id) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Action Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id}${result.delegated_operation_id ? ` --operation-id ${result.delegated_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Action Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:action:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id}${result.delegated_operation_id ? ` --operation-id ${result.delegated_operation_id}` : ''} --operator-session-file <operator-session-file> --execute-site-action`);
     if (result.delegated_operation_action=== 'refresh_site_continuity_loop' || result.delegated_operation_action === 'review_site_continuity_reconciliation_execution') {
-      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
-      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operator-session-file <operator-session-file>`);
     }
   }
   if (result.worker_url && result.delegated_operation_id && result.selected_site_id) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
+    lines.push(`Operation Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:read:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --operator-session-file <operator-session-file> --execute-operation-next`);
     if (result.delegated_operation_action=== 'refresh_site_continuity_loop') {
-      lines.push(`Continuity Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
+      lines.push(`Continuity Workflow: pnpm --filter @narada-core/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity`);
     }
     if (result.delegated_operation_action=== 'review_site_continuity_reconciliation_execution' && result.delegated_operation_focus_ref) {
-      lines.push(`Review Ack: pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --focus-kind ${result.delegated_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${result.delegated_operation_focus_ref} --operator-session-file <operator-session-file>`);
+      lines.push(`Review Ack: pnpm --filter @narada-core/cloudflare-carrier product:operation:focus-review:text -- --url ${result.worker_url} --site ${result.selected_site_id} --operation-id ${result.delegated_operation_id} --focus-kind ${result.delegated_operation_focus_kind ?? 'site_continuity_reconciliation_execution'} --focus-ref ${result.delegated_operation_focus_ref} --operator-session-file <operator-session-file>`);
     }
   }
   const postRoute = result.list_after_next?.route_next_action ?? null;

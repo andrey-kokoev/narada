@@ -14,7 +14,7 @@ The source files are orientation evidence only. Narada proper admits fixture-saf
 
 ## Goal
 
-Deepen `@narada2/windows-operator-surface` beyond seed descriptors with:
+Deepen `@narada-core/windows-operator-surface` beyond seed descriptors with:
 
 - source inventory classification;
 - fixture-safe binding liveness classification;

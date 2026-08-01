@@ -1,5 +1,5 @@
 import { PassThrough } from 'node:stream';
-import { createEventHub, startEventStreamProjection } from '@narada2/agent-runtime-server';
+import { createEventHub, startEventStreamProjection } from '@narada-core/agent-runtime-server';
 import { describe, expect, it } from 'vitest';
 import { NarsAttachClient } from '../src/nars-client/attach-client.js';
 

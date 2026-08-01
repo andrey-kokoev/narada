@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join, relative, resolve } from 'node:path';
-import { SqliteInboxStore, type InboxEnvelope } from '@narada2/control-plane';
+import { SqliteInboxStore, type InboxEnvelope } from '@narada-core/control-plane';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore } from '../lib/task-projection.js';

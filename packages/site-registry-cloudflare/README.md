@@ -1,4 +1,4 @@
-# @narada2/site-registry-cloudflare
+# @narada-core/site-registry-cloudflare
 
 Cloudflare Worker realization that currently co-locates four Narada hosted
 surface concerns: Site Operational Telemetry, Site Registry, Registry
@@ -6,8 +6,8 @@ Operational Telemetry, and Site Communication Candidate Exchange. The
 Site Registry grid is the primary public read model, not the whole authority
 object and not the owning Site.
 
-This package is not `@narada2/cloudflare-site` and it is not `@narada2/cloudflare-site-registry`.
-`@narada2/cloudflare-site-registry` is the carrier-embedded D1 site registry runtime;
+This package is not `@narada-core/cloudflare-site` and it is not `@narada-core/cloudflare-site-registry`.
+`@narada-core/cloudflare-site-registry` is the carrier-embedded D1 site registry runtime;
 this package is the hosted Cloudflare Worker read-model surface. It does not run
 Cycles, mutate Site state, admit inbox envelopes, change task lifecycle rows,
 certify identity, or grant capabilities. It hosts bounded projection inputs and read models.
@@ -64,7 +64,7 @@ authority.
 
 `POST /webhook` accepts current `narada.site_event.envelope.v0` compatibility
 payloads and future `narada.site_telemetry.event.v0` payloads through the
-`@narada2/site-config` telemetry event contract validator. The Worker
+`@narada-core/site-config` telemetry event contract validator. The Worker
 authenticates bearer capability tokens locally, refuses unknown Sites and
 unsupported families, checks payload bounds, rejects raw-secret markers, stores
 idempotency records and latest projection read models in KV, and records bounded
@@ -78,7 +78,7 @@ include no-authority fields and never echo bearer token values.
 
 ## Remote Message Exchange
 
-Hosted messages use `@narada2/site-inbox` remote exchange contracts. Submitted
+Hosted messages use `@narada-core/site-inbox` remote exchange contracts. Submitted
 messages remain remote pending candidates in D1 until a local Site reports
 admitted, rejected, or error finalization evidence. Cloud receipts are not local
 canonical inbox admission, and finalized admitted receipts reference local
@@ -156,7 +156,7 @@ delete provenance. Purge/delete transitions are refused in this slice.
 
 The non-live smoke fixture at `fixtures/relation-lifecycle-smoke.v0.json`
 contains only capability references and expected summaries, not bearer tokens.
-`pnpm --filter @narada2/site-registry-cloudflare smoke:fixture` proves the local
+`pnpm --filter @narada-core/site-registry-cloudflare smoke:fixture` proves the local
 active-to-withdrawn flow with fake KV/D1, plus suppression, invalid transition,
 and unauthorized refusal posture. Live smoke must remain route-shape/refusal-only
 unless `NARADA_SITE_REGISTRY_LIVE_RELATION_MUTATION=1` is explicitly set by the
@@ -164,7 +164,7 @@ operator for a controlled relation mutation.
 
 ## Client Helpers
 
-`@narada2/site-registry-cloudflare/client` exports helpers for local Sites to
+`@narada-core/site-registry-cloudflare/client` exports helpers for local Sites to
 publish bounded Site events and pull hosted messages. The compatibility publish
 helper still accepts ad hoc endpoint config. The Publication Edge helper path
 accepts a `SiteTelemetryPublicationEdge`, preflights it before transport, and

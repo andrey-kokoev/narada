@@ -1,4 +1,4 @@
-# @narada2/mcp-shell-windows
+# @narada-core/mcp-shell-windows
 
 Descriptor contracts for a policy-aware Windows shell-like MCP surface.
 

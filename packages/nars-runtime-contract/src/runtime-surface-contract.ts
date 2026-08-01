@@ -2,7 +2,7 @@ import {
   NARS_AUTHORITY_RUNTIME_HOST_KINDS,
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 
 type JsonRecord = Record<string, any>;
 type NarsRuntimeOrigin = 'local' | 'cloudflare';
@@ -108,7 +108,7 @@ export {
   NARS_AUTHORITY_RUNTIME_HOST_KINDS,
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_STATES,
   NARS_AUTHORITY_RUNTIME_SOURCE_WRITE_ADMISSIONS,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 
 const HOST_TO_RUNTIME_ORIGIN = Object.freeze({
   local: 'local',

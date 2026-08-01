@@ -11,8 +11,8 @@ import {
   ExchangeSource,
   normalizeFolderRef,
   normalizeFlagged,
-} from "@narada2/control-plane";
-import type { Source } from "@narada2/control-plane";
+} from "@narada-core/control-plane";
+import type { Source } from "@narada-core/control-plane";
 import type { WindowsLiveGraphSourceConfig } from "./types.js";
 
 /**

@@ -8,15 +8,15 @@ import {
   MATERIALIZATION_REVOCATION_SCHEMA,
   materializationProjectionKey,
   requestScopedMaterializationBinding,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   ContentDigest,
   MaterializationAdmission,
   MaterializationEnvelope,
   MaterializationRevocation,
   MaterializationStoreKind,
-} from "@narada2/invokable-intelligence-contract";
-import { createFakeD1 } from "@narada2/invokable-intelligence-registry";
+} from "@narada-core/invokable-intelligence-contract";
+import { createFakeD1 } from "@narada-core/invokable-intelligence-registry";
 
 import {
   D1MaterializationStore,

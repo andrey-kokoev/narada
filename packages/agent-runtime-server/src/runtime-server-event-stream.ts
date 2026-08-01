@@ -1,11 +1,11 @@
 import { createServer } from 'node:http';
-import { normalizeInputEvent } from '@narada2/carrier-protocol';
+import { normalizeInputEvent } from '@narada-core/carrier-protocol';
 import {
   NARS_SESSION_EVENT_DEFAULT_VIEW,
   normalizeNarsSessionEventView,
   readNarsEventLogPage,
-} from '@narada2/nars-session-core/event-log';
-import { isNarsSessionCoreMethod } from '@narada2/nars-session-core/session-control-contract';
+} from '@narada-core/nars-session-core/event-log';
+import { isNarsSessionCoreMethod } from '@narada-core/nars-session-core/session-control-contract';
 import { decodeWebSocketFrames, encodeWebSocketPongFrame, encodeWebSocketTextFrame, websocketAcceptValue } from './runtime-server-websocket.js';
 import { isNarsRuntimeServerMethod } from './runtime-control-contract.js';
 import { parseEndpointOptions } from './runtime-server-options.js';

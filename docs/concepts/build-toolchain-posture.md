@@ -32,7 +32,7 @@ The probe command is:
 pnpm toolchain:oxbuild-probe
 ```
 
-It currently targets `@narada2/intent-zones` because that package is small and low-risk. The probe:
+It currently targets `@narada-core/intent-zones` because that package is small and low-risk. The probe:
 
 1. builds the package with `tsc`;
 2. builds the package with `oxbuild`;

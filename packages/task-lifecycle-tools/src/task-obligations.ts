@@ -1,8 +1,8 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 import { resolveAgentRoleWithDiagnostics } from './agent-role-resolution.js';
 
 const cwd: any = process.argv[2] || process.cwd();

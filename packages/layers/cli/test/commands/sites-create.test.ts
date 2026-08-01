@@ -130,17 +130,17 @@ describe('sitesCreateCommand', () => {
       includes: ['task_lifecycle', 'agent_context_memory', 'canonical_inbox'],
       does_not_include: expect.arrayContaining(['site_config_awareness', 'site_lift_adoption', 'live capability grants']),
       package_components: [
-        '@narada2/site-task-lifecycle',
-        '@narada2/agent-context-memory',
-        '@narada2/site-inbox',
+        '@narada-core/site-task-lifecycle',
+        '@narada-core/agent-context-memory',
+        '@narada-core/site-inbox',
       ],
     }));
     expect(output.presets).toContainEqual(expect.objectContaining({
       preset: 'site-machinery',
       package_components: [
-        '@narada2/site-inbox',
-        '@narada2/site-config',
-        '@narada2/site-lift',
+        '@narada-core/site-inbox',
+        '@narada-core/site-config',
+        '@narada-core/site-lift',
       ],
     }));
     expect(output.presets.find((preset) => preset.preset === 'agent-site-core')?.operational_commands.live)
@@ -220,14 +220,14 @@ describe('sitesCreateCommand', () => {
     expect(plan.selected_preset).toBe('task-lifecycle');
     expect(plan.selected_template).toEqual({
       template_id: 'narada-proper.templates.site.task-lifecycle.v0',
-      template_components: ['@narada2/site-task-lifecycle'],
+      template_components: ['@narada-core/site-task-lifecycle'],
     });
     expect(plan.site).toMatchObject({
       site_id: 'shorthand-task-site',
       site_root: 'D:\\Sites\\shorthand-task-site',
     });
     expect(plan.package_descriptors).toContainEqual(expect.objectContaining({
-      package_name: '@narada2/site-task-lifecycle',
+      package_name: '@narada-core/site-task-lifecycle',
       posture: 'descriptor_only',
     }));
     expect(plan.evidence.source_state_imported).toBe(false);
@@ -251,9 +251,9 @@ describe('sitesCreateCommand', () => {
       template_catalog: {
         template_id: 'narada-proper.templates.site.agent-site-core.v0',
         template_components: [
-          '@narada2/site-task-lifecycle',
-          '@narada2/agent-context-memory',
-          '@narada2/site-inbox',
+          '@narada-core/site-task-lifecycle',
+          '@narada-core/agent-context-memory',
+          '@narada-core/site-inbox',
         ],
       },
       site: {
@@ -268,16 +268,16 @@ describe('sitesCreateCommand', () => {
         denied: ['source_task_db_import', 'source_checkpoint_import', 'source_inbox_history_import'],
       },
       inbox: { enable: 'canonical_envelope_intake' },
-      task_lifecycle: { enable: 'descriptor_only', package: '@narada2/site-task-lifecycle' },
-      agent_context: { enable: 'descriptor_only', package: '@narada2/agent-context-memory' },
+      task_lifecycle: { enable: 'descriptor_only', package: '@narada-core/site-task-lifecycle' },
+      agent_context: { enable: 'descriptor_only', package: '@narada-core/agent-context-memory' },
     });
     expect(config.evidence).toMatchObject({
       selected_interactively: true,
       template_refs: [
         'narada-proper.templates.site.agent-site-core.v0',
-        'package:@narada2/site-task-lifecycle',
-        'package:@narada2/agent-context-memory',
-        'package:@narada2/site-inbox',
+        'package:@narada-core/site-task-lifecycle',
+        'package:@narada-core/agent-context-memory',
+        'package:@narada-core/site-inbox',
       ],
     });
   });
@@ -312,15 +312,15 @@ describe('sitesCreateCommand', () => {
     expect(plan.selected_template).toEqual({
       template_id: 'narada-proper.templates.site.agent-site-core.v0',
       template_components: [
-        '@narada2/site-task-lifecycle',
-        '@narada2/agent-context-memory',
-        '@narada2/site-inbox',
+        '@narada-core/site-task-lifecycle',
+        '@narada-core/agent-context-memory',
+        '@narada-core/site-inbox',
       ],
     });
     expect(plan.package_descriptors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ package_name: '@narada2/site-task-lifecycle', posture: 'descriptor_only' }),
-      expect.objectContaining({ package_name: '@narada2/agent-context-memory', posture: 'descriptor_only' }),
-      expect.objectContaining({ package_name: '@narada2/site-inbox', posture: 'descriptor_only' }),
+      expect.objectContaining({ package_name: '@narada-core/site-task-lifecycle', posture: 'descriptor_only' }),
+      expect.objectContaining({ package_name: '@narada-core/agent-context-memory', posture: 'descriptor_only' }),
+      expect.objectContaining({ package_name: '@narada-core/site-inbox', posture: 'descriptor_only' }),
     ]));
     expect(plan.required_local_admissions).toEqual(expect.arrayContaining([
       { admission: 'task_lifecycle_db_init_and_mutation', status: 'separate_admission_required' },
@@ -380,11 +380,11 @@ describe('sitesCreateCommand', () => {
     expect(plan.config_path).toBe('<interactive:create-site-options>');
     expect(plan.selected_template).toEqual({
       template_id: 'narada-proper.templates.site.interactive-capability-selection.v0',
-      template_components: ['@narada2/site-task-lifecycle', '@narada2/site-config'],
+      template_components: ['@narada-core/site-task-lifecycle', '@narada-core/site-config'],
     });
     expect(plan.package_descriptors).toEqual(expect.arrayContaining([
-      expect.objectContaining({ package_name: '@narada2/site-task-lifecycle' }),
-      expect.objectContaining({ package_name: '@narada2/site-config' }),
+      expect.objectContaining({ package_name: '@narada-core/site-task-lifecycle' }),
+      expect.objectContaining({ package_name: '@narada-core/site-config' }),
     ]));
     expect(plan.evidence).toMatchObject({
       interactive_preview_default: true,
@@ -417,8 +417,8 @@ describe('sitesCreateCommand', () => {
     expect(plan.command).toBe('narada sites setup');
     expect(plan.config_path).toBe('<interactive:create-site-options>');
     expect(plan.selected_template.template_components).toEqual([
-      '@narada2/site-task-lifecycle',
-      '@narada2/site-inbox',
+      '@narada-core/site-task-lifecycle',
+      '@narada-core/site-inbox',
     ]);
     expect(plan.evidence).toMatchObject({
       interactive_preview_default: true,
@@ -538,9 +538,9 @@ describe('sitesCreateCommand', () => {
     };
     expect(plan.selected_preset).toBe('agent-site-core');
     expect(plan.selected_template.template_components).toEqual([
-      '@narada2/site-task-lifecycle',
-      '@narada2/agent-context-memory',
-      '@narada2/site-inbox',
+      '@narada-core/site-task-lifecycle',
+      '@narada-core/agent-context-memory',
+      '@narada-core/site-inbox',
     ]);
   });
 
@@ -566,9 +566,9 @@ describe('sitesCreateCommand', () => {
     expect(plan.selected_template).toEqual({
       template_id: 'narada-proper.templates.site.agent-site-core.v0',
       template_components: [
-        '@narada2/site-task-lifecycle',
-        '@narada2/agent-context-memory',
-        '@narada2/site-inbox',
+        '@narada-core/site-task-lifecycle',
+        '@narada-core/agent-context-memory',
+        '@narada-core/site-inbox',
       ],
     });
     expect(plan.required_local_admissions).toEqual(expect.arrayContaining([
@@ -761,7 +761,7 @@ describe('sitesCreateCommand', () => {
       source_state_imported: boolean;
     };
     expect(siteInboxSlice).toMatchObject({
-      package_name: '@narada2/site-inbox',
+      package_name: '@narada-core/site-inbox',
       live_execution_admitted: false,
       source_state_imported: false,
     });
@@ -784,7 +784,7 @@ describe('sitesCreateCommand', () => {
     };
     expect(plan.status).toBe('planned');
     expect(plan.package_descriptors).toContainEqual(expect.objectContaining({
-      package_name: '@narada2/agent-context-memory',
+      package_name: '@narada-core/agent-context-memory',
       posture: 'descriptor_only',
     }));
     expect(plan.package_descriptors[0].descriptors).toContain('checkpoint_descriptor');
@@ -807,7 +807,7 @@ describe('sitesCreateCommand', () => {
       required_local_admissions: Array<{ admission: string; status: string }>;
     };
     expect(plan.package_descriptors).toContainEqual(expect.objectContaining({
-      package_name: '@narada2/site-task-lifecycle',
+      package_name: '@narada-core/site-task-lifecycle',
       posture: 'descriptor_only',
     }));
     expect(plan.package_descriptors[0].descriptors).toContain('task_admission_write_request');
@@ -843,28 +843,28 @@ describe('sitesCreateCommand', () => {
     expect(plan.selected_template).toEqual({
       template_id: 'narada-proper.templates.site.site-machinery.v0',
       template_components: [
-        '@narada2/site-inbox',
-        '@narada2/site-config',
-        '@narada2/site-lift',
+        '@narada-core/site-inbox',
+        '@narada-core/site-config',
+        '@narada-core/site-lift',
       ],
     });
     expect(plan.package_descriptors).toEqual(expect.arrayContaining([
       expect.objectContaining({
-        package_name: '@narada2/site-inbox',
+        package_name: '@narada-core/site-inbox',
         posture: 'descriptor_only',
         template_component: true,
         descriptors: expect.arrayContaining(['envelope_admission_request']),
         denied_live_effects: expect.arrayContaining(['source inbox DB/history import']),
       }),
       expect.objectContaining({
-        package_name: '@narada2/site-config',
+        package_name: '@narada-core/site-config',
         posture: 'descriptor_only',
         template_component: true,
         descriptors: expect.arrayContaining(['known_site_registry_entry']),
         denied_live_effects: expect.arrayContaining(['target Site config mutation']),
       }),
       expect.objectContaining({
-        package_name: '@narada2/site-lift',
+        package_name: '@narada-core/site-lift',
         posture: 'descriptor_only',
         template_component: true,
         descriptors: expect.arrayContaining(['adoption_plan']),
@@ -1137,7 +1137,7 @@ describe('sitesCreateCommand', () => {
         authority_locus: 'project',
         site_root: 'D:\\Sites\\unknown-package',
       },
-      packages: [{ name: '@narada2/not-a-template-component' }],
+      packages: [{ name: '@narada-core/not-a-template-component' }],
       identity: {
         named_agents: [],
         role_assignments: [],

@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, readFile, readdir, realpath, lstat, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import { MANDATORY_HISTORY_EXCLUSIONS, pathInsideWorkspace, validatePolicy } from './policy.js';
 import type {
   CaptureResult,

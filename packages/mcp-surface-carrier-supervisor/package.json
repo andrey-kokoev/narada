@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/mcp-surface-carrier-supervisor",
+  "name": "@narada-core/mcp-surface-carrier-supervisor",
   "version": "0.1.0",
   "description": "Read-only descriptor contracts for MCP surface carrier supervisor lifecycle",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/mcp-surface-carrier-supervisor"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/typed-mcp-surface",
+  "name": "@narada-core/typed-mcp-surface",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -42,14 +42,14 @@
     "test": "pnpm run build && node --import tsx --test src/typed-mcp-surface.test.ts"
   },
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/site-common-tools": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/site-common-tools": "workspace:*"
   },
   "description": "Typed MCP surface contracts",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/typed-mcp-surface"
   },
   "engines": {

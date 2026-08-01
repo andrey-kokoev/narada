@@ -9,7 +9,7 @@
 
 import { readFileSync, existsSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { execGovernedSync } from '@narada2/process-launch-posture';
+import { execGovernedSync } from '@narada-core/process-launch-posture';
 
 const cwd: any = resolve(process.argv[2] || process.cwd());
 const baselinePath: any = process.argv[3] || join(cwd, '.ai', 'tmp', 'mcp-baseline.json');

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
+import { createFakeD1 } from '@narada-core/invokable-intelligence-registry';
 import {
   CLOUDFLARE_CARRIER_PERSISTENCE_SCHEMA_MANIFEST,
   createCloudflarePersistenceRegistry,

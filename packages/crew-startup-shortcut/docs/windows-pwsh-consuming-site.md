@@ -1,6 +1,6 @@
 # Windows PowerShell Consuming Site Guidance
 
-Future Windows PowerShell Narada Sites should consume `@narada2/crew-startup-shortcut` from the Narada repo package, not by copying shortcut files or runtime state from an existing Site.
+Future Windows PowerShell Narada Sites should consume `@narada-core/crew-startup-shortcut` from the Narada repo package, not by copying shortcut files or runtime state from an existing Site.
 
 The package provides descriptor contracts only:
 

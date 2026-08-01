@@ -1,4 +1,4 @@
-# @narada2/carrier-command-contract
+# @narada-core/carrier-command-contract
 
 Shared carrier command vocabulary and semantic effect contract for Narada carrier surfaces.
 

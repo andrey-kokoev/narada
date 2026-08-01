@@ -10,8 +10,8 @@ import {
   NarsKernelContractError,
   normalizeIntelligenceKernelKind,
   normalizeNarsExecutionPolicy,
-} from '@narada2/nars-intelligence-kernel-contract';
-import { createNarsNativeKernel } from '@narada2/nars-intelligence-kernel-contract/native-kernel';
+} from '@narada-core/nars-intelligence-kernel-contract';
+import { createNarsNativeKernel } from '@narada-core/nars-intelligence-kernel-contract/native-kernel';
 import { createPiSdkHost } from './pi/pi-sdk-host.ts';
 import { createPiRpcHost } from './pi/pi-rpc-host.ts';
 import { resolveAdmittedPiModelOptions } from './pi/pi-session-factory.ts';

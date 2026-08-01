@@ -7,7 +7,7 @@ import {
   runAgentStartCommand,
   writeOperatorProjectionLaunchBinding,
 } from '../lib/launcher-runtime.js';
-import { defaultRuntimeForOperatorSurface } from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { defaultRuntimeForOperatorSurface } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { requireAgent, requireSiteRoot } from './operator-surface-runtime-support.js';
 import { resolveWorkspaceLaunchSelection } from './workspace-launch-resolution.js';
 import { normalizeExplicitWorkspaceLaunchMcpScope } from './workspace-launch-contracts.js';
@@ -15,7 +15,7 @@ import { join } from 'node:path';
 import {
   createIntelligenceSelectionAuthority,
   type IntelligenceSelectionAuthority,
-} from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/invokable-intelligence-contract';
 
 /**
  * Canonical Operator Surface runtime-start boundary.

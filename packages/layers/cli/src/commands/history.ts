@@ -24,7 +24,7 @@ import {
   type HistoryPrivacyPosture,
   type HistoryTarget,
   type LocalHistoryPolicy,
-} from '@narada2/local-history';
+} from '@narada-core/local-history';
 
 const require = createRequire(import.meta.url);
 
@@ -211,7 +211,7 @@ export async function historyCaptureCommand(options: HistoryOptions, _context: C
 export async function historyStartCommand(options: HistoryOptions, _context: CommandContext): Promise<Result> {
   const { target, policy } = await loadEnabledPolicy(options);
   if (options.background) {
-    const daemonModule = require.resolve('@narada2/local-history/daemon');
+    const daemonModule = require.resolve('@narada-core/local-history/daemon');
     const args = [daemonModule, ...daemonArgs(target, options), ...(options.once ? ['--once'] : [])];
     const child = spawn(process.execPath, args, { detached: true, stdio: 'ignore', windowsHide: true });
     child.unref();

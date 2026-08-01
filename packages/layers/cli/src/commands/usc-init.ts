@@ -6,7 +6,7 @@
  * USC library functions only.
  *
  * Dependency strategy: plugin/provider boundary
- *   - `@narada2/cli` does NOT declare a hard dependency on `@narada.usc/*`
+ *   - `@narada-core/cli` does NOT declare a hard dependency on `@narada.usc/*`
  *   - USC packages are loaded dynamically at runtime
  *   - If absent, the command fails with a clear installation message
  *   - This keeps the CLI publishable without encoding machine-local paths

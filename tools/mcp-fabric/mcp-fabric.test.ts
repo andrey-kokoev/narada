@@ -72,7 +72,7 @@ writeFileSync(join(legacyRegistrySite, '.narada', 'capabilities', 'mcp-surfaces.
   schema: 'narada.site.capabilities.v0',
   mcp_surfaces: [{
     surface_id: 'legacy.surface',
-    package: '@narada2/legacy-mcp',
+    package: '@narada-core/legacy-mcp',
     registered_live_tools: [
       'agent_context_hydrate_current',
       'agent_context_memory.record_checkpoint',

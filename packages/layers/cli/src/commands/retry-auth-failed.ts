@@ -7,7 +7,7 @@ import {
   loadConfig,
   isMultiMailboxConfig,
   loadMultiMailboxConfig,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 export interface RetryAuthFailedOptions {
   config?: string;
@@ -75,7 +75,7 @@ export async function retryAuthFailedCommand(
   }
 
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore, SqliteIntentStore, executeOperatorAction } =
-    await import('@narada2/control-plane');
+    await import('@narada-core/control-plane');
 
   const retried: Array<{ scope_id: string; outbound_id: string; to_status: string }> = [];
 

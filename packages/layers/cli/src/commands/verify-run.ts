@@ -9,7 +9,7 @@
 
 import { existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
-import { execGovernedSync } from '@narada2/process-launch-posture';
+import { execGovernedSync } from '@narada-core/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { checkCommandPolicy, classifyCommandScope } from '../lib/verify-policy.js';

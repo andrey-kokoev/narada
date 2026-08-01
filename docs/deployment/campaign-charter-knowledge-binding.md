@@ -17,7 +17,7 @@
 | **Authority Classes** | `derive` (read facts, extract requirements), `propose` (propose brief or reply) |
 | **Forbidden Authority** | `claim`, `execute`, `resolve`, `confirm` — these remain kernel/runtime owned |
 | **Residence** | Private ops repo (prompt template, knowledge sources, policy binding) |
-| **Runtime** | `@narada2/control-plane` `CodexCharterRunner` (reused kernel charter runtime) |
+| **Runtime** | `@narada-core/control-plane` `CodexCharterRunner` (reused kernel charter runtime) |
 
 The charter is **not** a new runtime. It is a new charter identity (`charter_id: "campaign_producer"`) running inside the existing `CharterInvocationEnvelope` → `CharterOutputEnvelope` boundary.
 
@@ -277,7 +277,7 @@ The campaign charter may only propose these action types:
 
 ### 6.2 Foreman Action Bounding
 
-The `validateCharterOutput` function in `@narada2/control-plane` strips any proposed action not in `invocation.allowed_actions`. Since `campaign_brief` is a **new action type**, it must be added to:
+The `validateCharterOutput` function in `@narada-core/control-plane` strips any proposed action not in `invocation.allowed_actions`. Since `campaign_brief` is a **new action type**, it must be added to:
 
 1. `AllowedActionSchema` in `packages/domains/charters/src/runtime/envelope.ts`
 2. `OutboundActionType` in `packages/layers/control-plane/src/outbound/types.ts`

@@ -2,7 +2,7 @@ import { mkdirSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { dirname, join, posix, win32 } from 'node:path';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import {
   HOST_FLEET_ENROLLMENT_RESULT_SCHEMA,
   HOST_FLEET_LIFECYCLE_RESULT_SCHEMA,

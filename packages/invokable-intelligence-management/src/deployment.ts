@@ -4,7 +4,7 @@ import {
   CANONICAL_CATALOG_SEED_SCHEMA,
   materializationProjectionKey,
   validateCanonicalCatalogRecord,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   CanonicalCatalogRecord,
   CanonicalCatalogSeed,
@@ -12,7 +12,7 @@ import type {
   MaterializationAdmission,
   MaterializationEnvelope,
   ResourceRef,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 import {
   IntelligenceManagementService,

@@ -11,7 +11,7 @@ The source map and site-config docs/tools are external orientation evidence only
 
 ## Goal
 
-Create `@narada2/site-config` with:
+Create `@narada-core/site-config` with:
 
 - known-Site registry entry contracts;
 - explicit capability edge and capability denial types;

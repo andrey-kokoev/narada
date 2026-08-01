@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { appendFileSync, existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
-import { runGovernedCommand, runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommand, runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import { enforceAgentPathPolicy } from './support/path-policy.ts';
 import {
   attachPayloadSource,

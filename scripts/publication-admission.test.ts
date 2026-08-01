@@ -12,32 +12,32 @@ test('requires a live package-scoped publication grant', () => {
     schema: 'narada.npm_publication_admission.v1',
     token: 'test-token',
     expires_at_ms: 2000,
-    packages: ['@narada2/ui'],
+    packages: ['@narada-core/ui'],
   }));
 
   try {
     const admitted = assertPublicationAdmission({
       NARADA_PUBLICATION_ADMISSION_FILE: path,
       NARADA_PUBLICATION_ADMISSION_TOKEN: 'test-token',
-      npm_package_name: '@narada2/ui',
+      npm_package_name: '@narada-core/ui',
     }, 1000);
-    assert.equal(admitted.packageName, '@narada2/ui');
+    assert.equal(admitted.packageName, '@narada-core/ui');
 
     assert.throws(() => assertPublicationAdmission({}, 1000), /admission_missing/);
     assert.throws(() => assertPublicationAdmission({
       NARADA_PUBLICATION_ADMISSION_FILE: path,
       NARADA_PUBLICATION_ADMISSION_TOKEN: 'wrong-token',
-      npm_package_name: '@narada2/ui',
+      npm_package_name: '@narada-core/ui',
     }, 1000), /token_invalid/);
     assert.throws(() => assertPublicationAdmission({
       NARADA_PUBLICATION_ADMISSION_FILE: path,
       NARADA_PUBLICATION_ADMISSION_TOKEN: 'test-token',
-      npm_package_name: '@narada2/cli',
+      npm_package_name: '@narada-core/cli',
     }, 1000), /package_not_admitted/);
     assert.throws(() => assertPublicationAdmission({
       NARADA_PUBLICATION_ADMISSION_FILE: path,
       NARADA_PUBLICATION_ADMISSION_TOKEN: 'test-token',
-      npm_package_name: '@narada2/ui',
+      npm_package_name: '@narada-core/ui',
     }, 3000), /admission_expired/);
   } finally {
     rmSync(root, { recursive: true, force: true });

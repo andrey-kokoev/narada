@@ -1,4 +1,4 @@
-declare module '@narada2/carrier-protocol' {
+declare module '@narada-core/carrier-protocol' {
   export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA: string;
   export const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_REFUSAL_SCHEMA: string;
   export const NARS_AUTHORITY_RUNTIME_HOST_KINDS: readonly string[];

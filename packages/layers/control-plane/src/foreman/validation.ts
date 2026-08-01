@@ -3,7 +3,7 @@
  *
  * Arbitration logic for primary/secondary charter evaluation.
  *
- * The canonical `validateCharterOutput` function lives in `@narada2/charters`
+ * The canonical `validateCharterOutput` function lives in `@narada-core/charters`
  * and is re-exported by this package for convenience.
  */
 
@@ -11,7 +11,7 @@ import type {
   ProposedAction,
 } from "./types.js";
 
-export { validateCharterOutput, type ValidationResult } from "@narada2/charters";
+export { validateCharterOutput, type ValidationResult } from "@narada-core/charters";
 
 /**
  * Arbitration between primary and secondary charter outputs.

@@ -38,7 +38,7 @@ Allowed evidence scope:
 - No live DB mutation through MCP in this increment.
 - No narada-andrey state import.
 - No source history import.
-- No package-owned SQLite dependency in `@narada2/site-task-lifecycle`.
+- No package-owned SQLite dependency in `@narada-core/site-task-lifecycle`.
 
 ## Verification Checklist
 

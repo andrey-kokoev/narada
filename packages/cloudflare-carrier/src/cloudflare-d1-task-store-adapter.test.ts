@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
+import { createFakeD1 } from '@narada-core/invokable-intelligence-registry';
 import { createCloudflareD1TaskStoreAdapter } from './cloudflare-d1-task-store-adapter.ts';
 
 test('D1 task-store adapter owns session-scoped task persistence', async () => {

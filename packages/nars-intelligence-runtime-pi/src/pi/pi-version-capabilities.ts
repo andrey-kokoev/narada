@@ -1,4 +1,4 @@
-import { NarsKernelContractError } from '@narada2/nars-intelligence-kernel-contract';
+import { NarsKernelContractError } from '@narada-core/nars-intelligence-kernel-contract';
 
 export const PI_ADAPTER_VERSION: any = 'narada-pi-adapter-0.1.0';
 export const PI_EVENT_ADAPTER_VERSION: any = 'narada-pi-events.v1';

@@ -1,7 +1,7 @@
 import { createFormatter } from '../lib/formatter.js';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
-import { createMockAdapter } from '@narada2/control-plane';
+import { createMockAdapter } from '@narada-core/control-plane';
 
 export interface DemoOptions {
   count?: number;

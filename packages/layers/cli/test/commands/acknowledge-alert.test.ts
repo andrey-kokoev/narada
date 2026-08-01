@@ -18,7 +18,7 @@ const mocks = vi.hoisted(() => {
   };
 });
 
-vi.mock('@narada2/control-plane', () => ({
+vi.mock('@narada-core/control-plane', () => ({
   isMultiMailboxConfig: vi.fn(() => false),
   loadConfig: vi.fn(async () => ({
     scopes: [{ scope_id: 'test-scope', root_dir: '/test/data' }],

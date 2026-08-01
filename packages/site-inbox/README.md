@@ -1,4 +1,4 @@
-# @narada2/site-inbox
+# @narada-core/site-inbox
 
 Descriptor contracts for Canonical Inbox intake and portable envelope artifacts.
 

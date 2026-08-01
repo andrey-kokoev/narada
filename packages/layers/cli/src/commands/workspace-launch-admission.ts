@@ -4,7 +4,7 @@ import {
   normalizeRuntimeAlias,
   operatorSurfaceKindsForRuntimeHost,
   resolveOperatorSurfaceRuntimeSelection as resolveCanonicalOperatorSurfaceRuntimeSelection,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { commandResultError } from '../lib/command-wrapper.js';
 import type { WorkspaceLaunchRecord } from './workspace-launch-types.js';
 

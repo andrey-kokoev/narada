@@ -1,13 +1,13 @@
-import { classifyCarrierInputAdmission, classifyToolEffectAdmission } from '@narada2/carrier-protocol';
-import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
-import { createCloudflareSiteRegistryAdapter } from '@narada2/cloudflare-site-registry';
+import { classifyCarrierInputAdmission, classifyToolEffectAdmission } from '@narada-core/carrier-protocol';
+import { normalizeIntelligenceInvocationControl } from '@narada-core/invokable-intelligence-contract';
+import { createCloudflareSiteRegistryAdapter } from '@narada-core/cloudflare-site-registry';
 import {
   SITE_AUTHORITY_ACTIONS,
   SITE_EMBODIMENT_KINDS,
   SITE_MUTATION_CLASSES,
   classifySiteAuthorityRequest,
   createCloudflareSiteAuthorityMap,
-} from '@narada2/site-authority-map';
+} from '@narada-core/site-authority-map';
 import {
   SITE_CONTINUITY_EMBODIMENT_KINDS,
   SITE_CONTINUITY_EXCHANGE_CLASSES,
@@ -16,7 +16,7 @@ import {
   createSiteContinuityExchangePacket,
   createSiteContinuityPacketId,
   createSiteContinuityBinding,
-} from '@narada2/site-continuity';
+} from '@narada-core/site-continuity';
 
 import { createCarrierIntelligenceGateway } from './cloudflare-intelligence-resolution.ts';
 import { executeCloudflareIntelligenceManagement } from './cloudflare-intelligence-management-api.ts';
@@ -1986,9 +1986,9 @@ function summarizeLocalCloudContinuityBridge(siteId: any, continuityPackets: any
   const syncCommands = {
     loop_command: loopCommand,
     refresh_command: loopCommand,
-    pull_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
-    push_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file> < packet.json`,
-    read_command: `pnpm --filter @narada2/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
+    pull_command: `pnpm --filter @narada-core/cloudflare-carrier continuity:cloudflare -- pull-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
+    push_command: `pnpm --filter @narada-core/cloudflare-carrier continuity:cloudflare -- push-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file> < packet.json`,
+    read_command: `pnpm --filter @narada-core/cloudflare-carrier continuity:cloudflare -- read-cloudflare --site ${siteArg} --url <worker-url> --token-file <token-file>`,
   };
   return {
     schema: 'narada.local_cloud_continuity_bridge.v1',

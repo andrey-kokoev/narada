@@ -16,7 +16,7 @@ import {
   type SiteContinuityBinding,
   type SiteContinuityDecision,
   type SiteContinuityExchangePacket,
-} from "@narada2/site-continuity";
+} from "@narada-core/site-continuity";
 
 /** A stuck work item that needs operator attention. */
 export interface StuckWorkItem {

@@ -13,7 +13,7 @@ import {
   transitionState,
   isValidPrincipalRuntimeTransition,
   type PrincipalRuntimeState,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import {
   resolvePrincipalStateDir,
 } from "../lib/principal-bridge.js";

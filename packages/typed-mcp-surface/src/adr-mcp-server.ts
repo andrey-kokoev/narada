@@ -6,7 +6,7 @@
  */
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, join } from 'node:path';
-import { buildOutputRefToolContent, listOutputTools, outputShow } from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
+import { buildOutputRefToolContent, listOutputTools, outputShow } from '@narada-core/site-common-tools/compat/mcp-payload-file.legacy-site';
 
 type AnyRecord = Record<string, any>;
 

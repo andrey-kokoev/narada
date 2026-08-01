@@ -15,13 +15,13 @@
   },
   "decision": "accept_package_set_direction_with_descriptor_only_first_slices",
   "adopted_packages": [
-    "@narada2/windows-machinery-capability-exchange",
-    "@narada2/mcp-shell-windows",
-    "@narada2/mcp-test-windows",
-    "@narada2/windows-operator-surface",
-    "@narada2/windows-osl",
-    "@narada2/windows-pc-site-template",
-    "@narada2/windows-komorebi-yasb-kit"
+    "@narada-core/windows-machinery-capability-exchange",
+    "@narada-core/mcp-shell-windows",
+    "@narada-core/mcp-test-windows",
+    "@narada-core/windows-operator-surface",
+    "@narada-core/windows-osl",
+    "@narada-core/windows-pc-site-template",
+    "@narada-core/windows-komorebi-yasb-kit"
   ],
   "changed_files": [
     "packages/windows-machinery-capability-exchange/**",
@@ -39,7 +39,7 @@
   ],
   "verification": [
     {
-      "package": "@narada2/windows-machinery-capability-exchange",
+      "package": "@narada-core/windows-machinery-capability-exchange",
       "commands": [
         "pnpm --dir packages/windows-machinery-capability-exchange test",
         "pnpm --dir packages/windows-machinery-capability-exchange typecheck",
@@ -48,7 +48,7 @@
       "result": "passed"
     },
     {
-      "package": "@narada2/windows-operator-surface",
+      "package": "@narada-core/windows-operator-surface",
       "commands": [
         "pnpm --dir packages/windows-operator-surface test",
         "pnpm --dir packages/windows-operator-surface typecheck",
@@ -57,7 +57,7 @@
       "result": "passed"
     },
     {
-      "package": "@narada2/mcp-shell-windows",
+      "package": "@narada-core/mcp-shell-windows",
       "commands": [
         "pnpm --dir packages/mcp-shell-windows test",
         "pnpm --dir packages/mcp-shell-windows typecheck",
@@ -66,7 +66,7 @@
       "result": "passed"
     },
     {
-      "package": "@narada2/mcp-test-windows",
+      "package": "@narada-core/mcp-test-windows",
       "commands": [
         "pnpm --dir packages/mcp-test-windows test",
         "pnpm --dir packages/mcp-test-windows typecheck",
@@ -75,7 +75,7 @@
       "result": "passed"
     },
     {
-      "package": "@narada2/windows-osl",
+      "package": "@narada-core/windows-osl",
       "commands": [
         "pnpm --dir packages/windows-osl test",
         "pnpm --dir packages/windows-osl typecheck",
@@ -84,7 +84,7 @@
       "result": "passed"
     },
     {
-      "package": "@narada2/windows-pc-site-template",
+      "package": "@narada-core/windows-pc-site-template",
       "commands": [
         "pnpm --dir packages/windows-pc-site-template test",
         "pnpm --dir packages/windows-pc-site-template typecheck",
@@ -93,7 +93,7 @@
       "result": "passed"
     },
     {
-      "package": "@narada2/windows-komorebi-yasb-kit",
+      "package": "@narada-core/windows-komorebi-yasb-kit",
       "commands": [
         "pnpm --dir packages/windows-komorebi-yasb-kit test",
         "pnpm --dir packages/windows-komorebi-yasb-kit typecheck",
@@ -124,5 +124,5 @@
     "receiving Site safe runtime execution without local admission"
   ],
   "rollback": "Remove the seven adopted package directories and this task/capability/admission evidence. No source Site runtime state, PC state, private MCP config, Windows profile, or live operator-surface state was mutated.",
-  "next_smallest_slice": "Deepen @narada2/windows-operator-surface with source-inventory classification and fixture-safe service-module extraction, still excluding PC-locus repair scripts."
+  "next_smallest_slice": "Deepen @narada-core/windows-operator-surface with source-inventory classification and fixture-safe service-module extraction, still excluding PC-locus repair scripts."
 }

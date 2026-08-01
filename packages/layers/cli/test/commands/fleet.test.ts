@@ -10,7 +10,7 @@ const previousRegistryPath = process.env.NARADA_HOST_FLEET_REGISTRY_PATH;
 const temporaryRoots: string[] = [];
 
 const { fleetAuditCommand, fleetListCommand, fleetObservationsCommand, fleetRegisterCommand } = await import('../../src/commands/fleet.js');
-const { openHostFleetRegistry } = await import('@narada2/host-fleet');
+const { openHostFleetRegistry } = await import('@narada-core/host-fleet');
 
 function useTemporaryRegistry(): string {
   const root = mkdtempSync(join(tmpdir(), 'narada-host-fleet-cli-'));

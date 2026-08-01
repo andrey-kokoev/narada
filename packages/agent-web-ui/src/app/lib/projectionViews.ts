@@ -3,7 +3,7 @@ import {
   operatorViewTransportVerbosity,
   operatorViewLaneForDisposition,
   type OperatorViewLane,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 
 export const PROJECTION_VIEW_FACETS = OPERATOR_VIEW_LANES;
 

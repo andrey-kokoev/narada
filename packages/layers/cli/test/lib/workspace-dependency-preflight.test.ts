@@ -19,11 +19,11 @@ describe('workspace dependency preflight', () => {
     await mkdir(join(root, 'packages', 'layers', 'cli'), { recursive: true });
     await mkdir(join(root, 'packages', 'agent-start'), { recursive: true });
     await writeFile(join(root, 'packages', 'layers', 'cli', 'package.json'), JSON.stringify({
-      name: '@narada2/cli',
-      dependencies: { '@narada2/missing-package': 'workspace:*' },
+      name: '@narada-core/cli',
+      dependencies: { '@narada-core/missing-package': 'workspace:*' },
     }));
     await writeFile(join(root, 'packages', 'agent-start', 'package.json'), JSON.stringify({
-      name: '@narada2/agent-start',
+      name: '@narada-core/agent-start',
       dependencies: {},
     }));
 
@@ -32,8 +32,8 @@ describe('workspace dependency preflight', () => {
     expect(result.status).toBe('not_ready');
     expect(result.missing).toEqual([
       expect.objectContaining({
-        package_name: '@narada2/missing-package',
-        importer: '@narada2/cli',
+        package_name: '@narada-core/missing-package',
+        importer: '@narada-core/cli',
       }),
     ]);
     expect(formatWorkspaceDependencyPreflightFailure(result)).toContain('pnpm install --frozen-lockfile');
@@ -44,18 +44,18 @@ describe('workspace dependency preflight', () => {
     temporaryRoots.push(root);
     await mkdir(join(root, 'packages', 'layers', 'cli'), { recursive: true });
     await mkdir(join(root, 'packages', 'agent-start'), { recursive: true });
-    await mkdir(join(root, 'node_modules', '@narada2', 'transitive-package'), { recursive: true });
+    await mkdir(join(root, 'node_modules', '@narada-core', 'transitive-package'), { recursive: true });
     await writeFile(join(root, 'packages', 'layers', 'cli', 'package.json'), JSON.stringify({
-      name: '@narada2/cli',
-      dependencies: { '@narada2/transitive-package': 'workspace:*' },
+      name: '@narada-core/cli',
+      dependencies: { '@narada-core/transitive-package': 'workspace:*' },
     }));
     await writeFile(join(root, 'packages', 'agent-start', 'package.json'), JSON.stringify({
-      name: '@narada2/agent-start',
+      name: '@narada-core/agent-start',
       dependencies: {},
     }));
-    await writeFile(join(root, 'node_modules', '@narada2', 'transitive-package', 'package.json'), JSON.stringify({
-      name: '@narada2/transitive-package',
-      dependencies: { '@narada2/missing-transitive-package': 'workspace:*' },
+    await writeFile(join(root, 'node_modules', '@narada-core', 'transitive-package', 'package.json'), JSON.stringify({
+      name: '@narada-core/transitive-package',
+      dependencies: { '@narada-core/missing-transitive-package': 'workspace:*' },
     }));
 
     const result = checkWorkspaceDependencyPreflight(root);
@@ -63,8 +63,8 @@ describe('workspace dependency preflight', () => {
     expect(result.status).toBe('not_ready');
     expect(result.missing).toEqual([
       expect.objectContaining({
-        package_name: '@narada2/missing-transitive-package',
-        importer: '@narada2/transitive-package',
+        package_name: '@narada-core/missing-transitive-package',
+        importer: '@narada-core/transitive-package',
       }),
     ]);
   });

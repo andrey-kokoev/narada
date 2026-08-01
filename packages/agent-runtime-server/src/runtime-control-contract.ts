@@ -5,4 +5,4 @@ export {
   NARS_RUNTIME_SERVER_METHOD_LIST,
   NARS_RUNTIME_SERVER_METHODS,
   isNarsRuntimeServerMethod,
-} from '@narada2/nars-runtime-contract';
+} from '@narada-core/nars-runtime-contract';

@@ -138,8 +138,8 @@ Task lifecycle task reads remain bounded and keep their default order. Live cuto
 GitHub App installation authority is the preferred credential substrate for Cloudflare repository publication because the Worker mints short-lived installation tokens inside the executor boundary:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier run repository-publication:github-app-secret-put:live -- --app-id <id> --installation-id <id> --private-key-file <path>
-pnpm --filter @narada2/cloudflare-carrier run repository-publication:readiness-smoke:live
+pnpm --filter @narada-core/cloudflare-carrier run repository-publication:github-app-secret-put:live -- --app-id <id> --installation-id <id> --private-key-file <path>
+pnpm --filter @narada-core/cloudflare-carrier run repository-publication:readiness-smoke:live
 ```
 
 The legacy PAT substrate remains available through `repository-publication:secret-put:live`, but both paths are credentials only. They do not admit publication authority by themselves. The readiness smoke must report `ready` with `github_credential_mode = github_app_installation` or `github_token`, the requested repository and branch must be allowlisted, and only then may an operator run `repository-publication:cloudflare-github-smoke:live`. A `not_ready` result is a refusal boundary, not a fallback to Windows publication.
@@ -153,22 +153,22 @@ The first deliberate task lifecycle authority migrations are narrow and explicit
 The lower-level commands remain available for narrow checks. The root operator gate also runs the projection-write smoke because the product readiness question now includes fresh proof of the full Cloudflare task lifecycle projection record boundary:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier smoke:live -- --url <worker-url> --token-file <path> --expect-tool-effect-posture configured
+pnpm --filter @narada-core/cloudflare-carrier smoke:live -- --url <worker-url> --token-file <path> --expect-tool-effect-posture configured
 pnpm site:continuity:loop -- sync-cloudflare --site <site_id> --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:shadow-smoke:live -- --url <worker-url> --token-file <path> --payload-file <path-to-windows-shadow-read.json>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:create-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:claim-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:report-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:changed-file-evidence-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:finish-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:projection-write-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:source-state-write-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:assignment-write-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:role-resolution-write-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier task-lifecycle:roster-mutation-write-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier site-file-change:proposal-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier repository-publication:readiness-smoke:live -- --url <worker-url> --token-file <path>
-pnpm --filter @narada2/cloudflare-carrier repository-publication:cloudflare-github-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:shadow-smoke:live -- --url <worker-url> --token-file <path> --payload-file <path-to-windows-shadow-read.json>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:create-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:claim-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:report-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:changed-file-evidence-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:finish-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:projection-write-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:source-state-write-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:assignment-write-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:role-resolution-write-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier task-lifecycle:roster-mutation-write-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier site-file-change:proposal-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier repository-publication:readiness-smoke:live -- --url <worker-url> --token-file <path>
+pnpm --filter @narada-core/cloudflare-carrier repository-publication:cloudflare-github-smoke:live -- --url <worker-url> --token-file <path>
 ```
 
 The task-lifecycle shadow smoke records Windows task lifecycle state as Cloudflare read-model evidence only. It must report `mutation_authority = windows_task_lifecycle_sqlite` and `cloudflare_write_admission = not_admitted`.

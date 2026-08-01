@@ -65,9 +65,9 @@ Operations live in `config/config.json`. Logs, state, and backups live under the
 ### CLI (Recommended)
 
 ```bash
-npm install -g @narada2/cli
+npm install -g @narada-core/cli
 # or
-pnpm add -g @narada2/cli
+pnpm add -g @narada-core/cli
 ```
 
 The single `narada` CLI surfaces every command: runtime, backup, operation shaping, and repo bootstrapping.
@@ -75,9 +75,9 @@ The single `narada` CLI surfaces every command: runtime, backup, operation shapi
 ### Daemon
 
 ```bash
-npm install -g @narada2/daemon
+npm install -g @narada-core/daemon
 # or
-pnpm add -g @narada2/daemon
+pnpm add -g @narada-core/daemon
 ```
 
 The daemon is typically started from inside an ops repo via `pnpm daemon`.
@@ -85,9 +85,9 @@ The daemon is typically started from inside an ops repo via `pnpm daemon`.
 ### Library
 
 ```bash
-npm install @narada2/control-plane
+npm install @narada-core/control-plane
 # or
-pnpm add @narada2/control-plane
+pnpm add @narada-core/control-plane
 ```
 
 ## First-Run Paths
@@ -124,7 +124,7 @@ For a native Linux host, install the published CLI with npm or pnpm and use
 the CLI-owned resident-first path. PowerShell and WSL are not prerequisites:
 
 ```bash
-npm install -g @narada2/cli
+npm install -g @narada-core/cli
 narada onboarding start --scope user-site --interactive
 ```
 
@@ -278,7 +278,7 @@ Root `pnpm test` is disabled to prevent accidental full-suite runs. Use `pnpm ve
 - **[SEMANTICS.md](SEMANTICS.md)** — Canonical ontology and vocabulary (single source of truth for all terms)
 - **[TERMINOLOGY.md](TERMINOLOGY.md)** — User-facing words for talking about Narada
 - **[AGENTS.md](AGENTS.md)** — Navigation hub for contributors and agents
-- **[RELEASE.md](RELEASE.md)** — Local and CI publishing flow for `@narada2/*` packages
+- **[RELEASE.md](RELEASE.md)** — Local and CI publishing flow for `@narada-core/*` packages
 - **[.ai/do-not-open/tasks/](.ai/do-not-open/tasks/)** — Design tasks and specifications
 
 ## Review Checklist for Future Architecture Changes

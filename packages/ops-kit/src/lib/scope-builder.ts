@@ -8,7 +8,7 @@ import type {
   BodyPolicy,
   MailParticipantField,
   ScopeConfig,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type { PosturePreset } from "../intents/posture.js";
 import { resolvePostureActions } from "../intents/posture.js";
 import type { ClientServiceMaterialNotesPosture } from "../intents/mailbox.js";

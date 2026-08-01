@@ -14,7 +14,7 @@ test('Vue consumer fixture imports the internal source component package', async
   assert.equal(manifest.private, true);
   assert.equal(manifest.narada?.publication_posture, 'workspace_only');
   assert.equal(manifest.narada?.source_export_posture, 'intentional');
-  assert.match(app, /from '@narada2\/ui-vue'/);
+  assert.match(app, /from '@narada-core\/ui-vue'/);
   assert.match(app, /<TooltipProvider>/);
   assert.match(app, /<CommandItem/);
   assert.match(app, /<DropdownMenuItem/);

@@ -1,7 +1,7 @@
 import {
   executeOperatorProjectionOpenRequest,
   type OperatorProjectionOpenOutcome,
-} from '@narada2/process-launch-posture';
+} from '@narada-core/process-launch-posture';
 
 export interface OperatorConsoleBrowserOptions {
   shouldOpen?: boolean;
@@ -18,7 +18,7 @@ export async function openOperatorConsoleWorkspace(
     target_ref: targetRef,
     purpose: 'operator_console_workspace',
     caller: {
-      package: '@narada2/cli',
+      package: '@narada-core/cli',
       command: 'console serve',
       module: 'lib/operator-console-browser',
     },

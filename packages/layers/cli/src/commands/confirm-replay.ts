@@ -4,7 +4,7 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada-core/control-plane';
 
 export interface ConfirmReplayOptions {
   config?: string;
@@ -135,7 +135,7 @@ async function replayForScope(
     ConfirmationReplay,
     GraphHttpClient,
     buildGraphTokenProvider,
-  } = await import('@narada2/control-plane');
+  } = await import('@narada-core/control-plane');
 
   const db = new Database(coordinatorDbPath);
 
@@ -150,7 +150,7 @@ async function replayForScope(
     if (graphSource) {
       try {
         const tokenProvider = buildGraphTokenProvider({
-          config: { graph: graphSource } as import('@narada2/control-plane').ExchangeFsSyncConfig,
+          config: { graph: graphSource } as import('@narada-core/control-plane').ExchangeFsSyncConfig,
         });
         const graphHttpClient = new GraphHttpClient({
           tokenProvider,

@@ -36,7 +36,7 @@
     "cross-Site mutation"
   ],
   "no_import_evidence": [
-    "Implementation uses @narada2/agent-context-memory refusal guards.",
+    "Implementation uses @narada-core/agent-context-memory refusal guards.",
     "Tests prove source checkpoint refs are refused before checkpoint mutation.",
     "No source Site runtime DB or checkpoint file was copied."
   ],

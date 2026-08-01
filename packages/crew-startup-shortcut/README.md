@@ -1,4 +1,4 @@
-# @narada2/crew-startup-shortcut
+# @narada-core/crew-startup-shortcut
 
 Descriptor contracts for governed crew startup shortcuts.
 

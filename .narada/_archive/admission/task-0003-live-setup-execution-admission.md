@@ -13,7 +13,7 @@ Admit a bounded live execution increment under Narada proper authority.
 Admitted:
 
 - initializer execution under `D:\code\narada`;
-- concrete adapter activation using Windows `sqlite3.exe` outside `@narada2/site-task-lifecycle`;
+- concrete adapter activation using Windows `sqlite3.exe` outside `@narada-core/site-task-lifecycle`;
 - DB mutation through that adapter into `.ai/task-lifecycle.db`;
 - file-backed MCP capability evidence plus transport smoke test of the available `narada-mcp` facade.
 

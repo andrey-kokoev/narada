@@ -24,7 +24,7 @@ macOS is a **Site**, not an operation, not a vertical, and not a deployment targ
 >
 > This chapter documents one concrete macOS materialization. A generic `Site` abstraction (interface, base class, or shared package) is **not justified yet**. Cloudflare, Windows native, Windows WSL, and macOS differ in scheduler mechanism, secret binding, filesystem locking behavior, and session/permission boundaries enough that premature abstraction would hide real substrate constraints.
 >
-> If Tasks 431–435 reveal substantial commonality, a shared `@narada2/site-core` package may be proposed in the closure review (Task 436). Until then, each substrate keeps its own package or module.
+> If Tasks 431–435 reveal substantial commonality, a shared `@narada-core/site-core` package may be proposed in the closure review (Task 436). Until then, each substrate keeps its own package or module.
 
 ---
 
@@ -112,7 +112,7 @@ macOS shares these Narada concerns with other substrates, even though the substr
 | **Site identity** | `site_id` string, directory name under `~/Library/Application Support/Narada/` |
 | **Cycle trigger** | `launchd` LaunchAgent plist → shell script → Node.js |
 | **Coordinator/storage** | `better-sqlite3` file at `{siteRoot}/coordinator.db` |
-| **Lock/recovery model** | `FileLock` from `@narada2/control-plane` (cross-platform, handles Unix via `mkdir`-based locking with PID check) |
+| **Lock/recovery model** | `FileLock` from `@narada-core/control-plane` (cross-platform, handles Unix via `mkdir`-based locking with PID check) |
 | **Health/trace location** | SQLite `site_health` + `cycle_traces` tables (same schema as Windows/Cloudflare site-local tables) |
 | **Trace artifacts** | APFS `{siteRoot}/traces/` |
 | **Secret binding** | macOS Keychain first; env or `.env` fallback |
@@ -131,7 +131,7 @@ The Cycle explicitly avoids long-running daemon assumptions.
 
 ### Steps
 
-1. **Acquire Site/Cycle lock** — Claim exclusive coordination authority via `FileLock` from `@narada2/control-plane`. Fail fast if another Cycle is active.
+1. **Acquire Site/Cycle lock** — Claim exclusive coordination authority via `FileLock` from `@narada-core/control-plane`. Fail fast if another Cycle is active.
 2. **Sync source deltas** — Pull new facts from the Source. Write cursor and apply-log updates.
 3. **Derive / admit work** — Run context formation + foreman admission over new facts. Open or supersede work items.
 4. **Run charter evaluation** — Lease runnable work, execute charters, persist evaluations.
@@ -162,7 +162,7 @@ The Cycle explicitly avoids long-running daemon assumptions.
 | `/proc/{pid}` for process inspection | `sysctl` / `ps` / `lsof` (no `/proc` on macOS) |
 | GNU `date` | BSD `date` (different format strings) |
 | Case-sensitive filesystem | Case-insensitive APFS by default |
-| `flock()` reliable across processes | `FileLock` from `@narada2/control-plane` (`mkdir`-based, portable) |
+| `flock()` reliable across processes | `FileLock` from `@narada-core/control-plane` (`mkdir`-based, portable) |
 | Signal handling (`SIGTERM` standard) | `SIGTERM` works; `SIGKILL` from `launchctl`; no `SIGPWR` |
 
 ---
@@ -411,7 +411,7 @@ The boundary contract proposed in the chapter DAG anticipated modules that emerg
 
 | Contract Anticipation | Actual Name | Rationale |
 |-----------------------|-------------|-----------|
-| `credential-resolver.ts` | `credentials.ts` | Shorter; aligns with `@narada2/control-plane` naming conventions |
+| `credential-resolver.ts` | `credentials.ts` | Shorter; aligns with `@narada-core/control-plane` naming conventions |
 | `operator-surface.ts` | `observability.ts` | Explicitly read-only; mirrors control-plane `observability/` boundary |
 | `MacosSiteSupervisor` class | `supervisor.ts` (pure functions) | Template generators have no mutable state; functions are sufficient |
 

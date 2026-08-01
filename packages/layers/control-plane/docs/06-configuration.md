@@ -353,7 +353,7 @@ If no OS keychain is available, credentials are encrypted using AES-256-GCM with
 ### Programmatic API
 
 ```typescript
-import { createSecureStorage } from '@narada2/control-plane';
+import { createSecureStorage } from '@narada-core/control-plane';
 
 const storage = await createSecureStorage('my-scope');
 await storage.setCredential('client_secret', 'secret-value');

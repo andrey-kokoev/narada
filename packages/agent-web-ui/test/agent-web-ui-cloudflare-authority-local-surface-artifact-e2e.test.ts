@@ -5,8 +5,8 @@ import {
   createCloudflareNarsAuthorityService,
   createCloudflareNarsTestRuntimeExecutor,
   createCloudflareNarsWorkspaceDirectoryService,
-} from '@narada2/cloudflare-nars-projection';
-import { createCloudflareNarsProjectionWorker } from '@narada2/cloudflare-nars-projection/worker';
+} from '@narada-core/cloudflare-nars-projection';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
 import { startAgentWebUiServer } from '../src/server.ts';
 import {
   findHeadlessBrowser,

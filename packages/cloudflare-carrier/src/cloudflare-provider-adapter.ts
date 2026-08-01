@@ -1,4 +1,4 @@
-import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
+import { normalizeIntelligenceInvocationControl } from '@narada-core/invokable-intelligence-contract';
 import { createCarrierIntelligenceGateway } from './cloudflare-intelligence-resolution.ts';
 import { createCloudflareCarrierConfig } from './cloudflare-carrier-config.ts';
 

@@ -1,4 +1,4 @@
-# @narada2/windows-pc-site-template
+# @narada-core/windows-pc-site-template
 
 Parameterized descriptor template for a Windows PC Site embodiment.
 

@@ -18,7 +18,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, rename
 import { join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { appendAdmissionEvent } from '../inbox/admission-log.js';
-import { evaluateEnvelopeSeverity, checkDuplicateTask, materializeEnvelopeAsTask, markEnvelopeMaterialized } from '@narada2/task-governance/runtime/task-lifecycle/inbox-bridge';
+import { evaluateEnvelopeSeverity, checkDuplicateTask, materializeEnvelopeAsTask, markEnvelopeMaterialized } from '@narada-core/task-governance/runtime/task-lifecycle/inbox-bridge';
 
 function parseArgs(argv: any) : any{
   const args: any = { action: null, filterKind: null, olderThan: null, limit: Infinity, dryRun: false, siteRoot: process.cwd() };

@@ -133,12 +133,12 @@ Use `--platform windows` or `--platform linux` only when an explicit override is
 
 ### Windows Install Boundary
 
-The supported first-time Windows install boundary is the published `@narada2/cli` package. A source checkout is a contributor path and is not required for ordinary User Site use.
+The supported first-time Windows install boundary is the published `@narada-core/cli` package. A source checkout is a contributor path and is not required for ordinary User Site use.
 
 Prerequisite: Node.js 22 or newer.
 
 ```powershell
-npm install --global @narada2/cli
+npm install --global @narada-core/cli
 narada install windows-user-site --profile minimal
 narada doctor --bootstrap
 ```

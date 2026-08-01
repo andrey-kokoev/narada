@@ -1,7 +1,7 @@
 import { resolve } from 'node:path';
 import { readdir, readFile, stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { loadConfig } from '@narada2/control-plane';
+import { loadConfig } from '@narada-core/control-plane';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';

@@ -6,10 +6,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { createInterface } from 'node:readline';
-import { spawnTestChild } from '@narada2/process-launch-posture';
+import { spawnTestChild } from '@narada-core/process-launch-posture';
 import { checkTaskRoleEligibilityLocal } from './agent-role-resolution.js';
 import { resolveTaskRolePolicy } from './task-role-policy.js';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 
 const root: any = dirname(fileURLToPath(import.meta.url));
 

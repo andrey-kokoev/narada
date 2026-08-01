@@ -5,15 +5,15 @@ import {
   listReportsForTask,
   loadRoster,
   type WorkResultReport,
-} from '@narada2/task-governance-core/task-governance';
-import { resolveReviewTargetFromRoster, resolveDefaultReviewerFromRoster } from '@narada2/task-governance-core/task-review-authority';
+} from '@narada-core/task-governance-core/task-governance';
+import { resolveReviewTargetFromRoster, resolveDefaultReviewerFromRoster } from '@narada-core/task-governance-core/task-review-authority';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import {
   openTaskLifecycleStore,
   type TaskLifecycleStore,
 } from '../lib/task-lifecycle-store.js';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 import {
   captureTaskLifecycleEvidenceState,
   writeTaskLifecycleMutationEvidence,

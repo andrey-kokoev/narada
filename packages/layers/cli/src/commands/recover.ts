@@ -4,8 +4,8 @@ import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada2/control-plane';
-import type { AllowedAction, RuntimePolicy, ScopeConfig } from '@narada2/control-plane';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig } from '@narada-core/control-plane';
+import type { AllowedAction, RuntimePolicy, ScopeConfig } from '@narada-core/control-plane';
 
 export interface RecoverOptions {
   config?: string;
@@ -116,7 +116,7 @@ async function recoverForScope(
     SqliteFactStore,
     DefaultForemanFacade,
     resolveContextStrategy,
-  } = await import('@narada2/control-plane');
+  } = await import('@narada-core/control-plane');
 
   const db = new Database(coordinatorDbPath);
   const factDb = new Database(factsDbPath);
@@ -234,7 +234,7 @@ async function recoverForScope(
         mode: 'dry_run',
         scope: scopeId,
         facts_matched: facts.length,
-        contexts_would_be_admitted: contexts.map((c: import('@narada2/control-plane').PolicyContext) => ({
+        contexts_would_be_admitted: contexts.map((c: import('@narada-core/control-plane').PolicyContext) => ({
           context_id: c.context_id,
           revision_id: c.revision_id,
           change_kinds: c.change_kinds,

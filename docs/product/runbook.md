@@ -227,7 +227,7 @@ narada init-repo ./ops
 ### 2. Declare the Operation
 
 ```bash
-npx @narada2/ops-kit want-mailbox help@global-maxima.com \
+npx @narada-core/ops-kit want-mailbox help@global-maxima.com \
   --primary-charter support_steward \
   --posture draft-only
 ```
@@ -271,7 +271,7 @@ Verifies Graph API connectivity, credential validity, and charter runtime config
 ### 5. Scaffold Directories
 
 ```bash
-npx @narada2/ops-kit setup -c ./ops/config.json
+npx @narada-core/ops-kit setup -c ./ops/config.json
 ```
 
 ### 6. Dry-Run Sync
@@ -337,7 +337,7 @@ This composes health, recent activity, attention queue, and drafts pending revie
 Run the fixture-based smoke test to verify the pipeline without live credentials:
 
 ```bash
-pnpm --filter @narada2/control-plane exec vitest run test/integration/live-operation/smoke-test.test.ts
+pnpm --filter @narada-core/control-plane exec vitest run test/integration/live-operation/smoke-test.test.ts
 ```
 
 This test:

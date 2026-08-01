@@ -45,7 +45,7 @@ cf843e12 Add Narada proper native shell break-glass wrapper
 
 Recommended review focus:
 
-1. Confirm the package boundary is acceptable: `packages/narada-proper-mcp` depends on `@narada2/agent-context-memory` through workspace package resolution and does not import MCP handlers from `packages/layers/cli/src`.
+1. Confirm the package boundary is acceptable: `packages/narada-proper-mcp` depends on `@narada-core/agent-context-memory` through workspace package resolution and does not import MCP handlers from `packages/layers/cli/src`.
 2. Confirm the new agent-facing tool vocabulary and first-slice implementations are the intended Narada proper surface.
 3. Confirm the launcher-generated Codex config should keep using the source TypeScript entrypoint with `node --import tsx` because repository `dist/` outputs are ignored.
 4. Confirm `narada.builder` admission in `tools/agent-start/start-agent.mjs` is intended as part of this carrier slice.
@@ -55,9 +55,9 @@ Recommended review focus:
 ## Verification Already Run
 
 - `node --test tools/agent-start/start-agent.test.mjs`
-- `pnpm --filter @narada2/narada-proper-mcp typecheck`
-- `pnpm --filter @narada2/narada-proper-mcp build`
-- `pnpm --filter @narada2/narada-proper-mcp test`
+- `pnpm --filter @narada-core/narada-proper-mcp typecheck`
+- `pnpm --filter @narada-core/narada-proper-mcp build`
+- `pnpm --filter @narada-core/narada-proper-mcp test`
 - `.\narada.ps1 agent-start -Agent narada.architect -Runtime codex -DryRun -Json`
 - `.\narada.ps1 agent-start -Agent narada.builder -Runtime codex -DryRun -Json`
 - `.\Start-NaradaProperCodex.ps1 -DryRun`

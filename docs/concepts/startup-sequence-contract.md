@@ -18,7 +18,7 @@ The adjacent coherence gate checks declared startup contract presence from Site-
 node tools\mcp-fabric\adjacent-coherence-gate.mjs --pretty
 ```
 
-`@narada2/mcp-fabric` owns the shared fabric loading/projection semantics used by
+`@narada-core/mcp-fabric` owns the shared fabric loading/projection semantics used by
 Narada carriers. `tools\mcp-fabric\adjacent-coherence-gate.mjs` is the
 operator-facing gate command for this startup contract.
 

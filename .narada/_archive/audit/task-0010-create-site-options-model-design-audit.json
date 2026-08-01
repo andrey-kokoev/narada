@@ -42,7 +42,7 @@
   "designed_scope": [
     "greenfield template/catalog-driven Site creation from Narada proper",
     "Site locus/kind/id and root coordinates",
-    "package slice selection for @narada2/site-task-lifecycle and @narada2/agent-context-memory",
+    "package slice selection for @narada-core/site-task-lifecycle and @narada-core/agent-context-memory",
     "agent identities versus role assignments",
     "storage adapter posture",
     "MCP registration posture",

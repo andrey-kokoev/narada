@@ -3,8 +3,8 @@ import {
   publishBoundedSiteEventWithPublicationEdge,
   pullHostedMessages,
   type PublicationEdgePublisherConfig,
-} from '@narada2/site-registry-cloudflare/client';
-import type { SiteEventFamily, SiteTelemetryPublicationEdge } from '@narada2/site-config';
+} from '@narada-core/site-registry-cloudflare/client';
+import type { SiteEventFamily, SiteTelemetryPublicationEdge } from '@narada-core/site-config';
 import type { ExitCode } from '../lib/exit-codes.js';
 import { ExitCode as Code } from '../lib/exit-codes.js';
 

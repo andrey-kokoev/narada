@@ -1,5 +1,5 @@
 import { appendFile } from 'node:fs/promises';
-import { startOperatorTerminal } from '@narada2/process-launch-posture';
+import { startOperatorTerminal } from '@narada-core/process-launch-posture';
 
 export interface WorkspaceLaunchTerminalTab {
   title: string;

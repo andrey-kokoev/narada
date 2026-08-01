@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/intent-zones",
+  "name": "@narada-core/intent-zones",
   "version": "0.1.0",
   "description": "Narada Command Execution and Testing Intent Zone contracts",
   "type": "module",
@@ -39,7 +39,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/intent-zones"
   }
 }

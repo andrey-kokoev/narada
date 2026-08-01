@@ -42,7 +42,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/windows-komorebi-yasb-kit now includes descriptor-only Komorebi/YASB materialization policy contracts with local admission and refusal guards.",
+  "terminal_claim": "@narada-core/windows-komorebi-yasb-kit now includes descriptor-only Komorebi/YASB materialization policy contracts with local admission and refusal guards.",
   "refused_imports": [
     "live YASB runtime config",
     "monitor/display topology",
@@ -60,5 +60,5 @@
     "PC Site fallback execution"
   ],
   "rollback": "Remove materialization policy source, tests, source inventory doc, README section, and this task evidence. No live PC runtime state was mutated or imported.",
-  "next_smallest_slice": "Deepen @narada2/windows-machinery-capability-exchange with cross-package adoption manifest/conformance descriptors tying the package set together."
+  "next_smallest_slice": "Deepen @narada-core/windows-machinery-capability-exchange with cross-package adoption manifest/conformance descriptors tying the package set together."
 }

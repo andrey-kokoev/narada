@@ -13,7 +13,7 @@ NARS is the Narada-owned runtime server contract for durable, machine-addressabl
 ## Canonical Runtime / Surface / Authority Contract
 
 The shared origin and authority vocabulary is owned by
-`@narada2/nars-runtime-contract/runtime-surface-contract` under schema
+`@narada-core/nars-runtime-contract/runtime-surface-contract` under schema
 `narada.nars.runtime_surface_contract.v1`. Runtime, projection, and client
 code must consume this contract instead of inferring authority from a
 transport, UI, cache, or endpoint. Each report carries `runtime_origin`,
@@ -49,7 +49,7 @@ acknowledgment never confirms canonical mutation or provider completion.
 Canonical package:
 
 ```text
-@narada2/agent-runtime-server
+@narada-core/agent-runtime-server
 ```
 
 Canonical binary:
@@ -58,9 +58,9 @@ Canonical binary:
 narada-agent-runtime-server
 ```
 
-The stable runtime-server entrypoint belongs to `@narada2/agent-runtime-server` and binds each transport to one `@narada2/nars-session-core` supervisor. It invokes `@narada2/carrier-runtime` only as a stateless carrier turn adapter.
+The stable runtime-server entrypoint belongs to `@narada-core/agent-runtime-server` and binds each transport to one `@narada-core/nars-session-core` supervisor. It invokes `@narada-core/carrier-runtime` only as a stateless carrier turn adapter.
 
-Session discovery, health, and attachment schemas are public NARS contracts implemented by `@narada2/nars-session-core` and projected by `@narada2/agent-runtime-server`. Client code should depend on the NARS contract, not on internal helper placement.
+Session discovery, health, and attachment schemas are public NARS contracts implemented by `@narada-core/nars-session-core` and projected by `@narada-core/agent-runtime-server`. Client code should depend on the NARS contract, not on internal helper placement.
 
 ## Layer Shape
 
@@ -81,14 +81,14 @@ Load-bearing boundaries:
 | Layer | Owns | Does not own |
 | --- | --- | --- |
 | Launcher planner | Selecting agents, Sites, runtime choice, and launch packet validation. | Provider execution, conversation state, tool execution. |
-| `@narada2/agent-start` | Identity/session/event creation, Site MCP fabric validation, provider selection, credential projection, launch result materialization. | Runtime protocol, slash command semantics, provider turn loop. |
-| `@narada2/agent-runtime-server` | Stable machine-addressable session entrypoint, transport projection, and supervision of one session-core instance. | Session persistence internals, provider credentials, task truth, external effect authority. |
-| `@narada2/nars-session-core` | Session and turn lifecycle, durable event journal, artifacts, input queue state, health, and recovery. | Provider turns, MCP transport, effect admission, client rendering. |
-| `@narada2/nars-capability-gateway` | MCP hosting, gateway lifecycle, explicit capability admission, and tool execution lifecycle/evidence. | Session lifecycle, provider turns, effect confirmation. |
-| `@narada2/nars-client-projection-contract` | Client projection capability sets, attach command registry, projection command method aliases, and shared operator command/help projection for NARS clients. | Carrier protocol schema validation, runtime session execution, or browser/terminal rendering. |
-| `@narada2/carrier-protocol` | Carrier request/event vocabulary, schema helpers, input admission classification, and runtime event classification. | Client attach command rendering or client-specific capability lists. |
-| `@narada2/carrier-runtime` | Pure `runTurn(context, eventSink, toolGateway)` carrier adapter. | Session persistence, MCP hosting, public server protocol, launcher planning, or terminal-client attach/projection responsibilities. |
-| `@narada2/carrier-terminal-projection` | Runtime-neutral terminal projection of NARS events and operator input into protocol frames. | Provider execution, MCP hosting, session dispatch, or authority decisions. |
+| `@narada-core/agent-start` | Identity/session/event creation, Site MCP fabric validation, provider selection, credential projection, launch result materialization. | Runtime protocol, slash command semantics, provider turn loop. |
+| `@narada-core/agent-runtime-server` | Stable machine-addressable session entrypoint, transport projection, and supervision of one session-core instance. | Session persistence internals, provider credentials, task truth, external effect authority. |
+| `@narada-core/nars-session-core` | Session and turn lifecycle, durable event journal, artifacts, input queue state, health, and recovery. | Provider turns, MCP transport, effect admission, client rendering. |
+| `@narada-core/nars-capability-gateway` | MCP hosting, gateway lifecycle, explicit capability admission, and tool execution lifecycle/evidence. | Session lifecycle, provider turns, effect confirmation. |
+| `@narada-core/nars-client-projection-contract` | Client projection capability sets, attach command registry, projection command method aliases, and shared operator command/help projection for NARS clients. | Carrier protocol schema validation, runtime session execution, or browser/terminal rendering. |
+| `@narada-core/carrier-protocol` | Carrier request/event vocabulary, schema helpers, input admission classification, and runtime event classification. | Client attach command rendering or client-specific capability lists. |
+| `@narada-core/carrier-runtime` | Pure `runTurn(context, eventSink, toolGateway)` carrier adapter. | Session persistence, MCP hosting, public server protocol, launcher planning, or terminal-client attach/projection responsibilities. |
+| `@narada-core/carrier-terminal-projection` | Runtime-neutral terminal projection of NARS events and operator input into protocol frames. | Provider execution, MCP hosting, session dispatch, or authority decisions. |
 | Authority MCP surfaces | Admitted mutations and authoritative facts. | Model judgment or carrier convenience. |
 
 ## Session Binding
@@ -180,7 +180,7 @@ Current session-core control methods:
 
 `session.submit` may carry `params.intelligence_invocation` under the public
 `narada.invokable-intelligence.invocation-control.v1` schema owned by
-`@narada2/invokable-intelligence-contract`. The admitted fields are
+`@narada-core/invokable-intelligence-contract`. The admitted fields are
 `intent_id`, `operation_id`, `mode`, and `allow_replan`; unknown fields fail
 closed. Modes are `immediate`, `queued-batch`, `delayed`, `retry`, `resume`,
 and `replay`. Retry, resume, and replay require both identities. Reusing one
@@ -202,7 +202,7 @@ canonical Site-governed records and fresh topology evidence.
 
 The local event-stream transport also admits `session.events.subscribe` and `session.events.read` for replay and live delivery. They are transport controls, not JSONL turn controls.
 
-Historical `conversation.*`, `session.status`, `session.operations`, observer, authority-transition, affordance, and panel-summary methods are not part of the local session-core contract. The default runtime rejects them. `@narada2/carrier-protocol` and the Cloudflare projection may retain that vocabulary at an explicitly named adapter boundary; such an adapter must translate to the narrow methods above before crossing into local session-core.
+Historical `conversation.*`, `session.status`, `session.operations`, observer, authority-transition, affordance, and panel-summary methods are not part of the local session-core contract. The default runtime rejects them. `@narada-core/carrier-protocol` and the Cloudflare projection may retain that vocabulary at an explicitly named adapter boundary; such an adapter must translate to the narrow methods above before crossing into local session-core.
 
 Human terminal input is a projection of this contract. Ordinary lines become `session.submit` with `content`; active-turn queueing uses `delivery_mode: "admit_after_active_turn"` and `source: "operator_steering"`. `/status` maps to `session.health`, `/recovery` to `session.recovery`, `/interrupt` to `session.cancel`, `/events` to event subscription, and `/exit` to `session.close`. Unsupported historical commands remain local unavailable messages and are not sent.
 
@@ -358,7 +358,7 @@ to the provider-call instance rather than process-global state.
 
 ### Durable Turn Lifecycle
 
-`@narada2/nars-session-core` is authoritative for the durable turn FSM (`narada.nars.turn_state.v1`). Each accepted input is one `turn_id` and is persisted through this path:
+`@narada-core/nars-session-core` is authoritative for the durable turn FSM (`narada.nars.turn_state.v1`). Each accepted input is one `turn_id` and is persisted through this path:
 
 ```text
 accepted -> contextualized -> evaluating
@@ -370,7 +370,7 @@ Tool stages may repeat. A refused tool may return to `evaluating`; a failed or i
 
 ### Capability Gateway Lifecycle
 
-`@narada2/nars-capability-gateway` owns the MCP server and individual tool-attempt state machines. It does not own the session journal or provider turn state. Its gateway lifecycle is:
+`@narada-core/nars-capability-gateway` owns the MCP server and individual tool-attempt state machines. It does not own the session journal or provider turn state. Its gateway lifecycle is:
 
 ```text
 idle -> starting -> healthy | degraded -> closing -> closed
@@ -392,7 +392,7 @@ requested -> admitted -> executing -> completed | failed | interrupted
 
 ### Provider Invocation Lifecycle
 
-`@narada2/nars-provider-runtime` owns the lifecycle of one provider request under schema `narada.nars.provider_invocation_state.v1`. This is distinct from the session-core turn FSM and the capability-gateway tool-attempt FSM: the provider runtime owns request admission, provider-specific request shaping, transport dispatch, response receipt, and the request outcome, but it does not own session state or tool authority.
+`@narada-core/nars-provider-runtime` owns the lifecycle of one provider request under schema `narada.nars.provider_invocation_state.v1`. This is distinct from the session-core turn FSM and the capability-gateway tool-attempt FSM: the provider runtime owns request admission, provider-specific request shaping, transport dispatch, response receipt, and the request outcome, but it does not own session state or tool authority.
 
 Each provider invocation has its own `invocation_id` and follows:
 
@@ -408,7 +408,7 @@ The carrier forwards the correlation fields and the session event sink into the 
 
 ### Artifact Lifecycle
 
-`@narada2/nars-session-core` owns artifact records and their lifecycle under schema `narada.nars.artifact_lifecycle_state.v1`. Registration creates an `active` record; lifecycle transitions are durable in the artifact index and are also journaled as `session_artifact_lifecycle_transition` events when performed through session-core.
+`@narada-core/nars-session-core` owns artifact records and their lifecycle under schema `narada.nars.artifact_lifecycle_state.v1`. Registration creates an `active` record; lifecycle transitions are durable in the artifact index and are also journaled as `session_artifact_lifecycle_transition` events when performed through session-core.
 
 ```text
 active -> revoked  -> archived
@@ -426,7 +426,7 @@ Artifact metadata remains readable in every lifecycle state, while artifact cont
 
 ### Session Lifecycle
 
-`@narada2/nars-session-core` owns the session lifecycle under schema `narada.nars.session_lifecycle_state.v1`. The transition table and event-log rehydration rules are defined in the exported `session-lifecycle-state` module; `session-core` owns journaling and applies the transition guard.
+`@narada-core/nars-session-core` owns the session lifecycle under schema `narada.nars.session_lifecycle_state.v1`. The transition table and event-log rehydration rules are defined in the exported `session-lifecycle-state` module; `session-core` owns journaling and applies the transition guard.
 
 ```text
 starting -> ready -> closing -> closed
@@ -450,7 +450,7 @@ When no turn is active, shutdown begins at `draining`; otherwise it begins at `c
 
 ### Input Admission Lifecycle
 
-`@narada2/nars-session-core` also owns the admission state of each input event under schema `narada.nars.input_admission_state.v1`. Admission is separate from turn state and provider completion:
+`@narada-core/nars-session-core` also owns the admission state of each input event under schema `narada.nars.input_admission_state.v1`. Admission is separate from turn state and provider completion:
 
 ```text
 accepted -> queued -> held -> queued -> admitted
@@ -463,7 +463,7 @@ The normal path is `accepted -> queued -> admitted`; `held` represents an explic
 
 ### Runtime Host Lifecycle
 
-`@narada2/agent-runtime-server` owns the process/projection host lifecycle under schema `narada.nars.runtime_host_state.v1`. This FSM describes whether the NARS host is bound and serving transports; it does not replace the session, turn, provider, capability, or input-admission FSMs.
+`@narada-core/agent-runtime-server` owns the process/projection host lifecycle under schema `narada.nars.runtime_host_state.v1`. This FSM describes whether the NARS host is bound and serving transports; it does not replace the session, turn, provider, capability, or input-admission FSMs.
 
 ```text
 created -> binding -> projections_ready -> serving -> closing -> stopped
@@ -491,15 +491,15 @@ events.
 
 ## Client And Runtime Split
 
-NARS is the runtime owner. `@narada2/agent-runtime-server` owns session binding, transport projection, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. `@narada2/nars-provider-runtime` owns provider turn execution, while `@narada2/nars-capability-gateway` owns MCP fabric hosting, tool dispatch, and tool admission. Client packages must not silently recreate those responsibilities.
+NARS is the runtime owner. `@narada-core/agent-runtime-server` owns session binding, transport projection, durable `events.jsonl`, status/health/event subscription state, and lifecycle hook dispatch. `@narada-core/nars-provider-runtime` owns provider turn execution, while `@narada-core/nars-capability-gateway` owns MCP fabric hosting, tool dispatch, and tool admission. Client packages must not silently recreate those responsibilities.
 
 In Runtime Projection Graph terms, NARS is an `authority_runtime`; attached clients and remote browser embodiments are `projection_surface` nodes unless a separate authority transfer explicitly says otherwise.
 
-`@narada2/agent-cli`, `agent-tui`, and `@narada2/agent-web-ui` are peer projections over the NARS transport. Their responsibilities are terminal/UI input handling, event rendering, and explicit attach UX. Default clients submit text as `session.submit`, route shared carrier commands through `session.command.execute`, may read `session.health` or `session.recovery`, and may request `session.close`; unsupported historical methods must not be projected as available. Runtime hosting, provider turn execution, and MCP hosting remain outside client packages.
+`@narada-core/agent-cli`, `agent-tui`, and `@narada-core/agent-web-ui` are peer projections over the NARS transport. Their responsibilities are terminal/UI input handling, event rendering, and explicit attach UX. Default clients submit text as `session.submit`, route shared carrier commands through `session.command.execute`, may read `session.health` or `session.recovery`, and may request `session.close`; unsupported historical methods must not be projected as available. Runtime hosting, provider turn execution, and MCP hosting remain outside client packages.
 
-Client projection metadata is centralized in `@narada2/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, shared event rendering vocabulary, and help text. The same session may be attached by peer clients with `narada-agent-cli --attach <event_endpoint>`, `agent-tui --attach <event_endpoint>`, or `narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>`. `@narada2/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
+Client projection metadata is centralized in `@narada-core/nars-client-projection-contract`. Launchers and carrier runtime use it for attach command materialization; web UI uses it for admitted NARS methods, operator input command projection, shared event rendering vocabulary, and help text. The same session may be attached by peer clients with `narada-agent-cli --attach <event_endpoint>`, `agent-tui --attach <event_endpoint>`, or `narada-agent-web-ui --event-endpoint <event_endpoint> --health-endpoint <health_endpoint>`. `@narada-core/carrier-protocol` remains the carrier protocol vocabulary/classification owner and must not grow client attach command strings or client-specific projection registries.
 
-Session control construction is owned by `@narada2/nars-session-core`; provider execution is owned by `@narada2/nars-provider-runtime`, and capability transport is owned by `@narada2/nars-capability-gateway`. No compatibility package participates in the runtime path. `agent-cli` must not expose runtime-server shims, `--server` delegation, or private carrier-substrate adapter flags; launchers resolve `narada-agent-runtime-server` from `@narada2/agent-runtime-server` directly.
+Session control construction is owned by `@narada-core/nars-session-core`; provider execution is owned by `@narada-core/nars-provider-runtime`, and capability transport is owned by `@narada-core/nars-capability-gateway`. No compatibility package participates in the runtime path. `agent-cli` must not expose runtime-server shims, `--server` delegation, or private carrier-substrate adapter flags; launchers resolve `narada-agent-runtime-server` from `@narada-core/agent-runtime-server` directly.
 
 ### Runtime Ownership Guard
 
@@ -509,22 +509,22 @@ The former `agent-cli` runtime-server adapter has been removed. Reintroduction r
 
 | Area | Current owner | Classification | Evidence | Residual risk |
 | --- | --- | --- | --- | --- |
-| Stable runtime binary | `@narada2/agent-runtime-server` | already correctly owned | package exports only `narada-agent-runtime-server`; tests assert no `agent-runtime-server` alias and no `@narada2/agent-cli` dependency | low |
-| Runtime wrapper, health, events, lifecycle hooks, artifact HTTP projection | `@narada2/agent-runtime-server` | already correctly owned | `server-wrapper.mjs` owns health/event projections and lifecycle dispatch; artifact HTTP delegates record state to session-core | low |
-| Provider execution and MCP gateway internals | `@narada2/nars-provider-runtime` and `@narada2/nars-capability-gateway` | explicit split | server delegates provider execution to provider-runtime and capability hosting to the gateway | current runtime ownership |
-| Terminal rendering and operator input projection | `@narada2/agent-cli` plus `@narada2/carrier-terminal-projection` | intentionally client-specific | NARS creates projected terminal bridge only when `operator_surface=agent-cli`; raw JSONL and web surfaces bypass terminal projection | low |
-| Web projection | `@narada2/agent-web-ui` | correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |
-| Launch planning and selector UX | `@narada2/cli` with User Site PowerShell shim | already correctly owned | workspace launcher invokes Narada CLI; PS1 shim owns Windows convenience only | low |
+| Stable runtime binary | `@narada-core/agent-runtime-server` | already correctly owned | package exports only `narada-agent-runtime-server`; tests assert no `agent-runtime-server` alias and no `@narada-core/agent-cli` dependency | low |
+| Runtime wrapper, health, events, lifecycle hooks, artifact HTTP projection | `@narada-core/agent-runtime-server` | already correctly owned | `server-wrapper.mjs` owns health/event projections and lifecycle dispatch; artifact HTTP delegates record state to session-core | low |
+| Provider execution and MCP gateway internals | `@narada-core/nars-provider-runtime` and `@narada-core/nars-capability-gateway` | explicit split | server delegates provider execution to provider-runtime and capability hosting to the gateway | current runtime ownership |
+| Terminal rendering and operator input projection | `@narada-core/agent-cli` plus `@narada-core/carrier-terminal-projection` | intentionally client-specific | NARS creates projected terminal bridge only when `operator_surface=agent-cli`; raw JSONL and web surfaces bypass terminal projection | low |
+| Web projection | `@narada-core/agent-web-ui` | correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |
+| Launch planning and selector UX | `@narada-core/cli` with User Site PowerShell shim | already correctly owned | workspace launcher invokes Narada CLI; PS1 shim owns Windows convenience only | low |
 | Direct `agent-cli` runtime/server mode | none; removed | already correctly owned | `agent-cli` reports that non-server conversation runtime has been removed; NARS is the runtime path | low |
-| `agent-cli` runtime ownership | `@narada2/agent-runtime-server` | correctly narrowed | separate `D:/code/agent-cli` is a client/projection package with no carrier-runtime, provider-runtime, or MCP-hosting dependency; it attaches to an existing NARS session | low |
+| `agent-cli` runtime ownership | `@narada-core/agent-runtime-server` | correctly narrowed | separate `D:/code/agent-cli` is a client/projection package with no carrier-runtime, provider-runtime, or MCP-hosting dependency; it attaches to an existing NARS session | low |
 
 Fast verification should use focused package tests that do not create a real
 Windows launch chain:
 
-- `pnpm --filter @narada2/agent-runtime-server test`
-- `pnpm --filter @narada2/agent-runtime-server typecheck`
-- `pnpm --filter @narada2/agent-runtime-server run test:e2e:pty` (explicit real-PTY coverage; requires `node-pty`)
-- `pnpm --filter @narada2/agent-start test`
+- `pnpm --filter @narada-core/agent-runtime-server test`
+- `pnpm --filter @narada-core/agent-runtime-server typecheck`
+- `pnpm --filter @narada-core/agent-runtime-server run test:e2e:pty` (explicit real-PTY coverage; requires `node-pty`)
+- `pnpm --filter @narada-core/agent-start test`
 
 The operator launch journey is explicit Windows E2E evidence, not a fast test:
 
@@ -537,7 +537,7 @@ Web UI projection, proves exact Site/session correlation, then closes the
 processes. Expect roughly 30-60 seconds and run it only when launch-chain
 behavior is in scope. Browser/E2E projection tests and full recursive repo
 tests are likewise not default fast evidence; they must stay behind explicit
-selectors such as `@narada2/agent-web-ui test:browser`, `test:all`, or root
+selectors such as `@narada-core/agent-web-ui test:browser`, `test:all`, or root
 broad test commands with a declared reason and timeout budget.
 
 Residual launch-option risk: the launcher tests are representative, not a full Cartesian product. Coverage should prioritize alias normalization, mutually exclusive legacy/modern options, multi-surface launch, site/role filtering, provider selection/preflight, and stale-dist behavior. Full Cartesian coverage is not practical unless a generated pairwise matrix with bounded cases is introduced.
@@ -546,7 +546,7 @@ Residual launch-option risk: the launcher tests are representative, not a full C
 
 NARS owns local session discovery for NARS sessions. Client projections such as `agent-cli`, `agent-tui`, and `agent-web-ui` may use discovery to find attachable sessions, but they must not become the source of session truth.
 
-The canonical per-session storage remains the Site-local NARS session directory derived from `siteAuthorityRoot`. Production code resolves this through `@narada2/site-paths`; callers must not manually append `.narada` to an arbitrary `siteRoot`.
+The canonical per-session storage remains the Site-local NARS session directory derived from `siteAuthorityRoot`. Production code resolves this through `@narada-core/site-paths`; callers must not manually append `.narada` to an arbitrary `siteRoot`.
 
 ```text
 <siteAuthorityRoot>/crew/nars-sessions/<session-id>/
@@ -697,7 +697,7 @@ Tool events must preserve the distinction between request, admission/refusal, ex
 
 ## Runtime Health Contract
 
-NARS health is owned by `@narada2/agent-runtime-server`. Its authoritative method is `session.health`; HTTP `GET /health`, terminal summaries, and launcher discovery fields are projections of the same public runtime-health builder. Site/control-plane health endpoints remain separate surfaces with separate owners.
+NARS health is owned by `@narada-core/agent-runtime-server`. Its authoritative method is `session.health`; HTTP `GET /health`, terminal summaries, and launcher discovery fields are projections of the same public runtime-health builder. Site/control-plane health endpoints remain separate surfaces with separate owners.
 
 `session.health` is the small local probe for runtime liveness and readiness. The session-core supervisor owns the underlying lifecycle, queue, activity, and operational-posture fields; the runtime server projects those fields into the public NARS health schema. Richer durable diagnostics are exposed by `session.recovery`. `session.health` does not replace `heartbeat.json`: heartbeat is durable on-disk evidence for crash/recovery observation.
 
@@ -763,7 +763,7 @@ NARS does not define a separate HTTP `GET /ready` endpoint yet. Readiness is a f
 
 ## Event Subscription Contract
 
-NARS event subscription is owned by `@narada2/agent-runtime-server`. The canonical live-tail protocol method is `session.events.subscribe`; WebSocket `/events`, raw stdout JSONL, terminal projections, and future SSE transports are projections over the same sequenced runtime event stream. Durable history reads use `session.events.read` against the session `events.jsonl` log; clients should not depend on a WebSocket's in-memory replay buffer for full transcript recovery.
+NARS event subscription is owned by `@narada-core/agent-runtime-server`. The canonical live-tail protocol method is `session.events.subscribe`; WebSocket `/events`, raw stdout JSONL, terminal projections, and future SSE transports are projections over the same sequenced runtime event stream. Durable history reads use `session.events.read` against the session `events.jsonl` log; clients should not depend on a WebSocket's in-memory replay buffer for full transcript recovery.
 
 `session.events.subscribe` request parameters:
 
@@ -850,16 +850,16 @@ Lifecycle hooks are runtime callbacks correlated with emitted events. They are n
 Schema and vocabulary owner:
 
 ```text
-@narada2/carrier-protocol
+@narada-core/carrier-protocol
 ```
 
 Invoker owner:
 
 ```text
-@narada2/agent-runtime-server
+@narada-core/agent-runtime-server
 ```
 
-The current implementation invokes hooks at the runtime-server boundary while carrier execution runs through `@narada2/carrier-runtime` in-process. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
+The current implementation invokes hooks at the runtime-server boundary while carrier execution runs through `@narada-core/carrier-runtime` in-process. Future carrier adapters must map their native events into the same NARS lifecycle vocabulary before dispatching hooks.
 
 The runtime-server may load process-local hook handlers before session binding with `--lifecycle-hook-module <path>` or `NARADA_LIFECYCLE_HOOK_MODULE`. The module exports `hooks` (one handler or an array of handlers) and may export `onFailure`; a default export may provide either the handler or the `{ hooks, onFailure }` configuration. A handler is a function or an object with named lifecycle-hook methods. Module loading is startup-fatal when configured, while individual hook failures are reported through the bounded hook-failure path. Hook handlers receive validated lifecycle payloads only and do not become a durable authority surface.
 
@@ -958,7 +958,7 @@ Failure policy:
 | During an active turn | Emit/record a bounded runtime hook failure, redact credentials, and do not convert the hook failure into tool authority or external effect evidence. |
 | During closeout | Prefer preserving `session_closed` evidence and handoff files; report hook failure separately. Closeout hooks must not block durable session recovery unless the contract explicitly promotes them to a required closeout gate. |
 
-Implementation tasks derive directly from this contract: extend `@narada2/carrier-protocol` vocabulary, dispatch from `@narada2/agent-runtime-server`, map current `@narada2/agent-cli` events into the shared vocabulary, and keep docs/tests tied to the shared package.
+Implementation tasks derive directly from this contract: extend `@narada-core/carrier-protocol` vocabulary, dispatch from `@narada-core/agent-runtime-server`, map current `@narada-core/agent-cli` events into the shared vocabulary, and keep docs/tests tied to the shared package.
 
 ## Command Contract
 
@@ -974,7 +974,7 @@ Examples:
 /exit
 ```
 
-The command vocabulary should be sourced from `@narada2/carrier-command-contract`. Projected terminal input, help text, and server-side command dispatch should share that contract. If a command is not implemented in a projected runtime, it should fail as an unsupported command with a runtime event, not be sent to the model as ordinary user text.
+The command vocabulary should be sourced from `@narada-core/carrier-command-contract`. Projected terminal input, help text, and server-side command dispatch should share that contract. If a command is not implemented in a projected runtime, it should fail as an unsupported command with a runtime event, not be sent to the model as ordinary user text.
 
 ## Carrier Adapter Boundary
 
@@ -983,7 +983,7 @@ NARS is vendor-neutral. Carrier substrates are replaceable adapters behind the N
 Current carrier runtime substrate:
 
 ```text
-@narada2/carrier-runtime in-process
+@narada-core/carrier-runtime in-process
 ```
 
 Allowed adapter responsibilities:
@@ -999,7 +999,7 @@ Forbidden adapter ownership:
 - choosing Site root from ambient Codex/global config;
 - choosing provider defaults outside launch materialization;
 - owning the stable NARS binary name;
-- owning public server request admission, status/health projection, event subscription, or lifecycle dispatch outside `@narada2/agent-runtime-server`;
+- owning public server request admission, status/health projection, event subscription, or lifecycle dispatch outside `@narada-core/agent-runtime-server`;
 - rendering terminal-client projections from the private carrier substrate path;
 - treating vendor SDK permission state as Narada authority;
 - converting slash commands into model prompts;
@@ -1069,9 +1069,9 @@ NARS should fail early for binding and authority defects:
 Package-local checks:
 
 ```powershell
-pnpm --filter @narada2/agent-runtime-server test
-pnpm --filter @narada2/agent-cli test
-pnpm --filter @narada2/agent-start test
+pnpm --filter @narada-core/agent-runtime-server test
+pnpm --filter @narada-core/agent-cli test
+pnpm --filter @narada-core/agent-start test
 ```
 
 Launcher/fleet checks use record shards so each command remains bounded. Increase
@@ -1086,10 +1086,10 @@ node packages/agent-start/bin/verify-registered-site-launchers.ts --registry C:/
 
 Expected coverage:
 
-- shared lifecycle hook/event vocabulary and payload schema in `@narada2/carrier-protocol`;
+- shared lifecycle hook/event vocabulary and payload schema in `@narada-core/carrier-protocol`;
 - runtime-server hook ordering, alias mapping, and redacted hook failure behavior;
 - agent-cli server events expose a `lifecycle_event` projection compatible with the shared vocabulary;
-- package exports and binary ownership for `@narada2/agent-runtime-server`;
+- package exports and binary ownership for `@narada-core/agent-runtime-server`;
 - `agent-start` resolves `narada-agent-runtime-server` from the package bin;
 - startup event id and session id propagate to the runtime server boundary;
 - Site MCP fabric is isolated from global/user Codex config;
@@ -1100,15 +1100,15 @@ Expected coverage:
 Normal-turn verification example:
 
 ```powershell
-pnpm --filter @narada2/carrier-protocol test
-pnpm --filter @narada2/agent-runtime-server test
-pnpm --filter @narada2/agent-cli test
+pnpm --filter @narada-core/carrier-protocol test
+pnpm --filter @narada-core/agent-runtime-server test
+pnpm --filter @narada-core/agent-cli test
 ```
 
 Failure-path verification example:
 
 ```powershell
-pnpm --filter @narada2/agent-runtime-server test
+pnpm --filter @narada-core/agent-runtime-server test
 ```
 
 The runtime-server tests cover a hook throwing an error containing a secret-like token and assert the diagnostic is bounded and redacted.
@@ -1119,7 +1119,7 @@ Known convergence arrows from the current implementation:
 
 - keep moving runtime-specific launch branches out of `narada-agent-start.ts` into runtime launch adapters;
 - keep moving provider and credential logic into focused `agent-start` modules;
-- make `@narada2/carrier-command-contract` the single source for command parser/help/dispatch metadata;
-- keep `@narada2/agent-runtime-server` as the package authority for server entrypoints and `@narada2/carrier-runtime` as the package authority for carrier execution;
+- make `@narada-core/carrier-command-contract` the single source for command parser/help/dispatch metadata;
+- keep `@narada-core/agent-runtime-server` as the package authority for server entrypoints and `@narada-core/carrier-runtime` as the package authority for carrier execution;
 - make delegated workers that require Narada-bound Site MCP state use NARS instead of raw vendor runtimes;
 - document and test NARS as the stable session protocol, not as the current `agent-cli` implementation detail.

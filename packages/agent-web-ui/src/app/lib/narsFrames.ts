@@ -1,4 +1,4 @@
-import * as NarsClientProjectionContract from '@narada2/nars-client-projection-contract';
+import * as NarsClientProjectionContract from '@narada-core/nars-client-projection-contract';
 import { toSessionProtocolFrame, type SessionProtocolFrame } from '../../protocol/sessionTransport';
 
 const contract = NarsClientProjectionContract as unknown as Record<string, (...args: unknown[]) => unknown>;

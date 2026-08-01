@@ -9,16 +9,16 @@ import {
   normalizeRuntimeAlias,
   operatorSurfaceKindsForRuntimeHost,
   resolveOperatorSurfaceRuntimeSelection,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
-import { loadIntelligenceLaunchContext } from '@narada2/agent-start/intelligence-launch-context';
-import { createIntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { loadIntelligenceLaunchContext } from '@narada-core/agent-start/intelligence-launch-context';
+import { createIntelligenceSelectionAuthority } from '@narada-core/invokable-intelligence-contract';
 import type {
   OperatorSiteAgentAdmissionChoice,
   OperatorSiteAgentAdmissionOptionsWireResponse,
   OperatorSiteAgentAdmissionWireRequest,
   OperatorSiteAgentAdmissionWireResponse,
   OperatorSiteAgentIntelligenceSelectionAuthority,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import { silentCommandContext } from '../lib/command-wrapper.js';
 import { operatorSurfaceIdentityAddCommand } from './operator-surface.js';
 import {
@@ -279,7 +279,7 @@ export function createSiteAgentAdmissionGateway(
   const writeRecord = dependencies.writeLaunchRecord ?? writeLaunchRecord;
   const addSurfaceIdentity = dependencies.addSurfaceIdentity ?? operatorSurfaceIdentityAddCommand;
   const readSelectionChoices: NonNullable<SiteAgentAdmissionGatewayDependencies['readSelectionChoices']> = dependencies.readSelectionChoices ?? (async (input: { siteRoot: string; registryDbPath?: string }): Promise<IntelligenceSelectionChoices> => {
-    const runtime = await import('@narada2/agent-runtime-server/local-intelligence-runtime');
+    const runtime = await import('@narada-core/agent-runtime-server/local-intelligence-runtime');
     const selection = await runtime.readLocalIntelligenceSelectionChoices(input);
     return {
       provider_choices: selection.provider_choices.map((value: unknown) => String(value)),

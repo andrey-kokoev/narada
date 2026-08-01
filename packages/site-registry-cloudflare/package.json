@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-registry-cloudflare",
+  "name": "@narada-core/site-registry-cloudflare",
   "version": "0.1.0",
   "description": "Cloudflare Worker realization of a Narada Site Telemetry Surface serving SiteRegistry read models",
   "type": "module",
@@ -33,9 +33,9 @@
     "deploy:live": "pnpm build && node dist/hosted-telemetry-surface.js deploy --live --config wrangler.jsonc"
   },
   "dependencies": {
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/site-config": "workspace:*",
-    "@narada2/site-inbox": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/site-config": "workspace:*",
+    "@narada-core/site-inbox": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260421.1",
@@ -49,7 +49,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-registry-cloudflare"
   }
 }

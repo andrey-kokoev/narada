@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 
 export type DelegatedCliFailureKind =
   | 'missing_config'
@@ -33,7 +33,7 @@ export interface DelegatedCliHealth {
 }
 
 const CLI_ENTRYPOINT_RE = /(?:^|\s)node\s+(?:"([^"]*packages[\\/]+layers[\\/]+cli[\\/]+dist[\\/]+main\.js)"|'([^']*packages[\\/]+layers[\\/]+cli[\\/]+dist[\\/]+main\.js)'|(\S*packages[\\/]+layers[\\/]+cli[\\/]+dist[\\/]+main\.js))/g;
-const DEFAULT_REPAIR_COMMAND = 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim';
+const DEFAULT_REPAIR_COMMAND = 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim';
 
 export interface DelegatedCliInvocationContract {
   command: string;

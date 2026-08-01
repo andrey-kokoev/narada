@@ -1,4 +1,4 @@
-import { buildAgentWebUiHelpText, buildAgentWebUiOperatorInputAction } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiHelpText, buildAgentWebUiOperatorInputAction } from '@narada-core/nars-client-projection-contract';
 import type { NarsClientConnection } from './narsClient';
 import { toSessionProtocolFrame, type SessionProtocolFrame, type SessionTransportCorrelation } from './sessionTransport';
 

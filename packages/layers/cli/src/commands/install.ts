@@ -3,7 +3,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
@@ -60,20 +60,20 @@ function packageMetadata(): {
     const packagePath = fileURLToPath(new URL('../../package.json', import.meta.url));
     const parsed = JSON.parse(readFileSync(packagePath, 'utf8')) as { name?: string; version?: string };
     return {
-      name: parsed.name ?? '@narada2/cli',
+      name: parsed.name ?? '@narada-core/cli',
       version: parsed.version ?? 'unknown',
       bundled_components: {
-        runtime_server: component('@narada2/agent-runtime-server'),
-        web_ui: component('@narada2/agent-web-ui'),
+        runtime_server: component('@narada-core/agent-runtime-server'),
+        web_ui: component('@narada-core/agent-web-ui'),
       },
     };
   } catch {
     return {
-      name: '@narada2/cli',
+      name: '@narada-core/cli',
       version: 'unknown',
       bundled_components: {
-        runtime_server: component('@narada2/agent-runtime-server'),
-        web_ui: component('@narada2/agent-web-ui'),
+        runtime_server: component('@narada-core/agent-runtime-server'),
+        web_ui: component('@narada-core/agent-web-ui'),
       },
     };
   }

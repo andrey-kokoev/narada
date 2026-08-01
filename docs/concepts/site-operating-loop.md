@@ -49,7 +49,7 @@ Continuous execution is substrate behavior. Loop Run evidence is the auditable u
 ## Site Operating Runtime Host
 
 Narada proper provides a generic Site Operating Loop runtime host in
-`@narada2/site-operating-loop/runtime`. The runtime host is the reusable
+`@narada-core/site-operating-loop/runtime`. The runtime host is the reusable
 execution shell and authority boundary for a loop; it is not the Site-specific
 loop implementation. It is a first-class host object, not merely a process
 that happens to run a loop.

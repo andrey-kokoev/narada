@@ -39,8 +39,8 @@ Disposition: needs_repair
 
 - `git show --stat --oneline --find-renames 2f6446b1`
 - `git show --stat --oneline --find-renames 45294baf`
-- `pnpm --filter @narada2/narada-proper-mcp test`
-- `pnpm --filter @narada2/narada-proper-mcp build`
+- `pnpm --filter @narada-core/narada-proper-mcp test`
+- `pnpm --filter @narada-core/narada-proper-mcp build`
 - Direct source inspection of `packages/narada-proper-mcp/src/server.ts`, `packages/narada-proper-mcp/src/commands/process.ts`, `packages/narada-proper-mcp/test/narada-proper-mcp.test.ts`, and `tools/agent-start/start-agent.mjs`
 
 ## Recommended Repair

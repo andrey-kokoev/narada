@@ -2,7 +2,7 @@ import {
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
   preflightHostFleetLifecycleIntent,
   type HostFleetLifecycleCurrent,
-} from '@narada2/host-fleet/contract';
+} from '@narada-core/host-fleet/contract';
 
 export const CLOUDFLARE_HOST_FLEET_REGISTRY_SCHEMA = 'narada.cloudflare.host_fleet_registry.v1' as const;
 export const CLOUDFLARE_HOST_FLEET_OVERVIEW_SCHEMA = 'narada.cloudflare.host_fleet.overview.v1' as const;

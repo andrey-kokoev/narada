@@ -39,7 +39,7 @@ Specialized facades are encouraged when a family becomes central enough:
 resolveAgentIdentityRef(input, context) -> AgentIdentityRefV2 | ResolutionError
 ```
 
-The first concrete facade lives in `@narada2/agent-identity`:
+The first concrete facade lives in `@narada-core/agent-identity`:
 
 ```ts
 resolveAgentIdentityRef(input, context) ->

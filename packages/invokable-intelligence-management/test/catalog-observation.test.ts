@@ -5,8 +5,8 @@ import type {
   CredentialLocator,
   InferenceEndpoint,
   InferenceProvider,
-} from "@narada2/invokable-intelligence-contract";
-import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
+} from "@narada-core/invokable-intelligence-contract";
+import { SqliteRegistryStore } from "@narada-core/invokable-intelligence-registry";
 
 import {
   createOpenAiCompatibleCatalogAdapter,

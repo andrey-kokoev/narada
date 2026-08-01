@@ -4,7 +4,7 @@ import { existsSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough, Writable } from 'node:stream';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import { createRuntimeSessionBinding } from '../src/runtime-session-binding.js';
 import { createSessionCoreRuntimeService } from '../src/session-core-runtime-service.js';
 import { NarsIntelligenceInvocationError } from '../src/intelligence-runtime-controller.js';

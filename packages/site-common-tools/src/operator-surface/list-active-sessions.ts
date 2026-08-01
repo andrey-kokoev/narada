@@ -10,7 +10,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { execGovernedSync } from '@narada2/process-launch-posture';
+import { execGovernedSync } from '@narada-core/process-launch-posture';
 
 function parseArgs(argv: any) : any{
   const args: any = { siteRoot: process.cwd() };

@@ -61,7 +61,7 @@ state.
 
 ## Request Shape
 
-The `@narada2/nars-session-mcp` facade exposes a narrow command:
+The `@narada-core/nars-session-mcp` facade exposes a narrow command:
 
 ```text
 nars_session_input_deliver({
@@ -178,7 +178,7 @@ a carrier-specific interpretation of session input.
 
 - Narada `carrier-protocol` owns the input event schema, source metadata,
   delivery classification, fixtures, and protocol invariants.
-- The `@narada2/nars-session-mcp` surface owns only MCP argument
+- The `@narada-core/nars-session-mcp` surface owns only MCP argument
   validation, site/session resolution, policy checks, and translation to the
   canonical protocol.
 - The NARS runtime owns queue storage, control sidebands, session files,

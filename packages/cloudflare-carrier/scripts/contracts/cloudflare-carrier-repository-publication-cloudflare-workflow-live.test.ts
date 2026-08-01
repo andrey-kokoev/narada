@@ -12,7 +12,7 @@ test('parseRepositoryPublicationCloudflareWorkflowLiveArgs requires explicit exe
     () => parseRepositoryPublicationCloudflareWorkflowLiveArgs([
       '--url', 'https://carrier.example',
       '--token', 'token-value',
-      '--repository-ref', 'github:andrey-kokoev/narada',
+      '--repository-ref', 'github:narada-core/narada',
       '--branch', 'refs/heads/cloudflare-live',
       '--commit', '0123456789abcdef0123456789abcdef01234567',
     ], {}),
@@ -24,7 +24,7 @@ test('parseRepositoryPublicationCloudflareWorkflowLiveArgs supports operator ses
   const parsed = parseRepositoryPublicationCloudflareWorkflowLiveArgs([
     '--url', 'https://carrier.example',
     '--operator-session-cookie', 'operator-session-cookie',
-    '--repository-ref', 'github:andrey-kokoev/narada',
+    '--repository-ref', 'github:narada-core/narada',
     '--branch', 'refs/heads/cloudflare-live',
     '--commit', '0123456789abcdef0123456789abcdef01234567',
     '--execute-cloudflare-github',
@@ -41,7 +41,7 @@ test('parseRepositoryPublicationCloudflareWorkflowLiveArgs supports text format'
   const parsed = parseRepositoryPublicationCloudflareWorkflowLiveArgs([
     '--url', 'https://carrier.example',
     '--operator-session-cookie', 'operator-session-cookie',
-    '--repository-ref', 'github:andrey-kokoev/narada',
+    '--repository-ref', 'github:narada-core/narada',
     '--branch', 'refs/heads/cloudflare-live',
     '--commit', '0123456789abcdef0123456789abcdef01234567',
     '--format', 'text',
@@ -60,20 +60,20 @@ test('formatRepositoryPublicationCloudflareWorkflowLiveText renders direct reads
     repository_publication_request_id: 'request_1',
     repository_publication_admission_id: 'admission_1',
     repository_publication_execution_id: 'execution_1',
-    repository_ref: 'github:andrey-kokoev/narada',
+    repository_ref: 'github:narada-core/narada',
     branch_ref: 'refs/heads/cloudflare-live',
     publication_status: 'completed',
   });
 
   assert.match(text, /^Repository Publication Cloudflare Workflow: ok/m);
   assert.match(text, /Execution: execution_1/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
-  assert.match(text, /Request Review: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:request:review:text/);
-  assert.match(text, /Execution Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
-  assert.match(text, /Admission Read: pnpm --filter @narada2\/cloudflare-carrier product:repository-publication:admission:list:text/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_narada_cloudflare --operator-session-file <operator-session-file>/);
+  assert.match(text, /Request Review: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:request:review:text/);
+  assert.match(text, /Execution Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text/);
+  assert.match(text, /Admission Read: pnpm --filter @narada-core\/cloudflare-carrier product:repository-publication:admission:list:text/);
 });
 
 test('formatRepositoryPublicationCloudflareWorkflowLiveText suppresses downstream reads without site id', () => {
@@ -103,7 +103,7 @@ test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readbac
     workerUrl: 'https://carrier.example',
     siteId: 'site_narada_cloudflare',
     operationId: 'operation_repo_publication',
-    repositoryRef: 'github:andrey-kokoev/narada',
+    repositoryRef: 'github:narada-core/narada',
     branchRef: 'refs/heads/cloudflare-live',
     commitSha: '0123456789abcdef0123456789abcdef01234567',
     auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
@@ -128,7 +128,7 @@ test('runRepositoryPublicationCloudflareWorkflowLive runs execution then readbac
           repository_publication_request_id: 'repository_publication_request_live_1',
           repository_publication_admission_id: 'repository_publication_admission_live_1',
           repository_publication_execution_id: 'repository_publication_execution_live_1',
-          repository_ref: 'github:andrey-kokoev/narada',
+          repository_ref: 'github:narada-core/narada',
           branch_ref: 'refs/heads/cloudflare-live',
           source_change_ref: 'git:commit:0123456789abcdef0123456789abcdef01234567',
           publication_status: 'completed',

@@ -1,6 +1,6 @@
-import type { AgentIdentityRefV2 } from '@narada2/agent-identity';
-import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
-import type { IntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
+import type { AgentIdentityRefV2 } from '@narada-core/agent-identity';
+import type { LaunchProcessOwnership } from '@narada-core/launch-process-ownership';
+import type { IntelligenceSelectionAuthority } from '@narada-core/invokable-intelligence-contract';
 import type { CliFormat } from '../lib/cli-output.js';
 import type { ExitCode } from '../lib/exit-codes.js';
 import type { ResolvedSiteRoot } from '../lib/site-root-resolver.js';
@@ -175,7 +175,7 @@ export interface WorkspaceLaunchOperatorProjectionOpenRequest {
   target_ref_resolution: string;
   purpose: 'agent_web_ui_attach';
   caller: {
-    package: '@narada2/cli';
+    package: '@narada-core/cli';
     command: 'workspace launch';
     module: 'commands/launcher';
   };

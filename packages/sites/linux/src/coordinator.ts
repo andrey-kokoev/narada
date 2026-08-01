@@ -1,4 +1,4 @@
-import type { Database } from "@narada2/control-plane";
+import type { Database } from "@narada-core/control-plane";
 import type { SiteHealthRecord, CycleTraceRecord, LinuxSiteMode } from "./types.js";
 import { siteDbPath } from "./path-utils.js";
 
@@ -182,7 +182,7 @@ export async function openCoordinatorDb(
   siteId: string,
   mode: LinuxSiteMode
 ): Promise<Database> {
-  const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+  const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
   const dbPath = siteDbPath(siteId, mode);
   return new DatabaseCtor(dbPath) as Database;
 }

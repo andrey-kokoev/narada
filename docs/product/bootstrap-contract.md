@@ -38,7 +38,7 @@ Create a private operational repository that holds config, data, and operational
 
 | Artifact | Purpose |
 |----------|---------|
-| `package.json` | Dependencies (`@narada2/*`) and scripts (`sync`, `daemon`, `status`) |
+| `package.json` | Dependencies (`@narada-core/*`) and scripts (`sync`, `daemon`, `status`) |
 | `config/config.json` | Live config (demo: pre-populated with mock scope; live: empty scopes array) |
 | `config/config.example.json` | Documented template for adding scopes |
 | `.env.example` | Credential template |
@@ -46,7 +46,7 @@ Create a private operational repository that holds config, data, and operational
 | `mailboxes/`, `workflows/`, `logs/`, `knowledge/` | Operational directories |
 | `README.md` | Path-specific first-run guide |
 
-**Validation gate:** `package.json` exists and contains `@narada2/cli` dependency.
+**Validation gate:** `package.json` exists and contains `@narada-core/cli` dependency.
 
 ---
 

@@ -27,8 +27,8 @@ combined `pnpm test`.
 
 Package exports:
 
-- `@narada2/cloudflare-carrier` exports the session/router runtime core.
-- `@narada2/cloudflare-carrier/worker` exports the Worker, Durable Object class, auth helper, Workers AI provider adapter, Cloudflare tool/effect adapter, and tool/effect admission classifier.
+- `@narada-core/cloudflare-carrier` exports the session/router runtime core.
+- `@narada-core/cloudflare-carrier/worker` exports the Worker, Durable Object class, auth helper, Workers AI provider adapter, Cloudflare tool/effect adapter, and tool/effect admission classifier.
 
 Important Worker exports:
 
@@ -184,7 +184,7 @@ The Worker uses authorization code flow with PKCE, validates Microsoft ID tokens
 For local live probes that must use the Microsoft operator principal rather than a service token, capture a loopback-scoped operator session cookie:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier operator-session:capture -- --url https://<worker-host>
+pnpm --filter @narada-core/cloudflare-carrier operator-session:capture -- --url https://<worker-host>
 ```
 
 By default this writes to `D:\code\narada\.narada\auth\cloudflare-operator-session.json`, listens on `localhost`, and verifies `/auth/session` resolves to `auth_type: microsoft_oidc`. The capture endpoint refuses non-loopback `return_to` URLs.
@@ -192,7 +192,7 @@ By default this writes to `D:\code\narada\.narada\auth\cloudflare-operator-sessi
 To verify whether the current operator session file is still live before running governed workflows:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier operator-session:status:text -- --url https://<worker-host> --operator-session-file D:\code\narada\.narada\auth\cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier operator-session:status:text -- --url https://<worker-host> --operator-session-file D:\code\narada\.narada\auth\cloudflare-operator-session.json
 ```
 
 Microsoft identity is not Site authority. The Worker maps Microsoft claims into a Narada principal:
@@ -212,19 +212,19 @@ Auth identifies the caller and records principal evidence. It does not by itself
 Run local contract tests:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier test
+pnpm --filter @narada-core/cloudflare-carrier test
 ```
 
 Run deploy checks without live deployment:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier deploy:check
+pnpm --filter @narada-core/cloudflare-carrier deploy:check
 ```
 
 Run the package ship gate:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier ship
+pnpm --filter @narada-core/cloudflare-carrier ship
 ```
 
 `ship` runs tests, deploy checks, and Wrangler dry-run bundling.
@@ -232,11 +232,11 @@ pnpm --filter @narada2/cloudflare-carrier ship
 Materialize or validate the local Site continuity binding registry:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier continuity:bindings
-pnpm --filter @narada2/cloudflare-carrier continuity:bindings:validate
-pnpm --filter @narada2/cloudflare-carrier continuity:bindings:list
-pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next
-pnpm --filter @narada2/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute
+pnpm --filter @narada-core/cloudflare-carrier continuity:bindings
+pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:validate
+pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:list
+pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:prepare-next
+pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute
 ```
 
 `continuity:bindings` reads packet `binding` evidence and writes `.narada/site-continuity/bindings.json`. It accepts `NARADA_SITE_CONTINUITY_PACKET` or repeated `--packet` for explicit packet files, and `NARADA_SITE_CONTINUITY_PACKET_DIR` or `--packet-dir` for multi-site packet directories containing `<file-safe-site-id>-packet.json` files.
@@ -248,7 +248,7 @@ pnpm --filter @narada2/cloudflare-carrier continuity:bindings:admit-next -- --lo
 Run one guarded local-cloud continuity loop:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier continuity:run-once
+pnpm --filter @narada-core/cloudflare-carrier continuity:run-once
 ```
 
 `continuity:run-once` is the product-facing alias for the existing live reconciliation execution path: it plans ready configured sites, runs guarded `sync-once`, writes the reconciliation execution artifact, and records that execution evidence back to Cloudflare. The underlying continuity transport now accepts either bearer-token auth or captured Microsoft operator-session auth, so a direct operator run no longer has to fall back to service-token posture. Use `NARADA_SITE_CONTINUITY_PACKET` for a single configured site. Use `NARADA_SITE_CONTINUITY_PACKET_DIR` for multiple configured sites; each site packet is resolved as `<file-safe-site-id>-packet.json` from that directory.
@@ -256,7 +256,7 @@ pnpm --filter @narada2/cloudflare-carrier continuity:run-once
 Read local-cloud continuity health, including local sync artifacts, last reconciliation execution, and live Windows Task Scheduler readback:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier continuity:health
+pnpm --filter @narada-core/cloudflare-carrier continuity:health
 ```
 
 `continuity:health` loads the same local `.env` and `.narada/site-continuity/cloudflare-continuity.env` configuration as the scheduled-task wrapper, then attaches bounded Task Scheduler query evidence to the status output. It reports the installed task state, last result, next run, whether Task Scheduler points at the hidden `wscript.exe //B` wrapper, whether that wrapper file matches the package plan, and whether the host scheduler cadence matches the package plan.
@@ -264,7 +264,7 @@ pnpm --filter @narada2/cloudflare-carrier continuity:health
 Read the provider-liveness scheduler posture with the same operator-facing text style:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier provider-liveness:status:live:text
+pnpm --filter @narada-core/cloudflare-carrier provider-liveness:status:live:text
 ```
 
 `provider-liveness:status:live:text` performs a bounded live Task Scheduler readback for `\Narada\CloudflareProviderLivenessRefresh`. It reports whether Task Scheduler points at the hidden `wscript.exe //B` wrapper, whether the wrapper file matches the package plan, whether the two-minute cadence matches, the last run result, the next run time, and any attention reasons without exposing credential values.
@@ -272,7 +272,7 @@ pnpm --filter @narada2/cloudflare-carrier provider-liveness:status:live:text
 Read the last durable scheduled health snapshot without querying Cloudflare or Task Scheduler:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier continuity:health:last
+pnpm --filter @narada-core/cloudflare-carrier continuity:health:last
 ```
 
 `continuity:health:last` reads `.narada/site-continuity/health/cloudflare-continuity-health-last.json`, the snapshot written by the scheduled continuity loop. It is distinct from `continuity:last`, which reads the last sync artifact. When the scheduled loop has Cloudflare carrier URL and auth available, the snapshot also includes compact `site.list` product posture evidence under `cloudflare_product_posture`, local binding coverage for the remote next site under `cloudflare_product_binding_alignment`, and `operation.list` posture for the next selected site under `cloudflare_operation_posture`, without embedding credential values. The readback summary also projects `operator_next_action`, `operator_next_target_site_id`, `operator_next_reason`, and `operator_next_source`; an unbound remote next site becomes `bind_cloudflare_product_next_site_locally` so the attention state names its next operator move.
@@ -282,7 +282,7 @@ Scheduled health also reports `cloudflare_product_binding_preparation`, which sa
 Run a bounded live continuity health readback with direct operator-session auth, without relying on token-only env configuration:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier continuity:health:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier continuity:health:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json
 ```
 
 `continuity:health:text` now accepts the same `--url`, `--token`, `--token-file`, `--operator-session-cookie`, and `--operator-session-file` inputs as the other Cloudflare product read surfaces. `--url` is accepted as an alias for the scheduler's underlying `--projection-url`. In live mode it performs the Task Scheduler readback, summarizes local continuity health, and attaches live `site.list` / `operation.list` Cloudflare posture with non-secret auth provenance, local binding alignment, and binding preparation state, without echoing bearer tokens or operator-session cookies.
@@ -290,7 +290,7 @@ pnpm --filter @narada2/cloudflare-carrier continuity:health:text -- --url https:
 Run a bounded live durability coherence readback when you want one operator check over the currently focused operation on each site, rather than manually correlating `site.read`, `operation.list`, `operation.read`, and `product:operation:recovery`:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:durability:coherence:live` reads `site.list`, then for each selected site reads `site.read`, `operation.list`, `operation.read`, and `product:operation:recovery` for the currently routed operation. It fails when site durability drifts from `durable` / `reconstructable`, when operation recovery still has gaps, or when the `operation.read` recovery summary disagrees with the dedicated recovery surface.
@@ -298,7 +298,7 @@ pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text
 Run a bounded live control-plane convergence pass when you want the current top-level site route executed first and then immediately proven against both posture and durability coherence:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:control-plane:convergence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json --execute-control-plane
+pnpm --filter @narada-core/cloudflare-carrier product:control-plane:convergence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json --execute-control-plane
 ```
 
 `product:control-plane:convergence:live` reads `site.list`, executes `product:site:next:workflow:live` while the top-level route is still `focus_next_site`, then proves the resulting state with `product:posture:coherence:live` and `product:durability:coherence:live`. It fails if the site route does not converge back to `monitor_sites`, or if either downstream verifier still reports drift.
@@ -306,7 +306,7 @@ pnpm --filter @narada2/cloudflare-carrier product:control-plane:convergence:live
 Run a bounded live operation convergence pass when you want the currently focused operation route on one or more sites executed until it settles back to `monitor_operations`, then re-proven against the same posture and durability checks:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:convergence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json --site site_live_smoke --site site_narada_cloudflare --execute-operation-convergence
+pnpm --filter @narada-core/cloudflare-carrier product:operation:convergence:live:text -- --url https://<worker-host> --operator-session-file cloudflare-operator-session.json --site site_live_smoke --site site_narada_cloudflare --execute-operation-convergence
 ```
 
 `product:operation:convergence:live` reads `site.list`, then for each selected site reads `operation.list`, executes `product:operation:next:workflow:live` while the operation route is still `focus_next_operation`, and confirms the resulting focused operation now reads `monitor_operation`. It then re-runs `product:posture:coherence:live` and `product:durability:coherence:live` for the same site set. It fails if any selected site does not converge back to `monitor_operations`, or if the downstream verifiers still report drift.
@@ -314,7 +314,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:convergence:live:tex
 Install the Windows scheduled task for the recurring continuity loop after the site and packet path are configured in the local continuity env file:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier continuity:install
+pnpm --filter @narada-core/cloudflare-carrier continuity:install
 ```
 
 `continuity:install` creates or replaces the local Windows Task Scheduler entry with the same scheduled-task wrapper used by `continuity:run-once`; the task command carries no credential values and no long per-site argument payload. For unattended Windows scheduling, keep non-secret continuity inputs such as `NARADA_SITE_CONTINUITY_PACKET`, `NARADA_SITE_CONTINUITY_PACKET_DIR`, and `NARADA_SITE_CONTINUITY_SITES` in `.narada/site-continuity/cloudflare-continuity.env`, while Cloudflare credentials stay in the local root `.env` token-file pointer.
@@ -343,12 +343,12 @@ pnpm --filter @narada2/cloudflare-carrier continuity:install
 Use `product:read` for read-only inspection of the deployed Cloudflare carrier product model. It calls the same `POST /api/carrier` operation envelope as the browser console and accepts either the automation bearer token or a captured Microsoft operator session cookie.
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:site:list -- --url <worker-url> --token <token>
-pnpm --filter @narada2/cloudflare-carrier product:site:read -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:site-continuity:publish -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report -- --url <worker-url> --site <site-id> --report-file .narada/site-continuity/<site-id>-cloudflare-sync.json --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:list -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --format summary
-pnpm --filter @narada2/cloudflare-carrier product:operation:read -- --url <worker-url> --site <site-id> --operation-id <operation-id> --format summary
+pnpm --filter @narada-core/cloudflare-carrier product:site:list -- --url <worker-url> --token <token>
+pnpm --filter @narada-core/cloudflare-carrier product:site:read -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site-continuity:publish -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site-continuity:loop-report -- --url <worker-url> --site <site-id> --report-file .narada/site-continuity/<site-id>-cloudflare-sync.json --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:list -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --format summary
+pnpm --filter @narada-core/cloudflare-carrier product:operation:read -- --url <worker-url> --site <site-id> --operation-id <operation-id> --format summary
 ```
 
 The command prints a `narada.cloudflare_carrier.product_read.v1` envelope by default, including `site.list`, `site.read`, `operation.list`, or `operation.read` response evidence and a compact summary. It records only `auth_source` in the output; bearer tokens and operator-session cookies are not echoed.
@@ -360,7 +360,7 @@ Use `product:site-continuity:loop-report` when the next step is to refresh Cloud
 Create a governed Cloudflare operation from the operator CLI when the caller has Site authority:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:create:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --display-name "Operator Work" --operation-kind productization --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:create:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --display-name "Operator Work" --operation-kind productization --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:operation:create` calls `operation.create` through the same authenticated `POST /api/carrier` envelope as the console. It is a product mutation, not a readback command: the Worker still enforces Site authority, records the operation in the Site Registry, and returns a redacted `narada.cloudflare_carrier.operation_create.v1` envelope. Operation create uses the same canonical lifecycle statuses as operation status updates for initial creation: `active`, `inactive`, `needs_continuation`, and `closed` (`paused` is normalized to `inactive` for compatibility). Recreating an existing operation can update its name and kind, but preserves its current lifecycle status; use `product:operation:status` for lifecycle transitions. The `:text` alias prints the worker URL, auth source, site, operation id, name, kind, and status without echoing bearer tokens or operator-session cookies.
@@ -368,8 +368,8 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:create:text -- --url
 Move a governed Cloudflare operation through its lifecycle from the operator CLI:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status paused --reason operation_paused_by_operator --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status closed --reason operation_closed_by_operator --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status paused --reason operation_paused_by_operator --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:status:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --status closed --reason operation_closed_by_operator --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:operation:status` calls `operation.status.put` through authenticated `POST /api/carrier`. It supports `active`, `inactive`, `needs_continuation`, and `closed` (`paused` is normalized to `inactive` for compatibility), accepts optional `--reason` / `CLOUDFLARE_CARRIER_OPERATION_STATUS_REASON` transition evidence, leaves Site authority enforcement in the Worker, and returns a redacted `narada.cloudflare_carrier.operation_status_put.v1` envelope. `closed` is terminal: repeated close/archive updates are idempotent, but a closed operation cannot be reopened to `active`, `inactive`, or `needs_continuation`. The `:text` alias prints the worker URL, auth source, site, operation id, status, optional reason, worker-reported status transition, and update time without echoing bearer tokens or operator-session cookies.
@@ -377,7 +377,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:status:text -- --url
 Run the full governed operation lifecycle live when you need durable operator proof for create -> continuation -> resume -> close, using the same product commands and `operation.read` evidence the console consumes:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:lifecycle:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json --execute-operation-lifecycle
+pnpm --filter @narada-core/cloudflare-carrier product:operation:lifecycle:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json --execute-operation-lifecycle
 ```
 
 `product:operation:lifecycle:workflow:live` is an orchestrated live verifier, not a new mutation primitive. It calls `product:operation:create`, `product:operation:status`, `product:operation:continuation:resume`, and `product:operation:read` in sequence, and returns the readback summaries after each stage so the lifecycle route is proven from live product evidence instead of inferred from unit tests alone.
@@ -385,7 +385,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:lifecycle:workflow:l
 Run the adjacent focus-selection live proof when the operator workflow should begin from posture, selecting the next operation from `operation.list` before drilling into `operation.read`:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:focus:workflow:live -- --url <worker-url> --site <site-id> --operation-id <expected-operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-focus
+pnpm --filter @narada-core/cloudflare-carrier product:operation:focus:workflow:live -- --url <worker-url> --site <site-id> --operation-id <expected-operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-focus
 ```
 
 `product:operation:focus:workflow:live` is an orchestrated live verifier over the existing read surfaces, not a new mutation primitive. It reads `operation.list`, requires the posture route to point at `focus_next_operation`, optionally asserts `--operation-id` matches that selected target, then reads `operation.read` for that operation so the control-plane handoff from operation posture into focused operation readback is proven from live product evidence instead of relying on the web console.
@@ -393,7 +393,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:focus:workflow:live 
 Run the adjacent site-focus live proof when the operator workflow should begin one level higher, selecting the next site from `site.list` before drilling into `site.read`:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:site:focus:workflow:live -- --url <worker-url> --focused-site-id <expected-site-id> --operator-session-file cloudflare-operator-session.json --execute-site-focus
+pnpm --filter @narada-core/cloudflare-carrier product:site:focus:workflow:live -- --url <worker-url> --focused-site-id <expected-site-id> --operator-session-file cloudflare-operator-session.json --execute-site-focus
 ```
 
 `product:site:focus:workflow:live` is an orchestrated live verifier over the existing read surfaces, not a new mutation primitive. It reads `site.list`, requires the posture route to point at `focus_next_site`, optionally asserts `--focused-site-id` matches that selected target, then reads `site.read` for that site so the control-plane handoff from site posture into focused site readback is proven from live product evidence instead of relying on the web console.
@@ -401,7 +401,7 @@ pnpm --filter @narada2/cloudflare-carrier product:site:focus:workflow:live -- --
 Run the adjacent site-action live proof when the operator already has a focused site and wants the package to dispatch the current `site.read` next action into the matching downstream workflow:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --execute-site-action
+pnpm --filter @narada-core/cloudflare-carrier product:site:action:workflow:live -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --execute-site-action
 ```
 
 `product:site:action:workflow:live` is an orchestrated verifier over the existing downstream site lanes, not a new mutation primitive. It reads `site.read`, returns a clean monitored result when the next action is already `monitor_site`, and otherwise dispatches through the matching existing command: `product:operation:next:workflow:live` for `focus_site_operation` and `focus_next_operation`, `product:site:scope` for `read_site_scope`, `product:site-continuity:publish` for `publish_cloudflare_continuity_packet`, `continuity:bindings:prepare-next` for `bind_cloudflare_product_next_site_locally`, and `continuity:run-once` for `refresh_site_continuity_loop`.
@@ -409,7 +409,7 @@ pnpm --filter @narada2/cloudflare-carrier product:site:action:workflow:live -- -
 Run the adjacent site-next live proof when the operator wants the package to read `site.list` and either stop cleanly at `monitor_sites` or delegate into the focused site plus site-action workflow automatically:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live -- --url <worker-url> --operator-session-file cloudflare-operator-session.json --execute-site-next
+pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live -- --url <worker-url> --operator-session-file cloudflare-operator-session.json --execute-site-next
 ```
 
 `product:site:next:workflow:live` is an orchestrated verifier over the existing site read surfaces, not a new mutation primitive. It reads `site.list`, returns a clean monitored result only when the posture route is `monitor_sites` and the overview candidate is also already `monitor_site`, and otherwise advances through the next real site lane. When the route is `focus_next_site` it delegates first to `product:site:focus:workflow:live` and then to `product:site:action:workflow:live`; when the route stays `monitor_sites` but the current overview candidate still has actionable site work, it delegates directly to `product:site:action:workflow:live` for that current site.
@@ -417,7 +417,7 @@ pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live -- --u
 Run the adjacent next-operation live proof when the operator wants the package to select the next operation from posture and dispatch into the right downstream workflow automatically:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --execute-operation-next
+pnpm --filter @narada-core/cloudflare-carrier product:operation:next:workflow:live -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json --execute-operation-next
 ```
 
 `product:operation:next:workflow:live` is an orchestrated verifier over the existing focus/session/continuation/continuity/evidence workflows, not a new mutation primitive. It reads `operation.list`, selects the current `next_operation_id`, and then dispatches to the matching existing lane for the current workflow route, including `product:operation:scope` for `read_operation_scope`, the corresponding live workflow (`start_or_select_session`, `resume_operation_continuation`, or `refresh_site_continuity_loop`), or the focused evidence read surface when posture says `inspect_operation_evidence`. If that evidence already has an acknowledged focus review for the current reviewable focus, the wrapper re-enters the normal downstream operation route instead of stopping at the evidence read. This removes the manual control-room step of choosing which downstream operator command to run after `operation.list`.
@@ -425,7 +425,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live -
 Run the focused operation evidence read when posture says `inspect_operation_evidence` and the operator needs the actual evidence without parsing the full raw `operation.read` payload:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:evidence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:operation:evidence:text` reuses `operation.read`, but condenses the large product payload into the pieces the operator actually needs for evidence review: carrier evidence replay state, current carrier session ids, recent carrier event kinds, recent operation activity items, and the latest recorded focus review if one exists.
@@ -433,7 +433,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:evidence:text -- --u
 Run the focused operation recovery read when the workflow route is `review_recovery_posture` and the operator needs the current recovery boundaries, gaps, and follow-on evidence path without parsing the full raw `operation.read` payload:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:recovery:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:operation:recovery:text` reuses `operation.read`, but condenses the recovery posture the operator actually needs: recovery state, recovery boundaries, recovery gaps, the current lifecycle/evidence next action, and the explicit `product:operation:evidence:text` follow-on command.
@@ -441,7 +441,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:recovery:text -- --u
 Run the focused operation persistence read when the workflow route is `review_persistence_posture` and the operator needs the current persistence boundary coverage without parsing the full raw `operation.read` payload:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:persistence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:persistence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:operation:persistence:text` reuses `operation.read`, but condenses the persistence posture the operator actually needs: durability state, active and durable boundary counts, missing boundaries, warnings, and the explicit `product:operation:recovery:text` follow-on command.
@@ -451,8 +451,8 @@ Use `product:operation:continuity:workflow:live` for the operation-scoped contin
 When the focused operation has a reviewable focus item, the operator can record that review explicitly through the governed Cloudflare review lane:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --focus-kind <focus-kind> --focus-ref <focus-ref> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:focus-review:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --focus-kind <focus-kind> --focus-ref <focus-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:focus-review:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:operation:focus-review` calls the existing Worker-owned `operation_focus_review.acknowledge` primitive, while `product:operation:focus-review:list` reads the recorded review acknowledgements for that site. This makes the evidence-review step a first-class operator action instead of an implied manual note.
@@ -460,7 +460,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:focus-review:list:te
 Run the adjacent session-start live proof when a focused operation is routing toward `start_or_select_session` and the existing resident-dispatch path should satisfy that route:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-session
+pnpm --filter @narada-core/cloudflare-carrier product:operation:session:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-session
 ```
 
 `product:operation:session:workflow:live` is an orchestrated verifier over existing product surfaces, not a new mutation primitive. It reads `operation.read`, requires the current workflow route to be `start_or_select_session`, runs the existing resident-dispatch live workflow for that operation, then reads `operation.read` again so the handoff from missing-session posture into a started carrier session is proven from live product evidence instead of manual console bridging.
@@ -468,7 +468,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:session:workflow:liv
 Run the adjacent continuation-selection live proof when the operator workflow should begin from `operation.list` rather than a remembered operation id:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:workflow:live -- --url <worker-url> --site <site-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json --execute-operation-continuation-resume
+pnpm --filter @narada-core/cloudflare-carrier product:operation:continuation:workflow:live -- --url <worker-url> --site <site-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json --execute-operation-continuation-resume
 ```
 
 `product:operation:continuation:workflow:live` is an orchestrated verifier over the existing continuation selector and resume product paths, not a new mutation primitive. It reads `operation.list --continuation`, selects the next queued continuation operation, optionally asserts `--operation-id` matches that selection, reads `operation.read`, runs `product:operation:continuation:resume`, then re-reads both `operation.read` and `operation.list` so the selected operation is proven to have left the continuation queue through live product evidence instead of manual control-room bridging.
@@ -476,7 +476,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:workflo
 Run the adjacent resident-dispatch live proof when an active operation has already resumed and `operation.read` is routing toward `start_resident_dispatch`:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:resident-dispatch:workflow:live` is the productized form of the existing resident-dispatch smoke verifier. It calls `resident_dispatch.primary_with_fallback.start`, confirms the decision through `resident_dispatch.primary_with_fallback.list`, then reads `operation.read` so the dispatch decision and started carrier session are proven from the same live product surfaces the console uses. It accepts the same bearer-token or operator-session auth sources as the newer operator product commands and returns a redacted `narada.cloudflare_carrier.resident_dispatch_live_smoke.v1` envelope with auth provenance, dispatch state, and readback counts.
@@ -484,14 +484,14 @@ pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:workflow:liv
 When Cloudflare primary resident dispatch has failed and the product route has advanced into a governed Windows fallback request, record or read that fallback request explicitly through the Cloudflare product surface:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --dispatch-decision-id <dispatch-decision-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch.windows_fallback_request.list --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback:execute:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json --execute-windows-fallback
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --dispatch-decision-id <dispatch-decision-id> --fallback-request-id <fallback-request-id> --local-execution-id <local-execution-id> --local-resident-session-ref <local-session-ref> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --operation resident_dispatch.windows_fallback_evidence.list --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --operation resident_dispatch.local_resident_carrier_bridge.list --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --dispatch-decision-id <dispatch-decision-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:windows-fallback-request:text -- --operation resident_dispatch.windows_fallback_request.list --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:windows-fallback:execute:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json --execute-windows-fallback
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --dispatch-decision-id <dispatch-decision-id> --fallback-request-id <fallback-request-id> --local-execution-id <local-execution-id> --local-resident-session-ref <local-session-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:text -- --operation resident_dispatch.windows_fallback_evidence.list --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:windows-fallback-evidence:review:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:resident-dispatch:local-resident-carrier-bridge:text -- --operation resident_dispatch.local_resident_carrier_bridge.list --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:resident-dispatch:windows-fallback-request` is the governed Cloudflare queue lane for the Windows resident fallback. In create mode it calls `resident_dispatch.windows_fallback_request.create`, fixing the action to `local-windows-action:resident-session-start:v1`, the queue authority to `cloudflare_resident_dispatch_windows_fallback_request_queue`, the Windows executor to `windows_local_site_resident_loop`, and direct Cloudflare session start to `not_admitted`. In list mode it reads the recorded fallback request posture for the site or operation without claiming that Windows execution has already happened. This keeps the fallback branch explicit instead of collapsing back into the generic `start_or_select_session` route.
@@ -507,7 +507,7 @@ pnpm --filter @narada2/cloudflare-carrier product:resident-dispatch:local-reside
 Run the adjacent continuity-refresh live proof when `operation.read` has advanced past resident dispatch and is routing toward `refresh_site_continuity_loop`:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-continuity
+pnpm --filter @narada-core/cloudflare-carrier product:operation:continuity:workflow:live -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json --execute-operation-continuity
 ```
 
 `product:operation:continuity:workflow:live` is an orchestrated verifier over the existing continuity product path, not a new continuity primitive. It reads `operation.read`, requires the current workflow route to be `refresh_site_continuity_loop`, runs the existing live `continuity:run-once` execution path with the same operator auth, then reads both `operation.read` and `site.read` again so the continuity refresh is proven to have cleared that route through live product evidence instead of manual cross-checking.
@@ -515,7 +515,7 @@ pnpm --filter @narada2/cloudflare-carrier product:operation:continuity:workflow:
 Create a governed Cloudflare task lifecycle task from the operator CLI after explicit task-create cutover evidence exists:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:create:text -- --url <worker-url> --site <site-id> --title <task-title> --admission-id <admission-id> --admit-cloudflare-task-create --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:create:text -- --url <worker-url> --site <site-id> --title <task-title> --admission-id <admission-id> --admit-cloudflare-task-create --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:task-lifecycle:create` calls `task_lifecycle.task_create.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-create`, it can request the Worker's refusal evidence for the retained Windows task lifecycle authority. With the admission flag, it requires explicit cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-create admission request. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, decision, authority posture, and evidence refs without echoing bearer tokens or operator-session cookies.
@@ -523,7 +523,7 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:create:text -- 
 Claim an existing governed Cloudflare task lifecycle task after explicit task-claim cutover evidence exists:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- --url <worker-url> --site <site-id> --task-id <task-id> --claimant-agent <agent-id> --admission-id <admission-id> --admit-cloudflare-task-claim --assignment-authority-ref <assignment-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:claim:text -- --url <worker-url> --site <site-id> --task-id <task-id> --claimant-agent <agent-id> --admission-id <admission-id> --admit-cloudflare-task-claim --assignment-authority-ref <assignment-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:task-lifecycle:claim` calls `task_lifecycle.task_claim.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-claim`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit assignment-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-claim admission request. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, claimant, decision, authority posture, and evidence refs without echoing bearer tokens or operator-session cookies.
@@ -531,7 +531,7 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:claim:text -- -
 Report work on an existing claimed Cloudflare task lifecycle task after explicit task-report cutover evidence exists:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- --url <worker-url> --site <site-id> --task-id <task-id> --reporter-agent <agent-id> --summary <summary> --changed-file <path> --verification '{"command":"pnpm --filter @narada2/cloudflare-carrier test","result":"passed"}' --admission-id <admission-id> --admit-cloudflare-task-report --report-authority-ref <report-authority-ref> --report-schema-ref <report-schema-ref> --changed-file-evidence-boundary-ref <changed-file-boundary-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:report:text -- --url <worker-url> --site <site-id> --task-id <task-id> --reporter-agent <agent-id> --summary <summary> --changed-file <path> --verification '{"command":"pnpm --filter @narada-core/cloudflare-carrier test","result":"passed"}' --admission-id <admission-id> --admit-cloudflare-task-report --report-authority-ref <report-authority-ref> --report-schema-ref <report-schema-ref> --changed-file-evidence-boundary-ref <changed-file-boundary-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:task-lifecycle:report` calls `task_lifecycle.task_report.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-report`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit report-authority, report-schema, changed-file-evidence-boundary, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-report admission request. Reporting records changed-file evidence only as report evidence; separate changed-file-evidence, filesystem mutation, and repository publication boundaries remain not admitted until their own governed contracts admit them. The `:text` alias prints the Worker URL, auth source, site, admission id, task/report ids, reporter, decision, authority posture, changed-file evidence posture, and evidence refs without echoing bearer tokens or operator-session cookies.
@@ -539,7 +539,7 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:report:text -- 
 Record changed-file evidence for an existing reported Cloudflare task lifecycle task after explicit changed-file-evidence cutover evidence exists:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:changed-file-evidence:text -- --url <worker-url> --site <site-id> --task-id <task-id> --report-id <report-id> --file-path <repo-relative-path> --reporter-agent <agent-id> --admission-id <admission-id> --admit-cloudflare-changed-file-evidence --file-evidence-authority-ref <file-evidence-authority-ref> --file-material-source-ref <file-material-source-ref> --repository-authority-ref <repository-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:changed-file-evidence:text -- --url <worker-url> --site <site-id> --task-id <task-id> --report-id <report-id> --file-path <repo-relative-path> --reporter-agent <agent-id> --admission-id <admission-id> --admit-cloudflare-changed-file-evidence --file-evidence-authority-ref <file-evidence-authority-ref> --file-material-source-ref <file-material-source-ref> --repository-authority-ref <repository-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:task-lifecycle:changed-file-evidence` calls `task_lifecycle.changed_file_evidence.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-changed-file-evidence`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit file-evidence-authority, file-material-source, repository-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare changed-file-evidence admission request. Admitting changed-file evidence still leaves filesystem mutation, repository publication, and projection write as `not_admitted`; this command records Cloudflare evidence for the changed file, not those downstream effects. The `:text` alias prints the Worker URL, auth source, site, admission id, task/report/evidence ids, file path, reporter, authority posture, conflict evidence, and the three downstream admission postures without echoing bearer tokens or operator-session cookies.
@@ -547,7 +547,7 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:changed-file-ev
 Bridge a task or operation outcome into an explicit Cloudflare site file change proposal before any materialization or publication step:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:text -- --url <worker-url> --site <site-id> --proposal-id <proposal-id> --proposal-ref <proposal-ref> --summary <proposal-summary> --operation-id <operation-id> --task-id <task-id> --file-path <repo-relative-path> --change-kind <create|update|delete> --material-source-ref <material-source-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site-file-change:proposal:text -- --url <worker-url> --site <site-id> --proposal-id <proposal-id> --proposal-ref <proposal-ref> --summary <proposal-summary> --operation-id <operation-id> --task-id <task-id> --file-path <repo-relative-path> --change-kind <create|update|delete> --material-source-ref <material-source-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:site-file-change:proposal` calls `site_file_change_proposal.record` through authenticated `POST /api/carrier`. It requires explicit proposal ref, summary, and per-file material provenance instead of relying on the Worker's generic defaults. The command fixes proposal authority at `cloudflare_carrier_site`, executor authority at `windows_filesystem_executor`, and keeps filesystem mutation and repository publication at `not_admitted`; it records Cloudflare proposal state only, without pretending the file was materialized or published. The `:text` alias prints the Worker URL, auth source, site, proposal id/ref, operation/task linkage, proposal posture, file count, downstream admission posture, and per-file provenance without echoing bearer tokens or operator-session cookies.
@@ -555,7 +555,7 @@ pnpm --filter @narada2/cloudflare-carrier product:site-file-change:proposal:text
 Admit Cloudflare-owned site file materialization after explicit cutover evidence exists, while keeping Windows filesystem mutation and repository publication outside the admitted boundary:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:text -- --url <worker-url> --site <site-id> --materialization-id <materialization-id> --proposal-id <proposal-id> --proposal-ref <proposal-ref> --file-path <repo-relative-path> --content-sha256 <sha256> --content-ref <content-ref> --operation-id <operation-id> --task-id <task-id> --admit-cloudflare-site-file-materialization --materialization-authority-ref <materialization-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site-file:materialization:text -- --url <worker-url> --site <site-id> --materialization-id <materialization-id> --proposal-id <proposal-id> --proposal-ref <proposal-ref> --file-path <repo-relative-path> --content-sha256 <sha256> --content-ref <content-ref> --operation-id <operation-id> --task-id <task-id> --admit-cloudflare-site-file-materialization --materialization-authority-ref <materialization-authority-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:site-file:materialization` calls `site_file_materialization.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-site-file-materialization`, it can request the Worker's refusal evidence for missing cutover admission. With the admission flag, it requires explicit materialization-authority, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare materialization admission request. The command fixes materialization authority at `cloudflare_carrier_site`, executor authority at `cloudflare_site_file_store`, and keeps Windows filesystem mutation and repository publication at `not_admitted`; it records Cloudflare site-file materialization state only, without pretending the Windows site filesystem or repository publication boundary moved. The `:text` alias prints the Worker URL, auth source, site, materialization id, proposal linkage, file path, content provenance, authority posture, and downstream admission posture without echoing bearer tokens or operator-session cookies.
@@ -563,7 +563,7 @@ pnpm --filter @narada2/cloudflare-carrier product:site-file:materialization:text
 Queue a governed Windows-side local ingress request after Cloudflare-side planning/materialization state exists, without claiming direct Cloudflare filesystem mutation:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:text -- --url <worker-url> --site <site-id> --local-ingress-request-id <request-id> --operation-id <operation-id> --task-id <task-id> --action-ref <local-action-ref> --summary <operator-summary> --contract-ref <contract-ref> --evidence-contract-ref <evidence-contract-ref> --rollback-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:local-ingress:request:text -- --url <worker-url> --site <site-id> --local-ingress-request-id <request-id> --operation-id <operation-id> --task-id <task-id> --action-ref <local-action-ref> --summary <operator-summary> --contract-ref <contract-ref> --evidence-contract-ref <evidence-contract-ref> --rollback-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:local-ingress:request` calls `local_ingress.request.create` through authenticated `POST /api/carrier`. It requires explicit action, governed request contract, evidence return contract, and rollback refs before sending the Cloudflare queue request. The command fixes request authority at `cloudflare_local_ingress_request_queue`, target authority at `local-windows-site-authority`, executor authority at `windows_local_ingress_executor`, and keeps both direct Cloudflare filesystem mutation and repository publication at `not_admitted`; it records a governed request for Windows execution and later evidence return, not the execution itself. The `:text` alias prints the Worker URL, auth source, site, local ingress request id, operation/task linkage, action summary, authority posture, queue/execution posture, and contract refs without echoing bearer tokens or operator-session cookies.
@@ -571,7 +571,7 @@ pnpm --filter @narada2/cloudflare-carrier product:local-ingress:request:text -- 
 Record Windows execution evidence back into Cloudflare after a governed local ingress request has been admitted and executed:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:text -- --url <worker-url> --site <site-id> --local-ingress-request-id <request-id> --local-execution-id <execution-id> --changed-file <path-1> --changed-file <path-2> --rollback-evidence-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:local-ingress:evidence:text -- --url <worker-url> --site <site-id> --local-ingress-request-id <request-id> --local-execution-id <execution-id> --changed-file <path-1> --changed-file <path-2> --rollback-evidence-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:local-ingress:evidence` calls `local_ingress.evidence.put` through authenticated `POST /api/carrier`. It requires the governing request id, the Windows execution id, and at least one changed file before sending the evidence record. The command fixes requested mutation class at `local_repository_filesystem_mutation`, Windows admission action at `admit`, local execution status at `completed`, local filesystem mutation admission at `admitted_by_windows_local_ingress`, executor authority at `windows_local_ingress_executor`, and keeps both direct Cloudflare filesystem mutation and repository publication at `not_admitted`; it records the Windows-side execution evidence in Cloudflare without claiming direct Cloudflare filesystem authority. The `:text` alias prints the Worker URL, auth source, site, evidence/request/execution ids, authority partition, mutation admissions, changed files, rollback evidence ref, and record timestamps without echoing bearer tokens or operator-session cookies.
@@ -579,7 +579,7 @@ pnpm --filter @narada2/cloudflare-carrier product:local-ingress:evidence:text --
 Queue a governed repository publication request after Windows-side filesystem evidence exists, without claiming direct Cloudflare Git push or repository mutation:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operation-id <operation-id> --task-id <task-id> --publication-ref <publication-ref> --action-ref <action-ref> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --source-change-ref <git:commit:sha> --contract-ref <contract-ref> --evidence-contract-ref <evidence-contract-ref> --rollback-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:request:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operation-id <operation-id> --task-id <task-id> --publication-ref <publication-ref> --action-ref <action-ref> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --source-change-ref <git:commit:sha> --contract-ref <contract-ref> --evidence-contract-ref <evidence-contract-ref> --rollback-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:repository-publication:request` calls `repository_publication.request.create` through authenticated `POST /api/carrier`. It requires explicit publication, repository, branch, source-change, governed request contract, evidence return contract, and rollback refs before sending the queue request. The command fixes request authority at `cloudflare_repository_publication_request_queue`, executor authority at `windows_repository_publication_executor`, leaves repository publication admission at `pending_windows_publication_admission`, and keeps both Cloudflare Git push and direct Cloudflare repository mutation at `not_admitted`; it records the governed Windows publication request, not publication execution itself. The `:text` alias prints the Worker URL, auth source, site, request id, operation/task linkage, publication/repository refs, authority posture, admission posture, and contract refs without echoing bearer tokens or operator-session cookies.
@@ -587,7 +587,7 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request
 Record the Cloudflare admission decision for a queued repository publication request before Windows publishes:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --admission-action admit --admission-reason <reason-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:admission:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --admission-action admit --admission-reason <reason-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:repository-publication:admission` calls `repository_publication.admission.classify` through authenticated `POST /api/carrier`. It requires the queued request id and an admission action, fixes admission authority at `cloudflare_repository_publication_admission_controller`, executor authority at `windows_repository_publication_executor`, and keeps both Cloudflare Git push and direct Cloudflare repository mutation at `not_admitted`; it governs whether Windows may publish, without pretending Cloudflare performed the publish. The `:text` alias prints the Worker URL, auth source, site, admission/request ids, decision, authority posture, downstream mutation posture, and record timestamps without echoing bearer tokens or operator-session cookies.
@@ -595,7 +595,7 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admissi
 Record Windows repository publication evidence back into Cloudflare after governed publication resolves:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --publication-execution-id <execution-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --source-change-ref <git:commit:sha> --windows-admission-action admit --publication-status completed --published-commit-ref <git:commit:published-sha> --rollback-evidence-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:evidence:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --publication-execution-id <execution-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --source-change-ref <git:commit:sha> --windows-admission-action admit --publication-status completed --published-commit-ref <git:commit:published-sha> --rollback-evidence-ref <rollback-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:repository-publication:evidence` calls `repository_publication.evidence.put` through authenticated `POST /api/carrier`. It requires the governing request id, the Windows publication execution id, repository/branch/source-change refs, and for admitted completion a published commit ref before sending the evidence record. The command fixes evidence-store authority at `cloudflare_repository_publication_evidence_store`, executor authority at `windows_repository_publication_executor`, keeps both Cloudflare Git push and direct Cloudflare repository mutation at `not_admitted`, and records the Windows publication outcome only after Cloudflare admission exists; it does not blur the line into direct Cloudflare publication authority. The `:text` alias prints the Worker URL, auth source, site, evidence/request/execution ids, admission linkage, publish outcome, authority partition, mutation posture, and rollback evidence ref without echoing bearer tokens or operator-session cookies.
@@ -603,7 +603,7 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidenc
 Read whether the Cloudflare GitHub publication lane is configured and whether a repository/branch is currently allowed before requesting direct Cloudflare execution:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:readiness:text -- --url <worker-url> --site <site-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:readiness:text -- --url <worker-url> --site <site-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:repository-publication:readiness` calls `repository_publication.cloudflare_execution.readiness` through authenticated `POST /api/carrier`. It reads Cloudflare-held GitHub credential posture, allowed repository/branch policy, and requested repository/branch eligibility without mutating GitHub. The command fixes executor authority at `cloudflare_github_repository_publication_executor`, admission authority at `cloudflare_repository_publication_admission_controller`, keeps Cloudflare Git push at `not_admitted`, and reports whether direct Cloudflare repository mutation would be available if execution were later requested. The `:text` alias prints the Worker URL, auth source, site, readiness status, credential mode, requested repository/branch posture, missing configuration, and authority partition without echoing bearer tokens, operator-session cookies, or secret values.
@@ -611,7 +611,7 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:readine
 Read the current authority-transfer posture as a first-class product surface instead of relying on the older smoke-only wrapper:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:authority-transfer:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --repository-ref <github:owner/repo> --branch-ref <branch-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:authority-transfer` composes authenticated `operation.read` with `repository_publication.cloudflare_execution.readiness`. It reads the current `authority_transfer_posture`, the operation-product slice counts that still matter for transfer completion, and the Cloudflare GitHub publication readiness needed for `verify_full_cloudflare_authority`. The command does not mutate GitHub or Cloudflare state. The `:text` alias prints the Worker URL, auth source, site, operation, overall transfer readiness, remaining Windows-owned domain/authority counts, repository-publication readiness posture, and any incomplete reasons without echoing bearer tokens or operator-session cookies.
@@ -619,7 +619,7 @@ pnpm --filter @narada2/cloudflare-carrier product:authority-transfer:text -- --u
 Execute an already admitted repository publication directly through the Cloudflare GitHub executor when that lane is intentionally chosen:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --repository-publication-execution-id <execution-id> --execute-cloudflare-github --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:cloudflare-execution:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --repository-publication-execution-id <execution-id> --execute-cloudflare-github --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:repository-publication:cloudflare-execution` calls `repository_publication.cloudflare_execution.execute` through authenticated `POST /api/carrier`. It requires explicit `--execute-cloudflare-github` acknowledgement and a governed repository publication request id before Cloudflare may push to GitHub. This command is the direct-Cloudflare publication lane: it records execution under `cloudflare_github_repository_publication_executor`, links back to Cloudflare admission, keeps `cloudflare_git_push_admission` at `not_admitted`, and admits direct Cloudflare repository mutation only through this explicit execution boundary. The `:text` alias prints the Worker URL, auth source, site, request/execution ids, publication outcome, admission linkage, GitHub response summary, and authority partition without echoing bearer tokens or operator-session cookies.
@@ -627,11 +627,11 @@ pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudfl
 Read the governed repository publication lane back as operator-visible queue, admission, evidence, and Cloudflare execution history:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:request:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:admission:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:evidence:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:request:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:request:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:admission:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:evidence:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:cloudflare-execution:list:text -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 These aliases all route through `product:repository-publication:*` readback over authenticated `POST /api/carrier` and keep the authority boundary explicit instead of inferring publication state from smoke artifacts. `request:list` shows queued Windows publication requests, `request:next` shows the next admitted dispatch candidate and any pending-unadmitted backlog, `admission:list` shows Cloudflare admission history, `evidence:list` shows Windows execution evidence recorded back into Cloudflare, and `cloudflare-execution:list` shows direct Cloudflare GitHub execution history. The `:text` aliases print the Worker URL, auth source, site, latest ids/statuses, and authority posture without echoing bearer tokens or operator-session cookies.
@@ -639,7 +639,7 @@ These aliases all route through `product:repository-publication:*` readback over
 After a live publication request has been admitted and resolved, verify that the operator readback lane exposes coherent request/admission/downstream evidence:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier repository-publication:readback-smoke:live -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --lane cloudflare --repository-publication-execution-id <execution-id> --operation-id <operation-id>
+pnpm --filter @narada-core/cloudflare-carrier repository-publication:readback-smoke:live -- --url <worker-url> --site <site-id> --repository-publication-request-id <request-id> --lane cloudflare --repository-publication-execution-id <execution-id> --operation-id <operation-id>
 ```
 
 `repository-publication:readback-smoke:live` is a live verifier over the product read surfaces, not a second mutation path. It proves the request appears in `request:list`, the governing Cloudflare decision appears in `admission:list`, the downstream result appears in either `cloudflare-execution:list` or `evidence:list` depending on `--lane`, and `request:next` no longer selects the resolved request. When `--operation-id` is supplied, it also checks `operation.read` for the same downstream record so operator lifecycle readback stays coherent across both operation and publication views.
@@ -647,7 +647,7 @@ pnpm --filter @narada2/cloudflare-carrier repository-publication:readback-smoke:
 For the direct Cloudflare GitHub lane, use the workflow wrapper when one operator run should both execute the governed publication and prove the readback surface afterward:
 
 ```bash
-pnpm --filter @narada2/cloudflare-carrier repository-publication:cloudflare-workflow:live -- --url <worker-url> --operator-session-file cloudflare-operator-session.json --site <site-id> --operation <operation-id> --repository-ref github:andrey-kokoev/narada --branch refs/heads/cloudflare-publication-live --commit <40-hex-commit> --execute-cloudflare-github
+pnpm --filter @narada-core/cloudflare-carrier repository-publication:cloudflare-workflow:live -- --url <worker-url> --operator-session-file cloudflare-operator-session.json --site <site-id> --operation <operation-id> --repository-ref github:narada-core/narada --branch refs/heads/cloudflare-publication-live --commit <40-hex-commit> --execute-cloudflare-github
 ```
 
 `repository-publication:cloudflare-workflow:live` is an orchestration wrapper over the existing execution and readback live-smoke commands. It does not create a separate mutation path. It first runs the governed Cloudflare publication execution, then immediately verifies that the same request, admission, execution, and operation lifecycle are visible through the readback product surfaces. The wrapper accepts either bearer-token auth or a captured operator session file/cookie, so this lane can run as a real authenticated operator workflow instead of a token-only maintenance path.
@@ -655,7 +655,7 @@ pnpm --filter @narada2/cloudflare-carrier repository-publication:cloudflare-work
 Finish an existing closed Cloudflare task lifecycle task after explicit task-finish cutover evidence exists:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- --url <worker-url> --site <site-id> --task-id <task-id> --finalizer-agent <agent-id> --finish-verdict accepted --admission-id <admission-id> --admit-cloudflare-task-finish --finish-authority-ref <finish-authority-ref> --finish-schema-ref <finish-schema-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:task-lifecycle:finish:text -- --url <worker-url> --site <site-id> --task-id <task-id> --finalizer-agent <agent-id> --finish-verdict accepted --admission-id <admission-id> --admit-cloudflare-task-finish --finish-authority-ref <finish-authority-ref> --finish-schema-ref <finish-schema-ref> --cutover-point-ref <cutover-ref> --governed-write-contract-ref <contract-ref> --confirmation-evidence-ref <evidence-ref> --operator-session-file cloudflare-operator-session.json
 ```
 
 `product:task-lifecycle:finish` calls `task_lifecycle.task_finish.admit` through authenticated `POST /api/carrier`. Without `--admit-cloudflare-task-finish`, it can request the Worker's refusal evidence for retained Windows task lifecycle authority. With the admission flag, it requires explicit finish-authority, finish-schema, cutover, governed-write-contract, and confirmation-evidence refs before sending the Cloudflare task-finish admission request. The current Worker contract only admits `accepted` finish verdicts, so the product command rejects any other verdict locally instead of pretending a broader finish surface exists. The `:text` alias prints the Worker URL, auth source, site, admission id, task id/number when admitted, finalizer, verdict, decision, authority posture, changed-file-evidence count, and evidence refs without echoing bearer tokens or operator-session cookies.
@@ -663,14 +663,14 @@ pnpm --filter @narada2/cloudflare-carrier product:task-lifecycle:finish:text -- 
 For operator-facing readback without JSON inspection, use the text aliases:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier product:site:list:text -- --url <worker-url> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:site-continuity:publish:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text -- --url <worker-url> --site <site-id> --report-file .narada/site-continuity/<site-id>-cloudflare-sync.json --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:continuation:resume:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json
-pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site:list:text -- --url <worker-url> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site-continuity:publish:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:site-continuity:loop-report:text -- --url <worker-url> --site <site-id> --report-file .narada/site-continuity/<site-id>-cloudflare-sync.json --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:list:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:continuation:next:text -- --url <worker-url> --site <site-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:continuation:resume:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --agent-id <agent-id> --operator-session-file cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier product:operation:read:text -- --url <worker-url> --site <site-id> --operation-id <operation-id> --operator-session-file cloudflare-operator-session.json
 ```
 
 The text output names the operation, worker URL, auth source, selected site or operation, health, next action, continuity/reconciliation posture, durability posture, operation-list lifecycle status counts, operation-read lifecycle status transitions, and evidence counts while preserving the same credential redaction rule as the JSON envelope. The continuation selector filters the operation list for `needs_continuation`, prints the selected operation read command, and prints the resume command. By default, the resume command first reads `operation.read` and requires the workflow route to advertise `resume_operation_continuation`; only then does it transition the selected operation to `active` unless `--skip-activate` is passed and start a carrier session bound to that operation. Use `--skip-route-check` only for explicit recovery.
@@ -680,13 +680,13 @@ The text output names the operation, worker URL, auth source, selected site or o
 `smoke:live` requires a deployed Worker URL and a bearer token:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier smoke:live -- --url <worker-url> --token <token>
+pnpm --filter @narada-core/cloudflare-carrier smoke:live -- --url <worker-url> --token <token>
 ```
 
 To require a specific live tool/effect posture:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-carrier smoke:live -- --url <worker-url> --token <token> --expect-tool-effect-posture unconfigured
+pnpm --filter @narada-core/cloudflare-carrier smoke:live -- --url <worker-url> --token <token> --expect-tool-effect-posture unconfigured
 ```
 
 Use `configured` when the Worker was deployed with a configured tool/effect adapter. Live smoke checks the deployed console, `/api/carrier` API client path, posture, capabilities, routing, auth, provider execution, task create/update, persisted task readback, and event reads against a real Workers AI response. It does not force deterministic provider-selected tool-effect outcomes because live provider tool selection is model-dependent; deterministic denied, admitted-ok, and admitted-failed tool/effect outcomes are covered by `deploy:check`. The live token is not stored by this package. Rotate or set the Worker secret before running live smoke from a fresh shell.

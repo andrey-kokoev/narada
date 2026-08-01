@@ -575,7 +575,7 @@ Each Site has a `config.json` in its root directory. The shape is substrate-spec
 | Site bootstrap replaces operation bootstrap | **Forbidden** | They are separate, composable paths. Site bootstrap needs an operation to be meaningful, but does not create one. |
 | `sites enable` auto-registers with host supervisor | **Forbidden** | `sites enable` generates files and prints activation commands. The operator must manually run the activation step to avoid unexpected privilege escalation. |
 | Cloudflare first-run support | **Deferred** | Cloudflare Sites require `wrangler` deployment, Worker Secrets, and DO bindings. They are not a local-first-run path. |
-| Generic Site abstraction | **Deferred** | Each substrate keeps its own package. No `@narada2/site-core` abstraction is introduced by this contract. |
+| Generic Site abstraction | **Deferred** | Each substrate keeps its own package. No `@narada-core/site-core` abstraction is introduced by this contract. |
 | Auto-credential discovery | **Deferred** | Credentials must be explicitly set by the operator. No automatic keychain/systemd-credential probing during init. |
 
 ---

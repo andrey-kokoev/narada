@@ -1,6 +1,6 @@
 type AnyRecord = Record<string, any>;
 
-import { runHiddenPostureCommandSync, spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync, spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 import { createNarsOwnedProcessStateMachine } from './owned-process-state.js';
 
 const ownedProcessRegistry = new Set();

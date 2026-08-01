@@ -7,7 +7,7 @@ import {
   type OperatorCommandPaletteSection,
   type OperatorCommandPaletteView,
 } from '../lib/operatorCommandController';
-import { Command, CommandEmpty, CommandItem, CommandList } from '@narada2/ui-vue';
+import { Command, CommandEmpty, CommandItem, CommandList } from '@narada-core/ui-vue';
 
 const props = defineProps<{
   entries: OperatorCommandPaletteEntry[];

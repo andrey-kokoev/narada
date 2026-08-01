@@ -32,7 +32,7 @@ import {
   type ForemanFacade,
   type PreviewDerivationResult,
   type ScopeConfig,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import { createLogger } from "../lib/logger.js";
 import { createObservationRoutes } from "./observation-routes.js";
 import { createOperatorActionRoutes } from "./operator-action-routes.js";

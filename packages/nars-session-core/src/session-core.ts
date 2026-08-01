@@ -3,7 +3,7 @@ import { dirname } from 'node:path';
 import {
   classifyCarrierInputAdmission,
   classifyCarrierInputQueueAdmission,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 import { createNarsEventHub } from './event-hub.js';
 import type { NaradaEventHub } from './event-hub.js';
 import { readNarsEventLog } from './event-log.js';

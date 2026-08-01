@@ -5,7 +5,7 @@ import {
   observerPayload as protocolObserverPayload,
   observerVisibility as protocolObserverVisibility,
   isObserverInputEvent as isProtocolObserverInputEvent,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 import {
   assertNarsInputAdmissionTransition,
   NARS_INPUT_ADMISSION_STATE_SCHEMA,

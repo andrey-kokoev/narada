@@ -25,9 +25,9 @@ dependencies first:
 
 ```text
 pnpm install
-pnpm --filter @narada2/host-fleet typecheck
-pnpm --filter @narada2/operator-console-ui typecheck
-pnpm --filter @narada2/cloudflare-nars-projection typecheck
+pnpm --filter @narada-core/host-fleet typecheck
+pnpm --filter @narada-core/operator-console-ui typecheck
+pnpm --filter @narada-core/cloudflare-nars-projection typecheck
 ```
 
 Do not put raw credentials in a checked-in file. The physical harness accepts
@@ -63,7 +63,7 @@ Run the opt-in physical harness only after the two exact sessions are already
 running:
 
 ```text
-pnpm --filter @narada2/host-fleet exec node --import tsx --test --test-concurrency=1 test/host-fleet-live-e2e.test.ts
+pnpm --filter @narada-core/host-fleet exec node --import tsx --test --test-concurrency=1 test/host-fleet-live-e2e.test.ts
 ```
 
 The harness proves:
@@ -100,7 +100,7 @@ The deployment-owned registry is validated separately from live deployment:
 
 ```text
 $env:NARADA_HOST_FLEET_REGISTRY_FILE = "config/host-fleet.registry.json"
-pnpm --filter @narada2/cloudflare-nars-projection host-fleet:preflight
+pnpm --filter @narada-core/cloudflare-nars-projection host-fleet:preflight
 ```
 
 The result must have:
@@ -122,7 +122,7 @@ The read-only browser smoke lane is available after those deployment-owned
 inputs exist:
 
 ```text
-Get-Secret -Name <temporary-access-secret> -AsPlainText | pnpm --filter @narada2/cloudflare-nars-projection smoke:host-fleet-live -- --live --url <worker-url> --access-client-id <id> --access-client-secret-stdin
+Get-Secret -Name <temporary-access-secret> -AsPlainText | pnpm --filter @narada-core/cloudflare-nars-projection smoke:host-fleet-live -- --live --url <worker-url> --access-client-id <id> --access-client-secret-stdin
 ```
 
 It refuses local or private origins, requires Cloudflare Access credentials,
@@ -134,7 +134,7 @@ and verifies replay without submitting operator input. It writes redacted eviden
 mode is the default and performs no network request:
 
 ```text
-pnpm --filter @narada2/cloudflare-nars-projection smoke:host-fleet-live
+pnpm --filter @narada-core/cloudflare-nars-projection smoke:host-fleet-live
 ```
 
 This lane is acceptance evidence only. It does not deploy, enroll, revoke,

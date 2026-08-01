@@ -11,19 +11,19 @@ importers:
       '@changesets/cli':
         specifier: ^2.27.1
         version: 2.30.0(@types/node@22.19.19)
-      '@narada2/agent-cli':
+      '@narada-core/agent-cli':
         specifier: workspace:*
         version: link:../agent-cli
-      '@narada2/agent-runtime-server':
+      '@narada-core/agent-runtime-server':
         specifier: workspace:*
         version: link:packages/agent-runtime-server
-      '@narada2/agent-tui':
+      '@narada-core/agent-tui':
         specifier: workspace:*
         version: link:../agent-tui
-      '@narada2/agent-web-ui':
+      '@narada-core/agent-web-ui':
         specifier: workspace:*
         version: link:packages/agent-web-ui
-      '@narada2/cli':
+      '@narada-core/cli':
         specifier: workspace:*
         version: link:packages/layers/cli
       '@types/node':
@@ -44,11 +44,11 @@ importers:
 
   ../agent-cli:
     dependencies:
-      '@narada2/carrier-terminal-projection':
+      '@narada-core/carrier-terminal-projection':
         specifier: workspace:*
         version: link:../narada/packages/carrier-terminal-projection
     devDependencies:
-      '@narada2/agent-runtime-server':
+      '@narada-core/agent-runtime-server':
         specifier: workspace:*
         version: link:../narada/packages/agent-runtime-server
       '@types/node':
@@ -71,84 +71,84 @@ importers:
 
   ../mcp-surfaces/packages/agent-context-mcp:
     dependencies:
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/git-mcp:
     dependencies:
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/graph-mail-mcp:
     dependencies:
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-telemetry':
+      '@narada-core/mcp-telemetry':
         specifier: workspace:*
         version: link:../shared/mcp-telemetry
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/local-filesystem-mcp:
     dependencies:
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/mailbox-mcp:
     dependencies:
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/nars-session-mcp:
     dependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../../../narada/packages/site-paths
 
@@ -171,14 +171,14 @@ importers:
 
   ../mcp-surfaces/packages/shared/mcp-runtime-proxy:
     dependencies:
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../mcp-fabric-contracts
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../../../../narada/packages/process-launch-posture
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../mcp-e2e-harness
 
@@ -192,36 +192,36 @@ importers:
 
   ../mcp-surfaces/packages/structured-command-mcp:
     dependencies:
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-telemetry':
+      '@narada-core/mcp-telemetry':
         specifier: workspace:*
         version: link:../shared/mcp-telemetry
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
 
   ../mcp-surfaces/packages/task-lifecycle-mcp:
     dependencies:
-      '@narada2/execution-contract':
+      '@narada-core/execution-contract':
         specifier: workspace:*
         version: link:../shared/execution-contract
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
-      '@narada2/task-governance-core':
+      '@narada-core/task-governance-core':
         specifier: workspace:*
         version: link:../../../narada-core/packages/task-governance-core
     devDependencies:
-      '@narada2/mcp-e2e-harness':
+      '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
 
@@ -239,7 +239,7 @@ importers:
 
   ../narada-core/packages/task-executability-orchestrator:
     dependencies:
-      '@narada2/task-governance-core':
+      '@narada-core/task-governance-core':
         specifier: workspace:*
         version: link:../task-governance-core
     devDependencies:
@@ -262,7 +262,18 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@22.19.19)(jsdom@26.1.0)(lightningcss@1.32.0)(stylus@0.57.0)
 
-  ../narada-core/packages/work-lifecycle-core: {}
+  ../narada-core/packages/work-lifecycle-core:
+    dependencies:
+      '@narada-core/task-governance-core':
+        specifier: workspace:*
+        version: link:../task-governance-core
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.0
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   packages/agent-context-memory:
     devDependencies:
@@ -278,25 +289,25 @@ importers:
 
   packages/agent-context-tools:
     dependencies:
-      '@narada2/agent-context-mcp':
+      '@narada-core/agent-context-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/agent-context-mcp
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/agent-start-bootstrap':
+      '@narada-core/agent-start-bootstrap':
         specifier: workspace:*
         version: link:../agent-start-bootstrap
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-common-tools':
+      '@narada-core/site-common-tools':
         specifier: workspace:*
         version: link:../site-common-tools
-      '@narada2/task-lifecycle-mcp':
+      '@narada-core/task-lifecycle-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/task-lifecycle-mcp
-      '@narada2/task-lifecycle-tools':
+      '@narada-core/task-lifecycle-tools':
         specifier: workspace:*
         version: link:../task-lifecycle-tools
     devDependencies:
@@ -314,23 +325,23 @@ importers:
       '@earendil-works/pi-tui':
         specifier: ^0.79.3
         version: 0.79.10
-      '@narada2/nars-client-projection-contract':
+      '@narada-core/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
-      '@narada2/nars-runtime-contract':
+      '@narada-core/nars-runtime-contract':
         specifier: workspace:*
         version: link:../nars-runtime-contract
     devDependencies:
-      '@narada2/agent-runtime-server':
+      '@narada-core/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
       '@types/node':
@@ -351,67 +362,67 @@ importers:
 
   packages/agent-runtime-server:
     dependencies:
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/carrier-command-contract':
+      '@narada-core/carrier-command-contract':
         specifier: workspace:*
         version: link:../carrier-command-contract
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada2/carrier-provider-support':
+      '@narada-core/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support
-      '@narada2/carrier-runtime':
+      '@narada-core/carrier-runtime':
         specifier: workspace:*
         version: link:../carrier-runtime
-      '@narada2/carrier-terminal-projection':
+      '@narada-core/carrier-terminal-projection':
         specifier: workspace:*
         version: link:../carrier-terminal-projection
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-materialization':
+      '@narada-core/invokable-intelligence-materialization':
         specifier: workspace:*
         version: link:../invokable-intelligence-materialization
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
-      '@narada2/invokable-intelligence-resolver':
+      '@narada-core/invokable-intelligence-resolver':
         specifier: workspace:*
         version: link:../invokable-intelligence-resolver
-      '@narada2/invokable-intelligence-runtime':
+      '@narada-core/invokable-intelligence-runtime':
         specifier: workspace:*
         version: link:../invokable-intelligence-runtime
-      '@narada2/launch-process-ownership':
+      '@narada-core/launch-process-ownership':
         specifier: workspace:*
         version: link:../launch-process-ownership
-      '@narada2/nars-capability-gateway':
+      '@narada-core/nars-capability-gateway':
         specifier: workspace:*
         version: link:../nars-capability-gateway
-      '@narada2/nars-intelligence-kernel-contract':
+      '@narada-core/nars-intelligence-kernel-contract':
         specifier: workspace:*
         version: link:../nars-intelligence-kernel-contract
-      '@narada2/nars-pi-kernel':
+      '@narada-core/nars-pi-kernel':
         specifier: workspace:*
         version: link:../nars-intelligence-runtime-pi
-      '@narada2/nars-provider-runtime':
+      '@narada-core/nars-provider-runtime':
         specifier: workspace:*
         version: link:../nars-provider-runtime
-      '@narada2/nars-runtime-contract':
+      '@narada-core/nars-runtime-contract':
         specifier: workspace:*
         version: link:../nars-runtime-contract
-      '@narada2/nars-session-authority':
+      '@narada-core/nars-session-authority':
         specifier: workspace:*
         version: link:../nars-session-authority
-      '@narada2/nars-session-core':
+      '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../site-paths
     devDependencies:
@@ -421,46 +432,46 @@ importers:
 
   packages/agent-start:
     dependencies:
-      '@narada2/agent-context-mcp':
+      '@narada-core/agent-context-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/agent-context-mcp
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/agent-runtime-server':
+      '@narada-core/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada2/carrier-provider-support':
+      '@narada-core/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-management':
+      '@narada-core/invokable-intelligence-management':
         specifier: workspace:*
         version: link:../invokable-intelligence-management
-      '@narada2/nars-client-projection-contract':
+      '@narada-core/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
-      '@narada2/nars-intelligence-kernel-contract':
+      '@narada-core/nars-intelligence-kernel-contract':
         specifier: workspace:*
         version: link:../nars-intelligence-kernel-contract
-      '@narada2/nars-session-authority':
+      '@narada-core/nars-session-authority':
         specifier: workspace:*
         version: link:../nars-session-authority
-      '@narada2/nars-session-core':
+      '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
-      '@narada2/operator-surface-runtime-contract':
+      '@narada-core/operator-surface-runtime-contract':
         specifier: workspace:*
         version: link:../operator-surface-runtime-contract
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../site-paths
       zod:
@@ -481,31 +492,31 @@ importers:
 
   packages/agent-start-renderer:
     dependencies:
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
 
   packages/agent-web-ui:
     dependencies:
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/cloudflare-nars-projection':
+      '@narada-core/cloudflare-nars-projection':
         specifier: workspace:*
         version: link:../cloudflare-nars-projection
-      '@narada2/nars-client-projection-contract':
+      '@narada-core/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
-      '@narada2/nars-runtime-contract':
+      '@narada-core/nars-runtime-contract':
         specifier: workspace:*
         version: link:../nars-runtime-contract
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../site-paths
-      '@narada2/ui':
+      '@narada-core/ui':
         specifier: workspace:*
         version: link:../ui
-      '@narada2/ui-vue':
+      '@narada-core/ui-vue':
         specifier: workspace:*
         version: link:../ui-vue
       lucide-vue-next:
@@ -521,19 +532,19 @@ importers:
         specifier: ^3.5.0
         version: 3.5.39(typescript@5.9.3)
     devDependencies:
-      '@narada2/agent-cli':
+      '@narada-core/agent-cli':
         specifier: workspace:*
         version: link:../../../agent-cli
-      '@narada2/agent-runtime-server':
+      '@narada-core/agent-runtime-server':
         specifier: workspace:*
         version: link:../agent-runtime-server
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
       '@playwright/test':
@@ -584,7 +595,7 @@ importers:
 
   packages/carrier-action-admission:
     devDependencies:
-      '@narada2/site-common-tools':
+      '@narada-core/site-common-tools':
         specifier: workspace:*
         version: link:../site-common-tools
 
@@ -594,13 +605,13 @@ importers:
 
   packages/carrier-protocol-contract:
     devDependencies:
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
 
   packages/carrier-provider-support:
     dependencies:
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
 
@@ -612,52 +623,52 @@ importers:
 
   packages/carrier-terminal-projection:
     dependencies:
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/carrier-command-contract':
+      '@narada-core/carrier-command-contract':
         specifier: workspace:*
         version: link:../carrier-command-contract
-      '@narada2/nars-client-projection-contract':
+      '@narada-core/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
 
   packages/cloudflare-carrier:
     dependencies:
-      '@narada2/carrier-command-contract':
+      '@narada-core/carrier-command-contract':
         specifier: workspace:*
         version: link:../carrier-command-contract
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada2/cloudflare-site-registry':
+      '@narada-core/cloudflare-site-registry':
         specifier: workspace:*
         version: link:../cloudflare-site-registry
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-management':
+      '@narada-core/invokable-intelligence-management':
         specifier: workspace:*
         version: link:../invokable-intelligence-management
-      '@narada2/invokable-intelligence-materialization':
+      '@narada-core/invokable-intelligence-materialization':
         specifier: workspace:*
         version: link:../invokable-intelligence-materialization
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
-      '@narada2/invokable-intelligence-resolver':
+      '@narada-core/invokable-intelligence-resolver':
         specifier: workspace:*
         version: link:../invokable-intelligence-resolver
-      '@narada2/invokable-intelligence-runtime':
+      '@narada-core/invokable-intelligence-runtime':
         specifier: workspace:*
         version: link:../invokable-intelligence-runtime
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-authority-map':
+      '@narada-core/site-authority-map':
         specifier: workspace:*
         version: link:../site-authority-map
-      '@narada2/site-continuity':
+      '@narada-core/site-continuity':
         specifier: workspace:*
         version: link:../site-continuity
     devDependencies:
@@ -670,31 +681,31 @@ importers:
 
   packages/cloudflare-nars-projection:
     dependencies:
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada2/host-fleet':
+      '@narada-core/host-fleet':
         specifier: workspace:*
         version: link:../host-fleet
-      '@narada2/invokable-intelligence-runtime':
+      '@narada-core/invokable-intelligence-runtime':
         specifier: workspace:*
         version: link:../invokable-intelligence-runtime
-      '@narada2/nars-client-projection-contract':
+      '@narada-core/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
-      '@narada2/nars-runtime-contract':
+      '@narada-core/nars-runtime-contract':
         specifier: workspace:*
         version: link:../nars-runtime-contract
-      '@narada2/nars-session-core':
+      '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
-      '@narada2/operator-console-contract':
+      '@narada-core/operator-console-contract':
         specifier: workspace:*
         version: link:../operator-console-contract
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../site-paths
     devDependencies:
@@ -721,7 +732,7 @@ importers:
 
   packages/domains/charters:
     dependencies:
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../../process-launch-posture
       zod:
@@ -761,7 +772,7 @@ importers:
 
   packages/host-fleet:
     dependencies:
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../sqlite
     devDependencies:
@@ -798,16 +809,16 @@ importers:
 
   packages/invokable-intelligence-management:
     dependencies:
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-materialization':
+      '@narada-core/invokable-intelligence-materialization':
         specifier: workspace:*
         version: link:../invokable-intelligence-materialization
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
-      '@narada2/invokable-intelligence-resolver':
+      '@narada-core/invokable-intelligence-resolver':
         specifier: workspace:*
         version: link:../invokable-intelligence-resolver
     devDependencies:
@@ -823,11 +834,11 @@ importers:
 
   packages/invokable-intelligence-materialization:
     dependencies:
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
     devDependencies:
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
       '@types/node':
@@ -842,7 +853,7 @@ importers:
 
   packages/invokable-intelligence-registry:
     dependencies:
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
     devDependencies:
@@ -858,10 +869,10 @@ importers:
 
   packages/invokable-intelligence-resolver:
     dependencies:
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
     devDependencies:
@@ -877,16 +888,16 @@ importers:
 
   packages/invokable-intelligence-runtime:
     dependencies:
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-materialization':
+      '@narada-core/invokable-intelligence-materialization':
         specifier: workspace:*
         version: link:../invokable-intelligence-materialization
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../invokable-intelligence-registry
-      '@narada2/invokable-intelligence-resolver':
+      '@narada-core/invokable-intelligence-resolver':
         specifier: workspace:*
         version: link:../invokable-intelligence-resolver
     devDependencies:
@@ -914,199 +925,199 @@ importers:
       '@clack/prompts':
         specifier: ^0.7.0
         version: 0.7.0
-      '@narada2/agent-context-mcp':
+      '@narada-core/agent-context-mcp':
         specifier: workspace:*
         version: link:../../../../mcp-surfaces/packages/agent-context-mcp
-      '@narada2/agent-context-memory':
+      '@narada-core/agent-context-memory':
         specifier: workspace:*
         version: link:../../agent-context-memory
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../../agent-identity
-      '@narada2/agent-pi-tui':
+      '@narada-core/agent-pi-tui':
         specifier: workspace:*
         version: link:../../agent-pi-tui
-      '@narada2/agent-runtime-server':
+      '@narada-core/agent-runtime-server':
         specifier: workspace:*
         version: link:../../agent-runtime-server
-      '@narada2/agent-start':
+      '@narada-core/agent-start':
         specifier: workspace:*
         version: link:../../agent-start
-      '@narada2/agent-web-ui':
+      '@narada-core/agent-web-ui':
         specifier: workspace:*
         version: link:../../agent-web-ui
-      '@narada2/carrier-action-admission':
+      '@narada-core/carrier-action-admission':
         specifier: workspace:*
         version: link:../../carrier-action-admission
-      '@narada2/carrier-command-contract':
+      '@narada-core/carrier-command-contract':
         specifier: workspace:*
         version: link:../../carrier-command-contract
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../../carrier-protocol
-      '@narada2/carrier-provider-support':
+      '@narada-core/carrier-provider-support':
         specifier: workspace:*
         version: link:../../carrier-provider-support
-      '@narada2/carrier-runtime':
+      '@narada-core/carrier-runtime':
         specifier: workspace:*
         version: link:../../carrier-runtime
-      '@narada2/carrier-terminal-projection':
+      '@narada-core/carrier-terminal-projection':
         specifier: workspace:*
         version: link:../../carrier-terminal-projection
-      '@narada2/charters':
+      '@narada-core/charters':
         specifier: workspace:*
         version: link:../../domains/charters
-      '@narada2/cloudflare-nars-projection':
+      '@narada-core/cloudflare-nars-projection':
         specifier: workspace:*
         version: link:../../cloudflare-nars-projection
-      '@narada2/cloudflare-site':
+      '@narada-core/cloudflare-site':
         specifier: workspace:*
         version: link:../../sites/cloudflare
-      '@narada2/concepts':
+      '@narada-core/concepts':
         specifier: workspace:*
         version: link:../../domains/concepts
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../control-plane
-      '@narada2/host-fleet':
+      '@narada-core/host-fleet':
         specifier: workspace:*
         version: link:../../host-fleet
-      '@narada2/intent-zones':
+      '@narada-core/intent-zones':
         specifier: workspace:*
         version: link:../../intent-zones
-      '@narada2/invokable-intelligence-contract':
+      '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../../invokable-intelligence-contract
-      '@narada2/invokable-intelligence-management':
+      '@narada-core/invokable-intelligence-management':
         specifier: workspace:*
         version: link:../../invokable-intelligence-management
-      '@narada2/invokable-intelligence-materialization':
+      '@narada-core/invokable-intelligence-materialization':
         specifier: workspace:*
         version: link:../../invokable-intelligence-materialization
-      '@narada2/invokable-intelligence-resolver':
+      '@narada-core/invokable-intelligence-resolver':
         specifier: workspace:*
         version: link:../../invokable-intelligence-resolver
-      '@narada2/invokable-intelligence-runtime':
+      '@narada-core/invokable-intelligence-runtime':
         specifier: workspace:*
         version: link:../../invokable-intelligence-runtime
-      '@narada2/launch-process-ownership':
+      '@narada-core/launch-process-ownership':
         specifier: workspace:*
         version: link:../../launch-process-ownership
-      '@narada2/linux-site':
+      '@narada-core/linux-site':
         specifier: workspace:*
         version: link:../../sites/linux
-      '@narada2/local-history':
+      '@narada-core/local-history':
         specifier: workspace:*
         version: link:../../local-history
-      '@narada2/macos-site':
+      '@narada-core/macos-site':
         specifier: workspace:*
         version: link:../../sites/macos
-      '@narada2/mcp-fabric':
+      '@narada-core/mcp-fabric':
         specifier: workspace:*
         version: link:../../mcp-fabric
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../../../../mcp-surfaces/packages/shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../../../../mcp-surfaces/packages/shared/mcp-transport
-      '@narada2/nars-capability-gateway':
+      '@narada-core/nars-capability-gateway':
         specifier: workspace:*
         version: link:../../nars-capability-gateway
-      '@narada2/nars-client-projection-contract':
+      '@narada-core/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../../nars-client-projection-contract
-      '@narada2/nars-intelligence-kernel-contract':
+      '@narada-core/nars-intelligence-kernel-contract':
         specifier: workspace:*
         version: link:../../nars-intelligence-kernel-contract
-      '@narada2/nars-pi-kernel':
+      '@narada-core/nars-pi-kernel':
         specifier: workspace:*
         version: link:../../nars-intelligence-runtime-pi
-      '@narada2/nars-provider-runtime':
+      '@narada-core/nars-provider-runtime':
         specifier: workspace:*
         version: link:../../nars-provider-runtime
-      '@narada2/nars-runtime-contract':
+      '@narada-core/nars-runtime-contract':
         specifier: workspace:*
         version: link:../../nars-runtime-contract
-      '@narada2/nars-session-authority':
+      '@narada-core/nars-session-authority':
         specifier: workspace:*
         version: link:../../nars-session-authority
-      '@narada2/nars-session-core':
+      '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../../nars-session-core
-      '@narada2/operator-console-contract':
+      '@narada-core/operator-console-contract':
         specifier: workspace:*
         version: link:../../operator-console-contract
-      '@narada2/operator-console-mirror-runtime':
+      '@narada-core/operator-console-mirror-runtime':
         specifier: workspace:*
         version: link:../../operator-console-mirror-runtime
-      '@narada2/operator-console-overlay':
+      '@narada-core/operator-console-overlay':
         specifier: workspace:*
         version: link:../../operator-console-overlay
-      '@narada2/operator-console-remote-gateway':
+      '@narada-core/operator-console-remote-gateway':
         specifier: workspace:*
         version: link:../../operator-console-remote-gateway
-      '@narada2/operator-console-runtime':
+      '@narada-core/operator-console-runtime':
         specifier: workspace:*
         version: link:../../operator-console-runtime
-      '@narada2/operator-console-ui':
+      '@narada-core/operator-console-ui':
         specifier: workspace:*
         version: link:../../operator-console-ui
-      '@narada2/operator-router':
+      '@narada-core/operator-router':
         specifier: workspace:*
         version: link:../../operator-router
-      '@narada2/operator-surface-runtime-contract':
+      '@narada-core/operator-surface-runtime-contract':
         specifier: workspace:*
         version: link:../../operator-surface-runtime-contract
-      '@narada2/ops-kit':
+      '@narada-core/ops-kit':
         specifier: workspace:*
         version: link:../../ops-kit
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../../process-launch-posture
-      '@narada2/search':
+      '@narada-core/search':
         specifier: workspace:*
         version: link:../../verticals/search
-      '@narada2/site-common-tools':
+      '@narada-core/site-common-tools':
         specifier: workspace:*
         version: link:../../site-common-tools
-      '@narada2/site-config':
+      '@narada-core/site-config':
         specifier: workspace:*
         version: link:../../site-config
-      '@narada2/site-continuity':
+      '@narada-core/site-continuity':
         specifier: workspace:*
         version: link:../../site-continuity
-      '@narada2/site-inbox':
+      '@narada-core/site-inbox':
         specifier: workspace:*
         version: link:../../site-inbox
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../../site-paths
-      '@narada2/site-registry-cloudflare':
+      '@narada-core/site-registry-cloudflare':
         specifier: workspace:*
         version: link:../../site-registry-cloudflare
-      '@narada2/site-registry-contract':
+      '@narada-core/site-registry-contract':
         specifier: workspace:*
         version: link:../../site-registry-contract
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
-      '@narada2/task-governance':
+      '@narada-core/task-governance':
         specifier: workspace:*
         version: link:../../task-governance
-      '@narada2/task-governance-core':
+      '@narada-core/task-governance-core':
         specifier: workspace:*
         version: link:../../../../narada-core/packages/task-governance-core
-      '@narada2/ui':
+      '@narada-core/ui':
         specifier: workspace:*
         version: link:../../ui
-      '@narada2/ui-vue':
+      '@narada-core/ui-vue':
         specifier: workspace:*
         version: link:../../ui-vue
-      '@narada2/window-overlay-core':
+      '@narada-core/window-overlay-core':
         specifier: workspace:*
         version: link:../../window-overlay-core
-      '@narada2/windows-site':
+      '@narada-core/windows-site':
         specifier: workspace:*
         version: link:../../sites/windows
       chalk:
@@ -1137,7 +1148,7 @@ importers:
         specifier: ^3.25.76
         version: 3.25.76
     devDependencies:
-      '@narada2/invokable-intelligence-registry':
+      '@narada-core/invokable-intelligence-registry':
         specifier: workspace:*
         version: link:../../invokable-intelligence-registry
       '@playwright/test':
@@ -1164,10 +1175,10 @@ importers:
 
   packages/layers/control-plane:
     dependencies:
-      '@narada2/charters':
+      '@narada-core/charters':
         specifier: workspace:*
         version: link:../../domains/charters
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../../process-launch-posture
       zod:
@@ -1198,17 +1209,17 @@ importers:
 
   packages/layers/daemon:
     dependencies:
-      '@narada2/charters':
+      '@narada-core/charters':
         specifier: workspace:*
         version: link:../../domains/charters
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../control-plane
-      '@narada2/search':
+      '@narada-core/search':
         specifier: workspace:*
         version: link:../../verticals/search
     devDependencies:
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
       '@types/node':
@@ -1223,7 +1234,7 @@ importers:
 
   packages/local-history:
     dependencies:
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../sqlite
     devDependencies:
@@ -1239,10 +1250,10 @@ importers:
 
   packages/mcp-fabric:
     dependencies:
-      '@narada2/carrier-action-admission':
+      '@narada-core/carrier-action-admission':
         specifier: workspace:*
         version: link:../carrier-action-admission
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
 
@@ -1257,10 +1268,10 @@ importers:
 
   packages/mcp-shell-windows:
     dependencies:
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-transport
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
     devDependencies:
@@ -1309,10 +1320,10 @@ importers:
 
   packages/narada-proper-mcp:
     dependencies:
-      '@narada2/agent-context-memory':
+      '@narada-core/agent-context-memory':
         specifier: workspace:*
         version: link:../agent-context-memory
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
     devDependencies:
@@ -1328,25 +1339,25 @@ importers:
 
   packages/nars-capability-gateway:
     dependencies:
-      '@narada2/launch-process-ownership':
+      '@narada-core/launch-process-ownership':
         specifier: workspace:*
         version: link:../launch-process-ownership
-      '@narada2/mcp-fabric':
+      '@narada-core/mcp-fabric':
         specifier: workspace:*
         version: link:../mcp-fabric
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
 
   packages/nars-client-projection-contract:
     dependencies:
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/nars-runtime-contract':
+      '@narada-core/nars-runtime-contract':
         specifier: workspace:*
         version: link:../nars-runtime-contract
-      '@narada2/nars-session-core':
+      '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
 
@@ -1357,25 +1368,25 @@ importers:
       '@earendil-works/pi-coding-agent':
         specifier: 0.80.10
         version: 0.80.10(@modelcontextprotocol/sdk@1.29.0(zod@3.25.76))(ws@8.21.0)(zod@3.25.76)
-      '@narada2/nars-intelligence-kernel-contract':
+      '@narada-core/nars-intelligence-kernel-contract':
         specifier: workspace:*
         version: link:../nars-intelligence-kernel-contract
 
   packages/nars-provider-runtime:
     dependencies:
-      '@narada2/carrier-provider-support':
+      '@narada-core/carrier-provider-support':
         specifier: workspace:*
         version: link:../carrier-provider-support
-      '@narada2/mcp-fabric':
+      '@narada-core/mcp-fabric':
         specifier: workspace:*
         version: link:../mcp-fabric
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
 
   packages/nars-runtime-contract:
     dependencies:
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
 
@@ -1383,16 +1394,16 @@ importers:
 
   packages/nars-session-core:
     dependencies:
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/carrier-protocol':
+      '@narada-core/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
-      '@narada2/nars-runtime-contract':
+      '@narada-core/nars-runtime-contract':
         specifier: workspace:*
         version: link:../nars-runtime-contract
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../site-paths
 
@@ -1407,10 +1418,10 @@ importers:
 
   packages/operator-console-mirror-runtime:
     dependencies:
-      '@narada2/operator-console-remote-gateway':
+      '@narada-core/operator-console-remote-gateway':
         specifier: workspace:*
         version: link:../operator-console-remote-gateway
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
     devDependencies:
@@ -1426,16 +1437,16 @@ importers:
 
   packages/operator-console-overlay:
     dependencies:
-      '@narada2/operator-console-contract':
+      '@narada-core/operator-console-contract':
         specifier: workspace:*
         version: link:../operator-console-contract
-      '@narada2/operator-console-runtime':
+      '@narada-core/operator-console-runtime':
         specifier: workspace:*
         version: link:../operator-console-runtime
-      '@narada2/operator-router':
+      '@narada-core/operator-router':
         specifier: workspace:*
         version: link:../operator-router
-      '@narada2/window-overlay-core':
+      '@narada-core/window-overlay-core':
         specifier: workspace:*
         version: link:../window-overlay-core
     devDependencies:
@@ -1448,10 +1459,10 @@ importers:
 
   packages/operator-console-remote-gateway:
     dependencies:
-      '@narada2/operator-console-contract':
+      '@narada-core/operator-console-contract':
         specifier: workspace:*
         version: link:../operator-console-contract
-      '@narada2/operator-router':
+      '@narada-core/operator-router':
         specifier: workspace:*
         version: link:../operator-router
     devDependencies:
@@ -1467,10 +1478,10 @@ importers:
 
   packages/operator-console-runtime:
     dependencies:
-      '@narada2/operator-router':
+      '@narada-core/operator-router':
         specifier: workspace:*
         version: link:../operator-router
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
     devDependencies:
@@ -1486,13 +1497,16 @@ importers:
 
   packages/operator-console-ui:
     dependencies:
-      '@narada2/operator-console-contract':
+      '@narada-core/host-fleet':
+        specifier: workspace:*
+        version: link:../host-fleet
+      '@narada-core/operator-console-contract':
         specifier: workspace:*
         version: link:../operator-console-contract
-      '@narada2/site-registry-contract':
+      '@narada-core/site-registry-contract':
         specifier: workspace:*
         version: link:../site-registry-contract
-      '@narada2/ui-vue':
+      '@narada-core/ui-vue':
         specifier: workspace:*
         version: link:../ui-vue
       lucide-vue-next:
@@ -1523,10 +1537,10 @@ importers:
 
   packages/operator-router:
     dependencies:
-      '@narada2/nars-session-core':
+      '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
     devDependencies:
@@ -1542,22 +1556,22 @@ importers:
 
   packages/operator-surface-carriers:
     dependencies:
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
 
   packages/operator-surface-runtime-contract:
     dependencies:
-      '@narada2/nars-intelligence-kernel-contract':
+      '@narada-core/nars-intelligence-kernel-contract':
         specifier: workspace:*
         version: link:../nars-intelligence-kernel-contract
 
   packages/ops-kit:
     dependencies:
-      '@narada2/charters':
+      '@narada-core/charters':
         specifier: workspace:*
         version: link:../domains/charters
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../layers/control-plane
       commander:
@@ -1590,31 +1604,31 @@ importers:
 
   packages/site-common-tools:
     dependencies:
-      '@narada2/agent-context-mcp':
+      '@narada-core/agent-context-mcp':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/agent-context-mcp
-      '@narada2/mcp-fabric-contracts':
+      '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-fabric-contracts
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-transport
-      '@narada2/nars-session-core':
+      '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-paths':
+      '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../site-paths
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../sqlite
-      '@narada2/task-governance':
+      '@narada-core/task-governance':
         specifier: workspace:*
         version: link:../task-governance
-      '@narada2/task-governance-core':
+      '@narada-core/task-governance-core':
         specifier: workspace:*
         version: link:../../../narada-core/packages/task-governance-core
       ajv:
@@ -1664,7 +1678,7 @@ importers:
 
   packages/site-operating-loop:
     dependencies:
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
     devDependencies:
@@ -1691,13 +1705,13 @@ importers:
 
   packages/site-registry-cloudflare:
     dependencies:
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-config':
+      '@narada-core/site-config':
         specifier: workspace:*
         version: link:../site-config
-      '@narada2/site-inbox':
+      '@narada-core/site-inbox':
         specifier: workspace:*
         version: link:../site-inbox
     devDependencies:
@@ -1737,17 +1751,17 @@ importers:
 
   packages/sites/cloudflare:
     dependencies:
-      '@narada2/charters':
+      '@narada-core/charters':
         specifier: workspace:*
         version: link:../../domains/charters
-      '@narada2/windows-site':
+      '@narada-core/windows-site':
         specifier: workspace:*
         version: link:../windows
     devDependencies:
       '@cloudflare/workers-types':
         specifier: ^4.20260421.1
         version: 4.20260421.1
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
       '@types/node':
@@ -1762,10 +1776,10 @@ importers:
 
   packages/sites/linux:
     dependencies:
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../../layers/control-plane
-      '@narada2/windows-site':
+      '@narada-core/windows-site':
         specifier: workspace:*
         version: link:../windows
     devDependencies:
@@ -1781,13 +1795,13 @@ importers:
 
   packages/sites/macos:
     dependencies:
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../../layers/control-plane
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../../process-launch-posture
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
     devDependencies:
@@ -1800,16 +1814,16 @@ importers:
 
   packages/sites/windows:
     dependencies:
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../../layers/control-plane
-      '@narada2/site-continuity':
+      '@narada-core/site-continuity':
         specifier: workspace:*
         version: link:../../site-continuity
-      '@narada2/site-registry-contract':
+      '@narada-core/site-registry-contract':
         specifier: workspace:*
         version: link:../../site-registry-contract
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
     devDependencies:
@@ -1831,22 +1845,22 @@ importers:
 
   packages/task-governance:
     dependencies:
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../layers/control-plane
-      '@narada2/intent-zones':
+      '@narada-core/intent-zones':
         specifier: workspace:*
         version: link:../intent-zones
-      '@narada2/mcp-transport':
+      '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../../../mcp-surfaces/packages/shared/mcp-transport
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../sqlite
-      '@narada2/task-governance-core':
+      '@narada-core/task-governance-core':
         specifier: link:../../../narada-core/packages/task-governance-core
         version: link:../../../narada-core/packages/task-governance-core
     devDependencies:
@@ -1864,19 +1878,19 @@ importers:
 
   packages/task-lifecycle-tools:
     dependencies:
-      '@narada2/agent-identity':
+      '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-common-tools':
+      '@narada-core/site-common-tools':
         specifier: workspace:*
         version: link:../site-common-tools
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../sqlite
-      '@narada2/task-governance':
+      '@narada-core/task-governance':
         specifier: workspace:*
         version: link:../task-governance
     devDependencies:
@@ -1889,10 +1903,10 @@ importers:
 
   packages/typed-mcp-surface:
     dependencies:
-      '@narada2/process-launch-posture':
+      '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
-      '@narada2/site-common-tools':
+      '@narada-core/site-common-tools':
         specifier: workspace:*
         version: link:../site-common-tools
 
@@ -1916,7 +1930,7 @@ importers:
 
   packages/ui-vue:
     dependencies:
-      '@narada2/ui':
+      '@narada-core/ui':
         specifier: workspace:*
         version: link:../ui
       class-variance-authority:
@@ -1962,10 +1976,10 @@ importers:
 
   packages/verticals/search:
     dependencies:
-      '@narada2/control-plane':
+      '@narada-core/control-plane':
         specifier: workspace:*
         version: link:../../layers/control-plane
-      '@narada2/sqlite':
+      '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../sqlite
     devDependencies:

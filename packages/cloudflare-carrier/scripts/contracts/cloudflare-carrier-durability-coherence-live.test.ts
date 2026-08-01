@@ -176,14 +176,14 @@ test('durability coherence text surfaces direct workflow and durability reads', 
 
   assert.match(text, /Durability Coherence: ok/);
   assert.match(text, /Site Route: focus_next_site/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
   assert.match(text, /- site_alpha: persistence=durable recovery=reconstructable op=operation_alpha op_recovery=reconstructable gaps=0/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /  Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
-  assert.match(text, /Recovery Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Persistence Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /  Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/worker\.example --site site_alpha --operator-session-file <operator-session-file> --execute-site-next/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file> --execute-operation-next/);
+  assert.match(text, /Recovery Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:recovery:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Persistence Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:persistence:text -- --url https:\/\/worker\.example --site site_alpha --operation-id operation_alpha --operator-session-file <operator-session-file>/);
 });
 
 test('durability coherence suppresses focused site and operation links without concrete ids', () => {

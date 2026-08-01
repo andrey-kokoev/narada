@@ -16,7 +16,7 @@
   "relations": [
     { "kind": "paired_with", "concept_id": "watch_definition" }
   ],
-  "owner_surface": "@narada2/site-operating-loop package",
+  "owner_surface": "@narada-core/site-operating-loop package",
   "authority": {
     "kind": "package",
     "ref": "packages/site-operating-loop",

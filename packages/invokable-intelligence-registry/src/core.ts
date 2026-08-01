@@ -20,7 +20,7 @@ import {
   validateResource,
   validateRetainedPayloadRef,
   validateRouteCapabilityAssertion,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   CapabilityAssertion,
   CanonicalCatalogRecord,
@@ -48,7 +48,7 @@ import type {
   Resource,
   ResourceId,
   RouteCapabilityAssertion,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 import { MIGRATION_STATEMENTS, REGISTRY_SCHEMA_VERSION } from "./schema.js";
 import { RegistryError } from "./store.js";

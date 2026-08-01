@@ -23,9 +23,9 @@ import type { SandboxPayload } from "./runner.js";
 import type {
   CharterInvocationEnvelope,
   CharterOutputEnvelope,
-} from "@narada2/charters";
-import { MockCharterRunner } from "@narada2/charters";
-import type { CharterRunner } from "@narada2/charters";
+} from "@narada-core/charters";
+import { MockCharterRunner } from "@narada-core/charters";
+import type { CharterRunner } from "@narada-core/charters";
 
 export interface CharterSandboxResult {
   status: "success" | "error";

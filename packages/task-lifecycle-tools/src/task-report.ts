@@ -1,7 +1,7 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { reportTaskService } from '@narada2/task-governance/task-report-service';
+import { reportTaskService } from '@narada-core/task-governance/task-report-service';
 import { readFileSync } from 'node:fs';
 
 function parseArgs(argv: any) : any {

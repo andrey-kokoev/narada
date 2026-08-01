@@ -76,13 +76,13 @@ test('formatSiteActionWorkflowLiveText renders direct reads', () => {
   assert.match(text, /Site: site_alpha/);
   assert.match(text, /Pre Action: focus_next_operation/);
   assert.match(text, /Post Action: monitor_site/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.match(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.match(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
-  assert.match(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.match(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.match(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.match(text, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --expected-pre-action refresh_site_continuity_loop --operator-session-file <operator-session-file> --execute-operation-continuity/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
   assert.match(text, /Follow-up: executed/);
 });
 
@@ -103,14 +103,14 @@ test('formatSiteActionWorkflowLiveText renders delegated continuity binding hand
       target_site_id: 'site_beta',
       packet_id: 'site-continuity-packet-v1-site_beta',
       output_path: 'D:/code/narada/.narada/site-continuity/packets/site_beta-packet.json',
-      materialize_hint: 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet D:/code/narada/.narada/site-continuity/packets/site_beta-packet.json',
+      materialize_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings -- --packet D:/code/narada/.narada/site-continuity/packets/site_beta-packet.json',
     },
   });
 
   assert.match(text, /Binding Target Site: site_beta/);
   assert.match(text, /Binding Packet: site-continuity-packet-v1-site_beta/);
   assert.match(text, /Prepared Packet: D:\/code\/narada\/.narada\/site-continuity\/packets\/site_beta-packet\.json/);
-  assert.match(text, /Materialize Registry: pnpm --filter @narada2\/cloudflare-carrier continuity:bindings -- --packet D:\/code\/narada\/.narada\/site-continuity\/packets\/site_beta-packet\.json/);
+  assert.match(text, /Materialize Registry: pnpm --filter @narada-core\/cloudflare-carrier continuity:bindings -- --packet D:\/code\/narada\/.narada\/site-continuity\/packets\/site_beta-packet\.json/);
 });
 
 test('formatSiteActionWorkflowLiveText renders delegated continuity publish summary', () => {
@@ -164,14 +164,14 @@ test('formatSiteActionWorkflowLiveText suppresses scoped handoffs without site i
     },
   });
 
-  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
-  assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
-  assert.doesNotMatch(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
-  assert.doesNotMatch(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
-  assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
+  assert.doesNotMatch(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.doesNotMatch(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text/);
+  assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
 test('formatSiteActionWorkflowLiveText suppresses scoped handoffs without worker url', () => {
@@ -197,14 +197,14 @@ test('formatSiteActionWorkflowLiveText suppresses scoped handoffs without worker
     },
   });
 
-  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text/);
-  assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada2\/cloudflare-carrier product:operation:read:text/);
-  assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:next:workflow:live:text/);
-  assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada2\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
-  assert.doesNotMatch(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text/);
-  assert.doesNotMatch(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text/);
-  assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text/);
+  assert.doesNotMatch(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.doesNotMatch(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Operation Review: pnpm --filter @narada-core\/cloudflare-carrier product:operation:read:text/);
+  assert.doesNotMatch(text, /Operation Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:next:workflow:live:text/);
+  assert.doesNotMatch(text, /Continuity Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:operation:continuity:workflow:live:text/);
+  assert.doesNotMatch(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text/);
+  assert.doesNotMatch(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text/);
+  assert.doesNotMatch(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text/);
 });
 
 test('formatSiteActionWorkflowLiveText renders review ack from active operation route', () => {
@@ -230,9 +230,9 @@ test('formatSiteActionWorkflowLiveText renders review ack from active operation 
     },
   });
 
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
-  assert.match(text, /Review Ack: pnpm --filter @narada2\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref focus-ref --operator-session-file <operator-session-file>/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example --site site_alpha --operator-session-file <operator-session-file>/);
+  assert.match(text, /Review Ack: pnpm --filter @narada-core\/cloudflare-carrier product:operation:focus-review:text -- --url https:\/\/carrier\.example --site site_alpha --operation-id operation_alpha --focus-kind site_continuity_reconciliation_execution --focus-ref focus-ref --operator-session-file <operator-session-file>/);
 });
 
 test('runSiteActionWorkflowLive returns monitor result without delegation', async () => {

@@ -26,7 +26,7 @@ The tool may not:
 - import narada-andrey DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets/identity/source-history state;
 - mutate a cross-Site target;
 - expose arbitrary SQL;
-- add a SQLite dependency to `@narada2/site-task-lifecycle`;
+- add a SQLite dependency to `@narada-core/site-task-lifecycle`;
 - claim package-owned SQLite mutation.
 
 ## Terminal Criterion

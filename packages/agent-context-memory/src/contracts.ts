@@ -16,7 +16,7 @@ import type {
   MechanicalVerificationBasis,
 } from './types.js';
 
-const PACKAGE_NAME = '@narada2/agent-context-memory' as const;
+const PACKAGE_NAME = '@narada-core/agent-context-memory' as const;
 
 export interface NamedAgentRegistryOptions {
   siteId: string;

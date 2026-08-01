@@ -1,4 +1,4 @@
-# AGENTS.md — @narada2/cloudflare-site
+# AGENTS.md — @narada-core/cloudflare-site
 
 ## Fixture Discipline
 

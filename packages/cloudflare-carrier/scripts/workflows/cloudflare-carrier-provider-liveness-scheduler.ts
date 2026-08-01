@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
@@ -387,12 +387,12 @@ export function formatProviderLivenessSchedulerText(result: any) {
   const operatorSessionFile = normalizeOptionalString(result?.operator_session_file);
   if (workerUrl && siteId && operatorSessionFile) {
     const commandSuffix = `-- --url ${workerUrl} --site ${siteId} --operator-session-file ${operatorSessionFile}`;
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${commandSuffix}`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${commandSuffix} --execute-site-next`);
-    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${commandSuffix}`);
-    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${commandSuffix}`);
-    lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:local-ingress:provider-liveness:text ${commandSuffix}`);
-    lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada2/cloudflare-carrier product:repository-publication:provider-liveness:text ${commandSuffix}`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text ${commandSuffix}`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text ${commandSuffix} --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text ${commandSuffix}`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text ${commandSuffix}`);
+    lines.push(`Local Ingress Provider Liveness: pnpm --filter @narada-core/cloudflare-carrier product:local-ingress:provider-liveness:text ${commandSuffix}`);
+    lines.push(`Repository Publication Provider Liveness: pnpm --filter @narada-core/cloudflare-carrier product:repository-publication:provider-liveness:text ${commandSuffix}`);
   }
   return `${lines.join('\n')}\n`;
 }

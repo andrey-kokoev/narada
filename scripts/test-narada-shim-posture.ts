@@ -88,7 +88,7 @@ try {
     assert(result.status !== 0, 'stale implementation command should block');
     assert(result.stderr.includes('embodiment readiness: stale_dist_blocked'), 'blocked stale state missing');
     assert(result.stderr.includes('command_class: implementation'), 'implementation class missing');
-    assert(result.stderr.includes('repair_command: pnpm --filter @narada2/control-plane build && pnpm --filter @narada2/task-governance build && pnpm --filter @narada2/cli build'), 'repair command missing');
+    assert(result.stderr.includes('repair_command: pnpm --filter @narada-core/control-plane build && pnpm --filter @narada-core/task-governance build && pnpm --filter @narada-core/cli build'), 'repair command missing');
   }
 
   {
@@ -134,7 +134,7 @@ try {
     assert(output.stale.accepted === '1', 'stale evidence acceptance env missing');
     assert(output.stale.reason === 'operator accepted stale governance for recovery', 'stale acceptance reason env missing');
     assert(output.stale.command === 'narada task close 1200', 'stale command identity env missing');
-    assert(output.stale.sources.includes('@narada2/cli:'), 'stale source path evidence missing');
+    assert(output.stale.sources.includes('@narada-core/cli:'), 'stale source path evidence missing');
   }
 
   {

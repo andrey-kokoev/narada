@@ -2,11 +2,11 @@
 
 ## Authority ownership
 
-`@narada2/nars-intelligence-kernel-contract` is representation-neutral. It
+`@narada-core/nars-intelligence-kernel-contract` is representation-neutral. It
 contains the kernel kind enum, start evidence, health projection, and admitted
 turn/input shapes. It does not contain Pi SDK types.
 
-`@narada2/nars-pi-kernel` implements that contract. Its Pi SDK and RPC hosts
+`@narada-core/nars-pi-kernel` implements that contract. Its Pi SDK and RPC hosts
 are replaceable cognition mechanisms inside one NARS-admitted turn. The hosts
 are not allowed to mint session IDs, admit input, append canonical messages,
 confirm effects, or decide recovery.

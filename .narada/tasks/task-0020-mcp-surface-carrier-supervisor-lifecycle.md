@@ -5,7 +5,7 @@ Title: MCP Surface Carrier Supervisor Lifecycle
 Status:
 - Completed first read-only/status-registry implementation slice.
 - Audit: `.narada/audit/task-0020-mcp-surface-carrier-supervisor-lifecycle-audit.json`.
-- Package: `@narada2/mcp-surface-carrier-supervisor` at `packages/mcp-surface-carrier-supervisor`.
+- Package: `@narada-core/mcp-surface-carrier-supervisor` at `packages/mcp-surface-carrier-supervisor`.
 
 Source:
 - User Site tracking: task #559.

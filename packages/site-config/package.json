@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/site-config",
+  "name": "@narada-core/site-config",
   "version": "0.1.0",
   "description": "Descriptor contracts for Site registry awareness and read-only registered Site probe reports",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/site-config"
   }
 }

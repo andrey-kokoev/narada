@@ -1,4 +1,4 @@
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import { NaradaSiteCoordinator } from "../../src/coordinator.js";
 import { createMockState } from "./mock-sqlite.js";
 

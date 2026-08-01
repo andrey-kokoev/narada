@@ -4,7 +4,7 @@ import { loadOperatorSurfaceLaunchMatrixContract, loadRuntimeSubstrateKindsContr
 import {
   INTELLIGENCE_KERNEL_KINDS,
   normalizeIntelligenceKernelKind,
-} from '@narada2/nars-intelligence-kernel-contract';
+} from '@narada-core/nars-intelligence-kernel-contract';
 
 export const AGENT_CLI_OPERATOR_SURFACE_KIND = 'agent-cli';
 export const NARADA_AGENT_RUNTIME_SERVER_KIND = 'narada-agent-runtime-server';

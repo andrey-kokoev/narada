@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
-import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
+import { projectOperatorWorkspaceRouteDirectory } from '@narada-core/operator-console-contract';
 import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from '../../dist/commands/console-ui-assets.js';
 
 /**

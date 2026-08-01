@@ -1,5 +1,5 @@
 import { computed, ref, watch, type Ref } from 'vue';
-import { NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD } from '@narada2/nars-client-projection-contract';
+import { NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_METHOD } from '@narada-core/nars-client-projection-contract';
 import { unwrapRuntimeEvent } from '../../runtime-events.ts';
 import { buildIntelligenceReconfigureCancelFrame, buildIntelligenceReconfigureFrame } from '../lib/narsFrames';
 import type { IntelligenceSelectionDraft } from '../lib/intelligenceSelection';

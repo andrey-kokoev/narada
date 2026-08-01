@@ -29,7 +29,7 @@
   "why_partial_execution_refused": "The requested scope requires all four live admissions. Running initializer or DB mutation without admitted live MCP registration would create live state while terminal setup remains unclaimable.",
   "exact_admissions_needed": [
     "receiving Site write root plus exact initializer carrier/tool",
-    "concrete adapter implementation outside @narada2/site-task-lifecycle plus dependency/driver owner",
+    "concrete adapter implementation outside @narada-core/site-task-lifecycle plus dependency/driver owner",
     "DB mutation carrier through the admitted adapter with readback/idempotency/rollback evidence",
     "Narada proper live MCP registration tool/transport exposing site_task_lifecycle tools and constrained by adapter authority"
   ],

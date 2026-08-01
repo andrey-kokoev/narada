@@ -16,7 +16,7 @@ import {
   loadConfig,
   isMultiMailboxConfig,
   loadMultiMailboxConfig,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 export interface OpsOptions {
   config?: string;
@@ -109,7 +109,7 @@ async function loadOpsReport(
   storageScopes: Array<{ scopeId: string; rootDir: string }> = [{ scopeId, rootDir }],
 ): Promise<OpsReport> {
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore } = await import(
-    '@narada2/control-plane'
+    '@narada-core/control-plane'
   );
   const capturedAt = new Date().toISOString();
 
@@ -532,13 +532,13 @@ export async function opsCommand(
       return opsLinuxSite(options.site, options.mode, fmt);
     }
 
-    const { isMacosSite } = await import('@narada2/macos-site');
+    const { isMacosSite } = await import('@narada-core/macos-site');
     if (isMacosSite(options.site)) {
       return opsMacosSite(options.site, fmt);
     }
 
     try {
-      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada-core/linux-site');
       const linuxMode = resolveLinuxSiteMode(options.site);
       if (linuxMode) {
         return opsLinuxSite(options.site, linuxMode, fmt);
@@ -798,7 +798,7 @@ export async function opsCommand(
 
 async function loadWindowsSiteOpsEntries(): Promise<WindowsSiteOpsEntry[]> {
   try {
-    const { discoverWindowsSites, getWindowsSiteStatus } = await import('@narada2/windows-site');
+    const { discoverWindowsSites, getWindowsSiteStatus } = await import('@narada-core/windows-site');
     const discovered = discoverWindowsSites();
     const entries: WindowsSiteOpsEntry[] = [];
     for (const site of discovered) {
@@ -825,7 +825,7 @@ async function loadWindowsSiteOpsEntries(): Promise<WindowsSiteOpsEntry[]> {
 
 async function loadLinuxSiteOpsEntries(): Promise<LinuxSiteOpsEntry[]> {
   try {
-    const { listAllSites, getLinuxSiteStatus } = await import('@narada2/linux-site');
+    const { listAllSites, getLinuxSiteStatus } = await import('@narada-core/linux-site');
     const discovered = listAllSites();
     const entries: LinuxSiteOpsEntry[] = [];
     for (const site of discovered) {
@@ -855,7 +855,7 @@ async function opsLinuxSite(
   mode: string,
   fmt: ReturnType<typeof createFormatter>,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const { getLinuxSiteStatus } = await import('@narada2/linux-site');
+  const { getLinuxSiteStatus } = await import('@narada-core/linux-site');
 
   const status = await getLinuxSiteStatus(siteId, mode as 'system' | 'user');
   const entry: LinuxSiteOpsEntry = {
@@ -888,7 +888,7 @@ async function opsWindowsSite(
   const {
     resolveSiteVariant,
     getWindowsSiteStatus,
-  } = await import('@narada2/windows-site');
+  } = await import('@narada-core/windows-site');
 
   const variant = resolveSiteVariant(siteId);
   if (!variant) {
@@ -925,7 +925,7 @@ async function opsWindowsSite(
 
 async function loadMacosSiteOpsEntries(): Promise<MacosSiteOpsEntry[]> {
   try {
-    const { discoverMacosSites, getMacosSiteStatus } = await import('@narada2/macos-site');
+    const { discoverMacosSites, getMacosSiteStatus } = await import('@narada-core/macos-site');
     const discovered = discoverMacosSites();
     const entries: MacosSiteOpsEntry[] = [];
     for (const site of discovered) {
@@ -953,7 +953,7 @@ async function opsMacosSite(
   siteId: string,
   fmt: ReturnType<typeof createFormatter>,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
-  const { getMacosSiteStatus } = await import('@narada2/macos-site');
+  const { getMacosSiteStatus } = await import('@narada-core/macos-site');
 
   const status = await getMacosSiteStatus(siteId);
   const entry: MacosSiteOpsEntry = {

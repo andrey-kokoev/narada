@@ -1,4 +1,4 @@
-declare module '@narada2/nars-session-core/authority-transition-state' {
+declare module '@narada-core/nars-session-core/authority-transition-state' {
   export function authorityTransitionStatePathFromSessionPath(sessionPath: string | null | undefined): string | null;
 
   export interface AuthorityTransitionPlan {

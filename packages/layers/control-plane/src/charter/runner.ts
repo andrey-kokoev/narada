@@ -8,7 +8,7 @@ import type { CharterInvocationEnvelope, CharterOutputEnvelope } from "../forema
 
 export interface CharterRunner {
   run(envelope: CharterInvocationEnvelope): Promise<CharterOutputEnvelope>;
-  probeHealth(): Promise<import("@narada2/charters").CharterRuntimeHealth>;
+  probeHealth(): Promise<import("@narada-core/charters").CharterRuntimeHealth>;
 }
 
 export interface MockCharterRunnerOptions {
@@ -23,7 +23,7 @@ export interface MockCharterRunnerOptions {
 export class MockCharterRunner implements CharterRunner {
   constructor(private readonly opts: MockCharterRunnerOptions = {}) {}
 
-  async probeHealth(): Promise<import("@narada2/charters").CharterRuntimeHealth> {
+  async probeHealth(): Promise<import("@narada-core/charters").CharterRuntimeHealth> {
     return {
       class: "unconfigured",
       checked_at: new Date().toISOString(),

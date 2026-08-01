@@ -19,7 +19,7 @@ import {
   validateModelOfferingGraph,
   validatePolicy,
   validateResource,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   AuthoritativeDecisionClock,
   CanonicalCatalogAuthority,
@@ -46,8 +46,8 @@ import type {
   ResourceRef,
   ServiceAccount,
   TopologyBoundaryAdmission,
-} from "@narada2/invokable-intelligence-contract";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
+} from "@narada-core/invokable-intelligence-contract";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
 
 import type { LegacyProviderEntry, LegacyProviderRegistry } from "./legacy.js";
 import { legacyModelResourceId, legacyVendorSlug } from "./legacy.js";
@@ -348,7 +348,7 @@ function wrapRecord(
     authority: recordAuthorityForDocument(recordKind, document, source.reference, loci),
     validation: {
       status: "accepted",
-      validator: "@narada2/invokable-intelligence-management/migrate-v2",
+      validator: "@narada-core/invokable-intelligence-management/migrate-v2",
       validated_at: plannedAt,
       evidence: [{ kind: DOCUMENT_EVIDENCE_KIND, ref: source.reference }],
     },

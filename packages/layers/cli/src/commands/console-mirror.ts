@@ -7,7 +7,7 @@ import {
   runOperatorConsoleMirror,
   stopOperatorConsoleMirror,
   type OperatorConsoleMirrorOptions,
-} from '@narada2/operator-console-mirror-runtime';
+} from '@narada-core/operator-console-mirror-runtime';
 
 export interface ConsoleMirrorCommandOptions extends OperatorConsoleMirrorOptions {
   run_nonce?: string;

@@ -5,7 +5,7 @@ import type {
   OperatorSiteAgentLaunchFailureWireRecord,
   OperatorSiteAgentSurfaceOption,
   OperatorSiteAgentWireRecord,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import {
   Bot,
   CircleStop,
@@ -30,7 +30,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@narada2/ui-vue';
+} from '@narada-core/ui-vue';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import { findOperatorRouteTarget } from '../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../console/route-directory';

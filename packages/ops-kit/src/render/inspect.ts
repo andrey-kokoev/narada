@@ -1,4 +1,4 @@
-import type { ScopeConfig } from "@narada2/control-plane";
+import type { ScopeConfig } from "@narada-core/control-plane";
 
 export function renderScopeInspect(scope: ScopeConfig): string {
   return [

@@ -40,7 +40,7 @@ function main(): void {
     const user = output('npm whoami');
     console.log(`npm auth ok: ${user}`);
   } catch {
-    fail('npm auth is missing; run npm login for the narada2 org first');
+    fail('npm auth is missing; run npm login for the narada-core org first');
   }
 
   const changesets = changesetFiles();

@@ -1,13 +1,13 @@
-import { classifyNarsClientEventProjection, normalizeNarsSessionEventView, projectNarsClientEvent } from '@narada2/nars-client-projection-contract';
+import { classifyNarsClientEventProjection, normalizeNarsSessionEventView, projectNarsClientEvent } from '@narada-core/nars-client-projection-contract';
 import {
   buildNarsCapabilityProfile,
   buildNarsRuntimeSurfaceContract,
-} from '@narada2/nars-runtime-contract/runtime-surface-contract';
-import type { NarsCapabilityEvidence, NarsCapabilityState, NarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
+} from '@narada-core/nars-runtime-contract/runtime-surface-contract';
+import type { NarsCapabilityEvidence, NarsCapabilityState, NarsRuntimeSurfaceContract } from '@narada-core/nars-runtime-contract/runtime-surface-contract';
 import {
   NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA,
   validateNarsAuthorityRuntimeHostTransitionRecord,
-} from '@narada2/carrier-protocol';
+} from '@narada-core/carrier-protocol';
 
 function normalizeProjectionEventView(view: unknown): string | null {
   return normalizeNarsSessionEventView(typeof view === 'string' ? view : 'raw');

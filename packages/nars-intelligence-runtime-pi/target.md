@@ -44,7 +44,7 @@ Target architecture:
 
 &#x20;                 ┌──────────────▼─────────────┐
 
-&#x20;                 │ @narada2/nars-pi-kernel    │
+&#x20;                 │ @narada-core/nars-pi-kernel    │
 
 &#x20;                 │                            │
 
@@ -192,7 +192,7 @@ Suggested package identity:
 
 {
 
-&#x20; "name": "@narada2/nars-pi-kernel",
+&#x20; "name": "@narada-core/nars-pi-kernel",
 
 &#x20; "version": "0.1.0",
 
@@ -204,7 +204,7 @@ Suggested package identity:
 
 &#x20;   "package\_role": "nars\_intelligence\_kernel",
 
-&#x20;   "implements": "@narada2/nars-intelligence-kernel-contract",
+&#x20;   "implements": "@narada-core/nars-intelligence-kernel-contract",
 
 &#x20;   "substrate": "@earendil-works/pi-coding-agent"
 
@@ -406,7 +406,7 @@ Pi RPC commands
 
 
 
-All Pi-specific objects must remain behind `@narada2/nars-pi-kernel`.
+All Pi-specific objects must remain behind `@narada-core/nars-pi-kernel`.
 
 
 
@@ -2336,11 +2336,11 @@ Canonical NARS semantics must not.
 
 
 
-\* `@narada2/nars-intelligence-kernel-contract`;
+\* `@narada-core/nars-intelligence-kernel-contract`;
 
 \* native-kernel adapter conforming to the contract;
 
-\* `@narada2/nars-pi-kernel`;
+\* `@narada-core/nars-pi-kernel`;
 
 \* Pi SDK implementation;
 

@@ -7,7 +7,7 @@ const stringArraySchema: JsonSchemaObject = { type: 'array', items: stringSchema
 export function createSiteTaskLifecycleMcpFacadeBinding(siteRoot: string): McpFacadeBinding {
   return {
     schema: 'narada.site_task_lifecycle.mcp_facade_binding.v0',
-    packageName: '@narada2/site-task-lifecycle',
+    packageName: '@narada-core/site-task-lifecycle',
     siteRoot: resolve(siteRoot),
     transport: 'descriptor_only',
     tools: [

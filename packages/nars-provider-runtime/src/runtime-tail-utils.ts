@@ -1,7 +1,7 @@
 type AnyRecord = Record<string, any>;
 
 import { existsSync } from 'node:fs';
-import { codexCommand as resolveCodexCommand } from '@narada2/carrier-provider-support/codex-subscription-command';
+import { codexCommand as resolveCodexCommand } from '@narada-core/carrier-provider-support/codex-subscription-command';
 
 export function summarizeToolResult(value: any, limit: any = 500): any {
   const text = typeof value === 'string' ? value : JSON.stringify(value ?? null);

@@ -1,15 +1,15 @@
 import { dirname, resolve, join } from 'node:path';
 import { access, readFile, stat } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import type { openLocalIntelligenceRegistry } from '@narada2/agent-runtime-server/local-intelligence-runtime';
+import type { openLocalIntelligenceRegistry } from '@narada-core/agent-runtime-server/local-intelligence-runtime';
 import type { CommandContext } from '../lib/command-wrapper.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { createFormatter } from '../lib/formatter.js';
 import { coordinatorDbPathForRoot, siteAuthorityRootForRoot } from '../lib/site-authority-paths.js';
 import { inspectAuthorityClonePosture } from '../lib/narada-proper-authority.js';
-import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada2/control-plane';
-import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada2/charters';
-import { detectNodeSqliteAvailability, selectSqliteRuntime } from '@narada2/task-governance-core/sqlite-runtime';
+import { loadConfig, isMultiMailboxConfig, loadMultiMailboxConfig, loadCharterEnv, loadEnvFile } from '@narada-core/control-plane';
+import { CodexCharterRunner, MockCharterRunner, KimiCliCharterRunner, getRecoveryGuidance } from '@narada-core/charters';
+import { detectNodeSqliteAvailability, selectSqliteRuntime } from '@narada-core/task-governance-core/sqlite-runtime';
 import {
   WINDOWS_USER_SITE_ASSET_MARKER,
   WINDOWS_USER_SITE_INSTALL_SCHEMA,
@@ -74,7 +74,7 @@ async function inspectIntelligenceCatalogReadiness(root: string): Promise<Intell
     // eager module graph. The plain-node CLI is also used for launches, while
     // this package's local intelligence source is loaded through tsx during
     // the actual agent-start path.
-    const { openLocalIntelligenceRegistry: openRegistry } = await import('@narada2/agent-runtime-server/local-intelligence-runtime');
+    const { openLocalIntelligenceRegistry: openRegistry } = await import('@narada-core/agent-runtime-server/local-intelligence-runtime');
     store = await openRegistry({ siteRoot: root, registryDbPath: catalogLocator });
     const [records, resources] = await Promise.all([store.listCatalogRecords(), store.listResources()]);
     const ready = records.length > 0 && resources.length > 0;
@@ -147,7 +147,7 @@ async function doctorInstalledUserSite(
     name: 'cli-package-boundary',
     status: cliEntry && await pathExists(cliEntry) ? 'pass' : 'fail',
     detail: cliEntry && await pathExists(cliEntry) ? `CLI entry: ${cliEntry}` : 'The installed CLI entrypoint is unavailable',
-    remediation: cliEntry && await pathExists(cliEntry) ? undefined : 'Reinstall @narada2/cli from the package registry.',
+    remediation: cliEntry && await pathExists(cliEntry) ? undefined : 'Reinstall @narada-core/cli from the package registry.',
   });
   checks.push({
     name: 'user-site-root',
@@ -569,24 +569,24 @@ async function doctorBootstrap(
   });
 
   const freshness = await inspectCliDistFreshness(root, cliMain);
-  const distRepairCommand = 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim';
+  const distRepairCommand = 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim';
   checks.push({
     name: 'cli-dist-freshness',
     status: freshness.fresh === null ? 'warn' : freshness.fresh ? 'pass' : strictMode ? 'fail' : 'warn',
     detail: freshness.detail,
     remediation: freshness.fresh === true ? undefined : 'Run `' + distRepairCommand + '`.',
     remediation_command: freshness.fresh === true ? undefined : distRepairCommand,
-    remediation_args: freshness.fresh === true ? undefined : ['pnpm', '--filter', '@narada2/cli', 'build'],
+    remediation_args: freshness.fresh === true ? undefined : ['pnpm', '--filter', '@narada-core/cli', 'build'],
   });
   checks.push({
     name: 'package-build-posture',
     status: cliMainExists && freshness.fresh !== false ? 'pass' : strictMode && freshness.fresh === false ? 'fail' : 'warn',
     detail: cliMainExists
-      ? `@narada2/cli dist=${cliMain}; freshness=${freshness.fresh === null ? 'unknown' : freshness.fresh ? 'fresh' : 'stale'}${freshness.fresh === false ? `; repair=${distRepairCommand}` : ''}`
-      : `@narada2/cli dist missing; repair=${distRepairCommand}`,
+      ? `@narada-core/cli dist=${cliMain}; freshness=${freshness.fresh === null ? 'unknown' : freshness.fresh ? 'fresh' : 'stale'}${freshness.fresh === false ? `; repair=${distRepairCommand}` : ''}`
+      : `@narada-core/cli dist missing; repair=${distRepairCommand}`,
     remediation: cliMainExists && freshness.fresh !== false ? undefined : 'Run `' + distRepairCommand + '`.',
     remediation_command: cliMainExists && freshness.fresh !== false ? undefined : distRepairCommand,
-    remediation_args: cliMainExists && freshness.fresh !== false ? undefined : ['pnpm', '--filter', '@narada2/cli', 'build'],
+    remediation_args: cliMainExists && freshness.fresh !== false ? undefined : ['pnpm', '--filter', '@narada-core/cli', 'build'],
   });
   checks.push({
     name: 'governance-commands-allowed',
@@ -596,9 +596,9 @@ async function doctorBootstrap(
         ? 'strict mode blocks governance commands until CLI dist is rebuilt'
         : 'permissive mode allows read-only governance commands with stale dist warning'
       : 'governance commands may proceed',
-    remediation: freshness.fresh === false ? 'Run `pnpm --filter @narada2/cli build && pnpm run narada:install-shim`.' : undefined,
-    remediation_command: freshness.fresh === false ? 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim' : undefined,
-    remediation_args: freshness.fresh === false ? ['pnpm', '--filter', '@narada2/cli', 'build'] : undefined,
+    remediation: freshness.fresh === false ? 'Run `pnpm --filter @narada-core/cli build && pnpm run narada:install-shim`.' : undefined,
+    remediation_command: freshness.fresh === false ? 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim' : undefined,
+    remediation_args: freshness.fresh === false ? ['pnpm', '--filter', '@narada-core/cli', 'build'] : undefined,
   });
 
   const authorityClone = inspectAuthorityClonePosture(root);
@@ -674,8 +674,8 @@ async function doctorBootstrap(
           ? 'block_until_rebuilt'
           : 'warn_and_repair'
         : 'no_repair_needed',
-      repair_command: freshness.fresh === false ? 'pnpm --filter @narada2/cli build && pnpm run narada:install-shim' : null,
-      repair_args: freshness.fresh === false ? ['pnpm', '--filter', '@narada2/cli', 'build'] : [],
+      repair_command: freshness.fresh === false ? 'pnpm --filter @narada-core/cli build && pnpm run narada:install-shim' : null,
+      repair_args: freshness.fresh === false ? ['pnpm', '--filter', '@narada-core/cli', 'build'] : [],
     },
     build_repair_action: repairPlan.length > 0 ? {
       schema: 'narada.launcher_build_repair_action.v0',
@@ -959,7 +959,7 @@ async function checkScope(
 
   // 5. Principal runtime health (Task 406)
   try {
-    const { JsonPrincipalRuntimeRegistry } = await import('@narada2/control-plane');
+    const { JsonPrincipalRuntimeRegistry } = await import('@narada-core/control-plane');
     const principalStateDir = stateDir ?? rootDir;
     const principalRegistry = new JsonPrincipalRuntimeRegistry({ rootDir: principalStateDir });
     await principalRegistry.init();
@@ -974,7 +974,7 @@ async function checkScope(
     } else {
       const defaultPrincipal = principals.find((p) => p.principal_type === 'worker');
       if (defaultPrincipal) {
-        const { canClaimWork } = await import('@narada2/control-plane');
+        const { canClaimWork } = await import('@narada-core/control-plane');
         const canClaim = canClaimWork(defaultPrincipal.state);
         checks.push({
           name: 'principal-runtime',
@@ -1005,7 +1005,7 @@ async function checkScope(
   try {
     const dbStat = await stat(dbPath);
     if (dbStat.isFile()) {
-      const { Database } = await import('@narada2/control-plane');
+      const { Database } = await import('@narada-core/control-plane');
       const db = new Database(dbPath);
       try {
         const failedRow = db
@@ -1083,13 +1083,13 @@ export async function doctorCommand(
       return doctorLinuxSite(options.site, options.mode, staleThresholdMinutes, fmt, logger);
     }
 
-    const { isMacosSite } = await import('@narada2/macos-site');
+    const { isMacosSite } = await import('@narada-core/macos-site');
     if (isMacosSite(options.site)) {
       return doctorMacosSite(options.site, staleThresholdMinutes, fmt, logger);
     }
 
     try {
-      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada-core/linux-site');
       const linuxMode = resolveLinuxSiteMode(options.site);
       if (linuxMode) {
         return doctorLinuxSite(options.site, linuxMode, staleThresholdMinutes, fmt, logger);
@@ -1228,7 +1228,7 @@ async function doctorMacosSite(
   const {
     resolveSiteRoot,
     getMacosSiteStatus,
-  } = await import('@narada2/macos-site');
+  } = await import('@narada-core/macos-site');
 
   const checks: DoctorCheck[] = [];
   const siteRoot = resolveSiteRoot(siteId);
@@ -1432,7 +1432,7 @@ async function doctorLinuxSite(
   const {
     resolveSiteRoot,
     checkSite,
-  } = await import('@narada2/linux-site');
+  } = await import('@narada-core/linux-site');
 
   const checks = await checkSite(siteId, mode, staleThresholdMinutes);
   const siteRoot = resolveSiteRoot(siteId, mode);
@@ -1496,7 +1496,7 @@ async function doctorWindowsSite(
     resolveSiteVariant,
     resolveSiteRoot,
     getWindowsSiteStatus,
-  } = await import('@narada2/windows-site');
+  } = await import('@narada-core/windows-site');
 
   const variant = resolveSiteVariant(siteId);
   if (!variant) {

@@ -1,13 +1,13 @@
 import {
   requestScopedMaterializationBinding,
   verifyRequestScopedMaterialization,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   ContentDigest,
   MaterializationDiagnostic,
   MaterializationEnvelope,
   RequestScopedMaterializationBinding,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 
 export interface RequestScopedSignatureVerifier {
   digest(binding: RequestScopedMaterializationBinding): Promise<ContentDigest>;

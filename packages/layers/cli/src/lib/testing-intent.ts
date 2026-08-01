@@ -1,1 +1,1 @@
-export * from '@narada2/intent-zones/testing-intent';
+export * from '@narada-core/intent-zones/testing-intent';

@@ -51,7 +51,7 @@ const checks: Array<{ id: string; passed: boolean; detail: string }> = [
   },
   {
     id: "cli_bundles_linux_runtime_and_surfaces",
-    passed: ["@narada2/linux-site", "@narada2/agent-runtime-server", "@narada2/agent-web-ui"].every((name) => hasString(cliPackage.bundleDependencies, name)),
+    passed: ["@narada-core/linux-site", "@narada-core/agent-runtime-server", "@narada-core/agent-web-ui"].every((name) => hasString(cliPackage.bundleDependencies, name)),
     detail: "Published CLI bundle admits Linux Site, runtime-server, and Web UI assets.",
   },
   {

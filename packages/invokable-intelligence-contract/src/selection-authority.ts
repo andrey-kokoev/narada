@@ -19,7 +19,7 @@ export type IntelligenceCatalogStoreKind = "node:sqlite" | "cloudflare:d1";
 
 export interface IntelligenceSelectionAuthority {
   schema: typeof INTELLIGENCE_SELECTION_AUTHORITY_SCHEMA;
-  owner: "@narada2/invokable-intelligence-runtime";
+  owner: "@narada-core/invokable-intelligence-runtime";
   resolution_phase: "runtime-invocation";
   authority_scope: {
     kind: "site";
@@ -42,7 +42,7 @@ export function createIntelligenceSelectionAuthority(input: {
   if (!catalogLocator) throw new Error("intelligence_catalog_locator_required");
   return Object.freeze({
     schema: INTELLIGENCE_SELECTION_AUTHORITY_SCHEMA,
-    owner: "@narada2/invokable-intelligence-runtime",
+    owner: "@narada-core/invokable-intelligence-runtime",
     resolution_phase: "runtime-invocation",
     authority_scope: {
       kind: "site",

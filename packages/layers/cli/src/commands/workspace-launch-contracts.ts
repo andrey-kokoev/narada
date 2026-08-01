@@ -2,7 +2,7 @@ import { resolve } from 'node:path';
 import {
   ADMITTED_RUNTIME_SUBSTRATE_KINDS,
   resolveOperatorSurfaceRuntimeSelection,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import type { WorkspaceLaunchRecord } from './workspace-launch-types.js';
 import type { WorkspaceLaunchTerminalFailure } from './workspace-launch-types.js';
 

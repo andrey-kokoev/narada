@@ -4,7 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { Database } from '@narada2/control-plane';
+import { Database } from '@narada-core/control-plane';
 import {
   SqliteTaskLifecycleStore,
   type TaskLifecycleRow,

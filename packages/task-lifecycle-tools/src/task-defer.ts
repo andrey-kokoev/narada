@@ -1,8 +1,8 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { isValidTransition, findTaskFile, readTaskFile, writeTaskProjection } from '@narada2/task-governance/task-governance';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { isValidTransition, findTaskFile, readTaskFile, writeTaskProjection } from '@narada-core/task-governance/task-governance';
 
 const cwd: any = process.argv[2] || process.cwd();
 const taskNumber: any = parseInt(process.argv[3], 10);

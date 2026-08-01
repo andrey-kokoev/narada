@@ -12,9 +12,9 @@
 ### Installation
 
 ```bash
-npm install -g @narada2/cli
+npm install -g @narada-core/cli
 # or
-pnpm add -g @narada2/cli
+pnpm add -g @narada-core/cli
 ```
 
 ### First-Time Setup

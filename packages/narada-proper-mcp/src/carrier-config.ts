@@ -13,7 +13,7 @@ export const LEGACY_CLI_MCP_FACADE_POSTURE = {
   schema: 'narada.legacy_mcp_facade_posture.v0',
   path: 'packages/layers/cli/src/mcp-server.ts',
   status: 'compatibility_quarantined',
-  replacement: '@narada2/narada-proper-mcp',
+  replacement: '@narada-core/narada-proper-mcp',
   migration_guidance: 'Use target-local narada-proper-mcp registry-driven stdio config for covered surfaces; keep legacy CLI MCP facade as compatibility only.',
   monolithic_cli_dist_required_for_covered_surfaces: false,
 } as const;
@@ -26,7 +26,7 @@ export function generateCarrierMcpConfig(input: {
   registry?: NaradaProperMcpSurfaceRecord[];
 }): CarrierMcpConfigResult {
   const registry = input.registry ?? NARADA_PROPER_MCP_SURFACE_REGISTRY;
-  const live = registry.find((record) => record.package_name === '@narada2/narada-proper-mcp' && record.status === 'live');
+  const live = registry.find((record) => record.package_name === '@narada-core/narada-proper-mcp' && record.status === 'live');
   const missingSnippets: string[] = [];
   if (!live) missingSnippets.push('narada_proper_mcp_live_surface_missing');
   if (live?.runtime_binding.generated_client_config_posture !== 'transport_wiring_only') {

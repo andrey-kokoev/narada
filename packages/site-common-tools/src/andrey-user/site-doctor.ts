@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, readFileSync, statSync } from 'fs';
 import { join, resolve } from 'path';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import { validateAgentExecutionPolicy } from '../site-config/agent-execution-policy.js';
 import { taskLifecycleReadinessPaths } from '../task-lifecycle-mcp-resolution.js';
 import { siteControlRoot } from '../site-layout.js';

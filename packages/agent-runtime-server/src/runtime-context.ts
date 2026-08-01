@@ -1,12 +1,12 @@
-import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import {
   NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS,
   NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS,
   NARS_EXECUTION_POLICY_MIN_MAX_ROUNDS,
   normalizeIntelligenceKernelKind,
   normalizeNarsExecutionPolicy,
-} from '@narada2/nars-intelligence-kernel-contract';
+} from '@narada-core/nars-intelligence-kernel-contract';
 
 function optionalString(value: any) {
   return typeof value === 'string' && value.trim() ? value.trim() : null;

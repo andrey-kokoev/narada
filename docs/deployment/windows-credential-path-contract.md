@@ -68,7 +68,7 @@ import {
   resolveSecretRequired,
   envVarName,
   credentialManagerTarget,
-} from "@narada2/windows-site";
+} from "@narada-core/windows-site";
 
 // Resolve with full precedence chain
 const apiKey = await resolveSecret("prod", "api_key", "native");
@@ -108,7 +108,7 @@ credentialManagerTarget("prod", "api_key"); // "Narada/prod/api_key"
 ### 3.2 API
 
 ```typescript
-import { resolveSiteRoot, sitePath } from "@narada2/windows-site";
+import { resolveSiteRoot, sitePath } from "@narada-core/windows-site";
 
 resolveSiteRoot("prod", "native");
 // → "C:\\Users\\<user>\\AppData\\Local\\Narada\\prod"
@@ -148,7 +148,7 @@ import {
   siteDbPath,
   siteLogsPath,
   siteTracesPath,
-} from "@narada2/windows-site";
+} from "@narada-core/windows-site";
 
 siteConfigPath("prod", "native");
 // → "C:\\Users\\<user>\\AppData\\Local\\Narada\\prod\\config.json"

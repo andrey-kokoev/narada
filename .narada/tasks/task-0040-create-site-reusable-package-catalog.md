@@ -17,9 +17,9 @@ Make newly extracted reusable Site machinery descriptor packages selectable by g
 ## Scope
 
 - Add descriptor-only create-site catalog support for:
-  - `@narada2/site-inbox`
-  - `@narada2/site-config`
-  - `@narada2/site-lift`
+  - `@narada-core/site-inbox`
+  - `@narada-core/site-config`
+  - `@narada-core/site-lift`
 - Emit package-slice planned files for descriptor package selections.
 - Emit separate local admission requirements for inbox substrate/publication, site-config probe execution, and Site-lift adoption materialization.
 - Add CLI tests proving descriptor expansion and no live capability grant.

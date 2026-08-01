@@ -97,7 +97,7 @@ export { createSyncService as default } from "./service.js";
 // CLI entrypoint (when invoked as the bin target)
 // ---------------------------------------------------------------------------
 
-import { loadEnvFile } from "@narada2/control-plane";
+import { loadEnvFile } from "@narada-core/control-plane";
 import type { LogFormat } from "./lib/logger.js";
 
 async function main(): Promise<void> {

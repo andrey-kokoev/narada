@@ -1,8 +1,8 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { parseFrontMatter } from '@narada2/task-governance/task-governance';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { parseFrontMatter } from '@narada-core/task-governance/task-governance';
 import { readdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 

@@ -3,9 +3,9 @@ enforceMcpGuard(process.argv);
 
 import { readdir, readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
-import { parseFrontMatter } from '@narada2/task-governance/task-governance';
-import { parseTaskSpecFromMarkdown } from '@narada2/task-governance/task-spec';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
+import { parseFrontMatter } from '@narada-core/task-governance/task-governance';
+import { parseTaskSpecFromMarkdown } from '@narada-core/task-governance/task-spec';
 
 const cwd: any = process.argv[2] || process.cwd();
 const tasksDir: any = join(resolve(cwd), '.ai', 'do-not-open', 'tasks');

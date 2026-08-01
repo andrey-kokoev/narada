@@ -7,7 +7,7 @@ import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { Database, SqliteInboxStore } from '@narada2/control-plane';
+import { Database, SqliteInboxStore } from '@narada-core/control-plane';
 import { taskHandoffCommand } from '../../src/commands/task-handoff.js';
 import { ExitCode } from '../../src/lib/exit-codes.js';
 import { parseFrontMatter } from '../../src/lib/task-governance.js';

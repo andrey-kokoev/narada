@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/nars-provider-runtime",
+  "name": "@narada-core/nars-provider-runtime",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -69,15 +69,15 @@
     "test": "pnpm run build && node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
-    "@narada2/carrier-provider-support": "workspace:*",
-    "@narada2/mcp-fabric": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/carrier-provider-support": "workspace:*",
+    "@narada-core/mcp-fabric": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "description": "NARS provider runtime",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/nars-provider-runtime"
   },
   "engines": {

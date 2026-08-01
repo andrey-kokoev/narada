@@ -17,7 +17,7 @@ import {
   buildAgentWebUiSurfaceFeedbackSummaryFrame as buildSurfaceFeedbackSummaryRequestFrame,
   isAgentWebUiCloudflareMethod,
   isAgentWebUiCloudflareProtocolFrame,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import { readInjectedConfig, resolveAttachConfig, type AuthorityTransition } from './config.ts';
 import { connectEvents, buildSubscribeFrame, reconnectDelayForAttempt } from './event-stream.ts';
 import { refreshHttpHealthStatus } from './health.ts';

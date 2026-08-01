@@ -44,7 +44,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/windows-machinery-capability-exchange now includes descriptor-only package-set conformance reporting for the adopted Windows machinery packages.",
+  "terminal_claim": "@narada-core/windows-machinery-capability-exchange now includes descriptor-only package-set conformance reporting for the adopted Windows machinery packages.",
   "refused_imports": [
     "runtime databases",
     "task/inbox history",

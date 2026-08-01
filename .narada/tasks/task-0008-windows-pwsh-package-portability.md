@@ -11,13 +11,13 @@ Make the first Site task lifecycle slice reusable by future Windows PowerShell N
 
 ## Goal
 
-Document and verify that future Windows PowerShell Narada Sites consume `@narada2/site-task-lifecycle` from `narada/packages/site-task-lifecycle` as reusable descriptor/contract source, then admit their own local adapter/runtime state.
+Document and verify that future Windows PowerShell Narada Sites consume `@narada-core/site-task-lifecycle` from `narada/packages/site-task-lifecycle` as reusable descriptor/contract source, then admit their own local adapter/runtime state.
 
 ## Non-Goals
 
 - Do not copy Narada proper live Site state into future Sites.
 - Do not copy `.ai/task-lifecycle.db`, admission manifests, mutation evidence, task rows/history, live MCP registration state, adapter admission records, or narada-andrey/narada-proper runtime state.
-- Do not add SQLite dependency or mutation to `@narada2/site-task-lifecycle`.
+- Do not add SQLite dependency or mutation to `@narada-core/site-task-lifecycle`.
 - Do not implement richer list/query, richer transitions, cross-Site mutation, OSM policy, package-owned SQLite, or arbitrary SQL.
 
 ## Changed-File Scope

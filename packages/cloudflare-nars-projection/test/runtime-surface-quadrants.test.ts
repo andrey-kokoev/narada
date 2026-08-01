@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 import {
   buildNarsRuntimeSurfaceContract,
   validateNarsRuntimeSurfaceContract,
-} from '@narada2/nars-runtime-contract/runtime-surface-contract';
+} from '@narada-core/nars-runtime-contract/runtime-surface-contract';
 import {
   buildCloudflareNarsAuthorityRuntimeSurfaceContract,
   classifyCloudflareInputRelay,

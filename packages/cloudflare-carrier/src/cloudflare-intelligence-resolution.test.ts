@@ -5,11 +5,11 @@ import test from 'node:test';
 import {
   deployManagementBundle,
   MANAGEMENT_DEPLOYMENT_BUNDLE_SCHEMA,
-} from '@narada2/invokable-intelligence-management';
-import { D1MaterializationStore } from '@narada2/invokable-intelligence-materialization';
-import { D1RegistryStore } from '@narada2/invokable-intelligence-registry/d1';
-import { createFakeD1 } from '@narada2/invokable-intelligence-registry';
-import { canonicalSha256 } from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/invokable-intelligence-management';
+import { D1MaterializationStore } from '@narada-core/invokable-intelligence-materialization';
+import { D1RegistryStore } from '@narada-core/invokable-intelligence-registry/d1';
+import { createFakeD1 } from '@narada-core/invokable-intelligence-registry';
+import { canonicalSha256 } from '@narada-core/invokable-intelligence-contract';
 
 import { createCloudflareAiProviderAdapter } from './cloudflare-worker.ts';
 import {

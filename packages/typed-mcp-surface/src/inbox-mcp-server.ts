@@ -2,11 +2,11 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { appendAdmissionEvent, emitEnvelopeAdmitted, acknowledgeEnvelope, dismissEnvelope, exportDispositionLedger, readAdmissionLog, recordPromotion, resolveEnvelopeStatus } from '@narada2/site-common-tools/inbox/admission-log';
-import { validateRecoveryTruthfulnessPacket } from '@narada2/task-lifecycle-tools/recovery-truthfulness-guard';
-import { INBOX_ENVELOPE_KINDS, assertKnownInboxEnvelopeKind } from '@narada2/site-common-tools/inbox/envelope-kinds';
-import { isValidEnvelopeId } from '@narada2/site-common-tools/inbox/inbox-index';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { appendAdmissionEvent, emitEnvelopeAdmitted, acknowledgeEnvelope, dismissEnvelope, exportDispositionLedger, readAdmissionLog, recordPromotion, resolveEnvelopeStatus } from '@narada-core/site-common-tools/inbox/admission-log';
+import { validateRecoveryTruthfulnessPacket } from '@narada-core/task-lifecycle-tools/recovery-truthfulness-guard';
+import { INBOX_ENVELOPE_KINDS, assertKnownInboxEnvelopeKind } from '@narada-core/site-common-tools/inbox/envelope-kinds';
+import { isValidEnvelopeId } from '@narada-core/site-common-tools/inbox/inbox-index';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import {
   attachPayloadSource,
   buildOutputRefToolContent,
@@ -27,7 +27,7 @@ import {
   payloadRefMetadataFromEntry,
   resultShow,
   resolveToolPayloadArgs,
-} from '@narada2/site-common-tools/compat/mcp-payload-file.legacy-site';
+} from '@narada-core/site-common-tools/compat/mcp-payload-file.legacy-site';
 
 type AnyRecord = Record<string, any>;
 

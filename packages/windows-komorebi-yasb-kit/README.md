@@ -1,4 +1,4 @@
-# @narada2/windows-komorebi-yasb-kit
+# @narada-core/windows-komorebi-yasb-kit
 
 Descriptor templates for Windows Komorebi/YASB configuration materialization.
 

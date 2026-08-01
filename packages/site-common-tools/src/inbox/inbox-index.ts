@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import Database from '@narada2/sqlite';
+import Database from '@narada-core/sqlite';
 import { getLatestEventsByEnvelope } from './admission-log.js';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));

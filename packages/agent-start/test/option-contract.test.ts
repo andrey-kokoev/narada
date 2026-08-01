@@ -5,8 +5,8 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import {
   buildCarrierProcessEnvironment,
   carrierSpawnOptions,
@@ -454,7 +454,7 @@ test('NARS launch declares runtime catalog authority and scrubs ambient selectio
     OPENAI_MODEL: 'decoy-openai-model',
     KIMI_CODE_MODEL: 'decoy-kimi-model',
   });
-  assert.equal(output.intelligence_selection_authority.owner, '@narada2/invokable-intelligence-runtime');
+  assert.equal(output.intelligence_selection_authority.owner, '@narada-core/invokable-intelligence-runtime');
   assert.equal(output.intelligence_selection_authority.launcher_selection, false);
   for (const name of ['NARADA_INTELLIGENCE_PROVIDER', 'NARADA_AI_MODEL', 'NARADA_AI_THINKING', 'CODEX_MODEL', 'OPENAI_MODEL', 'KIMI_CODE_MODEL']) {
     assert.equal(output.required_environment[name], undefined);
@@ -517,7 +517,7 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.equal(output.nars_launch.operator_surface_kind, 'agent-cli');
   assert.equal(output.nars_launch.carrier_relation, 'narada_agent_runtime_server');
   assert.deepEqual(output.nars_launch.runtime_server, {
-    package: '@narada2/agent-runtime-server',
+    package: '@narada-core/agent-runtime-server',
     entrypoint: 'narada-agent-runtime-server',
     runtime_kind: 'narada-agent-runtime-server',
   });

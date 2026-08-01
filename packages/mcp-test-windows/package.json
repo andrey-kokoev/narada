@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/mcp-test-windows",
+  "name": "@narada-core/mcp-test-windows",
   "version": "0.1.0",
   "description": "Descriptor contracts for approved Windows test gateway MCP surfaces",
   "type": "module",
@@ -27,7 +27,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/mcp-test-windows"
   }
 }

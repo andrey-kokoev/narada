@@ -1,8 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { CoordinatorConfig, OperationalRequirement, AuthorityClass } from "@narada2/charters";
-import { collectOperationalRequirements, AUTHORITY_CLASSES, RUNTIME_AUTHORITY_CLASSES } from "@narada2/charters";
-import type { ScopeConfig, RuntimePolicy } from "@narada2/control-plane";
+import type { CoordinatorConfig, OperationalRequirement, AuthorityClass } from "@narada-core/charters";
+import { collectOperationalRequirements, AUTHORITY_CLASSES, RUNTIME_AUTHORITY_CLASSES } from "@narada-core/charters";
+import type { ScopeConfig, RuntimePolicy } from "@narada-core/control-plane";
 import { resolveConfigPath } from "../lib/config-io.js";
 import type { ReadinessCheck, ReadinessReport, ReadinessStatus } from "./types.js";
 

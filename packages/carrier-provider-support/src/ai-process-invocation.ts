@@ -4,7 +4,7 @@ type AnyFunction = (...args: any[]) => any;
 import { createHash, randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { runHiddenPostureCommandSync } from '@narada2/process-launch-posture';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import {
   aiProcessInvocationEventForState,
   transitionAiProcessInvocation,

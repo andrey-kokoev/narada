@@ -1,6 +1,6 @@
 # Site Operational Dashboard
 
-`@narada2/site-operational-dashboard` renders bounded operational dashboard
+`@narada-core/site-operational-dashboard` renders bounded operational dashboard
 snapshots to static HTML.
 
 The dashboard is an observation surface. It displays bounded posture rows and
@@ -19,7 +19,7 @@ expose mutation controls.
 - `createDashboardServer(options)`
 - `buildSiteRegistryProjectionSection(input)`
 - `buildSiteRegistryProjectionRows(input)`
-- `@narada2/site-operational-dashboard/narada-proper`
+- `@narada-core/site-operational-dashboard/narada-proper`
   - `collectNaradaProperDashboardSections(context)`
   - `buildNaradaProperDashboardSnapshot(context)`
   - `flattenDashboardRows(sections)`
@@ -34,7 +34,7 @@ Rendered HTML embeds a bounded JSON payload in
 Static render:
 
 ```ts
-import { renderDashboardHtml } from '@narada2/site-operational-dashboard';
+import { renderDashboardHtml } from '@narada-core/site-operational-dashboard';
 
 const html = renderDashboardHtml(snapshot);
 ```
@@ -42,7 +42,7 @@ const html = renderDashboardHtml(snapshot);
 Narada proper provider composition:
 
 ```ts
-import { buildNaradaProperDashboardSnapshot } from '@narada2/site-operational-dashboard/narada-proper';
+import { buildNaradaProperDashboardSnapshot } from '@narada-core/site-operational-dashboard/narada-proper';
 
 const snapshot = await buildNaradaProperDashboardSnapshot({
   site_ref: 'narada-proper',
@@ -98,7 +98,7 @@ observation rows. They do not fetch the network by default and they do not grant
 Site authority or capabilities. Live-fetch posture is represented only when the
 caller explicitly supplies `liveFetch.enabled`.
 
-`@narada2/site-operational-dashboard/narada-proper` provides local Narada proper
+`@narada-core/site-operational-dashboard/narada-proper` provides local Narada proper
 row providers for caller-supplied Site identity, task lifecycle, roster, inbox,
 inbox-drop, publication, telemetry, package/build, capability, residual, and
 work-next artifacts. Missing artifacts become `unknown` rows with missing

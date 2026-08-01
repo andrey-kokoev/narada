@@ -1,4 +1,4 @@
-# @narada2/invokable-intelligence-resolver
+# @narada-core/invokable-intelligence-resolver
 
 Deterministic hierarchical resolution for invokable intelligence (#2182).
 Turns an `InvocationIntent` plus explicit context into an explainable
@@ -56,7 +56,7 @@ reports `stale-capability` wherever it is detected.
 ## Usage
 
 ```ts
-import { resolveInvocation } from "@narada2/invokable-intelligence-resolver";
+import { resolveInvocation } from "@narada-core/invokable-intelligence-resolver";
 
 const result = await resolveInvocation(intent, {
   targetSite, userSite, hostSite, runtime: "workers", clock, access, topology_observations,

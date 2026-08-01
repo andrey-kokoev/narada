@@ -9,7 +9,7 @@ import {
   type PublicationEdgePublisherConfig,
   type HostedRegistryClientConfig,
 } from "../src/client.js";
-import type { SiteTelemetryPublicationEdge } from "@narada2/site-config";
+import type { SiteTelemetryPublicationEdge } from "@narada-core/site-config";
 
 function config(fetchImpl?: typeof fetch): HostedRegistryClientConfig {
   const capabilityValues: Record<string, string> = {
@@ -36,7 +36,7 @@ function edge(overrides: Partial<SiteTelemetryPublicationEdge> = {}): SiteTeleme
   } as SiteTelemetryPublicationEdge;
 }
 
-describe("@narada2/site-registry-cloudflare client helpers", () => {
+describe("@narada-core/site-registry-cloudflare client helpers", () => {
   it("builds bounded Site events without raw logs, secrets, or task DB dumps", () => {
     const event = buildBoundedSiteEvent({
       event_id: "evt-1",

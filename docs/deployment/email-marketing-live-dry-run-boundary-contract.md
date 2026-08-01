@@ -76,12 +76,12 @@ This email should produce either:
 
 | Artifact | Location | Reason |
 |----------|----------|--------|
-| Kernel enum updates (`campaign_brief` in `AllowedActionSchema`, `OutboundActionType`) | `@narada2/control-plane` | Kernel substrate change; all verticals benefit |
-| `CampaignRequestContextFormation` implementation | `@narada2/control-plane` | Context materializer is kernel code; vertical-neutral pattern |
-| Windows step handler ports (sync, derive, evaluate, handoff) | `@narada2/windows-site` | Site substrate code; reusable across verticals on Windows |
-| `KlaviyoEffectAdapter` interface + error classification | `@narada2/control-plane` | Intent boundary contract; already public |
-| Site config schema (`campaign_request_senders`, `knowledge_sources`) | `@narada2/control-plane` | Config schema is public; specific values are private |
-| Campaign-production charter prompt template shape | `@narada2/control-plane` | Template shape and injection pattern are public |
+| Kernel enum updates (`campaign_brief` in `AllowedActionSchema`, `OutboundActionType`) | `@narada-core/control-plane` | Kernel substrate change; all verticals benefit |
+| `CampaignRequestContextFormation` implementation | `@narada-core/control-plane` | Context materializer is kernel code; vertical-neutral pattern |
+| Windows step handler ports (sync, derive, evaluate, handoff) | `@narada-core/windows-site` | Site substrate code; reusable across verticals on Windows |
+| `KlaviyoEffectAdapter` interface + error classification | `@narada-core/control-plane` | Intent boundary contract; already public |
+| Site config schema (`campaign_request_senders`, `knowledge_sources`) | `@narada-core/control-plane` | Config schema is public; specific values are private |
+| Campaign-production charter prompt template shape | `@narada-core/control-plane` | Template shape and injection pattern are public |
 | Dry run boundary contract (this document) | `docs/deployment/` | Public governance document |
 
 ### 3.2 What Belongs in the Private Ops Repo

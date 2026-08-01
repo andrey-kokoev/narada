@@ -1,8 +1,8 @@
 {
   "schema": "narada.operator_journey_matrix.v1",
   "authority": {
-    "journey_semantics_owner": "@narada2/nars-session-core",
-    "evidence_semantics_owner": "@narada2/evidence-confirmation-contract",
+    "journey_semantics_owner": "@narada-core/nars-session-core",
+    "evidence_semantics_owner": "@narada-core/evidence-confirmation-contract",
     "launch_selection_authority": "packages/operator-surface-runtime-contract/contracts/operator-surface-launch-matrix.json",
     "projection_rule": "Operator surfaces project canonical runtime events, evidence, and read models; they do not mint authority, completion, failure, or recovery outcomes."
   },
@@ -34,13 +34,13 @@
     {
       "id": "local-nars",
       "kind": "local_authoritative_nars",
-      "authority_owner": "@narada2/nars-session-core",
+      "authority_owner": "@narada-core/nars-session-core",
       "proof_posture": "live_and_boundary",
       "claimed_surfaces": ["agent-cli", "agent-tui", "agent-web-ui", "operator-console"],
       "live_commands": [
-        "pnpm --filter @narada2/cli run test:launcher-acceptance",
-        "pnpm --filter @narada2/cli run test:operator-journey-acceptance",
-        "pnpm --filter @narada2/agent-pi-tui run test:live:local"
+        "pnpm --filter @narada-core/cli run test:launcher-acceptance",
+        "pnpm --filter @narada-core/cli run test:operator-journey-acceptance",
+        "pnpm --filter @narada-core/agent-pi-tui run test:live:local"
       ],
       "evidence_refs": [
         "docs/architecture/operator-journey-acceptance.md",
@@ -57,8 +57,8 @@
       "proof_posture": "boundary_with_explicit_live_smoke_path",
       "claimed_surfaces": ["agent-web-ui", "operator-console"],
       "live_commands": [
-        "pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live",
-        "pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live"
+        "pnpm --filter @narada-core/cloudflare-nars-projection smoke:local-origin-live",
+        "pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live"
       ],
       "evidence_refs": [
         "docs/concepts/cloudflare-nars-web-projection.md",
@@ -269,7 +269,7 @@
           "proof_level": "boundary",
           "result": "passed_at_boundary",
           "evidence_refs": ["docs/concepts/cloudflare-nars-web-projection.md", "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts"],
-          "verification_commands": ["pnpm --filter @narada2/cloudflare-nars-projection smoke:local-origin-live", "pnpm --filter @narada2/cloudflare-nars-projection smoke:cloudflare-origin-live"],
+          "verification_commands": ["pnpm --filter @narada-core/cloudflare-nars-projection smoke:local-origin-live", "pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live"],
           "live_gap": "The no-argument smoke invocation returned status planned because --live and explicit site/session/assets inputs are required; no external mutation was attempted in this run."
         }
       ]

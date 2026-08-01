@@ -39,7 +39,7 @@ It does not execute:
 
 Refuse any step that imports narada-andrey runtime DBs, task/inbox history, roster/checkpoint/operator-surface/PC state, secrets, identity-specific data, or source history.
 
-Refuse any step that makes `@narada2/site-task-lifecycle` own a SQLite dependency or directly execute SQLite mutation.
+Refuse any step that makes `@narada-core/site-task-lifecycle` own a SQLite dependency or directly execute SQLite mutation.
 
 Refuse live MCP registration unless a later Narada proper execution task names the concrete MCP registration transport/tool and rollback route.
 

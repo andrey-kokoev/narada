@@ -12,7 +12,7 @@ const files = [
 
 for (const file of files) {
   const source = readFileSync(join(kernelRoot, file), 'utf8');
-  assert.equal(source.includes('@narada2/task-governance'), false, `${file} must not import task-governance`);
+  assert.equal(source.includes('@narada-core/task-governance'), false, `${file} must not import task-governance`);
 }
 
 console.log('task lifecycle kernel import boundary tests passed');

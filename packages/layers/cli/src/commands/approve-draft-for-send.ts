@@ -7,7 +7,7 @@ import {
   loadConfig,
   isMultiMailboxConfig,
   loadMultiMailboxConfig,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 export interface ApproveDraftForSendOptions {
   config?: string;
@@ -74,7 +74,7 @@ export async function approveDraftForSendCommand(
   }
 
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore, SqliteIntentStore, executeOperatorAction } =
-    await import('@narada2/control-plane');
+    await import('@narada-core/control-plane');
 
   for (let i = 0; i < scopeIds.length; i++) {
     const dbPath = coordinatorDbPathForRoot(rootDirs[i]!);

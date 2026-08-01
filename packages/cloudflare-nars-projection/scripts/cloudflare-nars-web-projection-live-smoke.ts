@@ -4,7 +4,7 @@ import { dirname, join, resolve } from 'node:path';
 
 type AnyRecord = Record<string, any>;
 type AnyPage = any;
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import { deliverProjectionInputToNars } from '../dist/nars-session-input-client.js';
 import {
   deliverRemoteProjectionInputsOnce,

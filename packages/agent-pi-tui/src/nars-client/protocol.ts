@@ -7,7 +7,7 @@ import {
   buildAgentWebUiConversationSteerFrame,
   buildAgentWebUiEventsReadFrame,
   buildAgentWebUiSubscribeFrame,
-} from '@narada2/nars-client-projection-contract';
+} from '@narada-core/nars-client-projection-contract';
 import type { NarsProtocolFrame, JsonObject } from '../types.js';
 
 export const NARS_CLIENT_METHODS = Object.freeze([...AGENT_WEB_UI_NARS_METHOD_LIST]);

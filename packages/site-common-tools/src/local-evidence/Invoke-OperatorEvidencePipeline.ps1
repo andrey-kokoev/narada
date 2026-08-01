@@ -5,7 +5,7 @@ param(
 
     [string]$UserSiteRoot = $(if ($env:NARADA_USER_SITE_ROOT) { $env:NARADA_USER_SITE_ROOT } else { Join-Path $HOME 'Narada' }),
     [string]$NaradaCli = $(if ($env:NARADA_CLI) { $env:NARADA_CLI } else { "" }),
-    [string]$NaradaCliRepairCommand = $(if ($env:NARADA_PROPER_ROOT) { "pnpm --dir `"$env:NARADA_PROPER_ROOT`" --filter @narada2/cli build" } else { "set NARADA_CLI or NARADA_PROPER_ROOT" }),
+    [string]$NaradaCliRepairCommand = $(if ($env:NARADA_PROPER_ROOT) { "pnpm --dir `"$env:NARADA_PROPER_ROOT`" --filter @narada-core/cli build" } else { "set NARADA_CLI or NARADA_PROPER_ROOT" }),
     [string]$ArtifactRoot,
     [string]$RawFixturePath,
     [string]$RunId,

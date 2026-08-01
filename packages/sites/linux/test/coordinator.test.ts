@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Database } from "@narada2/control-plane";
+import { Database } from "@narada-core/control-plane";
 import { SqliteSiteCoordinator } from "../src/coordinator.js";
 
 describe("SqliteSiteCoordinator", () => {

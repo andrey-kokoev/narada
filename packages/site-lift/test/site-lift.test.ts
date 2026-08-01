@@ -15,7 +15,7 @@ function artifact() {
     source_locus: 'narada-proper',
     portable_scope: 'contracts_docs_tests_only',
     source_paths: ['docs/site-config/site-registry-capability-current-state-contract.md'],
-    dependencies: ['@narada2/site-config'],
+    dependencies: ['@narada-core/site-config'],
     non_portable_paths: ['target_site_config.json', 'target_site_task_db'],
     authority_boundaries: ['catalog_membership_is_not_receiving_site_authority'],
     adoption_requirements: ['receiving_site_records_admission_decision'],

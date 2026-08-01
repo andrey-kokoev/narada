@@ -10,7 +10,7 @@
 
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { execFileGoverned } from "@narada2/process-launch-posture";
+import { execFileGoverned } from "@narada-core/process-launch-posture";
 import { resolveSiteRoot } from "./path-utils.js";
 
 type CredentialExec = (

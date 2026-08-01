@@ -1,4 +1,4 @@
-import { canonicalInvocationInput, sha256Digest } from '@narada2/invokable-intelligence-resolver';
+import { canonicalInvocationInput, sha256Digest } from '@narada-core/invokable-intelligence-resolver';
 import { createNarsIntelligenceRuntimeReconfigurationStateMachine } from './intelligence-runtime-reconfiguration-state.js';
 
 function nonEmpty(value: any) {

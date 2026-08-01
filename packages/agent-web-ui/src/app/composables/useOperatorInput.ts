@@ -1,5 +1,5 @@
 import { ref, type ShallowRef } from 'vue';
-import { buildAgentWebUiConversationSteerFrame, buildAgentWebUiOperatorInputAction } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiConversationSteerFrame, buildAgentWebUiOperatorInputAction } from '@narada-core/nars-client-projection-contract';
 import { submitOperatorConversationText, submitOperatorInput, type AuthorityTransitionInputPolicy, type OperatorInputDeliveryMode, type OperatorInputIdempotencyKey, type ProtocolMethodSupport, type SessionFrameSender } from '../../protocol/operatorInput';
 import type { NarsClientConnection } from '../../protocol/narsClient';
 import { toSessionProtocolFrame, type SessionProtocolFrame } from '../../protocol/sessionTransport';

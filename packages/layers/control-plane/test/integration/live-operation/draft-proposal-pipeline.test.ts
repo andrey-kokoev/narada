@@ -13,7 +13,7 @@ import { MailboxContextMaterializer } from "../../../src/charter/mailbox/materia
 import { FileMessageStore } from "../../../src/persistence/messages.js";
 import { buildInvocationEnvelope, buildEvaluationRecord, persistEvaluation, VerticalMaterializerRegistry } from "../../../src/charter/envelope.js";
 import type { Fact } from "../../../src/facts/types.js";
-import type { CharterRunner, CharterInvocationEnvelope, CharterOutputEnvelope } from "@narada2/charters";
+import type { CharterRunner, CharterInvocationEnvelope, CharterOutputEnvelope } from "@narada-core/charters";
 
 describe("live operation draft proposal pipeline", () => {
   let db: Database;

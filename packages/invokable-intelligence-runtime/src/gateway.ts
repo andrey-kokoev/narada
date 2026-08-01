@@ -1,6 +1,6 @@
 /** Canonical invocation gateway shared by local Node and Workers runtimes. */
 
-import { evaluatePlanUse, validateResource } from "@narada2/invokable-intelligence-contract";
+import { evaluatePlanUse, validateResource } from "@narada-core/invokable-intelligence-contract";
 import type {
   AuthoritativeDecisionClock,
   CapabilityKey,
@@ -31,8 +31,8 @@ import type {
   ResourceRef,
   Resource,
   RetainedPayloadRef,
-} from "@narada2/invokable-intelligence-contract";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
+} from "@narada-core/invokable-intelligence-contract";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
 import {
   canonicalJson,
   canonicalInvocationInput,
@@ -40,8 +40,8 @@ import {
   deterministicId,
   resolveInvocation,
   sha256Digest,
-} from "@narada2/invokable-intelligence-resolver";
-import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+} from "@narada-core/invokable-intelligence-resolver";
+import type { ResolverContext } from "@narada-core/invokable-intelligence-resolver";
 
 export interface AdapterInvocation {
   plan: InvocationPlan;

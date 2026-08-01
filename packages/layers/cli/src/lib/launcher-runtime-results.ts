@@ -16,9 +16,9 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import {
   evaluateAgentStartHandoff,
   resolveAgentStartSessionProjection,
-} from '@narada2/agent-start/launch-result-v0-contract';
+} from '@narada-core/agent-start/launch-result-v0-contract';
 import type { LaunchResultSummary } from './launcher-contracts.js';
-import type { AgentStartResultV0 } from '@narada2/agent-start/launch-result-v0-contract';
+import type { AgentStartResultV0 } from '@narada-core/agent-start/launch-result-v0-contract';
 import { AgentStartArtifactError, parseAgentStartResultText } from './agent-start-result-reader.js';
 
 const LAUNCH_RESULT_RECONCILIATION_SCHEMA = 'narada.agent_start_result_reconciliation.v1';

@@ -7,10 +7,10 @@ import {
   normalizeSiteToken,
   roleSegment,
   siteSegment,
-} from '@narada2/agent-identity';
-import { prepareTargetAuthority, readAuthorityTransitionSourceState, authorityTransitionStatePathFromSessionPath } from '@narada2/nars-session-core/authority-transition-state';
-import { discoverNarsSessions } from '@narada2/nars-session-core/session-index';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
+} from '@narada-core/agent-identity';
+import { prepareTargetAuthority, readAuthorityTransitionSourceState, authorityTransitionStatePathFromSessionPath } from '@narada-core/nars-session-core/authority-transition-state';
+import { discoverNarsSessions } from '@narada-core/nars-session-core/session-index';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import { listKnownSiteRootsForCli, resolveSiteRootForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
@@ -19,7 +19,7 @@ import {
   defaultSessionAuthorityDbPath,
   normalizeSessionPrincipal,
   openLocalSessionAuthority,
-} from '@narada2/nars-session-authority';
+} from '@narada-core/nars-session-authority';
 
 const NARS_AUTHORITY_RUNTIME_HOST_KINDS = ['local', 'cloudflare-host'];
 const NARS_AUTHORITY_RUNTIME_HOST_TRANSITION_SCHEMA = 'narada.nars.authority_runtime_host_transition.v1';

@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/cloudflare-nars-projection",
+  "name": "@narada-core/cloudflare-nars-projection",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -22,7 +22,7 @@
   "scripts": {
     "build": "tsc",
     "prebuild:assets": "pnpm run build && node scripts-dist/clean-cloudflare-assets.js",
-    "build:assets": "pnpm --filter @narada2/operator-console-ui build && pnpm --filter @narada2/agent-web-ui build && pnpm run build:scripts && node scripts-dist/build-cloudflare-assets.js",
+    "build:assets": "pnpm --filter @narada-core/operator-console-ui build && pnpm --filter @narada-core/agent-web-ui build && pnpm run build:scripts && node scripts-dist/build-cloudflare-assets.js",
     "typecheck": "tsc --noEmit && pnpm run typecheck:scripts",
     "generate:types": "wrangler types --config wrangler.toml",
     "test": "vitest run",
@@ -50,15 +50,15 @@
     "typecheck:scripts": "tsc --noEmit -p tsconfig.scripts.json"
   },
   "dependencies": {
-    "@narada2/nars-session-core": "workspace:*",
-    "@narada2/carrier-protocol": "workspace:*",
-    "@narada2/host-fleet": "workspace:*",
-    "@narada2/nars-runtime-contract": "workspace:*",
-    "@narada2/operator-console-contract": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/nars-client-projection-contract": "workspace:*",
-    "@narada2/site-paths": "workspace:*",
-    "@narada2/invokable-intelligence-runtime": "workspace:*"
+    "@narada-core/nars-session-core": "workspace:*",
+    "@narada-core/carrier-protocol": "workspace:*",
+    "@narada-core/host-fleet": "workspace:*",
+    "@narada-core/nars-runtime-contract": "workspace:*",
+    "@narada-core/operator-console-contract": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/nars-client-projection-contract": "workspace:*",
+    "@narada-core/site-paths": "workspace:*",
+    "@narada-core/invokable-intelligence-runtime": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.3.0",
@@ -70,7 +70,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/cloudflare-nars-projection"
   }
 }

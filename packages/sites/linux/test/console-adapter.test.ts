@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { Database } from "@narada2/control-plane";
-import type { RegisteredSite } from "@narada2/windows-site";
+import { Database } from "@narada-core/control-plane";
+import type { RegisteredSite } from "@narada-core/windows-site";
 import {
   linuxSiteAdapter,
   LinuxSiteObservationApi,

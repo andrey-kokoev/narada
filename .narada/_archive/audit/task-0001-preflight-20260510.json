@@ -109,7 +109,7 @@
     },
     {
       "when": "after package metadata is registered",
-      "command": "pnpm --filter @narada2/site-task-lifecycle typecheck",
+      "command": "pnpm --filter @narada-core/site-task-lifecycle typecheck",
       "purpose": "Workspace-filtered typecheck for the new package."
     }
   ],

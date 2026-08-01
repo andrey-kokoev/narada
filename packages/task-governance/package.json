@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/task-governance",
+  "name": "@narada-core/task-governance",
   "version": "0.1.0",
   "description": "Narada compatibility facade for the neutral task governance core package",
   "type": "module",
@@ -132,7 +132,7 @@
     }
   },
   "scripts": {
-    "prebuild": "pnpm --filter @narada2/task-governance-core build",
+    "prebuild": "pnpm --filter @narada-core/task-governance-core build",
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.runtime.json",
     "test": "vitest run",
@@ -142,12 +142,12 @@
     "test:governance": "vitest run test/lib/task-governance.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000"
   },
   "dependencies": {
-    "@narada2/mcp-transport": "workspace:*",
-    "@narada2/task-governance-core": "link:../../../narada-core/packages/task-governance-core",
-    "@narada2/control-plane": "workspace:*",
-    "@narada2/intent-zones": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*",
-    "@narada2/sqlite": "workspace:*"
+    "@narada-core/mcp-transport": "workspace:*",
+    "@narada-core/task-governance-core": "link:../../../narada-core/packages/task-governance-core",
+    "@narada-core/control-plane": "workspace:*",
+    "@narada-core/intent-zones": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/sqlite": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -160,7 +160,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/task-governance"
   }
 }

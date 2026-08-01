@@ -4,7 +4,7 @@
   "preset": "agent-memory",
   "template_catalog": {
     "template_id": "narada-proper.templates.site.agent-memory.v0",
-    "template_components": ["@narada2/agent-context-memory"]
+    "template_components": ["@narada-core/agent-context-memory"]
   },
   "site": {
     "site_id": "user-alpha",
@@ -18,7 +18,7 @@
   },
   "packages": [
     {
-      "name": "@narada2/agent-context-memory",
+      "name": "@narada-core/agent-context-memory",
       "include_contracts": true,
       "include_docs": true,
       "include_schema_descriptors": true,
@@ -48,13 +48,13 @@
   "task_lifecycle": { "enable": false },
   "agent_context": {
     "enable": "descriptor_only",
-    "package": "@narada2/agent-context-memory",
+    "package": "@narada-core/agent-context-memory",
     "checkpoint_policy": "manual_descriptor"
   },
   "operator_surface": { "intent": "declare_relation", "pc_locus_required": false },
   "windows_pwsh": { "profile": "emit_example", "path_style": "windows" },
   "evidence": {
-    "template_refs": ["narada-proper.templates.site.agent-memory.v0", "package:@narada2/agent-context-memory"],
+    "template_refs": ["narada-proper.templates.site.agent-memory.v0", "package:@narada-core/agent-context-memory"],
     "refused_imports": []
   }
 }

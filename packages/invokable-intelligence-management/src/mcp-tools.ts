@@ -8,8 +8,8 @@ import type {
   MaterializationEnvelope,
   MaterializationRevocation,
   ResourceRef,
-} from "@narada2/invokable-intelligence-contract";
-import type { ResolverContext } from "@narada2/invokable-intelligence-resolver";
+} from "@narada-core/invokable-intelligence-contract";
+import type { ResolverContext } from "@narada-core/invokable-intelligence-resolver";
 
 import { deployManagementBundle } from "./deployment.js";
 import type { ManagementDeploymentBundle } from "./deployment.js";

@@ -1,15 +1,15 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { resolveNaradaSitePaths } from '@narada2/site-paths';
-import { resolveCommandInput } from '@narada2/carrier-command-contract';
-import { readNarsEventLog } from '@narada2/nars-session-core/event-log';
-import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
-import { buildNarsRuntimeSurfaceContract } from '@narada2/nars-runtime-contract/runtime-surface-contract';
-import { buildLaunchProcessOwnershipEvidence } from '@narada2/launch-process-ownership';
-import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
-import { normalizeNarsExecutionPolicy } from '@narada2/nars-intelligence-kernel-contract';
+import { resolveNaradaSitePaths } from '@narada-core/site-paths';
+import { resolveCommandInput } from '@narada-core/carrier-command-contract';
+import { readNarsEventLog } from '@narada-core/nars-session-core/event-log';
+import { markNarsSessionIndexClosed, writeNarsSessionStartedIndex } from '@narada-core/nars-session-core/session-index';
+import { buildNarsRuntimeSurfaceContract } from '@narada-core/nars-runtime-contract/runtime-surface-contract';
+import { buildLaunchProcessOwnershipEvidence } from '@narada-core/launch-process-ownership';
+import { normalizeIntelligenceInvocationControl } from '@narada-core/invokable-intelligence-contract';
+import { normalizeNarsExecutionPolicy } from '@narada-core/nars-intelligence-kernel-contract';
 import { createRuntimeSessionBinding } from './runtime-session-binding.js';
-import { createNarsCapabilityGateway } from '@narada2/nars-capability-gateway/capability-gateway';
+import { createNarsCapabilityGateway } from '@narada-core/nars-capability-gateway/capability-gateway';
 import { createNarsRuntimeRequestRegistry } from './runtime-request-state.js';
 import {
   NARS_RUNTIME_INTELLIGENCE_RECONFIGURE_CANCEL_METHOD,

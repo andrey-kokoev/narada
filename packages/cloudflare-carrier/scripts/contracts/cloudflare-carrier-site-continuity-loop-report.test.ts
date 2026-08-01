@@ -226,11 +226,11 @@ test('formatSiteContinuityLoopReportText renders operator summary without auth m
   assert.match(text, /Freshness Reason: site_continuity_loop_report_fresh/);
   assert.match(text, /Cloudflare Push: imported/);
   assert.match(text, /Durability: refreshed_existing_packet/);
-  assert.match(text, /Site Read: pnpm --filter @narada2\/cloudflare-carrier product:site:read:text/);
-  assert.match(text, /Operation List: pnpm --filter @narada2\/cloudflare-carrier product:operation:list:text/);
-  assert.match(text, /Site Next Workflow: pnpm --filter @narada2\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
-  assert.match(text, /Posture Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
-  assert.match(text, /Durability Coherence Review: pnpm --filter @narada2\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Site Read: pnpm --filter @narada-core\/cloudflare-carrier product:site:read:text/);
+  assert.match(text, /Operation List: pnpm --filter @narada-core\/cloudflare-carrier product:operation:list:text/);
+  assert.match(text, /Site Next Workflow: pnpm --filter @narada-core\/cloudflare-carrier product:site:next:workflow:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json --execute-site-next/);
+  assert.match(text, /Posture Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:posture:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
+  assert.match(text, /Durability Coherence Review: pnpm --filter @narada-core\/cloudflare-carrier product:durability:coherence:live:text -- --url https:\/\/carrier\.example\.test --site site_alpha --operator-session-file D:\\narada\\\.narada\\auth\\cloudflare-operator-session\.json/);
   assert.doesNotMatch(text, /operator-session-cookie|secret-token/);
 });
 

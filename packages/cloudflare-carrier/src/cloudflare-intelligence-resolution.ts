@@ -11,11 +11,11 @@ import {
   latestCatalogRecords,
   resolveInvocationPrincipalAdmission,
   siteMatchesRegistryIdentity,
-} from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/invokable-intelligence-contract';
 import {
   createCloudflareInvocationGateway,
-} from '@narada2/invokable-intelligence-runtime';
-import type { CloudflareInvocationAdmission } from '@narada2/invokable-intelligence-runtime';
+} from '@narada-core/invokable-intelligence-runtime';
+import type { CloudflareInvocationAdmission } from '@narada-core/invokable-intelligence-runtime';
 
 export const CARRIER_INTELLIGENCE_ADAPTER_ID = 'adapter:workers-ai-binding';
 export const CLOUDFLARE_SITE_REGISTRY_ID = 'narada.cloudflare-site-registry.v1';

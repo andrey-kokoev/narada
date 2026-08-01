@@ -1,12 +1,12 @@
 # Cloudflare Site Registry
 
-`@narada2/cloudflare-site-registry` owns the Cloudflare D1-backed site coordinate for Narada.
+`@narada-core/cloudflare-site-registry` owns the Cloudflare D1-backed site coordinate for Narada.
 
-It is intentionally separate from `@narada2/cloudflare-carrier` and `@narada2/site-registry-cloudflare`:
+It is intentionally separate from `@narada-core/cloudflare-carrier` and `@narada-core/site-registry-cloudflare`:
 
 - the carrier preserves Narada runtime/session semantics on Cloudflare;
 - this package owns the carrier-embedded D1 site registry: site identity, membership authority, settings, and carrier-session binding evidence;
-- `@narada2/site-registry-cloudflare` is the hosted Cloudflare Worker read-model surface for Site Registry and operational telemetry projections.
+- `@narada-core/site-registry-cloudflare` is the hosted Cloudflare Worker read-model surface for Site Registry and operational telemetry projections.
 
 ## Package Boundary
 
@@ -38,8 +38,8 @@ Use one of these D1 bindings:
 ## Checks
 
 ```powershell
-pnpm --filter @narada2/cloudflare-site-registry test
-pnpm --filter @narada2/cloudflare-site-registry ship
+pnpm --filter @narada-core/cloudflare-site-registry test
+pnpm --filter @narada-core/cloudflare-site-registry ship
 ```
 
 ## D1 Migrations
@@ -48,6 +48,6 @@ The site registry owns the D1 schema for `narada-cloudflare-site-registry`.
 Apply these migrations from this package boundary, not from the carrier task database:
 
 ```powershell
-pnpm --filter @narada2/cloudflare-site-registry d1:migrations:local
-pnpm --filter @narada2/cloudflare-site-registry d1:migrations:remote
+pnpm --filter @narada-core/cloudflare-site-registry d1:migrations:local
+pnpm --filter @narada-core/cloudflare-site-registry d1:migrations:remote
 ```

@@ -117,7 +117,7 @@ Authority contract:
 
 Current implementation posture:
 
-- `@narada2/nars-client-projection-contract` owns event classification and view eligibility.
+- `@narada-core/nars-client-projection-contract` owns event classification and view eligibility.
 - Canonical conversation comes from NARS lifecycle events, not provider telemetry.
 - Provider agent messages, stream fragments, routine health samples, and websocket/replay records are progress, operations, diagnostics, or raw records rather than durable chat facts.
 - Client packages own medium-specific rendering but not event semantics.
@@ -142,7 +142,7 @@ First-class object: governing delegation contract for scope, repositories, budge
 
 Authority contract:
 
-- `@narada2/delegated-task-mcp` target docs and tests in `D:/code/mcp-surfaces`
+- `@narada-core/delegated-task-mcp` target docs and tests in `D:/code/mcp-surfaces`
 
 Current implementation posture:
 
@@ -170,7 +170,7 @@ First-class object: named delegation DAG templates for common work shapes such a
 
 Authority contract:
 
-- `@narada2/delegated-task-mcp` template catalog and template validation tests
+- `@narada-core/delegated-task-mcp` template catalog and template validation tests
 
 Current implementation posture:
 
@@ -198,7 +198,7 @@ First-class object: provider/runtime compatibility and credential readiness befo
 
 Authority contract:
 
-- `@narada2/agent-start` provider resolution, credential projection, and launch preflight tests
+- `@narada-core/agent-start` provider resolution, credential projection, and launch preflight tests
 
 Current implementation posture:
 
@@ -226,7 +226,7 @@ First-class object: Site default speech settings with Agent-level partial overri
 
 Authority contract:
 
-- `@narada2/speech-mcp` provider/model/voice schema and operator-routing speech defaults
+- `@narada-core/speech-mcp` provider/model/voice schema and operator-routing speech defaults
 
 Current implementation posture:
 
@@ -283,7 +283,7 @@ First-class object: feedback intake, routing, status, import, and downstream tas
 
 Authority contract:
 
-- `@narada2/surface-feedback-mcp` feedback store and registrar binding guidance
+- `@narada-core/surface-feedback-mcp` feedback store and registrar binding guidance
 
 Current implementation posture:
 
@@ -341,8 +341,8 @@ First-class object: session-scoped artifact registration, serving, message refer
 Authority contracts:
 
 - [`nars-session-management.md`](nars-session-management.md)
-- `@narada2/artifacts-mcp` artifact registration/list/read/present tools
-- `@narada2/agent-runtime-server` artifact routes and message-part references
+- `@narada-core/artifacts-mcp` artifact registration/list/read/present tools
+- `@narada-core/agent-runtime-server` artifact routes and message-part references
 
 Current implementation posture:
 
@@ -453,7 +453,7 @@ Authority contracts:
 
 Current implementation posture:
 
-- `@narada2/narada-policy-contract` now owns the versioned AdmissionPolicy and AdmissionDecision schemas.
+- `@narada-core/narada-policy-contract` now owns the versioned AdmissionPolicy and AdmissionDecision schemas.
 - The contract carries source, target authority, ingress and payload kinds, queueing semantics, turn-state behavior, review gates, rejection reasons, retry posture, and audit evidence.
 - NARS owns canonical operator-message admission semantics while site-level hooks control target-specific restrictions.
 
@@ -493,7 +493,7 @@ Authority contracts:
 
 Current implementation posture:
 
-- `@narada2/narada-policy-contract` now owns the versioned ObjectLifecyclePolicy and ObjectLifecycleDecision schemas.
+- `@narada-core/narada-policy-contract` now owns the versioned ObjectLifecyclePolicy and ObjectLifecycleDecision schemas.
 - The contract defines shared ownership, mutation authority, revision, stale, replay, retention, archival, revocation, cleanup, and audit gates.
 - Object-specific lifecycle policies and hooks remain authoritative where a family has a distinct domain meaning or safety boundary.
 
@@ -536,7 +536,7 @@ Authority contracts:
 
 Current implementation posture:
 
-- `OPERATOR_VIEW_POLICY` in `@narada2/nars-client-projection-contract` is the semantic authority for lane inclusion, health/progress suppression, deduplication, raw access, and surface defaults.
+- `OPERATOR_VIEW_POLICY` in `@narada-core/nars-client-projection-contract` is the semantic authority for lane inclusion, health/progress suppression, deduplication, raw access, and surface defaults.
 - `agent-web-ui`, `agent-pi-tui`, and the carrier terminal projection delegate event eligibility to the shared contract; they retain only layout, formatting, and local interaction choices.
 - Surfaces may render differently while still sharing the same classification and inclusion rules.
 
@@ -577,7 +577,7 @@ Authority contracts:
 
 Current implementation posture:
 
-- `@narada2/evidence-confirmation-contract` implements `EvidencePacket`, `EffectConfirmation`, and correlation audits.
+- `@narada-core/evidence-confirmation-contract` implements `EvidencePacket`, `EffectConfirmation`, and correlation audits.
 - The packet carries claim, evidence type, producer, verifier, artifact refs, command/test refs, timestamps, trust, scope, invalidation, and request/input/turn/session/epoch/capability/intent/effect/observation identities.
 - Task and runtime reference builders add packet identities without replacing existing opaque evidence refs or provider outcome fields.
 - Provider success, transport closure, silence, and projection freshness are explicitly non-confirming signals.

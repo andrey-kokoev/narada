@@ -311,13 +311,13 @@ Agents and documentation for this Operation must avoid these overloaded phrases:
 
 | Component | Source | Reuse Mode |
 |-----------|--------|------------|
-| `HttpSourceAdapter` / Graph delta sync | `@narada2/control-plane` | Direct reuse; same adapter, different config (`campaign_request_senders` allowlist) |
-| `FileLock` / stuck-cycle recovery | `@narada2/control-plane` | Direct reuse |
-| `computeHealthTransition` | `@narada2/control-plane` | Direct reuse |
-| `DefaultForemanFacade` | `@narada2/control-plane` | Direct reuse; new policy binding for campaign charter |
-| `SqliteScheduler` | `@narada2/control-plane` | Direct reuse for campaign work item leasing |
-| `OutboundHandoff` | `@narada2/control-plane` | Direct reuse; new `campaign_brief` action type |
-| `SendReplyWorker` | `@narada2/control-plane` | Direct reuse for `send_reply` execution |
+| `HttpSourceAdapter` / Graph delta sync | `@narada-core/control-plane` | Direct reuse; same adapter, different config (`campaign_request_senders` allowlist) |
+| `FileLock` / stuck-cycle recovery | `@narada-core/control-plane` | Direct reuse |
+| `computeHealthTransition` | `@narada-core/control-plane` | Direct reuse |
+| `DefaultForemanFacade` | `@narada-core/control-plane` | Direct reuse; new policy binding for campaign charter |
+| `SqliteScheduler` | `@narada-core/control-plane` | Direct reuse for campaign work item leasing |
+| `OutboundHandoff` | `@narada-core/control-plane` | Direct reuse; new `campaign_brief` action type |
+| `SendReplyWorker` | `@narada-core/control-plane` | Direct reuse for `send_reply` execution |
 | `executeSiteOperatorAction` | Windows Site / CLI | Direct reuse; new action types if needed |
 | `executeApprovedCommands` | Cloudflare / Windows | Direct reuse; new Klaviyo adapter boundary in v1 |
 | Site Registry / Operator Console | Tasks 378–384 | Direct reuse; new Site entries for marketing Aim |
@@ -328,11 +328,11 @@ Agents and documentation for this Operation must avoid these overloaded phrases:
 
 | Component | Package | Responsibility |
 |-----------|---------|----------------|
-| `CampaignRequestContextFormation` | `@narada2/control-plane` | Groups mail facts into campaign-request contexts |
+| `CampaignRequestContextFormation` | `@narada-core/control-plane` | Groups mail facts into campaign-request contexts |
 | `campaign-production` charter | Ops repo | Extracts campaign requirements; proposes brief or follow-up |
-| `KlaviyoCampaignAdapter` seam | `@narada2/control-plane` (minimal) | Mockable boundary for campaign create/update/read (v1) |
-| `KlaviyoObservationAdapter` | `@narada2/control-plane` (minimal) | Polls Klaviyo for campaign state confirmations (v1) |
-| `campaign_brief` action type | `@narada2/control-plane` | New outbound action type; v0 is non-executable (document-only) |
+| `KlaviyoCampaignAdapter` seam | `@narada-core/control-plane` (minimal) | Mockable boundary for campaign create/update/read (v1) |
+| `KlaviyoObservationAdapter` | `@narada-core/control-plane` (minimal) | Polls Klaviyo for campaign state confirmations (v1) |
+| `campaign_brief` action type | `@narada-core/control-plane` | New outbound action type; v0 is non-executable (document-only) |
 
 ### 11.3 Deferrals
 

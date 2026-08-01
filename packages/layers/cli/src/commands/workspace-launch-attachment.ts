@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { discoverNarsSessions, type NarsSessionObservation } from '@narada2/nars-session-core/session-index';
+import { discoverNarsSessions, type NarsSessionObservation } from '@narada-core/nars-session-core/session-index';
 import type {
   WorkspaceLaunchAgentPlan,
   WorkspaceLaunchAttachmentEvidence,

@@ -14,9 +14,9 @@ import {
   observerPayload,
   SESSION_EVENT_SCHEMA,
   validateSessionEvent,
-} from '@narada2/carrier-protocol';
-import { commandTokens } from '@narada2/carrier-command-contract';
-import { normalizeIntelligenceInvocationControl } from '@narada2/invokable-intelligence-contract';
+} from '@narada-core/carrier-protocol';
+import { commandTokens } from '@narada-core/carrier-command-contract';
+import { normalizeIntelligenceInvocationControl } from '@narada-core/invokable-intelligence-contract';
 
 export const CLOUDFLARE_CARRIER_KIND = 'cloudflare-carrier';
 export const CLOUDFLARE_CARRIER_HOST = 'cloudflare-durable-object';

@@ -9,7 +9,7 @@ Source packet: `.narada/admission/candidates/task-0001-live-execution-admission-
 
 This carrier admits the Narada proper boundary for task DB writes through a separately admitted concrete adapter.
 
-`@narada2/site-task-lifecycle` remains descriptor/request/result oriented. It does not execute DB writes.
+`@narada-core/site-task-lifecycle` remains descriptor/request/result oriented. It does not execute DB writes.
 
 ## Mutation Mechanism
 

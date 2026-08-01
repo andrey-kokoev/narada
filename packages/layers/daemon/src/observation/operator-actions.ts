@@ -1,7 +1,7 @@
 /**
  * Safe Operator Action Execution
  *
- * Re-exports the canonical executor from @narada2/control-plane so that
+ * Re-exports the canonical executor from @narada-core/control-plane so that
  * the daemon's observation layer uses the same path as the CLI.
  *
  * All UI-facing mutations are validated, executed, and logged through
@@ -22,4 +22,4 @@ export {
   type OperatorActionPayload,
   type OperatorActionResult,
   type OperatorActionContext,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";

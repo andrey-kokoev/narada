@@ -38,7 +38,7 @@ The canonical event object has these fields:
 | `provenance` | future | Optional structured provenance block for source command, runtime, or projection lineage. Specified now, not required by current runtime envelopes. |
 
 The compatibility baseline is the existing `SiteEventEnvelope` TypeScript
-shape in `@narada2/site-config`. Current runtime envelopes already cover
+shape in `@narada-core/site-config`. Current runtime envelopes already cover
 identity, source/subject/target Site coordinates, family/type, timestamps,
 auth posture, payload bounds, payload summary, and authority limits.
 

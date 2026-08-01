@@ -1,11 +1,11 @@
 #!/usr/bin/env node
-import { execFileGoverned } from '@narada2/process-launch-posture';
+import { execFileGoverned } from '@narada-core/process-launch-posture';
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { readCloudflareSiteRegistryLocalProjection } from '@narada2/cloudflare-site-registry/local-projection';
+import { readCloudflareSiteRegistryLocalProjection } from '@narada-core/cloudflare-site-registry/local-projection';
 import {
-  SITE_CONTINUITY_EMBODIMENT_KINDS, listSiteContinuityBindingSites, validateSiteContinuityBindingRegistry, } from '@narada2/site-continuity';
+  SITE_CONTINUITY_EMBODIMENT_KINDS, listSiteContinuityBindingSites, validateSiteContinuityBindingRegistry, } from '@narada-core/site-continuity';
 import {
   materializeCloudflareSiteRegistryProjection, resolveCloudflareSiteRegistryProjectionInputs, } from '../read-models/cloudflare-carrier-site-registry-projection.ts';
 import { resolveAuth as resolveProductReadAuth } from '../shared/cloudflare-carrier-auth-http.ts';
@@ -615,31 +615,31 @@ export function formatSiteContinuitySchedulerResultForText(result: any) {
   }
   if (projectionWorkerUrl && operatorSessionFile) {
     const baseArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`;
-    lines.push(`Site List: pnpm --filter @narada2/cloudflare-carrier product:site:list:text ${baseArgs}`);
+    lines.push(`Site List: pnpm --filter @narada-core/cloudflare-carrier product:site:list:text ${baseArgs}`);
     if (operatorTarget) {
       const siteArgs = `${baseArgs} --site ${operatorTarget}`;
-      lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text ${siteArgs}`);
-      lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text ${siteArgs}`);
-      lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text ${siteArgs}`);
+      lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text ${siteArgs}`);
+      lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text ${siteArgs}`);
+      lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text ${siteArgs}`);
       if (nextOperationId) {
-        lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text ${siteArgs} --operation-id ${nextOperationId}`);
+        lines.push(`Operation Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:read:text ${siteArgs} --operation-id ${nextOperationId}`);
         if (nextOperationAction) {
-          lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text ${siteArgs} --operation-id ${nextOperationId} --execute-operation-next`);
+          lines.push(`Operation Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:operation:next:workflow:live:text ${siteArgs} --operation-id ${nextOperationId} --execute-operation-next`);
         }
       }
       if (operatorAction=== 'focus_next_site') {
-        lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text ${siteArgs} --execute-site-next`);
+        lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text ${siteArgs} --execute-site-next`);
       } else if (nextOperationId && nextOperationAction) {
         lines.push(`Operation Review Focus: action=${nextOperationAction} operation=${nextOperationId}`);
       }
     }
     if (loopReportSiteId && lastSync?.continuity_loop_report_artifact_path) {
       const siteArgs = `${baseArgs} --site ${loopReportSiteId}`;
-      lines.push(`Loop Report Review: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${lastSync.continuity_loop_report_artifact_path}`);
+      lines.push(`Loop Report Review: pnpm --filter @narada-core/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${lastSync.continuity_loop_report_artifact_path}`);
     }
     if (lastReconciliationExecution?.artifact_path && Array.isArray(lastReconciliationExecution.site_ids)) {
       for (const siteId of lastReconciliationExecution.site_ids) {
-        lines.push(`Reconciliation Execution Record: pnpm --filter @narada2/cloudflare-carrier exec node scripts/workflows/cloudflare-site-continuity-sync.ts reconciliation-execution-put --site ${siteId} --execution ${lastReconciliationExecution.artifact_path} --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`);
+        lines.push(`Reconciliation Execution Record: pnpm --filter @narada-core/cloudflare-carrier exec node scripts/workflows/cloudflare-site-continuity-sync.ts reconciliation-execution-put --site ${siteId} --execution ${lastReconciliationExecution.artifact_path} --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`);
       }
     }
   }
@@ -660,17 +660,17 @@ export function formatSiteContinuitySchedulerResultForText(result: any) {
         lines.push(`  Inbound Packet: ${inbound.packet_id}`);
       }
       if (inbound?.artifact_path) {
-        lines.push(`  Inbound Packet Materialize: pnpm --filter @narada2/cloudflare-carrier continuity:bindings -- --packet ${inbound.artifact_path}`);
+        lines.push(`  Inbound Packet Materialize: pnpm --filter @narada-core/cloudflare-carrier continuity:bindings -- --packet ${inbound.artifact_path}`);
       }
       if (syncArtifact?.continuity_loop_report_id) {
         lines.push(`  Loop Report: ${syncArtifact.continuity_loop_report_id}`);
       }
       if (projectionWorkerUrl && operatorSessionFile && syncArtifact?.continuity_loop_report_artifact_path) {
         const siteArgs = `-- --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile} --site ${siteId}`;
-        lines.push(`  Loop Report Review: pnpm --filter @narada2/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${syncArtifact.continuity_loop_report_artifact_path}`);
+        lines.push(`  Loop Report Review: pnpm --filter @narada-core/cloudflare-carrier product:site-continuity:loop-report:text ${siteArgs} --report-file ${syncArtifact.continuity_loop_report_artifact_path}`);
       }
       if (projectionWorkerUrl && operatorSessionFile && lastReconciliationExecution?.artifact_path && reconciliationSites.has(siteId)) {
-        lines.push(`  Reconciliation Execution Record: pnpm --filter @narada2/cloudflare-carrier exec node scripts/workflows/cloudflare-site-continuity-sync.ts reconciliation-execution-put --site ${siteId} --execution ${lastReconciliationExecution.artifact_path} --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`);
+        lines.push(`  Reconciliation Execution Record: pnpm --filter @narada-core/cloudflare-carrier exec node scripts/workflows/cloudflare-site-continuity-sync.ts reconciliation-execution-put --site ${siteId} --execution ${lastReconciliationExecution.artifact_path} --url ${projectionWorkerUrl} --operator-session-file ${operatorSessionFile}`);
       }
     }
   }
@@ -1048,7 +1048,7 @@ export function summarizeCloudflareProductBindingPreparation({
       ? 'blocked_missing_refs'
       : 'ready';
   const prepareCommand = state === 'ready'
-    ? `pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref ${localSiteRef} --cloudflare-site-ref ${cloudflareSiteRef}`
+    ? `pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref ${localSiteRef} --cloudflare-site-ref ${cloudflareSiteRef}`
     : null;
   return {
     schema: 'narada.cloudflare_carrier.product_binding_preparation.v1',
@@ -1070,7 +1070,7 @@ export function summarizeCloudflareProductBindingPreparation({
     cloudflare_site_projection_state: projectedRecord ? 'found' : 'missing',
     prepare_command: prepareCommand,
     command_hint: operatorAction
-      ? 'pnpm --filter @narada2/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref <file-or-site-ref> --cloudflare-site-ref <cloudflare-site-ref>'
+      ? 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:prepare-next -- --local-site-ref <file-or-site-ref> --cloudflare-site-ref <cloudflare-site-ref>'
       : null,
     embeds_credentials: false,
   };

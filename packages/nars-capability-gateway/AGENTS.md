@@ -1,4 +1,4 @@
-# AGENTS.md - @narada2/nars-capability-gateway
+# AGENTS.md - @narada-core/nars-capability-gateway
 
 This package owns the Narada capability gateway: MCP server lifecycle, tool catalog projection, explicit tool admission, and MCP request dispatch.
 
@@ -10,7 +10,7 @@ For the runtime contract, read:
 
 ## Package Role
 
-`@narada2/nars-capability-gateway` is the authority boundary for capability transport inside NARS. It is used by the runtime server and remains independent of provider turn execution and session persistence.
+`@narada-core/nars-capability-gateway` is the authority boundary for capability transport inside NARS. It is used by the runtime server and remains independent of provider turn execution and session persistence.
 
 It owns:
 
@@ -40,8 +40,8 @@ The gateway may emit compatibility terminal evidence (`tool_execution_completed`
 Run the focused package checks from the repository root:
 
 ```text
-pnpm --filter @narada2/nars-capability-gateway test
-pnpm --filter @narada2/nars-capability-gateway typecheck
+pnpm --filter @narada-core/nars-capability-gateway test
+pnpm --filter @narada-core/nars-capability-gateway typecheck
 ```
 
 The test suite includes state-table tests, startup/close races, retry and degraded startup, admission/refusal, transport failure, interruption, and real MCP failure transport cases.

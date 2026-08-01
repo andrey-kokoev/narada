@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/ops-kit",
+  "name": "@narada-core/ops-kit",
   "version": "0.1.0",
   "description": "Narada operational shaping and preflight layer",
   "type": "module",
@@ -12,12 +12,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/ops-kit"
   },
-  "homepage": "https://github.com/andrey-kokoev/narada",
+  "homepage": "https://github.com/narada-core/narada",
   "bugs": {
-    "url": "https://github.com/andrey-kokoev/narada/issues"
+    "url": "https://github.com/narada-core/narada/issues"
   },
   "publishConfig": {
     "access": "public"
@@ -29,8 +29,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@narada2/charters": "workspace:*",
-    "@narada2/control-plane": "workspace:*",
+    "@narada-core/charters": "workspace:*",
+    "@narada-core/control-plane": "workspace:*",
     "commander": "^12.0.0"
   },
   "devDependencies": {

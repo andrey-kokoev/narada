@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/mcp-shell-windows",
+  "name": "@narada-core/mcp-shell-windows",
   "version": "0.1.0",
   "description": "Policy descriptors for audited Windows shell-like MCP execution",
   "type": "module",
@@ -17,8 +17,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@narada2/mcp-transport": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/mcp-transport": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -40,7 +40,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/mcp-shell-windows"
   }
 }

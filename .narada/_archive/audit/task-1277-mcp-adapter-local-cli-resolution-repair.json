@@ -16,8 +16,8 @@
     "review_task_created_by_narada": "task:1277"
   },
   "verification": [
-    "pnpm --filter @narada2/narada-proper-mcp test",
-    "pnpm --filter @narada2/narada-proper-mcp typecheck",
+    "pnpm --filter @narada-core/narada-proper-mcp test",
+    "pnpm --filter @narada-core/narada-proper-mcp typecheck",
     "narada-proper MCP narada_inbox_submit_observation created env_2ccb1628-a612-487b-851d-9844a59b6524 with full payload",
     "narada-proper MCP narada_inbox_show env_2ccb1628-a612-487b-851d-9844a59b6524 returned full title, summary, and recommendation",
     "narada-proper MCP narada_inbox_work_next no longer reports spawnSync narada ENOENT"

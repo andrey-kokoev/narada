@@ -1,4 +1,4 @@
-import type { EnsureOperatorRouterOptions, EnsureOperatorRouterResult, OperatorRouterAdminOptions } from '@narada2/operator-router';
+import type { EnsureOperatorRouterOptions, EnsureOperatorRouterResult, OperatorRouterAdminOptions } from '@narada-core/operator-router';
 import type { CliFormat } from '../lib/cli-output.js';
 import type { JsonRecord } from '../lib/launcher-contracts.js';
 import type { AgentWebUiAttachmentLifecycle } from './agent-web-ui-attachment-state.js';
@@ -134,7 +134,7 @@ export interface AgentWebUiAttachDependencies {
   resolveAttachEndpoints?: NarsAttachCommand;
   startAgentWebUiServer?: (options: AgentWebUiServerStartOptions) => Promise<{ url: string; server?: unknown }>;
   ensureOperatorRouter?: (options?: EnsureOperatorRouterOptions) => Promise<EnsureOperatorRouterResult>;
-  registerOperatorRoute?: typeof import('@narada2/operator-router').registerOperatorRoute;
+  registerOperatorRoute?: typeof import('@narada-core/operator-router').registerOperatorRoute;
   openUrl?: (url: string) => Promise<void> | void;
   progress?: ProgressReporter;
   operatorRouterAdmin?: OperatorRouterAdminOptions;

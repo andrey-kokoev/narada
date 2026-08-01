@@ -44,17 +44,17 @@ export function formatMailboxReadbackLiveSmokeText(result: any) {
   const siteId = typeof result.site_id === 'string' && result.site_id.length > 0 ? result.site_id : null;
   const operationId = typeof result.operation_id === 'string' && result.operation_id.length > 0 ? result.operation_id : null;
   const draftProposalCommand = result.mailbox_draft_reply_proposal_id
-    ? (workerUrl && siteId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_draft_reply_proposal_id} --operator-session-file <operator-session-file>` : null)
-    : (workerUrl && siteId && operationId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
+    ? (workerUrl && siteId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_draft_reply_proposal_id} --operator-session-file <operator-session-file>` : null)
+    : (workerUrl && siteId && operationId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:draft-reply-proposal:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
   const draftReadCommand = result.mailbox_outlook_draft_create_id
-    ? (workerUrl && siteId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_outlook_draft_create_id} --operator-session-file <operator-session-file>` : null)
-    : (workerUrl && siteId && operationId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
+    ? (workerUrl && siteId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_outlook_draft_create_id} --operator-session-file <operator-session-file>` : null)
+    : (workerUrl && siteId && operationId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:outlook-draft:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
   const sendAcceptedReadCommand = result.mailbox_send_accepted_id
-    ? (workerUrl && siteId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_send_accepted_id} --operator-session-file <operator-session-file>` : null)
-    : (workerUrl && siteId && operationId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
+    ? (workerUrl && siteId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_send_accepted_id} --operator-session-file <operator-session-file>` : null)
+    : (workerUrl && siteId && operationId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:send-accepted:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
   const sendConfirmationReadCommand = result.mailbox_send_confirmation_id
-    ? (workerUrl && siteId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_send_confirmation_id} --operator-session-file <operator-session-file>` : null)
-    : (workerUrl && siteId && operationId ? `pnpm --filter @narada2/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
+    ? (workerUrl && siteId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${workerUrl} --site ${siteId} --focus-ref ${result.mailbox_send_confirmation_id} --operator-session-file <operator-session-file>` : null)
+    : (workerUrl && siteId && operationId ? `pnpm --filter @narada-core/cloudflare-carrier product:mailbox:send-confirmation:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>` : null);
   const lines = [
     `Mailbox Readback Smoke: ${result.status}`,
     `Worker: ${result.worker_url}`,
@@ -69,16 +69,16 @@ export function formatMailboxReadbackLiveSmokeText(result: any) {
     `Mutation Admission: ${result.mailbox_mutation_admission ?? 'unknown'}`,
   ];
   if (workerUrl && siteId) {
-    lines.push(`Site Read: pnpm --filter @narada2/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
-    lines.push(`Site Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
-    lines.push(`Posture Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
-    lines.push(`Durability Coherence Review: pnpm --filter @narada2/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Read: pnpm --filter @narada-core/cloudflare-carrier product:site:read:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Site Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:site:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file> --execute-site-next`);
+    lines.push(`Posture Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:posture:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
+    lines.push(`Durability Coherence Review: pnpm --filter @narada-core/cloudflare-carrier product:durability:coherence:live:text -- --url ${workerUrl} --site ${siteId} --operator-session-file <operator-session-file>`);
   }
   if (workerUrl && siteId && operationId) {
-    lines.push(`Operation Review: pnpm --filter @narada2/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
-    lines.push(`Operation Next Workflow: pnpm --filter @narada2/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
-    lines.push(`Status Source Read: pnpm --filter @narada2/cloudflare-carrier mailbox:status-source-smoke:live:text -- --url ${workerUrl} --site ${siteId} --operation ${operationId} --operator-session-file <operator-session-file>`);
-    lines.push(`Status Shadow Read: pnpm --filter @narada2/cloudflare-carrier mailbox:status-shadow-smoke:live:text -- --url ${workerUrl} --site ${siteId} --operation ${operationId} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Review: pnpm --filter @narada-core/cloudflare-carrier product:operation:read:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file>`);
+    lines.push(`Operation Next Workflow: pnpm --filter @narada-core/cloudflare-carrier product:operation:next:workflow:live:text -- --url ${workerUrl} --site ${siteId} --operation-id ${operationId} --operator-session-file <operator-session-file> --execute-operation-next`);
+    lines.push(`Status Source Read: pnpm --filter @narada-core/cloudflare-carrier mailbox:status-source-smoke:live:text -- --url ${workerUrl} --site ${siteId} --operation ${operationId} --operator-session-file <operator-session-file>`);
+    lines.push(`Status Shadow Read: pnpm --filter @narada-core/cloudflare-carrier mailbox:status-shadow-smoke:live:text -- --url ${workerUrl} --site ${siteId} --operation ${operationId} --operator-session-file <operator-session-file>`);
   }
   if (draftProposalCommand) lines.push(`Draft Proposal Read: ${draftProposalCommand}`);
   if (draftReadCommand) lines.push(`Draft Read: ${draftReadCommand}`);

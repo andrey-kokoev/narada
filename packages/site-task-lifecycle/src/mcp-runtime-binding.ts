@@ -13,7 +13,7 @@ import type {
   TaskDbAdapterCapability,
 } from './types.js';
 
-const PACKAGE_NAME = '@narada2/site-task-lifecycle';
+const PACKAGE_NAME = '@narada-core/site-task-lifecycle';
 
 export class McpRuntimeAuthorityError extends Error {
   constructor(reason: string) {

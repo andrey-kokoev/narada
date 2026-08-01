@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/nars-client-projection-contract",
+  "name": "@narada-core/nars-client-projection-contract",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -28,9 +28,9 @@
   },
   "types": "./dist/nars-client-projection-contract.d.ts",
   "dependencies": {
-    "@narada2/agent-identity": "workspace:*",
-    "@narada2/nars-runtime-contract": "workspace:*",
-    "@narada2/nars-session-core": "workspace:*"
+    "@narada-core/agent-identity": "workspace:*",
+    "@narada-core/nars-runtime-contract": "workspace:*",
+    "@narada-core/nars-session-core": "workspace:*"
   },
   "scripts": {
     "test": "node --import tsx --test src/*.test.ts",
@@ -42,7 +42,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/nars-client-projection-contract"
   },
   "engines": {

@@ -11,7 +11,7 @@ import type {
   GraphSubscriptionManager,
   Subscription,
   ChangeType,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import type {
   WebhookServer,
   WebhookServerConfig,

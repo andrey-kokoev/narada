@@ -1,7 +1,7 @@
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { searchTasksService } from '@narada2/task-governance/task-search-service';
+import { searchTasksService } from '@narada-core/task-governance/task-search-service';
 
 function parseArgs(argv: any) : any {
   const args: any = { positional: [], query: null, status: null, limit: 20 };

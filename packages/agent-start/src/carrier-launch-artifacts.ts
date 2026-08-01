@@ -1,11 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { resolveNaradaSitePaths, siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
   operatorSurfaceKindsForRuntimeHost,
-} from '@narada2/operator-surface-runtime-contract/operator-surface-runtime-selection';
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { assertAgentStartResultV0, evaluateAgentStartHandoff } from './launch-result-v0-contract.js';
 
 const NARS_OPERATOR_SURFACE_KINDS: any = operatorSurfaceKindsForRuntimeHost(NARADA_AGENT_RUNTIME_SERVER_KIND);

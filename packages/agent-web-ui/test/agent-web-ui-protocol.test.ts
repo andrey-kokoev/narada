@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { NARS_AFFORDANCE_ACTION_CANCEL_METHOD, NARS_AFFORDANCE_ACTION_CONFIRM_METHOD, NARS_AFFORDANCE_ACTION_REQUEST_METHOD } from '@narada2/nars-client-projection-contract';
+import { NARS_AFFORDANCE_ACTION_CANCEL_METHOD, NARS_AFFORDANCE_ACTION_CONFIRM_METHOD, NARS_AFFORDANCE_ACTION_REQUEST_METHOD } from '@narada-core/nars-client-projection-contract';
 import {
   buildAffordanceActionCancelFrame,
   buildAffordanceActionConfirmFrame,

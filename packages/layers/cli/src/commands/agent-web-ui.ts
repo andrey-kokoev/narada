@@ -3,8 +3,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { appendFile, mkdir, rename, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
-import { executeOperatorProjectionOpenRequest } from '@narada2/process-launch-posture';
-import { agentIdentityDisplay } from '@narada2/agent-identity';
+import { executeOperatorProjectionOpenRequest } from '@narada-core/process-launch-posture';
+import { agentIdentityDisplay } from '@narada-core/agent-identity';
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
   ensureOperatorRouter,
@@ -16,7 +16,7 @@ import {
   type EnsureOperatorRouterOptions,
   type EnsureOperatorRouterResult,
   type OperatorRouterAdminOptions,
-} from '@narada2/operator-router';
+} from '@narada-core/operator-router';
 import { formattedResult } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 import { asJsonRecord, objectField, stringField, type JsonRecord } from '../lib/launcher-contracts.js';
@@ -492,7 +492,7 @@ export async function agentWebUiAttachCommand(
   const agentWebUiArtifact = deps.startAgentWebUiServer
     ? null
     : ensureLaunchArtifact(naradaProperRoot(), 'agent-web-ui');
-  const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada2/agent-web-ui/server')).startAgentWebUiServer;
+  const startAgentWebUiServer = deps.startAgentWebUiServer ?? (await import('@narada-core/agent-web-ui/server')).startAgentWebUiServer;
   const started = await startAgentWebUiServer({
     host,
     port: router ? 0 : port,
@@ -790,7 +790,7 @@ async function buildAgentWebUiOpenRequest(args: {
     projection_kind: 'browser_url',
     target_ref: args.targetRef,
     purpose: 'agent_web_ui_attach',
-    caller: { package: '@narada2/cli', command: 'agent-web-ui attach', module: 'commands/agent-web-ui' },
+    caller: { package: '@narada-core/cli', command: 'agent-web-ui attach', module: 'commands/agent-web-ui' },
     mode: args.mode,
     policy: {
       allow_visible_host_effect: args.suppressReason ? false : true,

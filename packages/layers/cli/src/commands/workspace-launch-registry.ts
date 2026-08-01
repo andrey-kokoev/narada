@@ -1,8 +1,8 @@
 import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
-import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada2/agent-identity';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
+import { buildAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 import { recordMatchesSiteSelectors, type WorkspaceLaunchAdmissionPolicy } from './workspace-launch-admission.js';
 import { defaultLaunchRegistryPath, listKnownSiteRootsForCli, type ResolvedSiteRoot } from '../lib/site-root-resolver.js';
 import type {

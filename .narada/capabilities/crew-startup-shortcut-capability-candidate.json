@@ -15,7 +15,7 @@
   "first_slice": {
     "kind": "descriptor_contract_plan",
     "implementation_task": "narada-proper.task-0023",
-    "package": "@narada2/crew-startup-shortcut",
+    "package": "@narada-core/crew-startup-shortcut",
     "package_path": "packages/crew-startup-shortcut",
     "includes": [
       "startup shortcut request schema",

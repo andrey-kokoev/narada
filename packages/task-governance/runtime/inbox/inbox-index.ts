@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { Database } from '@narada2/control-plane';
+import { Database } from '@narada-core/control-plane';
 import { getLatestEventsByEnvelope } from './admission-log.js';
 
 const INBOX_DIR: any = '.ai/inbox-envelopes';

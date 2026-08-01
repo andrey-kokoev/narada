@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { DefaultLinuxSiteRunner } from "../src/runner.js";
 import { ensureSiteDir, resolveSiteRoot } from "../src/path-utils.js";
 import { SqliteSiteCoordinator } from "../src/coordinator.js";
-import { Database } from "@narada2/control-plane";
+import { Database } from "@narada-core/control-plane";
 
 describe("DefaultLinuxSiteRunner", () => {
   const testRoot = join(tmpdir(), "narada-linux-runner-test-" + Date.now());

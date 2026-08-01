@@ -5,7 +5,7 @@ import { request as httpsRequest } from 'node:https';
 import {
   AiProcessInvocationRefusalError,
   spawnAiProcessInvocation,
-} from '@narada2/carrier-provider-support/ai-process-invocation';
+} from '@narada-core/carrier-provider-support/ai-process-invocation';
 import {
   accumulateCodexExecEvent,
   buildCodexExecArgs,

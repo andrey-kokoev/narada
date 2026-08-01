@@ -1,4 +1,4 @@
-# @narada2/windows-site
+# @narada-core/windows-site
 
 > Windows Site materialization for Narada — native Windows and WSL Cycle runner.
 
@@ -159,7 +159,7 @@ narada cycle --site {site_id}
 ```bash
 # Generate unit files
 node -e "
-const { writeSystemdUnits } = require('@narada2/windows-site');
+const { writeSystemdUnits } = require('@narada-core/windows-site');
 writeSystemdUnits({
   site_id: 'my-site',
   variant: 'wsl',
@@ -181,7 +181,7 @@ sudo systemctl start narada-my-site.timer
 ```bash
 # Generate cron entry
 node -e "
-const { generateCronEntry } = require('@narada2/windows-site');
+const { generateCronEntry } = require('@narada-core/windows-site');
 console.log(generateCronEntry({
   site_id: 'my-site',
   variant: 'wsl',
@@ -202,9 +202,9 @@ crontab -e
 
 ```
 DefaultWindowsSiteRunner
-  ├── FileLock (from @narada2/control-plane) — cross-platform lock
+  ├── FileLock (from @narada-core/control-plane) — cross-platform lock
   ├── SqliteSiteCoordinator — health/trace persistence
-  ├── computeHealthTransition (from @narada2/control-plane) — state machine
+  ├── computeHealthTransition (from @narada-core/control-plane) — state machine
   └── Steps 2-6: fixture stubs (deferred to Tasks 346-348, 366)
 ```
 

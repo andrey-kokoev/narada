@@ -13,7 +13,7 @@ import {
   transitionState,
   isValidPrincipalRuntimeTransition,
   type PrincipalRuntimeState,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 
 export type TaskGovernanceEvent =
   | { type: "task_claimed"; agent_id: string; task_id: string }

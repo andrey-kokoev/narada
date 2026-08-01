@@ -27,7 +27,7 @@
   ],
   "verification": [
     {
-      "command": "pnpm --filter @narada2/cli exec vitest run test/docs/agent-carrier-contract.test.ts",
+      "command": "pnpm --filter @narada-core/cli exec vitest run test/docs/agent-carrier-contract.test.ts",
       "result": "passed: 2 tests"
     },
     {

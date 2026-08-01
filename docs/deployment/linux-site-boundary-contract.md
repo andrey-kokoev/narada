@@ -21,10 +21,10 @@ The Linux Site materialization **must** provide:
 | 1 | **Site discovery** | Scan `/var/lib/narada/` for site directories | Scan `~/.local/share/narada/` for site directories | Operator must be able to enumerate Sites without knowing IDs in advance |
 | 2 | **Site root resolution** | Resolve `{siteRoot}` from `/var/lib/narada/{site_id}` (overridable by `NARADA_SITE_ROOT`) | Resolve `{siteRoot}` from `~/.local/share/narada/{site_id}` (overridable by `NARADA_SITE_ROOT`) | Deterministic, documented path conventions |
 | 3 | **Config loading** | Load `config.json` from `{siteRoot}` using existing `loadConfig()` | Same | Reuse kernel config schema; no new config format |
-| 4 | **Lock acquisition** | `FileLock` from `@narada2/control-plane` (already cross-platform) | Same | Existing module handles Linux; no new lock implementation |
+| 4 | **Lock acquisition** | `FileLock` from `@narada-core/control-plane` (already cross-platform) | Same | Existing module handles Linux; no new lock implementation |
 | 5 | **Stuck-lock recovery** | TTL comparison on lock metadata + atomic steal | Same | Unattended operation layer §2.2 protocol |
 | 6 | **Bounded Cycle runner** | Execute 8-step pipeline (sync → derive → evaluate → handoff → reconcile → trace → health) | Same | Reuse `DefaultSyncRunner` for step 2; remaining steps use existing control-plane stores |
-| 7 | **Health transitions** | `computeHealthTransition()` from `@narada2/control-plane/src/health.ts` | Same | Existing state machine implements unattended layer §3 exactly |
+| 7 | **Health transitions** | `computeHealthTransition()` from `@narada-core/control-plane/src/health.ts` | Same | Existing state machine implements unattended layer §3 exactly |
 | 8 | **Health persistence** | SQLite `site_health` table in `{siteRoot}/db/coordinator.db` | Same table, XDG path | DO SQLite on Cloudflare; local SQLite on Linux |
 | 9 | **Trace persistence** | SQLite `cycle_traces` table + filesystem `{siteRoot}/traces/` | SQLite table + filesystem traces/ | Compact traces in SQLite; large artifacts on filesystem |
 | 10 | **Credential resolution** | env → `.env` → config (v0); systemd credentials (v1) | env → `.env` → config (v0); Secret Service / `pass` (v1) | System-mode uses Linux-native secret binding; user-mode uses desktop secret stores |

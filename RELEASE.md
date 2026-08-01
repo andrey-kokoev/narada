@@ -1,16 +1,16 @@
 # Publishing Narada Packages
 
-This repo publishes public npm packages under `@narada2/*`.
+This repo publishes public npm packages under `@narada-core/*`.
 
 Current packages:
 
-- `@narada2/control-plane`
-- `@narada2/cli`
-- `@narada2/daemon`
-- `@narada2/search`
-- `@narada2/charters`
-- `@narada2/ops-kit` (library only, no binary)
-- `@narada2/ui` (compiled renderer-neutral stylesheet)
+- `@narada-core/control-plane`
+- `@narada-core/cli`
+- `@narada-core/daemon`
+- `@narada-core/search`
+- `@narada-core/charters`
+- `@narada-core/ops-kit` (library only, no binary)
+- `@narada-core/ui` (compiled renderer-neutral stylesheet)
 
 `config/npm-publication-packages.json` is the canonical publication package
 inventory. Release validation reads that manifest directly; this list is its
@@ -31,7 +31,7 @@ Operational knowledge, private mailbox configs, and customer-specific playbooks 
 
 ## One-Time Setup
 
-1. Ensure npm ownership exists for the `@narada2` scope.
+1. Ensure npm ownership exists for the `@narada-core` scope.
 2. Run `npm login` with an account that can publish under that scope.
 3. Keep the git worktree clean before publishing.
 
@@ -71,4 +71,4 @@ pnpm release
 
 - `pnpm release` will modify package versions and changelog files before publish.
 - After a successful publish, commit those version bumps.
-- Private ops repos such as `narada.sonar` should consume the published `@narada2/*` packages, not copy source code.
+- Private ops repos such as `narada.sonar` should consume the published `@narada-core/*` packages, not copy source code.

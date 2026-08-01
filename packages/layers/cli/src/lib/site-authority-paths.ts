@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 
 export function siteAuthorityRootForRoot(root: string): string {
   return siteAuthorityRootFromSiteRoot(root);

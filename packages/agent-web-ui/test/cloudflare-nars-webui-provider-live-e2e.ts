@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { buildProjectionRegistrationPlan } from '@narada2/cloudflare-nars-projection';
+import { buildProjectionRegistrationPlan } from '@narada-core/cloudflare-nars-projection';
 import { validateRemoteCloudflareApiBaseUrl } from '../../cloudflare-nars-projection/scripts/lib/live-boundary.js';
 import {
   findHeadlessBrowser,
@@ -42,10 +42,10 @@ if (args.help) {
     'Cloudflare Web UI -> Cloudflare projection -> Cloudflare NARS -> provider live E2E',
     '',
     'Planning mode:',
-    '  pnpm --filter @narada2/agent-web-ui test:live:cloudflare-nars-webui-provider',
+    '  pnpm --filter @narada-core/agent-web-ui test:live:cloudflare-nars-webui-provider',
     '',
     'Live mode:',
-    '  pnpm --filter @narada2/agent-web-ui test:live:cloudflare-nars-webui-provider -- --live --cloudflare-projection-url <url> --cloudflare-nars-url <url> --principal-id principal:andrey',
+    '  pnpm --filter @narada-core/agent-web-ui test:live:cloudflare-nars-webui-provider -- --live --cloudflare-projection-url <url> --cloudflare-nars-url <url> --principal-id principal:andrey',
     '',
     'The authority browser credential is generated unless --browser-token is supplied.',
   ].join('\n'));

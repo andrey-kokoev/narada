@@ -6,7 +6,7 @@ import {
   type SiteRegistryManagementResponse,
   type SiteRegistryMutationRequest,
   type SiteRegistryShowResponse,
-} from '@narada2/site-registry-contract';
+} from '@narada-core/site-registry-contract';
 import { createSiteRegistryTransport, type SiteRegistryTransport } from './transport';
 
 export interface SiteRegistryClient {

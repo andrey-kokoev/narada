@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import type { OperatorSiteAgentWireRecord } from '@narada2/operator-console-contract';
+import type { OperatorSiteAgentWireRecord } from '@narada-core/operator-console-contract';
 import { decideAgentInspection, decideAgentPrimaryAction } from '../src/site-agents/interactions.ts';
 
 function agent(state: 'running' | 'stopped' | 'degraded' | 'ambiguous', sessionId: string | null = null): OperatorSiteAgentWireRecord {

@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { pathToFileURL, fileURLToPath } from 'node:url';
-import { projectCloudflareSiteRegistrySites } from '@narada2/cloudflare-site-registry';
+import { projectCloudflareSiteRegistrySites } from '@narada-core/cloudflare-site-registry';
 
 const DEFAULT_OUTPUT_PATH = '.narada/site-registry/cloudflare-sites.json';
 

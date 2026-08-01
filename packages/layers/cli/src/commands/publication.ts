@@ -3,7 +3,7 @@ import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { createHash } from 'node:crypto';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { openTaskLifecycleStore, type TaskLifecycleStore } from '../lib/task-lifecycle-store.js';
@@ -14,7 +14,7 @@ import {
 import {
   type RepoPublicationRow,
   type RepoPublicationStatus,
-} from '@narada2/intent-zones/repo-publication-intent';
+} from '@narada-core/intent-zones/repo-publication-intent';
 
 export interface PublicationPrepareOptions {
   message?: string;

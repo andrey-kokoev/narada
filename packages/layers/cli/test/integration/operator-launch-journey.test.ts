@@ -5,9 +5,9 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { appendFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { buildCanonicalLocalTestSeed, canonicalSha256 } from '@narada2/invokable-intelligence-contract';
-import { discoverNarsSessions, writeNarsSessionStartedIndex } from '@narada2/nars-session-core/session-index';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
+import { buildCanonicalLocalTestSeed, canonicalSha256 } from '@narada-core/invokable-intelligence-contract';
+import { discoverNarsSessions, writeNarsSessionStartedIndex } from '@narada-core/nars-session-core/session-index';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const naradaProperRoot = resolve(__dirname, '..', '..', '..', '..', '..');

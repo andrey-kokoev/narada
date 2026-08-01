@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
-import { siteAuthorityRootFromSiteRoot } from '@narada2/site-paths';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
+import { siteAuthorityRootFromSiteRoot } from '@narada-core/site-paths';
 import {
   buildCheckpointDescriptor,
   buildHydrationRequestDescriptor,
   findDeniedSourceImports,
-} from '@narada2/agent-context-memory';
+} from '@narada-core/agent-context-memory';
 import { cwd as processCwd, env as processEnv, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
   inboxDoctorCommand,
@@ -377,7 +377,7 @@ async function callTool(params: unknown, siteContext: McpSiteContext): Promise<M
       return jsonToolResult(attachTraversal({
         status: 'success',
         schema: 'narada.site_task_lifecycle.mcp_plan_init_result.v0',
-        packageName: '@narada2/site-task-lifecycle',
+        packageName: '@narada-core/site-task-lifecycle',
         siteId: traversal.target_site.site_id,
         paths: planSiteTaskLifecyclePathsForMcp(stringField(args, 'site_root') ?? traversal.target_site.site_root),
         mutationAttempted: false,
@@ -992,7 +992,7 @@ interface AgentContextMemoryStore {
   site_id: string;
   target_site_root: string;
   carrier_id: 'agent_context_memory_local_storage';
-  package_name: '@narada2/agent-context-memory';
+  package_name: '@narada-core/agent-context-memory';
   package_owns_sqlite_dependency: false;
   source_state_imported: false;
   named_agents: unknown[];
@@ -1035,7 +1035,7 @@ function planAgentContextHydration(args: {
   return {
     status: 'success',
     schema: 'narada.agent_context_memory.mcp_plan_hydration_result.v0',
-    packageName: '@narada2/agent-context-memory',
+    packageName: '@narada-core/agent-context-memory',
     siteId: args.siteId,
     storePath: agentContextMemoryStorePath(args.siteRoot),
     descriptor,
@@ -1105,7 +1105,7 @@ function recordAgentContextCheckpoint(args: {
   return {
     status: 'success',
     schema: 'narada.agent_context_memory.mcp_record_checkpoint_result.v0',
-    packageName: '@narada2/agent-context-memory',
+    packageName: '@narada-core/agent-context-memory',
     checkpointId: args.checkpointId,
     storePath: agentContextMemoryStorePath(args.siteRoot),
     checkpoint: descriptor,
@@ -1177,7 +1177,7 @@ function readAgentContextMemoryStore(siteRoot: string, siteId: string): AgentCon
     site_id: stringField(existing ?? {}, 'site_id') ?? siteId,
     target_site_root: stringField(existing ?? {}, 'target_site_root') ?? resolve(siteRoot),
     carrier_id: 'agent_context_memory_local_storage',
-    package_name: '@narada2/agent-context-memory',
+    package_name: '@narada-core/agent-context-memory',
     package_owns_sqlite_dependency: false,
     source_state_imported: false,
     named_agents: Array.isArray(existing?.named_agents) ? existing.named_agents : [],

@@ -12,7 +12,7 @@ import {
   type LeaseSummary,
   type StaleLeaseRecoveryEvent,
   type QuiescenceIndicator,
-} from '@narada2/control-plane';
+} from '@narada-core/control-plane';
 
 // Lazy-load SQLite driver to avoid eager native-module load in test environments
 async function loadControlPlaneSnapshot(
@@ -20,7 +20,7 @@ async function loadControlPlaneSnapshot(
   scopeId: string,
 ): Promise<ControlPlaneStatusSnapshot | undefined> {
   const { Database, SqliteCoordinatorStore, SqliteOutboundStore, buildControlPlaneSnapshot } = await import(
-    '@narada2/control-plane'
+    '@narada-core/control-plane'
   );
   const db = new Database(dbPath);
   try {
@@ -124,14 +124,14 @@ export async function statusCommand(
     }
 
     // Try macOS first
-    const { isMacosSite } = await import('@narada2/macos-site');
+    const { isMacosSite } = await import('@narada-core/macos-site');
     if (isMacosSite(options.site)) {
       return statusMacosSite(options.site, logger);
     }
 
     // Try Linux next
     try {
-      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada2/linux-site');
+      const { isLinuxSite, resolveLinuxSiteMode } = await import('@narada-core/linux-site');
       const linuxMode = resolveLinuxSiteMode(options.site);
       if (linuxMode) {
         return statusLinuxSite(options.site, linuxMode, logger);
@@ -239,7 +239,7 @@ async function statusMacosSite(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   logger.info('Querying macOS Site', { siteId });
 
-  const { getMacosSiteStatus } = await import('@narada2/macos-site');
+  const { getMacosSiteStatus } = await import('@narada-core/macos-site');
 
   try {
     const status = await getMacosSiteStatus(siteId);
@@ -279,7 +279,7 @@ async function statusLinuxSite(
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   logger.info('Querying Linux Site', { siteId, mode });
 
-  const { getLinuxSiteStatus } = await import('@narada2/linux-site');
+  const { getLinuxSiteStatus } = await import('@narada-core/linux-site');
 
   try {
     const status = await getLinuxSiteStatus(siteId, mode);
@@ -322,7 +322,7 @@ async function statusWindowsSite(
   const {
     resolveSiteVariant,
     getWindowsSiteStatus,
-  } = await import('@narada2/windows-site');
+  } = await import('@narada-core/windows-site');
 
   const variant = resolveSiteVariant(siteId);
   if (!variant) {

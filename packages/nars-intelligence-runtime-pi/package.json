@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/nars-pi-kernel",
+  "name": "@narada-core/nars-pi-kernel",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,9 +11,9 @@
   ],
   "narada": {
     "package_role": "nars_intelligence_kernel",
-    "implements": "@narada2/nars-intelligence-kernel-contract",
+    "implements": "@narada-core/nars-intelligence-kernel-contract",
     "substrate": "@earendil-works/pi-coding-agent",
-    "canonical_state_owner": "@narada2/nars-session-core",
+    "canonical_state_owner": "@narada-core/nars-session-core",
     "operator_surface_independent": true
   },
   "exports": {
@@ -40,13 +40,13 @@
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.80.10",
-    "@narada2/nars-intelligence-kernel-contract": "workspace:*"
+    "@narada-core/nars-intelligence-kernel-contract": "workspace:*"
   },
   "description": "Pi SDK/RPC implementation of the NARS intelligence-kernel boundary",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/nars-intelligence-runtime-pi"
   },
   "engines": {

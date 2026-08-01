@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeAll, afterAll } from "vitest";
 import { get, request as httpRequest } from "node:http";
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import {
   SqliteCoordinatorStore,
   SqliteOutboundStore,
@@ -8,7 +8,7 @@ import {
   SqliteProcessExecutionStore,
   SqliteFactStore,
   DefaultWorkerRegistry,
-} from "@narada2/control-plane";
+} from "@narada-core/control-plane";
 import { createObservationServer, type ObservationApiScope } from "../../src/observation/observation-server.js";
 
 async function httpGetJson(url: string): Promise<unknown> {

@@ -1,4 +1,4 @@
-# @narada2/mcp-fabric
+# @narada-core/mcp-fabric
 
 Package-owned MCP fabric loader and projection helpers used by Narada carriers.
 
@@ -13,7 +13,7 @@ Canonical source:
 D:\code\narada\packages\mcp-fabric\src\mcp-fabric.mjs
 ```
 
-`@narada2/agent-cli` imports this package source for interactive `agent-cli` and
+`@narada-core/agent-cli` imports this package source for interactive `agent-cli` and
 Agent Runtime Server mode. Site-local launcher code may point at a Site `.ai\mcp` fabric,
 but it must not fork MCP fabric parsing or projection behavior.
 
@@ -24,7 +24,7 @@ Carrier/client projections are disposable outputs: regenerate them from that
 registry with:
 
 ```powershell
-pnpm --filter @narada2/typed-mcp-surface exec node src/generate-carrier-mcp-config.mjs --site-root <site-root> --carrier all --write
+pnpm --filter @narada-core/typed-mcp-surface exec node src/generate-carrier-mcp-config.mjs --site-root <site-root> --carrier all --write
 ```
 
 Use the same command with `--check` to verify generated files without writing.
@@ -40,7 +40,7 @@ derived from the same registry and is not a second authority.
 Materializing those rules into a private Kimi config is explicit and opt-in:
 
 ```powershell
-pnpm --filter @narada2/typed-mcp-surface exec node src/generate-carrier-mcp-config.mjs `
+pnpm --filter @narada-core/typed-mcp-surface exec node src/generate-carrier-mcp-config.mjs `
   --site-root <site-root> --carrier kimi --write `
   --kimi-config-path <path-to-kimi-config.toml> `
   --materialize-kimi-permissions
@@ -71,6 +71,6 @@ tool authority or replace the carrier action-admission boundary.
 ## Verification
 
 ```powershell
-pnpm --filter @narada2/mcp-fabric test
-pnpm --filter @narada2/mcp-fabric typecheck
+pnpm --filter @narada-core/mcp-fabric test
+pnpm --filter @narada-core/mcp-fabric typecheck
 ```

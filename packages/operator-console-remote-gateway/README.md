@@ -1,4 +1,4 @@
-# @narada2/operator-console-remote-gateway
+# @narada-core/operator-console-remote-gateway
 
 The local crossing boundary for a remote Operator Console projection.
 

@@ -1,5 +1,5 @@
 {
-  "name": "@narada2/nars-capability-gateway",
+  "name": "@narada-core/nars-capability-gateway",
   "version": "0.1.0",
   "description": "NARS capability gateway",
   "private": true,
@@ -46,14 +46,14 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@narada2/launch-process-ownership": "workspace:*",
-    "@narada2/mcp-fabric": "workspace:*",
-    "@narada2/process-launch-posture": "workspace:*"
+    "@narada-core/launch-process-ownership": "workspace:*",
+    "@narada-core/mcp-fabric": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
   },
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/andrey-kokoev/narada.git",
+    "url": "git+https://github.com/narada-core/narada.git",
     "directory": "packages/nars-capability-gateway"
   },
   "engines": {

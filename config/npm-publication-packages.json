@@ -2,31 +2,31 @@
   "schema": "narada.npm_publication_packages.v1",
   "packages": [
     {
-      "name": "@narada2/control-plane",
+      "name": "@narada-core/control-plane",
       "path": "packages/layers/control-plane"
     },
     {
-      "name": "@narada2/cli",
+      "name": "@narada-core/cli",
       "path": "packages/layers/cli"
     },
     {
-      "name": "@narada2/daemon",
+      "name": "@narada-core/daemon",
       "path": "packages/layers/daemon"
     },
     {
-      "name": "@narada2/search",
+      "name": "@narada-core/search",
       "path": "packages/verticals/search"
     },
     {
-      "name": "@narada2/charters",
+      "name": "@narada-core/charters",
       "path": "packages/domains/charters"
     },
     {
-      "name": "@narada2/ops-kit",
+      "name": "@narada-core/ops-kit",
       "path": "packages/ops-kit"
     },
     {
-      "name": "@narada2/ui",
+      "name": "@narada-core/ui",
       "path": "packages/ui"
     }
   ]

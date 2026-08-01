@@ -1,16 +1,16 @@
 type AnyRecord = Record<string, any>;
 
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada2/operator-router';
-import { OPERATOR_CONSOLE_PATH } from '@narada2/operator-console-contract';
-import { ensureOperatorConsoleRuntime } from '@narada2/operator-console-runtime';
+import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada-core/operator-router';
+import { OPERATOR_CONSOLE_PATH } from '@narada-core/operator-console-contract';
+import { ensureOperatorConsoleRuntime } from '@narada-core/operator-console-runtime';
 import {
   createOverlayDocument,
   requestOverlayRefresh,
   startOverlay,
   stopOverlay,
   inspectOverlay,
-} from '@narada2/window-overlay-core';
+} from '@narada-core/window-overlay-core';
 
 export const OPERATOR_CONSOLE_OVERLAY_ID = 'operator-console';
 

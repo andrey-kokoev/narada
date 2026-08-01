@@ -42,7 +42,7 @@
       "result": "passed"
     }
   ],
-  "terminal_claim": "@narada2/windows-pc-site-template now includes descriptor-only greenfield Windows PC Site template planning with local admission and refusal guards.",
+  "terminal_claim": "@narada-core/windows-pc-site-template now includes descriptor-only greenfield Windows PC Site template planning with local admission and refusal guards.",
   "refused_imports": [
     "desktop-sunroom-2 runtime state",
     "machine identity",
@@ -62,5 +62,5 @@
     "PC-locus authority"
   ],
   "rollback": "Remove template plan source, tests, source inventory doc, README section, and this task evidence. No PC runtime or filesystem state was created or imported.",
-  "next_smallest_slice": "Deepen @narada2/windows-komorebi-yasb-kit with policy/template descriptors and no live Komorebi/YASB state import."
+  "next_smallest_slice": "Deepen @narada-core/windows-komorebi-yasb-kit with policy/template descriptors and no live Komorebi/YASB state import."
 }

@@ -18,14 +18,14 @@ import {
   canonicalTestClock,
   feasibleTopologyObservations,
   revokeMaterializedProjection,
-} from "@narada2/invokable-intelligence-contract";
+} from "@narada-core/invokable-intelligence-contract";
 import type {
   MaterializationAdmission,
   MaterializationEnvelope,
-} from "@narada2/invokable-intelligence-contract";
-import { SqliteRegistryStore } from "@narada2/invokable-intelligence-registry";
-import type { IntelligenceRegistryStore } from "@narada2/invokable-intelligence-registry";
-import { deterministicId } from "@narada2/invokable-intelligence-resolver";
+} from "@narada-core/invokable-intelligence-contract";
+import { SqliteRegistryStore } from "@narada-core/invokable-intelligence-registry";
+import type { IntelligenceRegistryStore } from "@narada-core/invokable-intelligence-registry";
+import { deterministicId } from "@narada-core/invokable-intelligence-resolver";
 
 import { buildResolverContext, createLocalInvocationGateway } from "../src/index.js";
 import type {

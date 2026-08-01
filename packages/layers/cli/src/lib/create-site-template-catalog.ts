@@ -24,7 +24,7 @@ export function expandCreateSitePackageDescriptorsFromPackages(
 ): CreateSitePackageDescriptor[] {
   return packages.map((pkg) => {
     const packageName = String(pkg.name ?? '');
-    if (packageName === '@narada2/site-task-lifecycle') {
+    if (packageName === '@narada-core/site-task-lifecycle') {
       return {
         package_name: packageName,
         posture: 'descriptor_only',
@@ -44,7 +44,7 @@ export function expandCreateSitePackageDescriptorsFromPackages(
         ],
       };
     }
-    if (packageName === '@narada2/agent-context-memory') {
+    if (packageName === '@narada-core/agent-context-memory') {
       return {
         package_name: packageName,
         posture: 'descriptor_only',
@@ -66,7 +66,7 @@ export function expandCreateSitePackageDescriptorsFromPackages(
         ],
       };
     }
-    if (packageName === '@narada2/site-inbox') {
+    if (packageName === '@narada-core/site-inbox') {
       return {
         package_name: packageName,
         posture: 'descriptor_only',
@@ -87,7 +87,7 @@ export function expandCreateSitePackageDescriptorsFromPackages(
         ],
       };
     }
-    if (packageName === '@narada2/site-config') {
+    if (packageName === '@narada-core/site-config') {
       return {
         package_name: packageName,
         posture: 'descriptor_only',
@@ -108,7 +108,7 @@ export function expandCreateSitePackageDescriptorsFromPackages(
         ],
       };
     }
-    if (packageName === '@narada2/site-lift') {
+    if (packageName === '@narada-core/site-lift') {
       return {
         package_name: packageName,
         posture: 'descriptor_only',

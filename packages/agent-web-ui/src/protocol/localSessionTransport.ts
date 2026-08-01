@@ -1,4 +1,4 @@
-import { buildAgentWebUiEventsReadFrame, buildAgentWebUiSubscribeFrame } from '@narada2/nars-client-projection-contract';
+import { buildAgentWebUiEventsReadFrame, buildAgentWebUiSubscribeFrame } from '@narada-core/nars-client-projection-contract';
 import { applyRuntimeEventToWebUiState, isTerminalRuntimeEvent, sequenceFromRuntimeMessage, unwrapRuntimeEvent } from '../runtime-events.ts';
 import { reconnectDelayForAttempt } from '../event-stream.ts';
 import { sessionIdFromTransportMessage, toSessionProtocolFrame } from './sessionTransport';

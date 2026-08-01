@@ -46,8 +46,8 @@ SSE is not the required operator path for this proof. Local SSE plausibility is 
 Run from `D:\code\narada`:
 
 ```text
-pnpm --filter @narada2/agent-web-ui build
-pnpm --filter @narada2/cloudflare-nars-projection deploy:live
+pnpm --filter @narada-core/agent-web-ui build
+pnpm --filter @narada-core/cloudflare-nars-projection deploy:live
 ```
 
 The deploy command publishes the Worker and static UI assets. The command output includes the deployed Worker URL and version id.

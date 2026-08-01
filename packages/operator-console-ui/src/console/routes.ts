@@ -1,12 +1,12 @@
-import type { RegistryManagementOperation } from '@narada2/site-registry-contract';
+import type { RegistryManagementOperation } from '@narada-core/site-registry-contract';
 import {
   findOperatorSurfaceRoute,
   projectOperatorSurfaceNavigation,
   type OperatorSurfaceRouteTarget,
   type OperatorWorkspaceRouteDirectory,
   type OperatorSurfaceNavigationKey,
-} from '@narada2/operator-console-contract';
-import type { OperatorSurfaceNavItem } from '@narada2/ui-vue';
+} from '@narada-core/operator-console-contract';
+import type { OperatorSurfaceNavItem } from '@narada-core/ui-vue';
 
 export type OperatorConsoleRouteKind =
   | 'host-fleet'

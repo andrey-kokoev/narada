@@ -17,7 +17,7 @@ import type {
   PendingOutboundCommand,
   PendingDraft,
   CredentialRequirement,
-} from "@narada2/windows-site";
+} from "@narada-core/windows-site";
 
 function resolveCloudflareToken(siteId: string): string | undefined {
   const envKey = `NARADA_CLOUDFLARE_TOKEN_${siteId.toUpperCase().replace(/-/g, "_")}`;

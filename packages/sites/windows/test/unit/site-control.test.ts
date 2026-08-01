@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import Database from "@narada2/sqlite";
+import Database from "@narada-core/sqlite";
 import { SiteRegistry } from "../../src/registry.js";
 import {
   WindowsSiteControlClient,

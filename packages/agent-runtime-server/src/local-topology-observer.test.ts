@@ -7,8 +7,8 @@ import {
   CANONICAL_LOCAL_TEST_IDS,
   canonicalSha256,
   canonicalTestClock,
-} from '@narada2/invokable-intelligence-contract';
-import { SqliteRegistryStore } from '@narada2/invokable-intelligence-registry';
+} from '@narada-core/invokable-intelligence-contract';
+import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
 
 import {
   createLocalTopologyObserver,

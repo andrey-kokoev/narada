@@ -24,7 +24,7 @@ function normalizeFocusedCommand(command) {
   const rosterSuite = "test/commands/task-roster.test.ts";
   const taskCloseSuite = "test/commands/task-close.test.ts";
   if (
-    /@narada2\/cli/.test(command) &&
+    /@narada-core\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
     command.includes(promoteSuite)
   ) {
@@ -36,7 +36,7 @@ function normalizeFocusedCommand(command) {
     return `${envPrefix}node scripts/cli-focused-proof.ts task-promote-recommendation`;
   }
   if (
-    /@narada2\/cli/.test(command) &&
+    /@narada-core\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
     command.includes(rosterSuite)
   ) {
@@ -48,7 +48,7 @@ function normalizeFocusedCommand(command) {
     return `${envPrefix}node scripts/cli-focused-proof.ts task-roster`;
   }
   if (
-    /@narada2\/cli/.test(command) &&
+    /@narada-core\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
     command.includes(taskCloseSuite)
   ) {
@@ -56,7 +56,7 @@ function normalizeFocusedCommand(command) {
   }
 
   const isCliVitestSingleFile =
-    /@narada2\/cli/.test(command) &&
+    /@narada-core\/cli/.test(command) &&
     /\bvitest\s+run\b/.test(command) &&
     (command.match(/\S+\.(?:test|spec)\.[cm]?[tj]sx?/g) ?? []).length === 1;
 

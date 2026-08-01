@@ -24,7 +24,7 @@
     "automatic work-next claimability for MCP-admitted rows"
   ],
   "verification": [
-    "pnpm --filter @narada2/narada-proper-mcp test",
-    "pnpm --filter @narada2/narada-proper-mcp typecheck"
+    "pnpm --filter @narada-core/narada-proper-mcp test",
+    "pnpm --filter @narada-core/narada-proper-mcp typecheck"
   ]
 }

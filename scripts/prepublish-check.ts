@@ -131,7 +131,7 @@ function runPackSmokeCheck(): CheckResult {
           };
         }
 
-        const installedCliEntrypoint = join(consumer, 'node_modules', '@narada2', 'cli', 'dist', 'main.js');
+        const installedCliEntrypoint = join(consumer, 'node_modules', '@narada-core', 'cli', 'dist', 'main.js');
         const consumerSiteRoot = mkdtempSync(join(tmp, 'cli-consumer-site-'));
         const bootstrap = runCommand(
           `${JSON.stringify(process.execPath)} ${JSON.stringify(installedCliEntrypoint)} install windows-user-site --site-root ${JSON.stringify(consumerSiteRoot)} --format json`,

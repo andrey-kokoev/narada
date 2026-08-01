@@ -8,7 +8,7 @@ import type { Logger } from './logger.js';
 import { createLogger } from './logger.js';
 import { ExitCode } from './exit-codes.js';
 import type { OutputFormat } from './formatter.js';
-import { configureLogging, setLogLevel, setLogFormat, metrics } from '@narada2/control-plane';
+import { configureLogging, setLogLevel, setLogFormat, metrics } from '@narada-core/control-plane';
 import {
   assertAuthorityCloneForMutation,
   authorityCloneErrorToCommandResult,

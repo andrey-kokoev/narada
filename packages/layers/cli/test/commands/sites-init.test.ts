@@ -32,9 +32,9 @@ const mockRegistry = {
   close: vi.fn(),
 };
 
-vi.mock('@narada2/windows-site', async (importOriginal) => {
+vi.mock('@narada-core/windows-site', async (importOriginal) => {
   const { vol } = await import('memfs');
-  const mod = await importOriginal<typeof import('@narada2/windows-site')>();
+  const mod = await importOriginal<typeof import('@narada-core/windows-site')>();
   return {
     ...mod,
     resolveSiteRoot: vi.fn((_siteId: string, variant: string) => `/tmp/windows-${variant}/${_siteId}`),
@@ -49,9 +49,9 @@ vi.mock('@narada2/windows-site', async (importOriginal) => {
   };
 });
 
-vi.mock('@narada2/macos-site', async (importOriginal) => {
+vi.mock('@narada-core/macos-site', async (importOriginal) => {
   const { vol } = await import('memfs');
-  const mod = await importOriginal<typeof import('@narada2/macos-site')>();
+  const mod = await importOriginal<typeof import('@narada-core/macos-site')>();
   return {
     ...mod,
     resolveSiteRoot: vi.fn((_siteId: string) => `/tmp/macos/${_siteId}`),
@@ -63,9 +63,9 @@ vi.mock('@narada2/macos-site', async (importOriginal) => {
   };
 });
 
-vi.mock('@narada2/linux-site', async (importOriginal) => {
+vi.mock('@narada-core/linux-site', async (importOriginal) => {
   const { vol } = await import('memfs');
-  const mod = await importOriginal<typeof import('@narada2/linux-site')>();
+  const mod = await importOriginal<typeof import('@narada-core/linux-site')>();
   return {
     ...mod,
     resolveSiteRoot: vi.fn((_siteId: string, _mode: string) => `/tmp/linux-${_mode}/${_siteId}`),
@@ -876,7 +876,7 @@ describe('sitesInitCommand', () => {
     expect(cli?.detail).toMatch(/packages[\\/]layers[\\/]cli[\\/]dist[\\/]main\.js/);
     expect(cli?.detail).not.toContain(`${cwd}/packages/layers/cli/dist/main.js`);
     if (cli?.status === 'fail') {
-      expect(cli.unblock_command).toBe('pnpm --filter @narada2/cli build && pnpm run narada:install-shim');
+      expect(cli.unblock_command).toBe('pnpm --filter @narada-core/cli build && pnpm run narada:install-shim');
     }
   });
 

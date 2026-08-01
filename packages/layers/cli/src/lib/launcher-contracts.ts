@@ -1,6 +1,6 @@
-import type { LaunchProcessOwnership } from '@narada2/launch-process-ownership';
-import type { AgentStartSessionRef } from '@narada2/agent-start/launch-result-v0-contract';
-import type { IntelligenceSelectionAuthority } from '@narada2/invokable-intelligence-contract';
+import type { LaunchProcessOwnership } from '@narada-core/launch-process-ownership';
+import type { AgentStartSessionRef } from '@narada-core/agent-start/launch-result-v0-contract';
+import type { IntelligenceSelectionAuthority } from '@narada-core/invokable-intelligence-contract';
 
 export type JsonRecord = Record<string, unknown>;
 

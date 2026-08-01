@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue';
 import { Archive, Pencil, Play, RotateCcw, SearchCheck, Trash2 } from 'lucide-vue-next';
-import { OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH } from '@narada2/operator-console-contract';
+import { OPERATOR_CONSOLE_REGISTRY_MANAGE_PATH } from '@narada-core/operator-console-contract';
 import type { SiteDetailProjection } from '../projections';
 import { operatorConsoleNavigationHref } from '../../console/routes';
 import { useOperatorWorkspaceRouteDirectory } from '../../console/route-directory';

@@ -16,7 +16,7 @@ The source files are external orientation evidence only. Narada proper admits de
 
 ## Goal
 
-Deepen `@narada2/mcp-shell-windows` with:
+Deepen `@narada-core/mcp-shell-windows` with:
 
 - typed shell MCP boundary request/decision descriptors;
 - ownership classification across filesystem MCP, shell MCP Git tools, domain MCP, and refusal;

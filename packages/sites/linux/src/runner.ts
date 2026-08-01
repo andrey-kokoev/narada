@@ -1,4 +1,4 @@
-import { FileLock, computeHealthTransition } from "@narada2/control-plane";
+import { FileLock, computeHealthTransition } from "@narada-core/control-plane";
 import type { LinuxSiteConfig, LinuxCycleResult, LinuxSiteMode } from "./types.js";
 import { ensureSiteDir, resolveSiteRoot, siteDbPath } from "./path-utils.js";
 import { SqliteSiteCoordinator } from "./coordinator.js";
@@ -57,7 +57,7 @@ export class DefaultLinuxSiteRunner implements LinuxSiteRunner {
     try {
       await ensureSiteDir(config.site_id, config.mode);
 
-      const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+      const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
       const db = new DatabaseCtor(siteDbPath(config.site_id, config.mode));
       const coordinator = new SqliteSiteCoordinator(db);
 
@@ -138,7 +138,7 @@ export class DefaultLinuxSiteRunner implements LinuxSiteRunner {
 
       // Update health on failure
       try {
-        const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+        const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
         const db = new DatabaseCtor(siteDbPath(config.site_id, config.mode));
         const failCoordinator = new SqliteSiteCoordinator(db);
         try {

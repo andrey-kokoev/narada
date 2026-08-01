@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { resolve } from 'node:path';
-import { execFileGovernedSync } from '@narada2/process-launch-posture';
+import { execFileGovernedSync } from '@narada-core/process-launch-posture';
 import {
   findTaskFile,
   getActiveAssignment,

@@ -14,8 +14,8 @@ import { dirname, join, resolve } from 'node:path';
 import { enforceMcpGuard } from './mcp-guard.js';
 enforceMcpGuard(process.argv);
 
-import { loadRoster } from '@narada2/task-governance/task-governance';
-import { openTaskLifecycleStore } from '@narada2/task-governance/task-lifecycle-store';
+import { loadRoster } from '@narada-core/task-governance/task-governance';
+import { openTaskLifecycleStore } from '@narada-core/task-governance/task-lifecycle-store';
 
 const cwd: any = process.argv[2] || process.cwd();
 const dryRun: any = process.argv.includes('--dry-run');

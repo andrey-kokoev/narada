@@ -1,7 +1,7 @@
 # Task CLI Service Extraction Rails
 
 Task governance is being extracted from CLI command files into
-`@narada2/task-governance`. This document is the migration rail: it names the
+`@narada-core/task-governance`. This document is the migration rail: it names the
 current adapter boundary, the remaining command families, and the order in which
 they should move.
 
@@ -31,12 +31,12 @@ may render those objects, but must not reinterpret their authority outcome.
 
 | Command | Package Service | Status |
 | --- | --- | --- |
-| `task close` | `@narada2/task-governance/task-close-service` | Adapter-complete |
-| `task allocate` | `@narada2/task-governance/task-allocate-service` | Adapter-complete |
-| `task search` | `@narada2/task-governance/task-search-service` | Adapter-complete |
-| `task claim` | `@narada2/task-governance/task-assignment-lifecycle-service` | Adapter-complete, except CLI-local principal-runtime advisory bridge |
-| `task continue` | `@narada2/task-governance/task-assignment-lifecycle-service` | Adapter-complete |
-| `task release` | `@narada2/task-governance/task-assignment-lifecycle-service` | Adapter-complete, except CLI-local principal-runtime advisory bridge |
+| `task close` | `@narada-core/task-governance/task-close-service` | Adapter-complete |
+| `task allocate` | `@narada-core/task-governance/task-allocate-service` | Adapter-complete |
+| `task search` | `@narada-core/task-governance/task-search-service` | Adapter-complete |
+| `task claim` | `@narada-core/task-governance/task-assignment-lifecycle-service` | Adapter-complete, except CLI-local principal-runtime advisory bridge |
+| `task continue` | `@narada-core/task-governance/task-assignment-lifecycle-service` | Adapter-complete |
+| `task release` | `@narada-core/task-governance/task-assignment-lifecycle-service` | Adapter-complete, except CLI-local principal-runtime advisory bridge |
 
 ## Remaining Service Families
 
@@ -56,7 +56,7 @@ may render those objects, but must not reinterpret their authority outcome.
    package tests cover the moved rules and the CLI test only proves adapter
    behavior.
 2. Export each service through `packages/task-governance/package.json`.
-3. Rebuild `@narada2/task-governance` before running CLI typecheck or CLI tests.
+3. Rebuild `@narada-core/task-governance` before running CLI typecheck or CLI tests.
 4. Keep result objects bounded. Any large observation must become an admitted
    observation artifact, not terminal output.
 5. Do not use the CLI command as the service API. The package service owns the

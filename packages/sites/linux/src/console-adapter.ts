@@ -22,7 +22,7 @@ import type {
   PendingOutboundCommand,
   PendingDraft,
   CredentialRequirement,
-} from "@narada2/windows-site";
+} from "@narada-core/windows-site";
 import {
   getSiteHealth,
   resolveLinuxSiteMode,
@@ -79,7 +79,7 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
   }
 
   async getStuckWorkItems(): Promise<StuckWorkItem[]> {
-    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+    const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
     const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
     try {
       const tableCheck = db.prepare(
@@ -126,7 +126,7 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
   }
 
   async getPendingOutboundCommands(): Promise<PendingOutboundCommand[]> {
-    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+    const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
     const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
     try {
       const tableCheck = db.prepare(
@@ -176,7 +176,7 @@ export class LinuxSiteObservationApi implements SiteObservationApi {
   }
 
   async getPendingDrafts(): Promise<PendingDraft[]> {
-    const { Database: DatabaseCtor } = await import("@narada2/control-plane");
+    const { Database: DatabaseCtor } = await import("@narada-core/control-plane");
     const db = new DatabaseCtor(siteDbPath(this.siteId, this.mode));
     try {
       const tableCheck = db.prepare(

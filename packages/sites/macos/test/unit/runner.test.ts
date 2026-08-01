@@ -136,7 +136,7 @@ describe("DefaultMacosSiteRunner", () => {
 
     it("fails fast if lock is held and not stale", async () => {
       // Acquire lock manually
-      const { FileLock } = await import("@narada2/control-plane");
+      const { FileLock } = await import("@narada-core/control-plane");
       const lock = new FileLock({
         rootDir: join(tempDir, "test-site"),
         lockName: "cycle.lock",

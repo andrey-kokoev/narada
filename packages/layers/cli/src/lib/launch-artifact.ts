@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { runGovernedCommandSync } from '@narada2/process-launch-posture';
+import { runGovernedCommandSync } from '@narada-core/process-launch-posture';
 import {
   checkLaunchArtifact,
   resolveLaunchArtifactDescriptor,
