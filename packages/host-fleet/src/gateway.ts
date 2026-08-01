@@ -314,7 +314,10 @@ export function createHostGatewayClient(record: HostRecord, options: HostGateway
       const token = await resolveHostGatewayCredential(record, options.credential_resolver, new Date(now()));
       const response = await fetchFn(`${baseEndpoint(record)}${path}`, {
         method,
-        headers: requestHeaders({ accept: 'text/html,application/xhtml+xml,application/octet-stream' }, record, token, requestId),
+        headers: {
+          ...requestHeaders(undefined, record, token, requestId),
+          accept: 'text/html,application/xhtml+xml,application/octet-stream',
+        },
         signal: AbortSignal.timeout(timeoutMs),
       });
       const contentLength = Number(response.headers.get('content-length') ?? '0');

@@ -22,8 +22,8 @@ import type {
   RegisteredSite,
   SiteObservationApi,
   SiteControlClientFactory,
-} from '@narada2/windows-site';
-import type { ConsoleControlRequest } from '@narada2/windows-site';
+} from '@narada-core/windows-site';
+import type { ConsoleControlRequest } from '@narada-core/windows-site';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
@@ -65,7 +65,7 @@ import {
   type OperatorConsoleOnboardingProjection,
   type OperatorConsoleOnboardingSetupAction,
   type OperatorConsoleOnboardingUiState,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import type { SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
 import {
   readOperatorConsoleUiAsset,
@@ -86,7 +86,7 @@ import {
   resolveRuntimeTarget,
   type HostFleetRegistry,
   type HostRuntimeSession,
-} from '@narada2/host-fleet';
+} from '@narada-core/host-fleet';
 
 export interface RouteHandler {
   route_id: string;
@@ -279,8 +279,10 @@ function hostFleetDocumentSuffix(value: string | undefined): string | null {
   if (!value) return '/console';
   try {
     const decoded = decodeURIComponent(value);
-    if (!decoded || decoded.includes('\\') || decoded.includes('..') || /[\u0000-\u001f\u007f]/u.test(decoded)) return null;
-    return `/console/${decoded.replace(/^\/+/, '')}`;
+    if (!decoded || decoded.includes('\\') || decoded.includes('..') || decoded.includes('?') || decoded.includes('#') || /[\u0000-\u001f\u007f]/u.test(decoded)) return null;
+    const segments = decoded.split('/');
+    if (segments.some((segment) => !segment || segment === '.')) return null;
+    return `/console/${segments.join('/')}`;
   } catch {
     return null;
   }
@@ -291,6 +293,13 @@ function rewriteHostFleetDocument(body: Uint8Array, contentType: string, mountPa
   const text = Buffer.from(body).toString('utf8');
   const rewritten = text.replaceAll('/console', mountPath);
   return Buffer.from(rewritten, 'utf8');
+}
+
+function safeHostFleetDocumentContentType(value: string): string {
+  const normalized = value.trim().slice(0, 256);
+  return /^[A-Za-z0-9!#$%&'*+.^_`|~-]+\/[A-Za-z0-9!#$%&'*+.^_`|~-]+(?:\s*;\s*[A-Za-z0-9!#$%&'*+.^_`|~-]+=(?:[A-Za-z0-9!#$%&'*+.^_`|~-]+|"[^"]*"))*$/u.test(normalized)
+    ? normalized
+    : 'application/octet-stream';
 }
 
 function onboardingHandoff(
@@ -719,6 +728,59 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-console-document',
+      method: 'GET',
+      pattern: new RegExp(`^${regexEscape(OPERATOR_CONSOLE_HOSTS_API_PATH)}/([^/]+)/([^/]+)/console(?:/(.*))?/?$`),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
+      handler: async (req, res, params) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason: 'origin_not_allowed' });
+          return;
+        }
+        const hostId = decodeHostFleetSegment(params[1] ?? '');
+        const instanceId = decodeHostFleetSegment(params[2] ?? '');
+        const remotePath = hostFleetDocumentSuffix(params[3]);
+        if (!hostId || !instanceId || !remotePath) {
+          jsonResponse(res, 400, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason: 'host_fleet_console_document_target_invalid' });
+          return;
+        }
+        const host = ctx.hostFleetRegistry?.getHost({ host_id: hostId, host_instance_id: instanceId });
+        if (!host) {
+          jsonResponse(res, 404, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason: 'host_not_registered' });
+          return;
+        }
+        if (host.lifecycle_state === 'revoked' || host.lifecycle_state === 'retired') {
+          jsonResponse(res, 409, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason: `host_${host.lifecycle_state}` });
+          return;
+        }
+        try {
+          const client = createHostGatewayClient(host, {
+            fetch_fn: ctx.hostFleetFetch,
+            credential_resolver: ctx.hostFleetCredentialResolver ?? resolveHostGatewayEnvironmentCredential,
+            observe_request: (observation) => ctx.hostFleetRegistry?.recordGatewayObservation(observation),
+          });
+          const requestId = typeof req.headers['x-request-id'] === 'string' ? req.headers['x-request-id'] : undefined;
+          const document = await client.requestDocument(remotePath, { ...(requestId ? { request_id: requestId } : {}) });
+          const mountPath = `${OPERATOR_CONSOLE_HOSTS_API_PATH}/${encodeURIComponent(hostId)}/${encodeURIComponent(instanceId)}/console`;
+          const body = rewriteHostFleetDocument(document.body, document.content_type, mountPath);
+          res.writeHead(document.status, {
+            'Content-Type': safeHostFleetDocumentContentType(document.content_type),
+            'Content-Length': body.byteLength,
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+          });
+          res.end(body);
+        } catch (error) {
+          const reason = error instanceof Error ? error.message.slice(0, 256) : String(error).slice(0, 256);
+          const status = /^host_gateway_http_404$/u.test(reason) ? 404 : 502;
+          jsonResponse(res, status, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason });
+        }
       },
     },
     {
@@ -1745,7 +1807,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        const { aggregateHealth } = await import('@narada2/windows-site');
+        const { aggregateHealth } = await import('@narada-core/windows-site');
         const summary = await aggregateHealth(ctx.registry, ctx.observationFactory);
         jsonResponse(res, 200, { summary });
       },
@@ -1765,7 +1827,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           jsonResponse(res, 403, { error: 'Origin not allowed' });
           return;
         }
-        const { deriveAttentionQueue } = await import('@narada2/windows-site');
+        const { deriveAttentionQueue } = await import('@narada-core/windows-site');
         const items = await deriveAttentionQueue(ctx.registry, ctx.observationFactory);
         jsonResponse(res, 200, { items });
       },
@@ -1954,7 +2016,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
 
-        const { ControlRequestRouter } = await import('@narada2/windows-site');
+        const { ControlRequestRouter } = await import('@narada-core/windows-site');
         const router = new ControlRequestRouter({
           registry: ctx.registry,
           clientFactory: ctx.controlClientFactory,

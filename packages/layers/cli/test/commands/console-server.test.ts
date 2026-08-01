@@ -6,8 +6,8 @@ import {
   ensureConsoleServer,
   OPERATOR_CONSOLE_IDENTITY,
 } from '../../src/commands/console-server.js';
-import Database from '@narada2/sqlite';
-import { HostFleetRegistry } from '@narada2/host-fleet';
+import Database from '@narada-core/sqlite';
+import { HostFleetRegistry } from '@narada-core/host-fleet';
 
 // The Registry page embeds a built package artifact; this test must read it from the real checkout.
 vi.unmock('node:fs');
@@ -71,8 +71,8 @@ const mockCloudflareControlClient = {
   executeControlRequest: vi.fn(),
 };
 
-vi.mock('@narada2/windows-site', async (importOriginal) => {
-  const mod = await importOriginal<typeof import('@narada2/windows-site')>();
+vi.mock('@narada-core/windows-site', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@narada-core/windows-site')>();
   return {
     ...mod,
     Database: vi.fn(() => mockDb),
@@ -125,7 +125,7 @@ vi.mock('@narada2/windows-site', async (importOriginal) => {
   };
 });
 
-vi.mock('@narada2/cloudflare-site', () => ({
+vi.mock('@narada-core/cloudflare-site', () => ({
   cloudflareSiteAdapter: {
     supports: vi.fn((site: { variant: string; substrate: string }) =>
       site.variant === 'cloudflare' || site.substrate === 'cloudflare'
@@ -154,7 +154,7 @@ vi.mock('@narada2/cloudflare-site', () => ({
   },
 }));
 
-vi.mock('@narada2/linux-site', () => ({
+vi.mock('@narada-core/linux-site', () => ({
   linuxSiteAdapter: {
     supports: vi.fn((site: { variant: string }) =>
       site.variant === 'linux-user' || site.variant === 'linux-system'
@@ -427,7 +427,7 @@ describe('console server', () => {
       }> }).surfaces;
       expect(surfaces.find((surface) => surface.id === 'site-operations')).toEqual(expect.objectContaining({
         authority: { kind: 'site', id: null },
-        projection: { kind: 'site-operations', owner: '@narada2/cli' },
+        projection: { kind: 'site-operations', owner: '@narada-core/cli' },
         intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', endpointBase: 'workspace', protocols: ['http'] },
         diagnosticOnly: false,
       }));
@@ -438,7 +438,7 @@ describe('console server', () => {
           availability: 'available',
           target: { kind: 'site', id: 'site-a' },
           authority: { kind: 'site', id: 'site-a' },
-          projection: { kind: 'site-operations', owner: '@narada2/cli' },
+          projection: { kind: 'site-operations', owner: '@narada-core/cli' },
           intent: { kind: 'site-control', endpoint: '/sites/<site-id>/operations/', endpointBase: 'workspace', protocols: ['http'] },
           diagnosticOnly: false,
         })]));
@@ -1320,6 +1320,66 @@ describe('console server', () => {
         const page = await fetch(`${url}/console/hosts`);
         expect(page.status).toBe(200);
         expect(await page.text()).toContain('<div id="app"></div>');
+      } finally {
+        await server.stop();
+        hostRegistry.close();
+      }
+    });
+
+    it('projects a host-local console through a bounded HostKey route without exposing the upstream endpoint', async () => {
+      const hostRegistry = new HostFleetRegistry(new Database(':memory:'));
+      hostRegistry.registerHost({
+        host_id: 'zima-board-2',
+        host_instance_id: 'zima-instance',
+        display_name: 'ZimaBoard 2',
+        platform: 'linux',
+        gateway: {
+          endpoint: 'http://127.0.0.1:61730',
+          transport: 'ssh-tunnel',
+          admitted_paths: ['/console', '/console/assets/*'],
+        },
+        credential_ref: 'env://ZIMA_GATEWAY_TOKEN',
+        admitted_sites: ['sonar'],
+      });
+      const server = await createConsoleServer({
+        port: 0,
+        host: '127.0.0.1',
+        hostFleetRegistry: hostRegistry,
+        hostFleetCredentialResolver: () => 'zima-token',
+        hostFleetFetch: async (input, init) => {
+          const request = new Request(String(input), init);
+          expect(request.headers.get('x-narada-host-id')).toBe('zima-board-2');
+          expect(request.headers.get('x-narada-host-instance-id')).toBe('zima-instance');
+          expect(request.headers.get('x-narada-operator-console-bridge-token')).toBe('zima-token');
+          if (new URL(request.url).pathname === '/console') {
+            return new Response('<!doctype html><script src="/console/assets/index.js"></script>', {
+              status: 200,
+              headers: { 'content-type': 'text/html; charset=utf-8' },
+            });
+          }
+          return new Response('console asset', {
+            status: 200,
+            headers: { 'content-type': 'text/javascript; charset=utf-8' },
+          });
+        },
+      });
+      try {
+        const url = await server.start();
+        const documentResponse = await fetch(`${url}/console/hosts/api/zima-board-2/zima-instance/console/`);
+        expect(documentResponse.status).toBe(200);
+        expect(documentResponse.headers.get('content-type')).toContain('text/html');
+        const document = await documentResponse.text();
+        expect(document).toContain('/console/hosts/api/zima-board-2/zima-instance/console/assets/index.js');
+        expect(document).not.toContain('127.0.0.1:61730');
+
+        const assetResponse = await fetch(`${url}/console/hosts/api/zima-board-2/zima-instance/console/assets/index.js`);
+        expect(assetResponse.status).toBe(200);
+        expect(await assetResponse.text()).toBe('console asset');
+        const retired = hostRegistry.retireHost({ host_id: 'zima-board-2', host_instance_id: 'zima-instance' });
+        expect(retired.mutation_performed).toBe(true);
+        const refusedResponse = await fetch(`${url}/console/hosts/api/zima-board-2/zima-instance/console/`);
+        expect(refusedResponse.status).toBe(409);
+        expect((await refusedResponse.json() as { reason: string }).reason).toBe('host_retired');
       } finally {
         await server.stop();
         hostRegistry.close();

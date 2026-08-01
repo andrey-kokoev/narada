@@ -83,6 +83,7 @@ test('Cloudflare Host Fleet transport uses its qualified route shape', async () 
   await transport.list();
   await transport.sessions?.();
   await transport.resolveTarget?.(target);
+  assert.equal(transport.hostConsolePath?.(target), null);
 
   assert.deepEqual(requests, [
     '/api/narada/fleet/hosts',
@@ -134,6 +135,7 @@ test('local Host Fleet transport refreshes host health through the same qualifie
 
   const overview = await createHostFleetAdapter(transport).list();
   assert.equal(overview.hosts[0]?.healthStatus, 'online');
+  assert.equal(transport.hostConsolePath?.(target), '/console/hosts/api/zima-board-2/zima-instance-2026-07/console/');
   assert.deepEqual(requests, [
     '/console/hosts/api',
     '/console/hosts/api/zima-board-2/zima-instance-2026-07/health',

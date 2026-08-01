@@ -25,7 +25,7 @@ host-local consoles without moving NARS or Site authority into that layer.
 The current implementation establishes the boundary without pretending to
 provide the full fleet runtime:
 
-- `@narada2/host-fleet` owns the versioned host record, registry, audit trail,
+- `@narada-core/host-fleet` owns the versioned host record, registry, audit trail,
   qualified target/event types, and bounded Host Gateway client.
 - The canonical registry is a SQLite database under the User Site's
   `.narada/host-fleet/registry.db`, with `NARADA_HOST_FLEET_REGISTRY_PATH`
@@ -405,7 +405,7 @@ Before deployment, the checked-in registry shape can be validated without
 claiming that a Worker or gateway is live:
 
     $env:NARADA_HOST_FLEET_REGISTRY_FILE = "config/host-fleet.registry.json"
-    pnpm --filter @narada2/cloudflare-nars-projection host-fleet:preflight
+    pnpm --filter @narada-core/cloudflare-nars-projection host-fleet:preflight
 
 The preflight reports the required service-binding and secret-binding names,
 checks the health/session/event admissions and declared capabilities, and
@@ -590,8 +590,9 @@ must not be smuggled into the fleet console as convenience behavior.
    server-side relay are implemented; governed launch and physical-host E2E
    remain.**
 6. Add host-local and fleet overlay/browser entry points with persistent host
-   context. **The Host Fleet page and Cloudflare static-page configuration are
-   implemented; host-local console linking and enrollment UX remain.**
+   context. **The Host Fleet page, local-authority enrollment/lifecycle
+   controls, Cloudflare static-page configuration, and host-local console
+   linking/projection are implemented; live physical-host acceptance remains.**
 7. Add Cloudflare fleet projection only after local two-host parity is proven. **Synthetic projection, per-host session fan-out, native browser route configuration, correlation diagnostics, and deployment preflight are implemented; production deployment parity remains.**
 8. Run the two-host E2E matrix with a Windows desktop and a ZimaBoard.
 
@@ -623,9 +624,9 @@ is not mistaken for a deployed fleet:
 | --- | --- | --- |
 | Physical Windows plus Linux acceptance | The opt-in harness and [`host-fleet-operator-console-acceptance.md`](../deployment/host-fleet-operator-console-acceptance.md) prove the required inputs and acceptance observations; the harness remains skipped without operator-supplied host data. | Run the two-host matrix, including restart, offline, stale, revoked, and re-enrollment cases. |
 | Production Cloudflare fleet | Worker routes, native browser configuration, redacted registry example, synthetic service-binding tests, fail-closed deployment preflight, lifecycle preflight, acceptance runbook, and an opt-in read-only live browser smoke lane exist. | Materialize a deployment-owned registry, bind each gateway and secret, deploy, then run `smoke:host-fleet-live -- --live ...`; the live result still requires real active hosts and sessions. |
-| Host-local console entry | The fleet page has no direct link or proxy route yet. | Add an explicit GET-only, host-qualified gateway-mediated console projection with safe asset/base-path handling; never expose loopback endpoints or credentials to the browser. |
-| Browser enrollment | `narada fleet register`, `reenroll`, `revoke`, and `retire` remain governed CLI operations; the User Site authority now also exposes the confirmed, idempotent enrollment route, and the UI transport has a typed local-authority adapter without raw credential fields crossing the boundary. | Expose the local User Site enrollment form only after the browser mutation surface is explicitly approved; never accept a raw gateway credential in browser state. |
-| Remote lifecycle controls | The User Site authority now exposes confirmed, revision-checked, idempotent lifecycle execution with audit correlation; the UI transport has a typed local-authority adapter and Cloudflare fails closed for mutation while exposing non-mutating preflight. | Expose local controls only with explicit UI approval; separately add an authenticated Cloudflare-to-User-Site authority binding before exposing remote controls. |
+| Host-local console entry | The fleet page now links each local-authority HostKey to a GET-only, host-qualified gateway-mediated console projection; the proxy enforces admitted paths, rewrites the console mount for assets, bounds content, and never exposes loopback endpoints or credentials. | Run physical-host acceptance for HTML, asset, unavailable, retired, and path-admission refusal cases. |
+| Browser enrollment | `narada fleet register`, `reenroll`, `revoke`, and `retire` remain governed CLI operations; the User Site authority and Host Fleet page now expose a reviewed, idempotent enrollment workflow that carries only a credential reference. | Run live enrollment and re-enrollment acceptance with provisioned gateway references; never accept a raw gateway credential in browser state. |
+| Remote lifecycle controls | The User Site authority and Host Fleet page now expose confirmed, revision-checked, idempotent lifecycle execution with audit correlation; Cloudflare fails closed for mutation while exposing non-mutating preflight. | Separately add an authenticated Cloudflare-to-User-Site authority binding before exposing remote controls; do not infer authority from the projection. |
 | Host Gateway credential class | Explicit bridge-compatibility and dedicated-host-gateway classes, migration-safe defaults, expiry checks, HTTP/WebSocket header selection, and remote admission tests exist. | Provision dedicated secrets in the deployed gateways and run live rotation, expiry, revocation, and rollback acceptance. |
 | Multi-host event aggregation | The Host Fleet page now offers an explicit read-only aggregate observation mode. It opens one exact-target subscription per active session, keeps cursors keyed by HostKey plus runtime session, preserves source identity on every event, and performs bounded observable reconnect/resume after transport loss. Target refusal is terminal for that subscription rather than a hidden retry loop. | Run physical and Cloudflare browser acceptance for reconnect/resume; never synthesize a global event sequence. |
 | Full fleet audit/observability | Registry mutations/refusals and bounded local request observations are retained and exportable; Cloudflare preserves correlation IDs and can emit opt-in secret-free relay observations to Worker diagnostics. | Add durable Cloudflare relay metrics plus a retention/export policy if Cloudflare-side historical audit is required; the current log mode is diagnostic, not a canonical ledger. |
