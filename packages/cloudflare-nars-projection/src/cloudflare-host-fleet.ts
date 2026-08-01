@@ -1,6 +1,8 @@
 import {
+  HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
   HOST_FLEET_LAUNCH_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
+  preflightHostFleetCredentialRotationIntent,
   preflightHostFleetLaunchIntent,
   preflightHostFleetLifecycleIntent,
   type HostFleetLifecycleCurrent,
@@ -650,6 +652,28 @@ export async function handleCloudflareHostFleetRequest(
       operator_surface: url.searchParams.get('operator_surface')?.trim() || null,
       confirmation: url.searchParams.get('confirmation') ?? '',
     }, entry ?? null);
+    return json(preflight, preflight.status === 'ready' ? 200 : 409, { 'x-request-id': correlationId });
+  }
+  if (url.pathname === '/api/narada/fleet/hosts/credentials/rotate/preflight' && request.method === 'GET') {
+    const parsed = readRegistry(env.NARADA_HOST_FLEET_REGISTRY ?? null);
+    if (parsed.status === 'refused') return json({ schema: 'narada.host_fleet.credential_rotation_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, refusals: parsed.refusals }, 503, { 'x-request-id': correlationId });
+    const hostId = url.searchParams.get('host_id')?.trim() ?? '';
+    const instanceId = url.searchParams.get('host_instance_id')?.trim() ?? '';
+    const entry = parsed.registry.hosts.find((candidate) => candidate.host_id === hostId && candidate.host_instance_id === instanceId);
+    const preflight = preflightHostFleetCredentialRotationIntent({
+      schema: HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
+      request_id: url.searchParams.get('request_id')?.trim() ?? '',
+      host: { host_id: hostId, host_instance_id: instanceId },
+      expected_revision: Number(url.searchParams.get('expected_revision') ?? Number.NaN),
+      credential_ref: url.searchParams.get('credential_ref')?.trim() ?? '',
+      credential: {
+        schema: 'narada.host_fleet.gateway_credential.v1',
+        class: url.searchParams.get('credential_class')?.trim() ?? '',
+        not_before: url.searchParams.get('not_before')?.trim() || null,
+        expires_at: url.searchParams.get('expires_at')?.trim() || null,
+      },
+      confirmation: url.searchParams.get('confirmation') ?? '',
+    }, entry ?? null, new Date(now()));
     return json(preflight, preflight.status === 'ready' ? 200 : 409, { 'x-request-id': correlationId });
   }
   if (request.method === 'POST'

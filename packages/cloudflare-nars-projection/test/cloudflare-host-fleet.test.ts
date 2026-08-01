@@ -344,6 +344,33 @@ describe('Cloudflare Host Fleet projection', () => {
     expect(await denied!.json()).toMatchObject({ status: 'refused', reason: 'host_site_not_admitted' });
   });
 
+  it('exposes credential rotation preflight without exposing or mutating a Worker registry', async () => {
+    const confirmation = 'desktop-sunroom-2@desktop-instance';
+    const query = new URLSearchParams({
+      host_id: 'desktop-sunroom-2',
+      host_instance_id: 'desktop-instance',
+      expected_revision: '4',
+      request_id: 'cf-credential-preflight-1',
+      credential_ref: 'env://DESKTOP_TOKEN_NEXT',
+      credential_class: 'dedicated_host_gateway',
+      not_before: '2026-08-01T12:00:00.000Z',
+      expires_at: '2026-09-01T12:00:00.000Z',
+      confirmation,
+    });
+    const response = await handleCloudflareHostFleetRequest(
+      new Request(`https://fleet.example/api/narada/fleet/hosts/credentials/rotate/preflight?${query}`),
+      environment(),
+      () => '2026-08-01T12:00:00.000Z',
+    );
+    expect(response?.status).toBe(200);
+    expect(await response!.json()).toMatchObject({
+      schema: 'narada.host_fleet.credential_rotation_preflight.v1',
+      status: 'ready',
+      mutation_performed: false,
+      intent: { credential_ref: 'env://DESKTOP_TOKEN_NEXT', credential: { class: 'dedicated_host_gateway' } },
+    });
+  });
+
   it('preflights lifecycle intents without touching a Cloudflare gateway or registry', async () => {
     let gatewayCalls = 0;
     const env = {

@@ -179,6 +179,8 @@ export interface HostFleetCredentialRotationIntent {
   confirmation: string;
 }
 
+export type HostFleetCredentialRotationCurrent = Pick<HostRecord, 'host_id' | 'host_instance_id' | 'revision' | 'lifecycle_state'>;
+
 export interface HostFleetCredentialRotationResult {
   schema: typeof HOST_FLEET_CREDENTIAL_ROTATION_RESULT_SCHEMA;
   status: 'applied' | 'replayed' | 'unchanged' | 'refused';
@@ -503,7 +505,7 @@ export function preflightHostFleetLaunchIntent(
 
 export function preflightHostFleetCredentialRotationIntent(
   value: unknown,
-  current: HostRecord | null,
+  current: HostFleetCredentialRotationCurrent | null,
   now = new Date(),
 ): HostFleetCredentialRotationPreflight {
   try {

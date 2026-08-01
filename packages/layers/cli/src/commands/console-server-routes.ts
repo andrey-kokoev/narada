@@ -54,6 +54,7 @@ import {
   OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH,
   OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH,
   OPERATOR_CONSOLE_HOSTS_LAUNCH_PREFLIGHT_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_PREFLIGHT_API_PATH,
   OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_API_PATH,
   OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_SCHEMA,
   formatOperatorSiteAgentInvariantViolation,
@@ -79,8 +80,10 @@ import { silentCommandContext } from '../lib/command-wrapper.js';
 import {
   createHostGatewayClient,
   HOST_FLEET_ENROLLMENT_RESULT_SCHEMA,
+  HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
   HOST_FLEET_LIFECYCLE_RESULT_SCHEMA,
+  preflightHostFleetCredentialRotationIntent,
   preflightHostFleetLifecycleIntent,
   preflightHostFleetLaunchIntent,
   resolveHostGatewayCredential,
@@ -1015,6 +1018,44 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           site_id: searchParams.get('site_id')?.trim() ?? '',
           agent_id: searchParams.get('agent_id')?.trim() ?? '',
           operator_surface: searchParams.get('operator_surface')?.trim() || null,
+          confirmation: searchParams.get('confirmation') ?? '',
+        }, host);
+        jsonResponse(res, preflight.status === 'ready' ? 200 : 409, preflight);
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-credential-rotation-preflight',
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_CREDENTIAL_ROTATION_PREFLIGHT_API_PATH),
+      remote_disposition: 'local-only',
+      remote_kind: 'observation',
+      remote_intent: null,
+      handler: async (_req, res, _params, searchParams) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: 'narada.host_fleet.credential_rotation_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, refusals: ['origin_not_allowed'] });
+          return;
+        }
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: 'narada.host_fleet.credential_rotation_preflight.v1', status: 'refused', mutation_performed: false, intent: null, current_revision: null, current_lifecycle_state: null, refusals: ['host_fleet_registry_unavailable'] });
+          return;
+        }
+        const hostId = searchParams.get('host_id')?.trim() ?? '';
+        const instanceId = searchParams.get('host_instance_id')?.trim() ?? '';
+        const host = hostId && instanceId ? ctx.hostFleetRegistry.getHost({ host_id: hostId, host_instance_id: instanceId }) : null;
+        const credentialClass = searchParams.get('credential_class')?.trim() ?? '';
+        const preflight = preflightHostFleetCredentialRotationIntent({
+          schema: HOST_FLEET_CREDENTIAL_ROTATION_INTENT_SCHEMA,
+          request_id: searchParams.get('request_id')?.trim() ?? '',
+          host: { host_id: hostId, host_instance_id: instanceId },
+          expected_revision: Number(searchParams.get('expected_revision') ?? Number.NaN),
+          credential_ref: searchParams.get('credential_ref')?.trim() ?? '',
+          credential: {
+            schema: 'narada.host_fleet.gateway_credential.v1',
+            class: credentialClass,
+            not_before: searchParams.get('not_before')?.trim() || null,
+            expires_at: searchParams.get('expires_at')?.trim() || null,
+          },
           confirmation: searchParams.get('confirmation') ?? '',
         }, host);
         jsonResponse(res, preflight.status === 'ready' ? 200 : 409, preflight);

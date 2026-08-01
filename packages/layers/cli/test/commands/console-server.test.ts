@@ -1497,6 +1497,36 @@ describe('console server', () => {
         expect(preflightBody.status).toBe('ready');
         expect(preflightBody.mutation_performed).toBe(false);
 
+        const credentialPreflightQuery = new URLSearchParams({
+          host_id: 'zima-board-2',
+          host_instance_id: 'zima-instance',
+          expected_revision: '1',
+          request_id: 'host-credential-preflight-1',
+          credential_ref: 'env://ZIMA_GATEWAY_TOKEN_NEXT',
+          credential_class: 'dedicated_host_gateway',
+          not_before: '2026-07-01T12:00:00.000Z',
+          expires_at: '2026-09-01T12:00:00.000Z',
+          confirmation: 'zima-board-2@zima-instance',
+        });
+        const credentialPreflightResponse = await fetch(`${url}/console/hosts/api/credentials/rotate/preflight?${credentialPreflightQuery}`);
+        const credentialPreflightBody = await credentialPreflightResponse.json() as { schema: string; status: string; mutation_performed: boolean; refusals: string[] };
+        expect(credentialPreflightResponse.status).toBe(200);
+        expect(credentialPreflightBody.schema).toBe('narada.host_fleet.credential_rotation_preflight.v1');
+        expect(credentialPreflightBody.status).toBe('ready');
+        expect(credentialPreflightBody.mutation_performed).toBe(false);
+
+        const expiredCredentialQuery = new URLSearchParams({
+          ...Object.fromEntries(credentialPreflightQuery.entries()),
+          request_id: 'host-credential-preflight-expired',
+          expires_at: '2026-07-02T12:00:00.000Z',
+        });
+        const expiredCredentialResponse = await fetch(`${url}/console/hosts/api/credentials/rotate/preflight?${expiredCredentialQuery}`);
+        const expiredCredentialBody = await expiredCredentialResponse.json() as { status: string; mutation_performed: boolean; refusals: string[] };
+        expect(expiredCredentialResponse.status).toBe(409);
+        expect(expiredCredentialBody.status).toBe('refused');
+        expect(expiredCredentialBody.mutation_performed).toBe(false);
+        expect(expiredCredentialBody.refusals).toContain('host_gateway_credential_expired');
+
         const staleQuery = new URLSearchParams({
           ...Object.fromEntries(preflightQuery.entries()),
           expected_revision: '2',

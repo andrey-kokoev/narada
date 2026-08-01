@@ -320,6 +320,7 @@ routes:
 | `GET` | `/console/hosts/api/target?host_id=...&host_instance_id=...&site_id=...&agent_id=...` | Resolve exactly one session on one host; `runtime_session_id` may further constrain it. |
 | `GET` | `/console/hosts/api/observations?...` | Read bounded, redacted Host Gateway request observations from the User Site ledger. |
 | `GET` | `/console/hosts/api/lifecycle/preflight?...` | Validate a typed, revision-checked lifecycle intent without mutating the registry; the response always reports `mutation_performed: false`. |
+| `GET` | `/console/hosts/api/credentials/rotate/preflight?...` | Validate a typed credential reference/class/lifetime and revision without mutating the registry; raw credential values never enter the route. |
 | `POST` | `/console/hosts/api/lifecycle` | Execute one confirmed, revision-checked lifecycle intent at the User Site authority; request IDs are durable and replay-safe. |
 | `POST` | `/console/hosts/api/enrollment` | Execute one confirmed, revision-checked enrollment or explicit re-enrollment intent at the User Site authority; only secret references cross the route. |
 | `GET` + WebSocket upgrade | `/console/hosts/api/sessions/:host_id/:host_instance_id/:runtime_session_id/events?site_id=...&agent_id=...` | Re-discover and validate the exact target, then relay the authenticated host gateway stream in both directions. |
@@ -339,6 +340,7 @@ The Cloudflare projection composes the same boundary with these routes:
 | `GET` | `/api/narada/fleet/hosts/:host_id/:host_instance_id/sessions` | Host-qualified session discovery. |
 | `GET` | `/api/narada/fleet/hosts/:host_id/:host_instance_id/target?...` | Exact host/session target resolution. |
 | `GET` | `/api/narada/fleet/hosts/lifecycle/preflight?...` | Validate a typed, revision-checked lifecycle intent without mutating the Cloudflare registry; the response always reports `mutation_performed: false`. |
+| `GET` | `/api/narada/fleet/hosts/credentials/rotate/preflight?...` | Validate a typed credential reference/class/lifetime and revision without mutating the Cloudflare registry; the response always reports `mutation_performed: false`. |
 | `GET` + WebSocket upgrade | `/api/narada/fleet/hosts/:host_id/:host_instance_id/sessions/:runtime_session_id/events?...` | Exact-target WebSocket relay with server-side service binding/HTTPS credential injection. |
 
 Cloudflare remains projection-only for this slice. It may expose the
