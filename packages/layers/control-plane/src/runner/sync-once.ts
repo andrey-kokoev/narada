@@ -42,6 +42,8 @@ export interface SyncOnceDeps {
   projector: Projector;
   /** Optional fact store for durable canonical boundary */
   factStore?: FactStore;
+  /** Abort before cursor advancement when canonical fact persistence fails. */
+  requireFactPersistence?: boolean;
   /** Optional pre-persistence materialization gate. Returning false prevents local message/fact materialization. */
   shouldMaterializeRecord?: (record: SourceRecord) => boolean;
   cleanupTmp?: () => Promise<void>;
@@ -133,10 +135,11 @@ export class DefaultSyncRunner implements SyncRunner {
         try {
           releaseLock = await this.deps.acquireLock();
         } catch (lockError) {
-          const error = addError("setup", lockError, { actionTaken: "abort" });
-          if (!error.recoverable) {
-            throw lockError;
-          }
+          addError("setup", lockError, { actionTaken: "abort" });
+          // A failed lock acquisition is never permission to continue without
+          // mutual exclusion. Error recoverability controls retry policy, not
+          // authority to enter the critical section.
+          throw lockError;
         }
       }
 
@@ -235,8 +238,12 @@ export class DefaultSyncRunner implements SyncRunner {
             const fact = sourceRecordToFact(record, batch.nextCheckpoint ?? null);
             this.deps.factStore.ingest(fact);
           } catch (factError) {
-            addError("persist", factError, { actionTaken: "logged_only" });
-            // Continue: fact persistence failures should not abort sync
+            addError("persist", factError, {
+              actionTaken: this.deps.requireFactPersistence ? "abort" : "logged_only",
+            });
+            if (this.deps.requireFactPersistence) {
+              throw factError;
+            }
           }
         }
 

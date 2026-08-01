@@ -5,6 +5,7 @@
     {
       "host_id": "desktop-sunroom-2",
       "host_instance_id": "desktop-instance-YYYY-MM",
+      "revision": 1,
       "display_name": "Desktop Sunroom 2",
       "platform": "windows",
       "lifecycle_state": "active",
@@ -14,6 +15,7 @@
         "transport": "service-binding",
         "binding": "DESKTOP_GATEWAY",
         "credential_binding": "DESKTOP_TOKEN",
+        "credential_class": "dedicated_host_gateway",
         "admitted_paths": [
           "/health",
           "/console/sessions/api/sessions",
@@ -24,6 +26,7 @@
     {
       "host_id": "zima-board-2",
       "host_instance_id": "zima-instance-YYYY-MM",
+      "revision": 1,
       "display_name": "ZimaBoard 2",
       "platform": "linux",
       "lifecycle_state": "active",
@@ -33,6 +36,7 @@
         "transport": "service-binding",
         "binding": "ZIMA_GATEWAY",
         "credential_binding": "ZIMA_TOKEN",
+        "credential_class": "dedicated_host_gateway",
         "admitted_paths": [
           "/health",
           "/console/sessions/api/sessions",

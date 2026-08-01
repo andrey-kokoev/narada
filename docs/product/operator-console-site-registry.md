@@ -25,6 +25,13 @@ The console is **not**:
 - The kernel control plane — it does not open work items, create decisions, or execute effects.
 - A distributed fleet manager — it does not orchestrate Cycles across Sites.
 
+This is intentionally a host-local boundary. The target shape for operating
+multiple Narada hosts is defined in
+[`Host Fleet Operator Console Target`](../architecture/host-fleet-operator-console-target.md).
+That layer composes host-local consoles through explicit Host Registry and
+Host Gateway contracts; it does not weaken this console's Site authority
+boundary.
+
 The console is an **operator surface** that aggregates read-only observation and routes audited control requests to Site-owned APIs. Registry management is a separate User Site read-model operation defined in section 3.1.
 
 For the normal local Workspace entry point, route-directory failure states, and

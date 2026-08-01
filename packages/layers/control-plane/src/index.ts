@@ -396,7 +396,12 @@ export type { IntentHandoffDeps } from "./intent/handoff.js";
 export type { Fact, FactStore, FactStoreView, FactType, FactProvenance } from "./facts/types.js";
 export { buildFactId } from "./ids/fact-id.js";
 export { sourceRecordToFact } from "./facts/record-to-fact.js";
-export { mailFactPassesAdmission } from "./foreman/context.js";
+export {
+  evaluateMailFactAdmission,
+  mailFactPassesAdmission,
+  type MailAdmissionDecision,
+  type MailAdmissionDecisionReason,
+} from "./foreman/context.js";
 export type {
   AgentTraceStore,
   AgentTrace,

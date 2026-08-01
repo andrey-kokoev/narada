@@ -12,6 +12,7 @@ export type JourneyRoutes = {
   site_operations_path: string | null;
   session_path: string | null;
   session_events_path: string | null;
+  session_input_path: string | null;
   artifact_base_path: string | null;
   availability: {
     site_operations: JourneyRouteAvailability;
@@ -74,6 +75,7 @@ export function resolveJourneyRoutes(directory: AnyRecord): JourneyRoutes {
   const sessionId = agentSessions.path?.split('/').filter(Boolean)[1] ?? '';
   const sessionPath = sessionId ? agentSessions.path : null;
   const sessionEventsPath = sessionId ? `/sessions/${encodeURIComponent(sessionId)}/events` : null;
+  const sessionInputPath = sessionId ? `/sessions/${encodeURIComponent(sessionId)}/input` : null;
   if (!sessionPath && agentSessions.path) {
     agentSessions.path = null;
     agentSessions.status = 'unavailable';
@@ -83,6 +85,7 @@ export function resolveJourneyRoutes(directory: AnyRecord): JourneyRoutes {
     site_operations_path: siteOperations.path,
     session_path: sessionPath,
     session_events_path: sessionEventsPath,
+    session_input_path: sessionInputPath,
     artifact_base_path: artifacts.path?.replace(/\/$/, '') ?? null,
     availability: {
       site_operations: siteOperations,

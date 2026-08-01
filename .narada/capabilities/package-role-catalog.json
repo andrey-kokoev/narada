@@ -486,6 +486,15 @@
       "posture": "nars_session_core_runtime"
     },
     {
+      "package": "@narada2/host-fleet",
+      "path": "packages/host-fleet",
+      "roles": [
+        "runtime_authority",
+        "domain_model"
+      ],
+      "posture": "user_site_host_registry_and_bounded_gateway_contract"
+    },
+    {
       "package": "@narada2/operator-console-contract",
       "path": "packages/operator-console-contract",
       "roles": [
@@ -509,6 +518,14 @@
         "runtime_authority"
       ],
       "posture": "operator_console_runtime_lifecycle"
+    },
+    {
+      "package": "@narada2/operator-console-mirror-runtime",
+      "path": "packages/operator-console-mirror-runtime",
+      "roles": [
+        "runtime_authority"
+      ],
+      "posture": "operator_console_remote_mirror_lifecycle"
     },
     {
       "package": "@narada2/operator-console-ui",

@@ -85,4 +85,71 @@ describe('DefaultSyncRunner materialization gate', () => {
     expect(ingested).toEqual(['allowed']);
     expect(await applyLogStore.hasApplied('filtered')).toBe(true);
   });
+
+  it('fails closed before source pull when the sync lock cannot be acquired', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'narada-sync-lock-refusal-'));
+    let pulls = 0;
+    const source = new ArraySource([makeRecord('must-not-pull')]);
+    const runner = new DefaultSyncRunner({
+      rootDir,
+      source: {
+        sourceId: source.sourceId,
+        pull: async (checkpoint) => {
+          pulls += 1;
+          return await source.pull(checkpoint);
+        },
+      },
+      cursorStore: new FileCursorStore({ rootDir, scopeId: 'test-scope' }),
+      applyLogStore: new FileApplyLogStore({ rootDir }),
+      projector: {
+        applyRecord: async () => {
+          throw new Error('projector_must_not_run');
+        },
+      },
+      acquireLock: async () => {
+        throw new Error('fixture_lock_held');
+      },
+    });
+
+    const result = await runner.syncOnce();
+
+    expect(result.status).not.toBe('success');
+    expect(pulls).toBe(0);
+    expect(result.errors.some((error) => error.actionTaken === 'abort')).toBe(true);
+  });
+
+  it('does not project or advance the cursor when required fact persistence fails', async () => {
+    const rootDir = await mkdtemp(join(tmpdir(), 'narada-sync-required-fact-'));
+    const cursorStore = new FileCursorStore({ rootDir, scopeId: 'test-scope' });
+    let projected = false;
+    const runner = new DefaultSyncRunner({
+      rootDir,
+      source: new ArraySource([makeRecord('fact-fails')]),
+      cursorStore,
+      applyLogStore: new FileApplyLogStore({ rootDir }),
+      projector: {
+        applyRecord: async (record) => {
+          projected = true;
+          return {
+            event_id: record.recordId,
+            message_id: record.recordId,
+            applied: true,
+            dirty_views: { by_thread: [], by_folder: [], unread_changed: false, flagged_changed: false },
+          };
+        },
+      },
+      factStore: {
+        ingest: () => {
+          throw new Error('fixture_fact_store_unavailable');
+        },
+      },
+      requireFactPersistence: true,
+    });
+
+    const result = await runner.syncOnce();
+
+    expect(result.status).not.toBe('success');
+    expect(projected).toBe(false);
+    expect(await cursorStore.read()).toBeNull();
+  });
 });

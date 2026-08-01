@@ -779,7 +779,7 @@ export function registerSitesCommands(program: Command): void {
     .description('Validate a Site root and authority posture')
     .option('--root <path>', 'Site workspace/root path to inspect')
     .option('--authority-locus <locus>', 'Windows authority locus: user or pc')
-    .option('--kind <kind>', 'Site kind: windows, client, or project', 'windows')
+    .option('--kind <kind>', 'Site kind: windows, linux-user, linux-system, client, or project', 'windows')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (siteId: string, opts: CommanderOptionValues) => {

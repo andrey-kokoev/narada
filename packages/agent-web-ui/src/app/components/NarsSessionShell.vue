@@ -39,7 +39,7 @@ import type { HealthIntelligenceSummary } from '../composables/useHealthStatus';
 import type { DelegationSummary } from '../composables/useDelegationSummary';
 import type { GitSummary } from '../composables/useGitSummary';
 import type { InboxSummary } from '../composables/useInboxSummary';
-import type { McpInventorySummary } from '../composables/useMcpInventory';
+import { formatMcpServerCount, type McpInventorySummary } from '../composables/useMcpInventory';
 import type { MailboxSummary } from '../composables/useMailboxSummary';
 import type { OperatorQueueItem } from '../composables/useOperatorInput';
 import type { OperatorSnippet, OperatorSnippetFeedback, OperatorSnippetOpenRequest } from '../composables/useOperatorSnippets';
@@ -235,7 +235,7 @@ const surfaceGroups = computed(() => [
       {
         key: 'mcp',
         label: 'MCP Catalog',
-        detail: `${props.mcpInventory.serverCount ?? props.mcpInventory.servers.length} ${props.mcpInventory.operationalState ?? 'unknown'}`,
+        detail: `${formatMcpServerCount(props.mcpInventory.serverCount, props.mcpInventory.servers.length)} ${props.mcpInventory.operationalState ?? 'unknown'}`,
         available: true,
       },
     ],

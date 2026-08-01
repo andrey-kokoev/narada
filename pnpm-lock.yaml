@@ -262,6 +262,8 @@ importers:
         specifier: ^1.0.0
         version: 1.6.1(@types/node@22.19.19)(jsdom@26.1.0)(lightningcss@1.32.0)(stylus@0.57.0)
 
+  ../narada-core/packages/work-lifecycle-core: {}
+
   packages/agent-context-memory:
     devDependencies:
       '@types/node':
@@ -671,6 +673,9 @@ importers:
       '@narada2/carrier-protocol':
         specifier: workspace:*
         version: link:../carrier-protocol
+      '@narada2/host-fleet':
+        specifier: workspace:*
+        version: link:../host-fleet
       '@narada2/invokable-intelligence-runtime':
         specifier: workspace:*
         version: link:../invokable-intelligence-runtime
@@ -8466,7 +8471,7 @@ snapshots:
       obug: 2.1.4
       std-env: 4.2.0
       tinyrainbow: 3.1.0
-      vitest: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@20.19.39)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0))
+      vitest: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@22.19.19)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0))
 
   '@vitest/expect@1.6.1':
     dependencies:

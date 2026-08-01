@@ -139,3 +139,16 @@
   color: var(--error);
 }
 
+.runtime-topology-fault {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 8px 12px 0;
+  padding: 8px 10px;
+  border: 1px solid var(--error-border);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--surface) 90%, var(--error-border));
+  color: var(--error);
+  font-size: 12px;
+}
+

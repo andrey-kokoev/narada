@@ -23,6 +23,12 @@ export interface McpInventorySummary {
   source: 'health' | 'event' | 'none';
 }
 
+export function formatMcpServerCount(advertisedCount: number | null, observedCount: number): string {
+  const count = advertisedCount ?? (observedCount > 0 ? observedCount : null);
+  if (count === null) return 'not advertised';
+  return String(count);
+}
+
 export function useMcpInventory(events: unknown[], healthBody: Ref<Record<string, unknown> | null>) {
   const inventory = computed<McpInventorySummary>(() => {
     const health = inventoryFromHealth(healthBody.value);

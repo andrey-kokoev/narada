@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import type { McpInventorySummary } from '../composables/useMcpInventory';
+import { formatMcpServerCount, type McpInventorySummary } from '../composables/useMcpInventory';
 import type { SurfaceAffordanceItem, SurfaceAffordanceSummary } from '../composables/useSurfaceAffordances';
 
 const props = defineProps<{
@@ -18,7 +18,7 @@ const searchText = ref('');
 const expandedServers = ref(new Set<string>());
 
 const mcpLabel = computed(() => {
-  const count = props.inventory.serverCount ?? props.inventory.servers.length;
+  const count = formatMcpServerCount(props.inventory.serverCount, props.inventory.servers.length);
   const state = props.inventory.operationalState ?? 'unknown';
   return `MCP Catalog: ${count} ${state}`;
 });
@@ -156,7 +156,7 @@ async function copyDiagnostics() {
               </div>
               <div>
                 <dt>Servers</dt>
-                <dd>{{ inventory.serverCount ?? inventory.servers.length }}</dd>
+                <dd>{{ formatMcpServerCount(inventory.serverCount, inventory.servers.length) }}</dd>
               </div>
               <div>
                 <dt>Startup failures</dt>

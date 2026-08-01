@@ -289,6 +289,9 @@ export const NARS_RUNTIME_EVENT_KINDS = Object.freeze([
 ]);
 export const NARS_RUNTIME_EVENT_ALIASES = Object.freeze({
   carrier_command_result: 'command_result',
+  // A result-bearing Pi/NARS carrier completion is the runtime's concrete
+  // spelling of the canonical tool-result lifecycle event.
+  carrier_tool_completed: 'tool_result',
   directive_complete: 'turn_complete',
   error: 'runtime_error',
   'item.completed': 'tool_result',
@@ -1989,6 +1992,10 @@ export function narsLifecycleHooksForEvent(event: ProtocolRecord | string) {
   const eventRecord = isObject(event) ? event : null;
   const rawEventKind = eventRecord ? eventRecord.event : event;
   if (rawEventKind === 'item.completed' && eventRecord?.item?.type !== 'mcp_tool_call') return Object.freeze([]);
+  // Pi/NARS emits a result-bearing carrier completion after the capability
+  // gateway has executed the MCP call. Status-only carrier completions remain
+  // ordinary operational evidence and must not impersonate tool results.
+  if (rawEventKind === 'carrier_tool_completed' && !Object.hasOwn(eventRecord ?? {}, 'result')) return Object.freeze([]);
   const eventKind = normalizeNarsRuntimeEventKind(rawEventKind);
   return enumIncludes(NARS_RUNTIME_EVENT_KINDS, eventKind)
     ? NARS_EVENT_TO_LIFECYCLE_HOOKS[eventKind as keyof typeof NARS_EVENT_TO_LIFECYCLE_HOOKS] ?? Object.freeze([])

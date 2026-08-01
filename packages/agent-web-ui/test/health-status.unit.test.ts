@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { healthIntelligence } from '../src/app/composables/useHealthStatus';
+import { formatMcpServerDetail } from '../src/app/composables/useRuntimeTopology';
 
 describe('healthIntelligence', () => {
   it('projects the active kernel binding when health exposes it', () => {
@@ -93,5 +94,19 @@ describe('healthIntelligence', () => {
         thinkingChoices: ['xhigh'],
       }],
     }]);
+  });
+});
+
+describe('formatMcpServerDetail', () => {
+  it('does not turn an advertised unknown count into a false zero', () => {
+    expect(formatMcpServerDetail({ server_count: null }, 0)).toBe('server count not advertised');
+  });
+
+  it('uses concrete child inventory when the health projection omits the count', () => {
+    expect(formatMcpServerDetail({ server_count: null }, 2)).toBe('2 servers');
+  });
+
+  it('prefers the authoritative advertised count over projected children', () => {
+    expect(formatMcpServerDetail({ server_count: 4 }, 2)).toBe('4 servers');
   });
 });

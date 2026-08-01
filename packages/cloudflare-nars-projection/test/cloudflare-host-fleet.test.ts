@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   handleCloudflareHostFleetRequest,
   projectCloudflareHostFleetOverview,
+  validateCloudflareHostFleetRegistry,
 } from '../src/cloudflare-host-fleet.ts';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.ts';
 
@@ -66,6 +67,7 @@ function environment() {
       const request = new Request(input, init);
       expect(request.headers.get('x-narada-host-id')).toBe(hostId);
       expect(request.headers.get('x-narada-operator-console-bridge-token')).toBe(expectedToken);
+      expect(request.headers.get('x-request-id')).toMatch(/^[A-Za-z0-9._:-]{1,128}$/u);
       if (new URL(request.url).pathname === '/health') {
         return new Response(JSON.stringify({ schema: 'narada.operator_console_remote_gateway.health.v1', status: 'healthy' }), { status: 200, headers: { 'content-type': 'application/json' } });
       }
@@ -164,6 +166,39 @@ describe('Cloudflare Host Fleet projection', () => {
     expect(JSON.stringify(response)).not.toContain('desktop-secret');
   });
 
+  it('validates a deployment registry without treating it as a live deployment', () => {
+    const validation = validateCloudflareHostFleetRegistry(registry);
+    expect(validation.status).toBe('success');
+    expect(validation.revision).toBe(4);
+    expect(validation.hosts[0]?.gateway.credential_binding).toBe('DESKTOP_TOKEN');
+    expect(JSON.stringify(validation)).not.toContain('desktop-secret');
+  });
+
+  it('uses a dedicated host gateway credential for an explicitly classified host', async () => {
+    const dedicatedRegistry = JSON.stringify({
+      ...JSON.parse(registry),
+      hosts: JSON.parse(registry).hosts.map((host: Record<string, unknown>, index: number) => index === 0
+        ? { ...host, gateway: { ...(host.gateway as Record<string, unknown>), credential_class: 'dedicated_host_gateway' } }
+        : host),
+    });
+    const env = environment();
+    env.NARADA_HOST_FLEET_REGISTRY = dedicatedRegistry;
+    env.DESKTOP_GATEWAY = {
+      fetch: async (input: Request | string | URL, init?: RequestInit) => {
+        const request = new Request(input, init);
+        expect(request.headers.get('x-narada-host-gateway-token')).toBe('desktop-secret');
+        expect(request.headers.get('x-narada-operator-console-bridge-token')).toBeNull();
+        return new Response(JSON.stringify({ schema: 'narada.operator_console_remote_gateway.health.v1', status: 'healthy' }), { status: 200 });
+      },
+    };
+    const response = await handleCloudflareHostFleetRequest(
+      new Request('https://fleet.example/api/narada/fleet/hosts/desktop-sunroom-2/desktop-instance/health'),
+      env,
+      now,
+    );
+    expect(response?.status).toBe(200);
+  });
+
   it('routes fleet inventory through the Cloudflare Worker boundary', async () => {
     const worker = createCloudflareNarsProjectionWorker({ now });
     const response = await worker.fetch(
@@ -181,11 +216,14 @@ describe('Cloudflare Host Fleet projection', () => {
   it('keeps session discovery and target resolution host-qualified', async () => {
     const env = environment();
     const sessions = await handleCloudflareHostFleetRequest(
-      new Request('https://fleet.example/api/narada/fleet/hosts/zima-board-2/zima-instance/sessions'),
+      new Request('https://fleet.example/api/narada/fleet/hosts/zima-board-2/zima-instance/sessions', {
+        headers: { 'x-request-id': 'fleet-session-read-1' },
+      }),
       env,
       now,
     );
     expect(sessions?.status).toBe(200);
+    expect(sessions?.headers.get('x-request-id')).toBe('fleet-session-read-1');
     const sessionBody = await sessions!.json() as { count: number; sessions: Array<{ target: { host_id: string; runtime_session_id: string } }> };
     expect(sessionBody.count).toBe(1);
     expect(sessionBody.sessions[0]?.target.host_id).toBe('zima-board-2');
@@ -211,6 +249,110 @@ describe('Cloudflare Host Fleet projection', () => {
     expect(await denied!.json()).toMatchObject({ status: 'refused', reason: 'host_site_not_admitted' });
   });
 
+  it('preflights lifecycle intents without touching a Cloudflare gateway or registry', async () => {
+    let gatewayCalls = 0;
+    const env = {
+      ...environment(),
+      DESKTOP_GATEWAY: {
+        fetch: async () => {
+          gatewayCalls += 1;
+          throw new Error('gateway_should_not_be_called');
+        },
+      },
+    };
+    const confirmation = encodeURIComponent('desktop-sunroom-2@desktop-instance');
+    const ready = await handleCloudflareHostFleetRequest(
+      new Request(`https://fleet.example/api/narada/fleet/hosts/lifecycle/preflight?host_id=desktop-sunroom-2&host_instance_id=desktop-instance&operation=revoke&expected_revision=4&request_id=cf-preflight-1&confirmation=${confirmation}`),
+      env,
+      now,
+    );
+    expect(ready?.status).toBe(200);
+    expect(await ready!.json()).toMatchObject({
+      schema: 'narada.host_fleet.lifecycle_preflight.v1',
+      status: 'ready',
+      mutation_performed: false,
+      current_revision: 4,
+    });
+
+    const explicitRevisionEnvironment = {
+      ...env,
+      NARADA_HOST_FLEET_REGISTRY: JSON.stringify({
+        ...JSON.parse(registry),
+        hosts: JSON.parse(registry).hosts.map((host: Record<string, unknown>, index: number) => index === 0 ? { ...host, revision: 7 } : host),
+      }),
+    };
+    const explicitRevision = await handleCloudflareHostFleetRequest(
+      new Request(`https://fleet.example/api/narada/fleet/hosts/lifecycle/preflight?host_id=desktop-sunroom-2&host_instance_id=desktop-instance&operation=revoke&expected_revision=7&request_id=cf-preflight-explicit&confirmation=${confirmation}`),
+      explicitRevisionEnvironment,
+      now,
+    );
+    expect(explicitRevision?.status).toBe(200);
+    expect(await explicitRevision!.json()).toMatchObject({ current_revision: 7, mutation_performed: false });
+
+    const stale = await handleCloudflareHostFleetRequest(
+      new Request(`https://fleet.example/api/narada/fleet/hosts/lifecycle/preflight?host_id=desktop-sunroom-2&host_instance_id=desktop-instance&operation=revoke&expected_revision=3&request_id=cf-preflight-2&confirmation=${confirmation}`),
+      env,
+      now,
+    );
+    expect(stale?.status).toBe(409);
+    expect(await stale!.json()).toMatchObject({
+      status: 'refused',
+      mutation_performed: false,
+      refusals: ['host_revision_conflict'],
+    });
+    expect(gatewayCalls).toBe(0);
+  });
+
+  it('fails closed for Cloudflare fleet mutations instead of mutating the materialized registry', async () => {
+    let gatewayCalls = 0;
+    const env = {
+      ...environment(),
+      ZIMA_GATEWAY: {
+        fetch: async () => {
+          gatewayCalls += 1;
+          throw new Error('gateway_should_not_be_called');
+        },
+      },
+    };
+    const response = await handleCloudflareHostFleetRequest(
+      new Request('https://fleet.example/api/narada/fleet/hosts/lifecycle', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ operator_confirmed: true, intent: { operation: 'revoke' } }),
+      }),
+      env,
+      now,
+    );
+    expect(response?.status).toBe(503);
+    expect(await response!.json()).toMatchObject({ status: 'refused', reason: 'host_fleet_authority_forwarding_required' });
+    expect(gatewayCalls).toBe(0);
+  });
+
+  it('emits bounded Cloudflare relay observations without payloads or credentials', async () => {
+    const observations: Array<Record<string, unknown>> = [];
+    const response = await handleCloudflareHostFleetRequest(
+      new Request('https://fleet.example/api/narada/fleet/hosts/zima-board-2/zima-instance/sessions', {
+        headers: { 'x-request-id': 'cloudflare-observation-1' },
+      }),
+      environment(),
+      now,
+      fetch,
+      { observe_request: (observation) => observations.push(observation) },
+    );
+    expect(response?.status).toBe(200);
+    expect(observations).toHaveLength(1);
+    expect(observations[0]).toMatchObject({
+      schema: 'narada.cloudflare.host_fleet.gateway_request_observation.v1',
+      request_id: 'cloudflare-observation-1',
+      host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' },
+      method: 'GET',
+      path: '/console/sessions/api/sessions',
+      outcome: 'success',
+      status: 200,
+    });
+    expect(JSON.stringify(observations)).not.toContain('zima-secret');
+  });
+
   it('refuses revoked hosts before touching their gateway binding', async () => {
     const revoked = JSON.stringify(JSON.parse(registry).hosts.map((host: Record<string, unknown>, index: number) => index === 1 ? { ...host, lifecycle_state: 'revoked' } : host));
     const env = { ...environment(), NARADA_HOST_FLEET_REGISTRY: JSON.stringify({ schema: 'narada.cloudflare.host_fleet_registry.v1', revision: 5, hosts: JSON.parse(revoked) }) };
@@ -221,6 +363,25 @@ describe('Cloudflare Host Fleet projection', () => {
     );
     expect(response?.status).toBe(409);
     expect(await response!.json()).toMatchObject({ status: 'refused', reason: 'host_revoked' });
+  });
+
+  it('projects a gateway transport failure as typed offline health with correlation', async () => {
+    const env = {
+      ...environment(),
+      ZIMA_GATEWAY: {
+        fetch: async () => { throw new Error('connect_timeout'); },
+      },
+    };
+    const response = await handleCloudflareHostFleetRequest(
+      new Request('https://fleet.example/api/narada/fleet/hosts/zima-board-2/zima-instance/health', {
+        headers: { 'x-request-id': 'health-failure-1' },
+      }),
+      env,
+      now,
+    );
+    expect(response?.status).toBe(503);
+    expect(response?.headers.get('x-request-id')).toBe('health-failure-1');
+    expect(await response!.json()).toMatchObject({ status: 'offline', detail: 'connect_timeout' });
   });
 
   it('relays the exact host session WebSocket in both directions', async () => {

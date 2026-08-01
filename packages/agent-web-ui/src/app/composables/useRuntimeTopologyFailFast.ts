@@ -3,6 +3,7 @@ import type { SessionIdentitySummary } from './useNarsEvents';
 import type { RuntimeTopologySummary } from './useRuntimeTopology';
 
 export interface RuntimeTopologyFaultSnapshot {
+  severity: 'recoverable' | 'fatal';
   previousStatus: RuntimeTopologySummary['status'];
   currentStatus: RuntimeTopologySummary['status'];
   topology: RuntimeTopologySummary;
@@ -36,6 +37,7 @@ export function useRuntimeTopologyFailFast(options: RuntimeTopologyFailFastOptio
   let previousStatus = options.topology.value.status;
   let armed = previousStatus === 'live';
   let stopped = false;
+  let lastReportedStatus: RuntimeTopologySummary['status'] | null = null;
 
   const stopWatch = watch(options.topology, (topology) => {
     if (stopped) return;
@@ -44,11 +46,16 @@ export function useRuntimeTopologyFailFast(options: RuntimeTopologyFailFastOptio
     previousStatus = topology.status;
     if (topology.status === 'live') {
       armed = true;
+      lastReportedStatus = null;
+      fault.value = null;
       return;
     }
-    if (!armed || !isRedStatus(topology.status) || isRedStatus(previous)) return;
+    if (!armed || !isReportableStatus(topology.status) || topology.status === lastReportedStatus) return;
+
+    lastReportedStatus = topology.status;
 
     const snapshot: RuntimeTopologyFaultSnapshot = {
+      severity: isFatalStatus(topology.status) ? 'fatal' : 'recoverable',
       previousStatus: previous,
       currentStatus: topology.status,
       topology,
@@ -65,9 +72,11 @@ export function useRuntimeTopologyFailFast(options: RuntimeTopologyFailFastOptio
     };
     const error = new Error(`agent_web_ui_runtime_topology_fault:${topology.status}`);
 
-    stopped = true;
     fault.value = snapshot;
-    options.stop();
+    if (snapshot.severity === 'fatal') {
+      stopped = true;
+      options.stop();
+    }
     options.onFault?.(snapshot);
     (options.errorSink ?? defaultRuntimeTopologyErrorSink)(error, snapshot);
   });
@@ -81,20 +90,22 @@ export function useRuntimeTopologyFailFast(options: RuntimeTopologyFailFastOptio
   return { fault, stop };
 }
 
-function isRedStatus(status: RuntimeTopologySummary['status']): boolean {
+function isReportableStatus(status: RuntimeTopologySummary['status']): boolean {
   return status === 'degraded' || status === 'stale' || status === 'unavailable';
 }
 
+function isFatalStatus(status: RuntimeTopologySummary['status']): boolean {
+  return status === 'stale';
+}
+
 function defaultRuntimeTopologyErrorSink(error: Error, snapshot: RuntimeTopologyFaultSnapshot) {
-  console.error(
-    '[Narada Agent Web UI] fatal runtime topology transition',
+  const log = snapshot.severity === 'fatal' ? console.error : console.warn;
+  log(
+    `[Narada Agent Web UI] ${snapshot.severity} runtime topology transition`,
     { error, snapshot },
     JSON.stringify({
       error: { name: error.name, message: error.message },
       snapshot,
     }),
   );
-  queueMicrotask(() => {
-    throw error;
-  });
 }

@@ -11,13 +11,10 @@ NARS_AUTHORITY_REQUIRE_CREDENTIAL = "true"
 # HTTPS provider adapters require an explicit deployment capability. Workers
 # AI is the default provider route for this worker.
 NARS_OUTBOUND_PROVIDER_ENABLED = "false"
-# The remote Operator Console mirror is enabled only after these deployment
-# values and the matching Cloudflare Access application are configured. The
-# tunnel URL/origin are intentionally deployment-specific; the bridge token is
-# a Wrangler secret, not a vars value.
-OPERATOR_CONSOLE_ACCESS_REQUIRED = "true"
-OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN = "https://global-maxima.cloudflareaccess.com"
-OPERATOR_CONSOLE_ACCESS_AUDIENCE = "724f8cc4382825eaf4b4f2d439e77989f68ee4afe67552f5a65b51691feec4e5"
+# The remote Operator Console mirror is enabled only after its Narada-owned
+# shared secret and gateway secret are configured. The shared secret is a
+# Wrangler secret, not a vars value, and may be copied to explicitly
+# authorized host clients that need to use this mirror.
 # OPERATOR_CONSOLE_GATEWAY_URL = "https://console-gateway.example.test"
 # OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN = "https://console-gateway.example.test"
 # The gateway is reached through a private Workers VPC service. The URL is an
@@ -31,6 +28,14 @@ OPERATOR_CONSOLE_GATEWAY_TCP_PORT = "61730"
 # into this variable by deployment tooling; keep gateway bindings and tokens
 # out of the browser and out of this JSON. See config/host-fleet.registry.example.json.
 # NARADA_HOST_FLEET_REGISTRY = "..."
+# When NARADA_HOST_FLEET_REGISTRY is set, the Operator Console asset is
+# injected with the native Cloudflare fleet API and route shape. Override
+# these only when the deployment intentionally fronts the fleet API elsewhere.
+# NARADA_HOST_FLEET_UI_API_BASE_PATH = "/api/narada/fleet/hosts"
+# NARADA_HOST_FLEET_UI_ROUTE_SHAPE = "cloudflare-projection"
+# Set to "log" only when structured, secret-free gateway relay observations
+# are desired in Worker diagnostics. This does not persist payloads.
+# NARADA_HOST_FLEET_OBSERVABILITY = "log"
 
 [ai]
 binding = "AI"

@@ -2,6 +2,8 @@ const TASK_EXECUTABILITY_FOLLOW_UP_SCHEMA: any = 'narada.task.executability.foll
 const MAX_TRACKED_REQUESTS: any = 256;
 const MAX_ID_LENGTH: any = 160;
 const MAX_DIGEST_LENGTH: any = 128;
+const MAX_RESULT_SCAN_DEPTH: any = 6;
+const MAX_RESULT_SCAN_NODES: any = 128;
 const SUCCESS_STATUSES: any = new Set(['completed', 'ok', 'success']);
 
 function isObject(value: any) {
@@ -18,12 +20,24 @@ function validDigest(value: any) {
 
 function structuredResultCandidates(result: any) {
   if (!isObject(result)) return [];
-  return [
-    result.structuredContent,
-    result.structured_content,
-    isObject(result.result) ? result.result.structuredContent : null,
-    isObject(result.result) ? result.result.structured_content : null,
-  ].filter(isObject);
+  const candidates: any[] = [];
+  const seen: any = new Set();
+  let visited: any = 0;
+  const visit: any = (value: any, depth: any) => {
+    if (visited >= MAX_RESULT_SCAN_NODES || depth > MAX_RESULT_SCAN_DEPTH || value == null || typeof value !== 'object' || seen.has(value)) return;
+    seen.add(value);
+    visited += 1;
+    if (isObject(value)) {
+      for (const key of ['structuredContent', 'structured_content']) {
+        if (isObject(value[key])) candidates.push(value[key]);
+      }
+      for (const nested of Object.values(value)) visit(nested, depth + 1);
+    } else if (Array.isArray(value)) {
+      for (const nested of value) visit(nested, depth + 1);
+    }
+  };
+  visit(result, 0);
+  return candidates;
 }
 
 function followUpFromResult(result: any) {
@@ -44,6 +58,11 @@ function successfulToolResultFromEvent(event: any) {
     const status: any = event.status ?? event.terminal_state ?? 'completed';
     if (!SUCCESS_STATUSES.has(String(status))) return null;
     return event.result ?? event.structuredContent ?? event.structured_content ?? event.payload ?? null;
+  }
+  if (event.event === 'carrier_tool_completed' && Object.hasOwn(event, 'result')) {
+    const status: any = event.status ?? event.terminal_state ?? 'completed';
+    if (!SUCCESS_STATUSES.has(String(status))) return null;
+    return event.result ?? null;
   }
   return null;
 }

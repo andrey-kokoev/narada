@@ -259,62 +259,113 @@ function predicateMatches(fact: Fact, predicate: MailAdmissionPredicateConfig): 
   return false;
 }
 
-function mailFactPassesPredicateAdmission(fact: Fact, admission: MailAdmissionConfig): boolean {
+type PredicateAdmissionDecision =
+  | { admitted: true; reason: "predicate_admitted" }
+  | { admitted: false; reason: "excluded_predicate" | "included_predicate_not_matched" };
+
+function evaluatePredicateAdmission(fact: Fact, admission: MailAdmissionConfig): PredicateAdmissionDecision {
   const predicates = admission.predicates;
-  if (!predicates) return true;
+  if (!predicates) return { admitted: true, reason: "predicate_admitted" };
 
   const unknownBehavior = predicates.unknown_participant_behavior ?? admission.unknown_sender_behavior ?? "ignore";
   const exclude = predicates.exclude ?? [];
   for (const predicate of exclude) {
     const result = predicateMatches(fact, predicate);
     if (result === true || (result === "unknown" && unknownBehavior === "admit")) {
-      return false;
+      return { admitted: false, reason: "excluded_predicate" };
     }
   }
 
   const include = predicates.include ?? [];
-  if (include.length === 0) return true;
+  if (include.length === 0) return { admitted: true, reason: "predicate_admitted" };
   let sawUnknown = false;
   for (const predicate of include) {
     const result = predicateMatches(fact, predicate);
-    if (result === true) return true;
+    if (result === true) return { admitted: true, reason: "predicate_admitted" };
     if (result === "unknown") sawUnknown = true;
   }
-  return sawUnknown && unknownBehavior === "admit";
+  return sawUnknown && unknownBehavior === "admit"
+    ? { admitted: true, reason: "predicate_admitted" }
+    : { admitted: false, reason: "included_predicate_not_matched" };
 }
 
-export function mailFactPassesAdmission(fact: Fact, admission?: MailAdmissionConfig): boolean {
-  if (!admission || fact.fact_type !== "mail.message.discovered") {
-    return true;
+export type MailAdmissionDecisionReason =
+  | "not_subject_to_new_message_policy"
+  | "no_policy_restrictions"
+  | "excluded_folder"
+  | "included_folder_not_matched"
+  | "excluded_predicate"
+  | "included_predicate_not_matched"
+  | "sender_unknown_rejected"
+  | "sender_not_allowed"
+  | "admitted";
+
+export interface MailAdmissionDecision {
+  admitted: boolean;
+  reason: MailAdmissionDecisionReason;
+  fact_type: Fact["fact_type"];
+  folder_refs: string[];
+  sender_email: string | null;
+}
+
+export function evaluateMailFactAdmission(
+  fact: Fact,
+  admission?: MailAdmissionConfig,
+): MailAdmissionDecision {
+  const folderRefs = [...extractMailFolderRefs(fact)].sort();
+  const senderEmail = extractMailSenderEmail(fact);
+  const decision = (
+    admitted: boolean,
+    reason: MailAdmissionDecisionReason,
+  ): MailAdmissionDecision => ({
+    admitted,
+    reason,
+    fact_type: fact.fact_type,
+    folder_refs: folderRefs,
+    sender_email: senderEmail,
+  });
+
+  if (fact.fact_type !== "mail.message.discovered") {
+    return decision(true, "not_subject_to_new_message_policy");
+  }
+  if (!admission) {
+    return decision(true, "no_policy_restrictions");
   }
 
-  const folderRefs = extractMailFolderRefs(fact);
   const includedFolders = new Set((admission.included_folder_refs ?? []).map((s) => s.toLowerCase()));
   const excludedFolders = new Set((admission.excluded_folder_refs ?? []).map((s) => s.toLowerCase()));
-  if (excludedFolders.size > 0 && [...folderRefs].some((ref) => excludedFolders.has(ref))) {
-    return false;
+  if (excludedFolders.size > 0 && folderRefs.some((ref) => excludedFolders.has(ref))) {
+    return decision(false, "excluded_folder");
   }
-  if (includedFolders.size > 0 && ![...folderRefs].some((ref) => includedFolders.has(ref))) {
-    return false;
+  if (includedFolders.size > 0 && !folderRefs.some((ref) => includedFolders.has(ref))) {
+    return decision(false, "included_folder_not_matched");
   }
 
-  if (!mailFactPassesPredicateAdmission(fact, admission)) {
-    return false;
+  const predicateDecision = evaluatePredicateAdmission(fact, admission);
+  if (!predicateDecision.admitted) {
+    return decision(false, predicateDecision.reason);
   }
 
   const addresses = new Set((admission.allowed_sender_addresses ?? []).map((s) => s.toLowerCase()));
   const domains = new Set((admission.allowed_sender_domains ?? []).map((s) => s.toLowerCase()));
   if (addresses.size === 0 && domains.size === 0) {
-    return true;
+    return decision(true, "admitted");
   }
 
-  const email = extractMailSenderEmail(fact);
-  if (!email) {
-    return admission.unknown_sender_behavior === "admit";
+  if (!senderEmail) {
+    return admission.unknown_sender_behavior === "admit"
+      ? decision(true, "admitted")
+      : decision(false, "sender_unknown_rejected");
   }
 
-  const domain = senderDomain(email);
-  return addresses.has(email) || (domain !== null && domains.has(domain));
+  const domain = senderDomain(senderEmail);
+  return addresses.has(senderEmail) || (domain !== null && domains.has(domain))
+    ? decision(true, "admitted")
+    : decision(false, "sender_not_allowed");
+}
+
+export function mailFactPassesAdmission(fact: Fact, admission?: MailAdmissionConfig): boolean {
+  return evaluateMailFactAdmission(fact, admission).admitted;
 }
 
 export class AdmittedMailContextStrategy implements ContextFormationStrategy {

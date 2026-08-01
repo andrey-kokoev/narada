@@ -263,6 +263,11 @@ test('carrier turn adapter completes provider-requested tools through the inject
   assert.equal(toolInvocation.toolCallId, 'call-1');
   assert.equal(toolInvocation.capabilityIdentity, 'capability:fs_read_file');
   assert.equal(toolInvocation.authorityPosture, 'nars-admitted');
+  assert.deepEqual(events.find((event) => event.kind === 'carrier_tool_completed')?.result, {
+    status: 'completed',
+    toolName: 'fs_read_file',
+    args: {},
+  });
 });
 
 test('carrier turn adapter durably projects explicit provider stream chunks before completion', async () => {

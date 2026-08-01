@@ -246,6 +246,32 @@ test('controller passes the privately admitted plan to the kernel switch', async
   assert.equal(switched.admittedPlan, PLAN);
 });
 
+test('controller health projects the plan admitted by the active reconfiguration', async () => {
+  const admittedPlan: any = {
+    ...PLAN,
+    id: 'plan:active',
+    selected: {
+      ...PLAN.selected,
+      model: { kind: 'model', id: 'model:next' },
+    },
+    options: { thinking: 'xhigh' },
+  };
+  const controller: any = createNarsIntelligenceRuntimeController({
+    runtimeContext: { session: 'session-health-plan', intelligence: { principal: 'principal:health-plan' } },
+    gateway: { async invoke() { return planResult(); } },
+    validateSelection: async () => admittedPlan,
+  });
+  const result: any = await controller.reconfigure({
+    request_id: 'health-plan-1',
+    requested_inference_provider: { kind: 'inference-provider', id: 'inference-provider:test' },
+    requested_model: { kind: 'model', id: 'model:next' },
+    requested_options: { thinking: 'xhigh' },
+  });
+  assert.equal(result.terminal_state, 'active');
+  assert.equal(controller.snapshot().latest_plan.model.id, 'model:next');
+  assert.equal(controller.snapshot().latest_plan.options.thinking, 'xhigh');
+});
+
 test('controller cancels a pending validation without entering the switching state', async () => {
   let releaseValidation: any;
   let validationStarted: any;

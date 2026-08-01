@@ -3,6 +3,7 @@ import { connect as connectTls } from 'node:tls';
 import type { IncomingMessage } from 'node:http';
 import type { Duplex } from 'node:stream';
 import type { HostKey, HostRecord } from './contract.js';
+import { HOST_GATEWAY_BRIDGE_TOKEN_HEADER, HOST_GATEWAY_TOKEN_HEADER } from './gateway.js';
 
 export interface HostFleetWebSocketRelayOptions {
   record: HostRecord;
@@ -107,6 +108,9 @@ export function relayHostGatewayWebSocket(options: HostFleetWebSocketRelayOption
   };
   upstream.on('data', onData);
   upstream.once(target.protocol === 'https:' ? 'secureConnect' : 'connect', () => {
+    const credentialHeader = options.record.gateway.credential.class === 'dedicated_host_gateway'
+      ? HOST_GATEWAY_TOKEN_HEADER
+      : HOST_GATEWAY_BRIDGE_TOKEN_HEADER;
     const lines = [
       `GET ${target.pathname}${target.search} HTTP/1.1`,
       `Host: ${target.host}`,
@@ -116,7 +120,7 @@ export function relayHostGatewayWebSocket(options: HostFleetWebSocketRelayOption
       `Sec-WebSocket-Version: ${header(options.request, 'sec-websocket-version') ?? '13'}`,
       `x-narada-host-id: ${options.host.host_id}`,
       `x-narada-host-instance-id: ${options.host.host_instance_id}`,
-      `x-narada-operator-console-bridge-token: ${options.credential}`,
+      `${credentialHeader}: ${options.credential}`,
     ];
     const protocol = header(options.request, 'sec-websocket-protocol');
     if (protocol) lines.push(`Sec-WebSocket-Protocol: ${protocol}`);

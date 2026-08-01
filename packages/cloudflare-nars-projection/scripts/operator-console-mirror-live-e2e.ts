@@ -1,60 +1,82 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createHash, randomUUID } from 'node:crypto';
+import { basename, dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
+  type BrowserCookie,
   findHeadlessBrowser,
   openCdpPage,
   waitForPageText,
 } from './lib/browser-smoke.js';
+import { canonicalizeRouteDirectory, routeDirectoryDigest } from './lib/operator-console-mirror-contract.js';
 import { resolveJourneyRoutes, type JourneyRoutes } from './lib/operator-console-mirror-journey.js';
 
 type AnyRecord = Record<string, any>;
+type EvidenceTarget = {
+  runId: string;
+  path: string;
+  indexPath: string;
+};
+type OperatorConsoleAuth = {
+  headers: Record<string, string>;
+  browserCookies: BrowserCookie[];
+};
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
 
 type LiveArgs = {
   live: boolean;
+  plan: boolean;
+  allowSkippedJourneys: boolean;
   quiet: boolean;
   help: boolean;
   url: string | null;
   localRouteDirectoryUrl: string | null;
   evidencePath: string | null;
-  accessClientId: string | null;
-  accessClientSecret: string | null;
-  accessClientSecretFile: string | null;
-  accessCookieFile: string | null;
+  operatorSecretStdin: boolean;
+  turnContent: string | null;
   artifactId: string | null;
-  mutationMode: 'none' | 'disposable';
+  artifactSha256: string | null;
+  mutationMode: 'none' | 'disposable' | 'api-disposable';
   failureMode: 'none' | 'tunnel-loss' | 'route-revocation' | 'stale-lease';
   timeoutMs: number;
 };
 
 const args = parseArgs(process.argv.slice(2));
+const evidenceRunId = randomUUID();
 
 if (args.help) {
   process.stdout.write([
     'Cloudflare Operator Console mirror live E2E',
     '',
     'Planning mode:',
-    '  pnpm --filter @narada2/cloudflare-nars-projection smoke:operator-console-mirror-live',
+    '  pnpm --filter @narada2/cloudflare-nars-projection plan:operator-console-mirror-live',
+    '  ... --plan',
     '',
-    'Live mode with a Cloudflare Access service token:',
-    '  pnpm --filter @narada2/cloudflare-nars-projection smoke:operator-console-mirror-live -- --live --url <worker-url> --access-client-id <id> --access-client-secret-file <path>',
+    'Live mode requires --live, a Worker origin, and the Narada shared secret on stdin.',
     '',
-    'Live mode with an exported CF_Authorization cookie:',
-    '  ... --live --url <worker-url> --access-cookie-file <path>',
+    'Live mode with the Narada-owned shared secret:',
+    '  Get-Secret -Name <narada-operator-console-secret> -AsPlainText | pnpm --filter @narada2/cloudflare-nars-projection test:operator-console-mirror-live -- --url <worker-url> --operator-secret-stdin --turn-content <sentinel> --artifact-id <id> --artifact-sha256 <sha256>',
     '',
     'The live gate compares the remote route directory with the local authority by default:',
     '  --local-route-directory-url <http://127.0.0.1:61729/console/routes>',
     '',
-    'If the live session has no rendered artifact reference, provide:',
+    'Strict live mode requires a concrete artifact and its expected content digest:',
     '  ... --artifact-id <session-artifact-id>',
+    '  ... --artifact-sha256 <64-hex-sha256>',
     '',
-    'Opt-in disposable Site Registry mutation journey:',
+    'Reachability-only mode (dynamic session, artifact, and Site Operations slices may be skipped):',
+    '  ... --allow-skipped-journeys',
+    'The default live profile fails when any required dynamic slice is unavailable.',
+    '',
+    'The full live profile performs a disposable Site Registry mutation journey through the real UI by default:',
     '  ... --mutation-mode disposable',
     'This adds, edits, retires, and purges a unique temporary record and verifies cleanup.',
+    'Use --mutation-mode none only for an explicit read-only browser profile.',
+    'Direct API-only mutation coverage is separate and explicit:',
+    '  ... --mutation-mode api-disposable',
     '',
     'Opt-in failure checks (disrupt local projection state and restore it):',
     '  ... --failure-mode tunnel-loss',
@@ -63,7 +85,7 @@ if (args.help) {
     'Route failure modes require NARADA_OPERATOR_ROUTER_TOKEN or the local Router token file.',
     'Tunnel-loss requires the owned mirror state or NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN so the mirror can be restored.',
     '',
-    'The service-token secret or cookie value is never written to evidence or output.',
+    'The shared secret is accepted only from stdin, bounded in memory, and never written to evidence or output.',
   ].join('\n'));
   process.exit(0);
 }
@@ -75,37 +97,43 @@ if (args.quiet) {
   process.stdout.write('[cloudflare:operator-console-mirror-live] ' + result.status + ': ' + (result.code ?? 'checks_complete') + '\n');
   if (result.evidence_path) process.stdout.write('evidence: ' + result.evidence_path + '\n');
 }
-process.exitCode = result.status === 'passed' || result.status === 'planned' ? 0 : 1;
+process.exitCode = ['passed', 'passed_with_skips', 'planned'].includes(String(result.status)) ? 0 : 1;
 
 async function run(): Promise<AnyRecord> {
-  const evidencePath = args.evidencePath
-    ? resolve(args.evidencePath)
-    : resolve(REPO_ROOT, '.narada/evidence/operator-console-mirror-live.json');
-  if (!args.live) {
+  const evidenceTarget = resolveEvidenceTarget(args.evidencePath, evidenceRunId);
+  if (args.plan) {
     return persist({
       schema: 'narada.operator_console_mirror.live_e2e.v1',
       status: 'planned',
-      code: 'live_flag_required',
-      required: ['--live', '--url', 'one Access credential mode'],
-      credential_modes: ['service_token', 'cf_authorization_cookie'],
-      evidence_path: evidencePath,
-    }, evidencePath);
+      code: 'plan_requested',
+       required: ['--live', '--url', '--operator-secret-stdin', '--turn-content', '--artifact-id', '--artifact-sha256'],
+       credential_modes: ['narada_shared_secret_stdin'],
+      evidence_path: evidenceTarget.path,
+    }, evidenceTarget);
   }
+  if (!args.live) return persistRefusal('live_flag_required_use_plan_for_explicit_plan', evidenceTarget);
 
   let baseUrl: string;
   let headers: Record<string, string>;
+  let browserCookies: BrowserCookie[];
   try {
     baseUrl = requireWorkerOrigin(args.url);
-    headers = readAccessHeaders(args);
+    const auth = await readOperatorConsoleAuth(args, baseUrl);
+    headers = auth.headers;
+    browserCookies = auth.browserCookies;
   } catch (error) {
-    return persistRefusal(error instanceof Error ? error.message : String(error), evidencePath);
+    return persistRefusal(error instanceof Error ? error.message : String(error), evidenceTarget);
   }
 
   const evidence: AnyRecord = {
     schema: 'narada.operator_console_mirror.live_e2e.v1',
     status: 'running',
     worker_url: baseUrl,
-    access_mode: headers['CF-Access-Client-Id'] ? 'service_token' : 'cf_authorization_cookie',
+     access_mode: 'narada_shared_secret',
+    credential_transport: 'stdin',
+    profile: args.failureMode === 'none'
+      ? (args.allowSkippedJourneys ? 'reachability-only' : 'full')
+      : `failure:${args.failureMode}`,
     mutation_mode: args.mutationMode,
     failure_mode: args.failureMode,
     checks: {},
@@ -116,16 +144,11 @@ async function run(): Promise<AnyRecord> {
     assert.ok([302, 401, 403].includes(unauthenticated.response.status), 'unauthenticated mirror route must fail closed');
     evidence.checks.unauthenticated = { status: unauthenticated.response.status, passed: true };
 
-    const invalidAccess = headers['CF-Access-Client-Id']
-      ? await request(baseUrl, '/api/nars/operator-console/routes', {
-        'CF-Access-Client-Id': headers['CF-Access-Client-Id'],
-        'CF-Access-Client-Secret': 'invalid-live-e2e-secret',
-      })
-      : null;
-    if (invalidAccess) {
-      assert.ok([302, 401, 403].includes(invalidAccess.response.status), 'invalid Access service token must fail closed');
-      evidence.checks.invalid_access = { status: invalidAccess.response.status, passed: true };
-    }
+    const invalidSecret = await request(baseUrl, '/api/nars/operator-console/routes', {
+      Authorization: 'Bearer invalid-live-e2e-secret',
+    });
+    assert.ok([401, 403].includes(invalidSecret.response.status), 'invalid shared secret must fail closed');
+    evidence.checks.invalid_shared_secret = { status: invalidSecret.response.status, passed: true };
 
     const routeDirectory = await requestJson(baseUrl, '/api/nars/operator-console/routes', headers);
     assert.equal(routeDirectory.response.status, 200, compact(routeDirectory));
@@ -152,9 +175,22 @@ async function run(): Promise<AnyRecord> {
     const localRouteDirectory = await readLocalRouteDirectory(args.localRouteDirectoryUrl);
     assert.equal(localRouteDirectory.response.status, 200, compact(localRouteDirectory));
     assert.equal(localRouteDirectory.body?.schema, routeDirectory.body?.schema, compact(localRouteDirectory));
-    const remoteParity = comparableRouteDirectory(routeDirectory.body);
-    const localParity = comparableRouteDirectory(localRouteDirectory.body);
-    assert.equal(JSON.stringify(remoteParity), JSON.stringify(localParity), 'remote route directory does not match local authority');
+    assert.deepEqual(routeDirectory.body?.workspaceHost, {
+      kind: 'cloudflare',
+      id: 'worker',
+      origin: baseUrl,
+    }, 'remote route directory workspace host is invalid');
+    assert.deepEqual(localRouteDirectory.body?.workspaceHost, {
+      kind: 'local',
+      id: 'operator-console',
+      origin: null,
+    }, 'local route directory workspace host is invalid');
+    const remoteContract = comparableRouteDirectory(routeDirectory.body);
+    const localContract = comparableRouteDirectory(localRouteDirectory.body);
+    assert.deepEqual(remoteContract, localContract, 'remote route directory does not match local authority');
+    const remoteContractSha256 = routeDirectoryDigest(routeDirectory.body, { ignoreAuthorityIdentity: true });
+    const localContractSha256 = routeDirectoryDigest(localRouteDirectory.body, { ignoreAuthorityIdentity: true });
+    assert.equal(remoteContractSha256, localContractSha256, 'route directory contract digests differ');
     const journeyRoutes = resolveJourneyRoutes(routeDirectory.body);
     evidence.checks.route_directory = {
       status: routeDirectory.response.status,
@@ -165,6 +201,9 @@ async function run(): Promise<AnyRecord> {
       local_parity_route_count: Array.isArray(localRouteDirectory.body?.httpRouteParity?.routes)
         ? localRouteDirectory.body.httpRouteParity.routes.length
         : 0,
+      remote_contract_sha256: remoteContractSha256,
+      local_contract_sha256: localContractSha256,
+      comparison: 'complete_document_except_generatedAt_and_workspaceHost',
       local_remote_parity_match: true,
       journey_routes: journeyRoutes,
       passed: true,
@@ -234,13 +273,15 @@ async function run(): Promise<AnyRecord> {
       passed: true,
     };
 
-    if (args.mutationMode === 'disposable') {
-      evidence.checks.mutation_journey = await runDisposableRegistryMutationJourney(baseUrl, registryHeaders);
+    if (args.mutationMode === 'api-disposable') {
+      evidence.checks.api_mutation_journey = await runDisposableRegistryMutationJourney(baseUrl, registryHeaders);
     }
 
     if (args.failureMode !== 'none') {
-      return await runFailureMode({ baseUrl, headers, journeyRoutes, evidence, evidencePath });
+      return await runFailureMode({ baseUrl, headers, journeyRoutes, evidence, evidenceTarget });
     }
+
+    assertRequiredDynamicJourneys(journeyRoutes);
 
     const browserPath = findHeadlessBrowser();
     assert.ok(browserPath, 'a supported headless browser is required for browser-level acceptance');
@@ -248,6 +289,7 @@ async function run(): Promise<AnyRecord> {
       browserPath,
       url: baseUrl + '/',
       extraHeaders: headers,
+      cookies: browserCookies,
       instrumentWebSocketClose: true,
       userDataPrefix: 'narada-operator-console-mirror-live-',
     });
@@ -283,7 +325,11 @@ async function run(): Promise<AnyRecord> {
         browserPages.push({ path: target.path, href: state.href, body_length: state.bodyLength });
       }
 
+      const interactionChecks = await runBrowserOperatorInteractionJourney(page, baseUrl);
       const dynamicChecks: AnyRecord = {};
+      if (args.mutationMode === 'disposable') {
+        dynamicChecks.registry_mutation = await runBrowserDisposableRegistryMutationJourney(page, baseUrl, registryHeaders);
+      }
       if (journeyRoutes.site_operations_path) {
         await page.navigate(baseUrl + journeyRoutes.site_operations_path);
         const siteOperations = await waitForPageText(page, 'Task & Agent Operations', args.timeoutMs);
@@ -300,14 +346,41 @@ async function run(): Promise<AnyRecord> {
       }
 
       let sessionEvents: AnyRecord | null = null;
+      let sessionTurn: AnyRecord | null = null;
       let sessionConfig: AnyRecord = {};
       let websocketRecords: AnyRecord[] = [];
-      if (journeyRoutes.session_path && journeyRoutes.session_events_path) {
-        await page.navigate(baseUrl + journeyRoutes.session_path);
-        sessionConfig = await page.evaluate('JSON.parse(document.querySelector("#nars-config")?.textContent ?? "{}")');
-        const expectedEventEndpoint = new URL(journeyRoutes.session_events_path, baseUrl);
+      const sessionJourney = journeyRoutes.session_path
+        && journeyRoutes.session_events_path
+        && journeyRoutes.session_input_path
+        && (!args.allowSkippedJourneys || args.turnContent?.trim())
+        ? {
+          path: journeyRoutes.session_path,
+          eventsPath: journeyRoutes.session_events_path,
+          inputPath: journeyRoutes.session_input_path,
+        }
+        : null;
+      if (sessionJourney) {
+        await page.navigate(baseUrl + sessionJourney.path);
+        const sessionConfigReady = await waitForPageValue(
+          page,
+          '(() => { try { return JSON.parse(document.querySelector("#nars-config")?.textContent ?? "{}"); } catch { return {}; } })()',
+          (value) => Boolean(value && typeof value === 'object' && typeof (value as AnyRecord).eventEndpoint === 'string' && typeof (value as AnyRecord).inputEndpoint === 'string'),
+          args.timeoutMs,
+        );
+        assert.equal(sessionConfigReady.found, true, JSON.stringify({ session_config: sessionConfigReady }));
+        sessionConfig = sessionConfigReady.value as AnyRecord;
+        const expectedEventEndpoint = new URL(sessionJourney.eventsPath, baseUrl);
         expectedEventEndpoint.protocol = expectedEventEndpoint.protocol === 'https:' ? 'wss:' : 'ws:';
+        const expectedInputEndpoint = new URL(sessionJourney.inputPath, baseUrl).toString();
         assert.equal(String(sessionConfig.eventEndpoint ?? ''), expectedEventEndpoint.toString(), JSON.stringify({ session_config: sessionConfig }));
+        assert.equal(String(sessionConfig.inputEndpoint ?? ''), expectedInputEndpoint, JSON.stringify({ session_config: sessionConfig }));
+        const sessionControls = await waitForPageValue(
+          page,
+          'Boolean(document.querySelector("#operator-form") && document.querySelector("#operator-input") && document.querySelector(".composer-submit"))',
+          (value) => value === true,
+          args.timeoutMs,
+        );
+        assert.equal(sessionControls.found, true, JSON.stringify({ session_controls: sessionControls }));
         const replay = await page.waitForWebSocketFrame(
           (entry: AnyRecord) => String(entry.url ?? '') === expectedEventEndpoint.toString()
             && String(entry.payload_data ?? '').includes('session_events_replay_completed'),
@@ -316,12 +389,71 @@ async function run(): Promise<AnyRecord> {
         sessionEvents = replay;
         assert.equal(replay.found, true, JSON.stringify({ session_events: replay }));
         assert.equal(await page.evaluate('Boolean(document.querySelector("#events"))'), true);
+        const turnContent = args.turnContent;
+        if (!turnContent?.trim()) throw new Error('live_session_turn_content_required');
+        const baselineRendered = await page.evaluate('(() => ({ operator_or_user: document.querySelectorAll("#events [data-event-kind=operator_input_submitted], #events [data-event-kind=user_message]").length, assistant: document.querySelectorAll("#events [data-event-kind=assistant_message]").length }))()');
+        const priorTurnIds = new Set(page.webSocketFrames()
+          .map((entry: AnyRecord) => parseWebSocketEvent(entry)?.turn_id)
+          .filter((value: unknown): value is string => typeof value === 'string'));
+        await page.fill('#operator-input', turnContent);
+        await page.click('.composer-submit');
+        const localSubmission = await waitForPageValue(
+          page,
+          '(() => { const form = document.querySelector("#operator-form"); return { request_id: form?.getAttribute("data-operator-delivery-request-id") ?? null, phase: form?.getAttribute("data-operator-delivery-phase") ?? null }; })()',
+          (value) => Boolean(value && typeof value === 'object' && typeof (value as AnyRecord).request_id === 'string' && (value as AnyRecord).phase !== 'draft'),
+          args.timeoutMs,
+        );
+        assert.equal(localSubmission.found, true, JSON.stringify({ local_submission: localSubmission }));
+        const requestId = String((localSubmission.value as AnyRecord).request_id);
+        const queued = await waitForSessionEvent(page, expectedEventEndpoint.toString(), 'input_event_queued', (event) => event.request_id === requestId, args.timeoutMs);
+        const started = await waitForSessionEvent(page, expectedEventEndpoint.toString(), 'input_event_started', (event) => event.request_id === queued.event.request_id, args.timeoutMs);
+        const queuedTurnId = String(queued.event.turn_id ?? queued.event.event_id ?? '');
+        const turnStarted = await waitForSessionEvent(page, expectedEventEndpoint.toString(), 'carrier_turn_started', (event) => {
+          if (priorTurnIds.has(String(event.turn_id ?? ''))) return false;
+          return !queuedTurnId || String(event.turn_id ?? '') === queuedTurnId;
+        }, args.timeoutMs);
+        const turnId = String(turnStarted.event.turn_id ?? '');
+        assert.ok(turnId, 'carrier turn must expose a concrete turn id');
+        const assistant = await waitForSessionEvent(page, expectedEventEndpoint.toString(), 'assistant_message', (event) => event.turn_id === turnId, args.timeoutMs);
+        const turnCompleted = await waitForSessionEvent(page, expectedEventEndpoint.toString(), 'carrier_turn_completed', (event) => event.turn_id === turnId, args.timeoutMs);
+        const inputCompleted = await waitForSessionEvent(page, expectedEventEndpoint.toString(), 'input_event_completed', (event) => event.request_id === queued.event.request_id, args.timeoutMs);
+        const controlResponse = await waitForSessionEvent(page, expectedEventEndpoint.toString(), 'session_control_response', (event) => event.request_id === queued.event.request_id, args.timeoutMs);
+        assert.equal(inputCompleted.event.terminal_state, 'completed', JSON.stringify(inputCompleted.event));
+        assert.equal(controlResponse.event.terminal_state, 'completed', JSON.stringify(controlResponse.event));
+        const rendered = await waitForPageValue(
+          page,
+          '(() => ({ operator_or_user: document.querySelectorAll("#events [data-event-kind=operator_input_submitted], #events [data-event-kind=user_message]").length, assistant: document.querySelectorAll("#events [data-event-kind=assistant_message]").length, phase: document.querySelector("#operator-form")?.getAttribute("data-operator-delivery-phase") ?? null }))()',
+          (value) => Boolean(value && typeof value === 'object'
+            && Number((value as AnyRecord).operator_or_user) > Number((baselineRendered as AnyRecord).operator_or_user)
+            && Number((value as AnyRecord).assistant) > Number((baselineRendered as AnyRecord).assistant)
+            && (value as AnyRecord).phase === 'completed'),
+          args.timeoutMs,
+        );
+        assert.equal(rendered.found, true, JSON.stringify({ baseline_rendered: baselineRendered, rendered }));
+        const lifecycle = [queued, started, turnStarted, assistant, turnCompleted, inputCompleted, controlResponse]
+          .map((entry) => Number(entry.event.event_sequence ?? entry.event.sequence));
+        assert.equal(lifecycle.every(Number.isFinite), true, JSON.stringify({ lifecycle }));
+        for (let index = 1; index < lifecycle.length; index += 1) {
+          assert.ok(lifecycle[index] > lifecycle[index - 1], JSON.stringify({ lifecycle }));
+        }
+        sessionTurn = {
+          request_id: requestId,
+          turn_id: turnId,
+          turn_content_length: turnContent.length,
+          event_kinds: [queued, started, turnStarted, assistant, turnCompleted, inputCompleted, controlResponse].map((entry) => entry.event.event),
+          terminal_state: inputCompleted.event.terminal_state,
+          rendered: rendered.value,
+          passed: true,
+        };
         websocketRecords = await page.webSocketInstrumentation();
         assert.equal(websocketRecords.some((record: AnyRecord) => String(record.url ?? '') === expectedEventEndpoint.toString()), true, JSON.stringify({ websocket_records: websocketRecords }));
       } else {
         dynamicChecks.agent_sessions = {
           ...journeyRoutes.availability.agent_sessions,
           status: 'skipped',
+          reason: journeyRoutes.session_path && !args.turnContent?.trim()
+            ? 'turn_content_not_requested'
+            : journeyRoutes.availability.agent_sessions.reason,
         };
       }
 
@@ -330,7 +462,7 @@ async function run(): Promise<AnyRecord> {
       let artifactPath: string | null = null;
       let artifactContentPath: string | null = null;
       let artifactId: string | null = null;
-      if (journeyRoutes.artifact_base_path && (artifactHref || args.artifactId?.trim())) {
+      if (journeyRoutes.artifact_base_path && (artifactHref || args.artifactId?.trim()) && args.artifactSha256?.trim()) {
         artifactPath = resolveArtifactPath({
           baseUrl,
           artifactBasePath: journeyRoutes.artifact_base_path,
@@ -345,21 +477,43 @@ async function run(): Promise<AnyRecord> {
         assert.equal(artifactBody.found, true, JSON.stringify({ artifact: artifactBody }));
         const artifactMarkup = await page.evaluate('document.documentElement?.outerHTML ?? ""');
         assert.equal(artifactMarkup.includes('source_path'), false);
+        const artifactMetadata = await requestJson(baseUrl, artifactPath, headers);
+        assert.equal(artifactMetadata.response.status, 200, compact(artifactMetadata));
+        assert.equal(artifactMetadata.body?.artifact_id, decodeURIComponent(concreteArtifactId), compact(artifactMetadata));
+        const expectedSessionId = journeyRoutes.session_path?.split('/').filter(Boolean)[1] ?? null;
+        if (expectedSessionId) assert.equal(artifactMetadata.body?.session_id, expectedSessionId, compact(artifactMetadata));
+        assert.equal(artifactMetadata.body?.lifecycle?.state, 'active', compact(artifactMetadata));
+        assert.equal('source_path' in artifactMetadata.body, false, compact(artifactMetadata));
         artifactContentPath = artifactPath.replace(/\/?$/, '/content');
-        await page.navigate(baseUrl + artifactContentPath);
-        const artifactContent = await waitForPageValue(page, 'document.body?.innerText ?? ""', (value) => String(value).trim().length > 0, args.timeoutMs);
-        assert.equal(artifactContent.found, true, JSON.stringify({ artifact_content: artifactContent }));
+        const artifactContent = await requestBytes(baseUrl, artifactContentPath, headers);
+        assert.equal(artifactContent.response.status, 200, compact({ response: artifactContent.response, body: {} }));
+        assert.ok(artifactContent.bytes.byteLength > 0, 'artifact content must not be empty');
+        const artifactContentSha256 = createHash('sha256').update(artifactContent.bytes).digest('hex');
+        const expectedArtifactSha256 = args.artifactSha256?.trim().toLowerCase();
+        assert.ok(expectedArtifactSha256, 'strict artifact acceptance requires --artifact-sha256');
+        assert.equal(artifactContentSha256, expectedArtifactSha256, 'artifact content digest does not match the supplied fixture digest');
         dynamicChecks.artifacts = {
           status: 'passed',
           path: artifactPath,
           content_path: artifactContentPath,
           artifact_id: decodeURIComponent(concreteArtifactId),
+          content_bytes: artifactContent.bytes.byteLength,
+          content_type: artifactContent.response.headers.get('content-type'),
+          lifecycle_state: artifactMetadata.body?.lifecycle?.state ?? null,
+          session_id: artifactMetadata.body?.session_id ?? null,
+          expected_sha256: expectedArtifactSha256,
+          observed_sha256: artifactContentSha256,
         };
       } else {
+        if (!args.allowSkippedJourneys) {
+          throw new Error(`required_live_journey_unavailable:artifacts:${journeyRoutes.artifact_base_path ? (artifactHref || args.artifactId?.trim() ? 'artifact_sha256_required' : 'artifact_id_not_observed') : journeyRoutes.availability.artifacts.reason}`);
+        }
         dynamicChecks.artifacts = {
           ...journeyRoutes.availability.artifacts,
           status: 'skipped',
-          reason: journeyRoutes.artifact_base_path ? 'artifact_id_not_observed' : journeyRoutes.availability.artifacts.reason,
+          reason: journeyRoutes.artifact_base_path
+            ? (artifactHref || args.artifactId?.trim() ? 'artifact_sha256_required' : 'artifact_id_not_observed')
+            : journeyRoutes.availability.artifacts.reason,
         };
       }
 
@@ -371,12 +525,18 @@ async function run(): Promise<AnyRecord> {
       evidence.checks.browser = {
         root,
         pages: browserPages,
+        interactions: interactionChecks,
         dynamic: dynamicChecks,
         site_operations_path: journeyRoutes.site_operations_path,
         session_path: journeyRoutes.session_path,
         session_events_path: journeyRoutes.session_events_path,
-        session_event_count: sessionEvents?.value ?? null,
+        session_input_path: journeyRoutes.session_input_path,
+        session_replay: sessionEvents
+          ? { found: Boolean(sessionEvents.found), waited_ms: sessionEvents.waited_ms ?? null }
+          : null,
         session_event_endpoint: sessionConfig.eventEndpoint ?? null,
+        session_input_endpoint: sessionConfig.inputEndpoint ?? null,
+        session_turn: sessionTurn,
         websocket_records: websocketRecords.slice(0, 8),
         artifact_path: artifactPath,
         artifact_content_path: artifactContentPath,
@@ -388,13 +548,267 @@ async function run(): Promise<AnyRecord> {
       await page.close();
     }
 
-    evidence.status = 'passed';
-    return persist(evidence, evidencePath);
+    evidence.status = args.allowSkippedJourneys ? 'passed_with_skips' : 'passed';
+    return persist(evidence, evidenceTarget);
   } catch (error) {
     evidence.status = 'failed';
     evidence.code = error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500);
-    return persist(evidence, evidencePath);
+    return persist(evidence, evidenceTarget);
   }
+}
+
+function assertRequiredDynamicJourneys(journeyRoutes: JourneyRoutes): void {
+  if (args.allowSkippedJourneys) return;
+  const missing: string[] = [];
+  if (!journeyRoutes.site_operations_path) {
+    missing.push(`site_operations:${journeyRoutes.availability.site_operations.reason}`);
+  }
+  if (!journeyRoutes.session_path || !journeyRoutes.session_events_path || !journeyRoutes.session_input_path) {
+    missing.push(`agent_sessions:${journeyRoutes.availability.agent_sessions.reason}`);
+  }
+  if (!journeyRoutes.artifact_base_path) {
+    missing.push(`artifacts:${journeyRoutes.availability.artifacts.reason}`);
+  }
+  if (!args.turnContent?.trim()) missing.push('agent_sessions:turn_content_required');
+  if (!args.artifactSha256?.trim()) missing.push('artifacts:artifact_sha256_required');
+  if (missing.length) throw new Error(`required_live_journey_unavailable:${missing.join('|')}`);
+}
+
+async function runBrowserOperatorInteractionJourney(page: AnyRecord, baseUrl: string): Promise<AnyRecord> {
+  await page.navigate(baseUrl + '/console/launch');
+  const launchPage = await waitForPageText(page, 'Site Runtime', args.timeoutMs);
+  assert.equal(launchPage.found, true, JSON.stringify({ launch_page: launchPage }));
+  const tileCount = await waitForPageValue(
+    page,
+    'document.querySelectorAll("button.site-tile[data-site-id]").length',
+    (value) => Number(value) > 0,
+    args.timeoutMs,
+  );
+  assert.equal(tileCount.found, true, JSON.stringify({ site_tiles: tileCount }));
+  const siteId = await page.evaluate('document.querySelector("button.site-tile[data-site-id]")?.getAttribute("data-site-id") ?? null');
+  assert.equal(typeof siteId, 'string');
+  assert.ok(String(siteId).trim(), 'launch journey requires a concrete Site tile');
+
+  await page.click('button.site-tile[data-site-id]');
+  const registryNavigation = await waitForPageValue(
+    page,
+    'location.pathname',
+    (value) => value === '/console/registry',
+    args.timeoutMs,
+  );
+  assert.equal(registryNavigation.found, true, JSON.stringify({ registry_navigation: registryNavigation }));
+  const selectedSite = await page.evaluate('new URL(location.href).searchParams.get("site") ?? null');
+  assert.equal(selectedSite, siteId, 'launch tile must select the clicked Site');
+  const postureButton = await waitForPageValue(
+    page,
+    'Boolean(document.querySelector("[data-testid=\\"site-detail-check-posture\\"]") && !document.querySelector("[data-testid=\\"site-detail-check-posture\\"]")?.matches(":disabled"))',
+    (value) => value === true,
+    args.timeoutMs,
+  );
+  assert.equal(postureButton.found, true, JSON.stringify({ posture_button: postureButton }));
+  await page.click('[data-testid="site-detail-check-posture"]');
+  const postureResult = await waitForPageValue(
+    page,
+    'document.querySelector(".launch-status")?.innerText ?? ""',
+    (value) => typeof value === 'string' && value.trim().length > 0,
+    args.timeoutMs,
+  );
+  assert.equal(postureResult.found, true, JSON.stringify({ posture_result: postureResult }));
+  assert.match(String(postureResult.value), /dry run/i, 'posture action must remain a dry run');
+
+  await page.navigate(baseUrl + '/console/onboarding');
+  const onboardingPage = await waitForPageText(page, 'Start with one assistant', args.timeoutMs);
+  assert.equal(onboardingPage.found, true, JSON.stringify({ onboarding_page: onboardingPage }));
+  const refreshButton = await waitForPageValue(
+    page,
+    'Boolean(document.querySelector("button[aria-label=\\"Refresh status\\"]") && !document.querySelector("button[aria-label=\\"Refresh status\\"]")?.matches(":disabled"))',
+    (value) => value === true,
+    args.timeoutMs,
+  );
+  assert.equal(refreshButton.found, true, JSON.stringify({ refresh_button: refreshButton }));
+  const beforeRefresh = page.networkResponseCount();
+  await page.click('button[aria-label="Refresh status"]');
+  const refresh = await page.waitForNetworkResponse(
+    (entry: AnyRecord) => entry.method === 'GET' && String(entry.url ?? '').includes('/console/onboarding/api/status'),
+    args.timeoutMs,
+    beforeRefresh,
+  );
+  assert.equal(refresh.found, true, JSON.stringify({ onboarding_refresh: refresh }));
+  return {
+    site_runtime: {
+      site_id: siteId,
+      launch_page: true,
+      selected_site: selectedSite,
+      posture_action: 'check-posture',
+      posture_result: postureResult.value,
+    },
+    onboarding: {
+      page: true,
+      refresh_request: refresh,
+    },
+  };
+}
+
+async function runBrowserDisposableRegistryMutationJourney(
+  page: AnyRecord,
+  baseUrl: string,
+  headers: Record<string, string>,
+): Promise<AnyRecord> {
+  const siteId = `operator-console-mirror-live-${Date.now()}-${process.pid}`;
+  const root = resolve(REPO_ROOT, '.ai', 'tmp', siteId);
+  const sourceRef = 'operator-console-mirror-live-e2e';
+  const history: AnyRecord[] = [];
+
+  const statusText = async (expected: string, phase: string): Promise<string> => {
+    const result = await waitForPageValue(
+      page,
+      'document.querySelector("[data-testid=\\"site-registry-status\\"]")?.innerText ?? ""',
+      (value) => typeof value === 'string' && value.includes(expected),
+      args.timeoutMs,
+    );
+    assert.equal(result.found, true, JSON.stringify({ phase, result }));
+    const value = String(result.value ?? '');
+    history.push({ phase, status: value });
+    return value;
+  };
+
+  const waitForEnabled = async (selector: string, phase: string): Promise<void> => {
+    const result = await waitForPageValue(
+      page,
+      `Boolean(document.querySelector(${JSON.stringify(selector)}) && !document.querySelector(${JSON.stringify(selector)})?.matches(':disabled'))`,
+      (value) => value === true,
+      args.timeoutMs,
+    );
+    assert.equal(result.found, true, JSON.stringify({ phase, selector, result }));
+  };
+
+  const previewAndApply = async (phase: string, purge = false): Promise<void> => {
+    await waitForEnabled('[data-testid="site-registry-preview"]', `${phase}:preview-enabled`);
+    await page.click('[data-testid="site-registry-preview"]');
+    await statusText('Preview ready.', `${phase}:preview`);
+    if (purge) {
+      const confirmation = await page.evaluate('document.querySelector("[data-testid=\\"site-registry-purge-confirmation\\"]")?.getAttribute("placeholder") ?? ""');
+      assert.ok(typeof confirmation === 'string' && confirmation.length > 0, `${phase} must expose an exact purge confirmation`);
+      await page.fill('[data-testid="site-registry-purge-confirmation"]', confirmation);
+    }
+    await page.click('[data-testid="site-registry-confirm-apply"]');
+    await waitForEnabled('[data-testid="site-registry-apply"]', `${phase}:apply-enabled`);
+    await page.click('[data-testid="site-registry-apply"]');
+    await statusText('Change applied.', `${phase}:apply`);
+  };
+
+  const read = async (): Promise<{ response: Response; body: AnyRecord }> => {
+    return await requestJson(baseUrl, `/console/registry/api/sites/${encodeURIComponent(siteId)}`, headers);
+  };
+
+  try {
+    await page.navigate(baseUrl + '/console/registry/add');
+    const addPage = await waitForPageText(page, 'Add Site', args.timeoutMs);
+    assert.equal(addPage.found, true, JSON.stringify({ add_page: addPage }));
+    await page.fill('[data-testid="site-registry-site-id"]', siteId);
+    await page.fill('[data-testid="site-registry-root"]', root);
+    await page.fill('[data-testid="site-registry-substrate"]', 'windows');
+    await page.fill('[data-testid="site-registry-source-ref"]', sourceRef);
+    await page.fill('[data-testid="site-registry-reason"]', 'Disposable browser journey add');
+    await previewAndApply('add');
+    const added = await read();
+    assert.equal(added.response.status, 200, compact(added));
+    const addedRevision = Number(added.body?.site?.revision);
+    assert.ok(Number.isInteger(addedRevision), compact(added));
+    history.push({ phase: 'add:readback', http_status: added.response.status, revision: addedRevision });
+
+    await page.navigate(baseUrl + `/console/registry/manage?operation=edit&site=${encodeURIComponent(siteId)}`);
+    const editPage = await waitForPageText(page, 'Edit Site', args.timeoutMs);
+    assert.equal(editPage.found, true, JSON.stringify({ edit_page: editPage }));
+    const editSelection = await waitForPageValue(
+      page,
+      `document.querySelector("[data-testid=\\"site-registry-existing-site\\"]")?.value ?? ""`,
+      (value) => value === siteId,
+      args.timeoutMs,
+    );
+    assert.equal(editSelection.found, true, JSON.stringify({ edit_selection: editSelection }));
+    await page.fill('[data-testid="site-registry-source-ref"]', `${sourceRef}-edit`);
+    await page.fill('[data-testid="site-registry-reason"]', 'Disposable browser journey edit');
+    await previewAndApply('edit');
+    const edited = await read();
+    assert.equal(edited.response.status, 200, compact(edited));
+    assert.ok(Number(edited.body?.site?.revision) > addedRevision, compact(edited));
+    history.push({ phase: 'edit:readback', http_status: edited.response.status, revision: edited.body?.site?.revision ?? null });
+
+    await page.navigate(baseUrl + `/console/registry/manage?operation=retire&site=${encodeURIComponent(siteId)}`);
+    const retirePage = await waitForPageText(page, 'Retire Site', args.timeoutMs);
+    assert.equal(retirePage.found, true, JSON.stringify({ retire_page: retirePage }));
+    await page.fill('[data-testid="site-registry-reason"]', 'Disposable browser journey retire');
+    await previewAndApply('retire');
+    const retired = await read();
+    assert.equal(retired.response.status, 200, compact(retired));
+    assert.equal(retired.body?.site?.lifecycle_status, 'retired', compact(retired));
+    history.push({ phase: 'retire:readback', http_status: retired.response.status, lifecycle_status: retired.body?.site?.lifecycle_status ?? null });
+
+    await page.navigate(baseUrl + `/console/registry/manage?operation=purge&site=${encodeURIComponent(siteId)}`);
+    const purgePage = await waitForPageText(page, 'Purge Site', args.timeoutMs);
+    assert.equal(purgePage.found, true, JSON.stringify({ purge_page: purgePage }));
+    await page.fill('[data-testid="site-registry-reason"]', 'Disposable browser journey purge');
+    await previewAndApply('purge', true);
+    const final = await read();
+    assert.equal(final.response.status, 404, compact(final));
+    history.push({ phase: 'purge:readback', http_status: final.response.status, cleanup: 'verified_absent' });
+    return { status: 'passed', site_id: siteId, mutation_surface: 'browser-ui', history };
+  } catch (error) {
+    let cleanup: { status: 'verified_absent' };
+    try {
+      cleanup = await cleanupDisposableRegistryRecord(baseUrl, headers, siteId, history);
+    } catch (cleanupError) {
+      throw new Error(`browser_registry_mutation_failed:${error instanceof Error ? error.message : String(error)};manual_cleanup_required:${siteId};cleanup_error=${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`);
+    }
+    throw new Error(`browser_registry_mutation_failed:${error instanceof Error ? error.message : String(error)};cleanup=${cleanup.status}`);
+  }
+}
+
+async function cleanupDisposableRegistryRecord(
+  baseUrl: string,
+  headers: Record<string, string>,
+  siteId: string,
+  history: AnyRecord[],
+): Promise<{ status: 'verified_absent' }> {
+  const read = async (): Promise<{ response: Response; body: AnyRecord }> => {
+    return await requestJson(baseUrl, `/console/registry/api/sites/${encodeURIComponent(siteId)}`, headers);
+  };
+  const post = async (operation: string, payload: AnyRecord): Promise<{ response: Response; body: AnyRecord }> => {
+    const result = await requestJson(baseUrl, `/console/registry/api/operations/apply`, headers, {
+      method: 'POST',
+      body: JSON.stringify({ ...payload, operation, reference: siteId, confirm_apply: true, actor: 'operator-console-mirror-live-e2e-recovery' }),
+    });
+    history.push({ phase: `recovery:${operation}`, http_status: result.response.status, status: result.body?.status ?? null });
+    assert.equal(result.response.status, 200, compact(result));
+    assert.equal(result.body?.status, 'applied', compact(result));
+    return result;
+  };
+
+  const current = await read();
+  if (current.response.status === 404) return { status: 'verified_absent' };
+  assert.equal(current.response.status, 200, compact(current));
+  const currentSite = current.body?.site as AnyRecord | undefined;
+  assert.ok(currentSite, compact(current));
+  let revision = Number(currentSite.revision);
+  assert.ok(Number.isInteger(revision), compact(current));
+  if (currentSite.lifecycle_status !== 'retired') {
+    const retired = await post('retire', {
+      expected_revision: revision,
+      reason: 'Disposable browser journey recovery cleanup',
+    });
+    revision = Number(retired.body?.after?.revision);
+    assert.ok(Number.isInteger(revision), compact(retired));
+  }
+  await post('purge', {
+    expected_revision: revision,
+    reason: 'Disposable browser journey recovery cleanup',
+    confirm_site_id: siteId,
+  });
+  const final = await read();
+  assert.equal(final.response.status, 404, compact(final));
+  history.push({ phase: 'recovery:readback', http_status: final.response.status, cleanup: 'verified_absent' });
+  return { status: 'verified_absent' };
 }
 
 async function runDisposableRegistryMutationJourney(
@@ -600,13 +1014,13 @@ async function runFailureMode({
   headers,
   journeyRoutes,
   evidence,
-  evidencePath,
+  evidenceTarget,
 }: {
   baseUrl: string;
   headers: Record<string, string>;
   journeyRoutes: JourneyRoutes;
   evidence: AnyRecord;
-  evidencePath: string;
+  evidenceTarget: EvidenceTarget;
 }): Promise<AnyRecord> {
   if (args.failureMode === 'tunnel-loss') {
     const restartAuthority = await resolveMirrorRestartAuthority();
@@ -636,7 +1050,7 @@ async function runFailureMode({
       passed: true,
     };
     evidence.status = 'passed';
-    return persist(evidence, evidencePath);
+    return persist(evidence, evidenceTarget);
   }
 
   if (!journeyRoutes.session_path) {
@@ -766,7 +1180,7 @@ async function runFailureMode({
     passed: true,
   };
   evidence.status = 'passed';
-  return persist(evidence, evidencePath);
+  return persist(evidence, evidenceTarget);
 }
 
 async function runMirrorLifecycleCommand(action: 'stop' | 'restart'): Promise<number> {
@@ -925,6 +1339,48 @@ async function waitForPageValue(
   return { found: false, value: await page.evaluate(expression), waited_ms: Date.now() - started };
 }
 
+function parseWebSocketEvent(entry: AnyRecord): AnyRecord | null {
+  let value: unknown;
+  try {
+    value = JSON.parse(String(entry?.payload_data ?? ''));
+  } catch {
+    return null;
+  }
+  const unwrap = (candidate: unknown): AnyRecord | null => {
+    if (!candidate || typeof candidate !== 'object') return null;
+    const record = candidate as AnyRecord;
+    if (typeof record.event === 'string') return record;
+    if (record.event && typeof record.event === 'object') return unwrap(record.event);
+    for (const key of ['payload', 'data', 'message', 'result']) {
+      const nested = unwrap(record[key]);
+      if (nested) return nested;
+    }
+    return null;
+  };
+  return unwrap(value);
+}
+
+async function waitForSessionEvent(
+  page: AnyRecord,
+  endpoint: string,
+  eventName: string,
+  predicate: (event: AnyRecord) => boolean,
+  timeoutMs: number,
+): Promise<{ entry: AnyRecord; event: AnyRecord }> {
+  const result = await page.waitForWebSocketFrame(
+    (entry: AnyRecord) => {
+      if (String(entry.url ?? '') !== endpoint) return false;
+      const event = parseWebSocketEvent(entry);
+      return event?.event === eventName && predicate(event);
+    },
+    timeoutMs,
+  );
+  assert.equal(result.found, true, JSON.stringify({ endpoint, event: eventName, result }));
+  const event = parseWebSocketEvent(result);
+  assert.ok(event, JSON.stringify({ endpoint, event: eventName, result }));
+  return { entry: result, event: event! };
+}
+
 async function request(
   baseUrl: string,
   path: string,
@@ -956,6 +1412,29 @@ async function requestJson(
     body = { raw: result.raw.slice(0, 4000) };
   }
   return { ...result, body };
+}
+
+const MAX_ARTIFACT_CONTENT_BYTES = 64 * 1024 * 1024;
+
+async function requestBytes(
+  baseUrl: string,
+  path: string,
+  headers: Record<string, string>,
+): Promise<{ response: Response; bytes: Uint8Array }> {
+  const response = await fetch(new URL(path, baseUrl), {
+    headers,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(args.timeoutMs),
+  });
+  const advertisedLength = Number(response.headers.get('content-length') ?? '');
+  if (Number.isFinite(advertisedLength) && advertisedLength > MAX_ARTIFACT_CONTENT_BYTES) {
+    throw new Error(`artifact_content_exceeds_bound:${advertisedLength}`);
+  }
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (bytes.byteLength > MAX_ARTIFACT_CONTENT_BYTES) {
+    throw new Error(`artifact_content_exceeds_bound:${bytes.byteLength}`);
+  }
+  return { response, bytes };
 }
 
 function requireWorkerOrigin(value: string | null): string {
@@ -996,46 +1475,58 @@ async function readLocalRouteDirectory(value: string | null): Promise<{ response
   return { response, body, raw };
 }
 
-function comparableRouteDirectory(body: AnyRecord): AnyRecord {
-  const parity = body.httpRouteParity && typeof body.httpRouteParity === 'object'
-    ? { ...(body.httpRouteParity as AnyRecord), generatedAt: null }
-    : null;
+function comparableRouteDirectory(body: AnyRecord): unknown {
+  return canonicalizeRouteDirectory(body, { ignoreAuthorityIdentity: true });
+}
+
+async function readOperatorConsoleAuth(input: LiveArgs, baseUrl: string): Promise<OperatorConsoleAuth> {
+  if (!input.operatorSecretStdin) throw new Error('operator_console_shared_secret_stdin_required');
+  const secret = await readStdinSecret('operator_console_shared_secret');
+  const loginResponse = await fetch(new URL('/auth/operator-console', baseUrl), {
+    method: 'POST',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: new URLSearchParams({ secret, return_to: '/' }),
+    redirect: 'manual',
+    signal: AbortSignal.timeout(args.timeoutMs),
+  });
+  if (loginResponse.status !== 200) {
+    throw new Error(`operator_console_browser_login_failed:${loginResponse.status}`);
+  }
+  const setCookieValues = typeof (loginResponse.headers as Headers & { getSetCookie?: () => string[] }).getSetCookie === 'function'
+    ? (loginResponse.headers as Headers & { getSetCookie: () => string[] }).getSetCookie()
+    : [loginResponse.headers.get('set-cookie') ?? ''];
+  const cookiePair = setCookieValues
+    .map((value) => value.split(';', 1)[0]?.trim() ?? '')
+    .find((value) => value.startsWith('narada_operator_console_session='));
+  if (!cookiePair) throw new Error('operator_console_browser_session_cookie_missing');
+  const separator = cookiePair.indexOf('=');
+  const cookieValue = cookiePair.slice(separator + 1);
+  if (!cookieValue) throw new Error('operator_console_browser_session_cookie_empty');
   return {
-    schema: body.schema ?? null,
-    surfaces: Array.isArray(body.surfaces) ? body.surfaces : [],
-    httpRouteParity: parity,
+    headers: { Authorization: `Bearer ${secret}` },
+    browserCookies: [{
+      name: 'narada_operator_console_session',
+      value: cookieValue,
+      url: baseUrl + '/',
+      secure: true,
+      httpOnly: true,
+      sameSite: 'Lax',
+    }],
   };
 }
 
-function readAccessHeaders(input: LiveArgs): Record<string, string> {
-  if (input.accessClientId) {
-    const secret = input.accessClientSecretFile
-      ? readFileSync(input.accessClientSecretFile, 'utf8').trim()
-      : input.accessClientSecret?.trim();
-    if (!secret) throw new Error('access_client_secret_required');
-    return {
-      'CF-Access-Client-Id': input.accessClientId,
-      'CF-Access-Client-Secret': secret,
-    };
+async function readStdinSecret(label: string): Promise<string> {
+  let raw = '';
+  for await (const chunk of process.stdin) {
+    raw += String(chunk);
+    if (raw.length > 16_384) throw new Error(`${label}_stdin_exceeds_limit`);
   }
-  if (input.accessCookieFile) {
-    const raw = readFileSync(input.accessCookieFile, 'utf8').trim();
-    if (!raw) throw new Error('access_cookie_empty');
-    let value = raw;
-    try {
-      const parsed = JSON.parse(raw);
-      value = parsed?.value ?? parsed?.cookie ?? parsed?.CF_Authorization ?? (
-        Array.isArray(parsed?.cookies)
-          ? parsed.cookies.find((cookie: AnyRecord) => cookie?.name === 'CF_Authorization')?.value
-          : undefined
-      ) ?? '';
-    } catch {
-      // A plain exported CF_Authorization value is also accepted.
-    }
-    if (!value) throw new Error('cf_authorization_cookie_not_found');
-    return { Cookie: String(value).startsWith('CF_Authorization=') ? String(value) : 'CF_Authorization=' + String(value) };
-  }
-  throw new Error('access_service_token_or_cookie_required');
+  const value = raw.trim();
+  if (!value) throw new Error(`${label}_stdin_empty`);
+  return value;
 }
 
 function compact(value: AnyRecord): string {
@@ -1046,50 +1537,90 @@ function compact(value: AnyRecord): string {
   });
 }
 
-function persist(value: AnyRecord, evidencePath: string): AnyRecord {
-  mkdirSync(dirname(evidencePath), { recursive: true });
-  writeFileSync(evidencePath, JSON.stringify({ ...value, generated_at: new Date().toISOString() }, null, 2) + '\n', 'utf8');
-  return { ...value, evidence_path: evidencePath };
+function resolveEvidenceTarget(requestedPath: string | null, runId: string): EvidenceTarget {
+  const requested = requestedPath
+    ? resolve(requestedPath)
+    : resolve(REPO_ROOT, '.narada/evidence/operator-console-mirror-live');
+  const isJsonFile = requested.toLowerCase().endsWith('.json');
+  const directory = isJsonFile ? dirname(requested) : requested;
+  const stem = isJsonFile ? basename(requested, '.json') : 'run';
+  return {
+    runId,
+    path: join(directory, `${stem}-${runId}.json`),
+    indexPath: join(directory, 'index.jsonl'),
+  };
 }
 
-function persistRefusal(code: string, evidencePath: string): AnyRecord {
+function persist(value: AnyRecord, target: EvidenceTarget): AnyRecord {
+  mkdirSync(dirname(target.path), { recursive: true });
+  const generatedAt = new Date().toISOString();
+  const output: AnyRecord = {
+    ...value,
+    run_id: target.runId,
+    generated_at: generatedAt,
+    evidence_path: target.path,
+    evidence_index_path: target.indexPath,
+  };
+  writeFileSync(target.path, JSON.stringify(output, null, 2) + '\n', 'utf8');
+  appendFileSync(target.indexPath, JSON.stringify({
+    schema: output.schema ?? null,
+    run_id: target.runId,
+    status: output.status ?? null,
+    code: output.code ?? null,
+    worker_url: output.worker_url ?? null,
+    access_mode: output.access_mode ?? null,
+    mutation_mode: output.mutation_mode ?? null,
+    failure_mode: output.failure_mode ?? null,
+    generated_at: generatedAt,
+    evidence_path: target.path,
+  }) + '\n', 'utf8');
+  return output;
+}
+
+function persistRefusal(code: string, target: EvidenceTarget): AnyRecord {
   return persist({
     schema: 'narada.operator_console_mirror.live_e2e.v1',
     status: 'refused',
     code,
-  }, evidencePath);
+  }, target);
 }
 
 function parseArgs(values: string[]): LiveArgs {
   const parsed: LiveArgs = {
     live: false,
+    plan: false,
+    allowSkippedJourneys: false,
     quiet: false,
     help: false,
     url: process.env.OPERATOR_CONSOLE_MIRROR_URL ?? null,
     localRouteDirectoryUrl: process.env.OPERATOR_CONSOLE_LOCAL_ROUTE_DIRECTORY_URL ?? 'http://127.0.0.1:61729/console/routes',
     evidencePath: process.env.OPERATOR_CONSOLE_MIRROR_EVIDENCE_PATH ?? null,
-    accessClientId: process.env.CLOUDFLARE_ACCESS_CLIENT_ID ?? null,
-    accessClientSecret: process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET ?? null,
-    accessClientSecretFile: process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET_FILE ?? null,
-    accessCookieFile: process.env.CLOUDFLARE_ACCESS_COOKIE_FILE ?? null,
+    operatorSecretStdin: false,
+    turnContent: process.env.OPERATOR_CONSOLE_MIRROR_TURN_CONTENT ?? null,
     artifactId: process.env.OPERATOR_CONSOLE_MIRROR_ARTIFACT_ID ?? null,
-    mutationMode: (process.env.OPERATOR_CONSOLE_MIRROR_MUTATION_MODE ?? 'none') as LiveArgs['mutationMode'],
+    artifactSha256: process.env.OPERATOR_CONSOLE_MIRROR_ARTIFACT_SHA256 ?? null,
+    mutationMode: (process.env.OPERATOR_CONSOLE_MIRROR_MUTATION_MODE ?? 'disposable') as LiveArgs['mutationMode'],
     failureMode: 'none',
     timeoutMs: 30_000,
   };
   for (let index = 0; index < values.length; index += 1) {
     const value = values[index];
     if (value === '--live') parsed.live = true;
+    else if (value === '--plan') parsed.plan = true;
+    else if (value === '--allow-skipped-journeys') parsed.allowSkippedJourneys = true;
     else if (value === '--quiet') parsed.quiet = true;
     else if (value === '--help' || value === '-h') parsed.help = true;
     else if (value === '--url') parsed.url = values[++index] ?? null;
     else if (value === '--local-route-directory-url') parsed.localRouteDirectoryUrl = values[++index] ?? null;
     else if (value === '--evidence-path') parsed.evidencePath = values[++index] ?? null;
-    else if (value === '--access-client-id') parsed.accessClientId = values[++index] ?? null;
-    else if (value === '--access-client-secret') parsed.accessClientSecret = values[++index] ?? null;
-    else if (value === '--access-client-secret-file') parsed.accessClientSecretFile = values[++index] ?? null;
-    else if (value === '--access-cookie-file') parsed.accessCookieFile = values[++index] ?? null;
+    else if (value === '--operator-secret-stdin') parsed.operatorSecretStdin = true;
+    else if (value === '--operator-secret' || value === '--operator-secret-file') {
+      index += 1;
+      throw new Error('operator_console_shared_secret_forbidden_use_stdin');
+    }
+    else if (value === '--turn-content') parsed.turnContent = values[++index] ?? null;
     else if (value === '--artifact-id') parsed.artifactId = values[++index] ?? null;
+    else if (value === '--artifact-sha256') parsed.artifactSha256 = values[++index] ?? null;
     else if (value === '--mutation-mode') parsed.mutationMode = (values[++index] ?? 'none') as LiveArgs['mutationMode'];
     else if (value === '--failure-mode') parsed.failureMode = (values[++index] ?? 'none') as LiveArgs['failureMode'];
     else if (value === '--timeout-ms') parsed.timeoutMs = Number(values[++index] ?? '30000');
@@ -1097,8 +1628,12 @@ function parseArgs(values: string[]): LiveArgs {
   if (!['none', 'tunnel-loss', 'route-revocation', 'stale-lease'].includes(parsed.failureMode)) {
     throw new Error('failure_mode_invalid');
   }
-  if (!['none', 'disposable'].includes(parsed.mutationMode)) {
+  if (!['none', 'disposable', 'api-disposable'].includes(parsed.mutationMode)) {
     throw new Error('mutation_mode_invalid');
   }
+  if (parsed.artifactSha256 && !/^[a-f0-9]{64}$/i.test(parsed.artifactSha256.trim())) {
+    throw new Error('artifact_sha256_invalid');
+  }
+  if (parsed.live && parsed.plan) throw new Error('live_plan_conflict');
   return parsed;
 }

@@ -27,6 +27,7 @@ describe('operator console mirror journey route resolution', () => {
     expect(routes.site_operations_path).toBeNull();
     expect(routes.session_path).toBeNull();
     expect(routes.session_events_path).toBeNull();
+    expect(routes.session_input_path).toBeNull();
     expect(routes.artifact_base_path).toBeNull();
     expect(routes.availability.site_operations).toMatchObject({
       status: 'planned',
@@ -70,6 +71,7 @@ describe('operator console mirror journey route resolution', () => {
       site_operations_path: '/sites/staccato/operations/',
       session_path: '/sessions/carrier-123/',
       session_events_path: '/sessions/carrier-123/events',
+      session_input_path: '/sessions/carrier-123/input',
       artifact_base_path: '/artifacts/carrier-123/report-456',
     });
     expect(routes.availability.site_operations.reason).toBe('concrete_path');

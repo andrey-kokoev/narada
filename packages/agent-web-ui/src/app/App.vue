@@ -382,8 +382,11 @@ function cancelAffordanceAction(item: AffordanceConfirmationItem) {
 </script>
 
 <template>
+  <div v-if="runtimeTopologyFault && runtimeTopologyFault.severity === 'fatal'" class="runtime-topology-fault" role="alert">
+    <strong>Connection requires attention</strong>
+    <span>{{ runtimeTopologyFault.topology.primaryCause }}</span>
+  </div>
   <NarsSessionShell
-    v-if="!runtimeTopologyFault"
     :supports-protocol-method="supportsProtocolMethod"
     v-model:draft="draft"
     :event-endpoint="config.eventEndpoint"

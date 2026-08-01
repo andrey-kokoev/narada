@@ -1,12 +1,12 @@
 # Narada Quickstart
 
-Choose the route that matches your goal. A first-time Windows user who wants a personal assistant should start with the User Site path. The operation paths below are for declaring governed work.
+Choose the route that matches your goal. A first-time operator who wants a personal assistant should start with the User Site path. The operation paths below are for declaring governed work.
 
 For the full bootstrap contract (artifact expectations, validation gates, and path diagrams), see [`docs/product/bootstrap-contract.md`](docs/product/bootstrap-contract.md).
 
 ## Install
 
-### Windows User Site (recommended first install)
+### Windows User Site
 
 Prerequisite: Node.js 22 or newer.
 
@@ -62,6 +62,19 @@ If the installation is incomplete, `narada doctor --bootstrap` reports one repai
 narada install windows-user-site --repair
 ```
 
+### Native Linux User Site
+
+Prerequisite: Node.js 22 or newer. PowerShell and WSL are not prerequisites:
+
+```bash
+npm install --global @narada2/cli
+narada doctor --bootstrap
+```
+
+Then continue with the platform-neutral User Site first-use command below. See
+[`docs/deployment/linux-installation.md`](docs/deployment/linux-installation.md)
+for Linux Site roots, supervision, provider readiness, and recovery.
+
 ### Advanced: source checkout (contributors)
 
 The source checkout path is for Narada development, not required for ordinary User Site use:
@@ -79,7 +92,7 @@ directly from your checkout, checks CLI dist freshness (rebuilding when stale), 
 projections, and exposes the full selection surface (`-All`, `-Carrier`, `-ConfigPath`, `-Smoke`, ...).
 Use it when working from a checkout; use the plain shim for published installs.
 
-## Personal User Site — first-time Windows path
+## Personal User Site — first-time path
 
 This is the recommended starting point when you do not yet have a project, mailbox operation, or separate Site to configure.
 
@@ -92,7 +105,7 @@ Pwsh -File "$env:USERPROFILE\Narada\Start-NaradaWorkspace.ps1" -Onboarding
 Or, from an installed CLI:
 
 ```powershell
-narada onboarding start --platform windows --scope user-site --interactive
+narada onboarding start --scope user-site --interactive
 ```
 
 The path locates or creates the User Site, starts one `resident` General assistant, and opens the available operator surface. Send one human request, then verify the first-use proof:
@@ -103,7 +116,7 @@ narada onboarding status --scope user-site
 
 The status should show a healthy resident session, successful identity hydration, admitted operator input, and a useful or explicit no-work response. Role expansion is optional and requires explicit approval. Use `narada demo` instead when you want to explore without credentials or live setup.
 
-Detailed contract: [`docs/product/first-time-operator-success-path.md`](docs/product/first-time-operator-success-path.md#user-first-windows-onboarding-ux).
+Detailed contract: [`docs/product/first-time-operator-success-path.md`](docs/product/first-time-operator-success-path.md#user-first-onboarding-ux).
 
 ## Operation Paths
 

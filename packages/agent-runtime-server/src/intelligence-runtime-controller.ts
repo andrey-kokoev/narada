@@ -86,6 +86,13 @@ function publicPlan(plan: any) {
   };
 }
 
+function admittedInvocationPlan(value: any): any | null {
+  if (value?.plan && typeof value.plan === 'object') return value.plan;
+  if (value?.schema === 'narada.invokable-intelligence.invocation-plan.v2') return value;
+  if (value?.selected && value?.route && value?.snapshot && value?.options) return value;
+  return null;
+}
+
 function publicOutcome(outcome: any) {
   if (!outcome) return null;
   return {
@@ -359,6 +366,10 @@ export function createNarsIntelligenceRuntimeController({
           machine.transition('failed', { reason: kernelResult.reason ?? 'kernel_reconfiguration_refused', kernel: kernelResult });
           return intelligenceControllerResult(machine, { target });
         }
+      }
+      const activePlan = admittedInvocationPlan(admittedPlan);
+      if (activePlan) {
+        latest = { ...(latest ?? {}), plan: activePlan };
       }
       selection = target;
       machine.transition('active', { active: target });

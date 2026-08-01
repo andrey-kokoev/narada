@@ -7,6 +7,15 @@ import { spawnHiddenPostureProcess } from '@narada2/process-launch-posture';
 type AnyRecord = Record<string, any>;
 type AnyPage = any;
 
+export type BrowserCookie = {
+  name: string;
+  value: string;
+  url: string;
+  secure?: boolean;
+  httpOnly?: boolean;
+  sameSite?: 'Strict' | 'Lax' | 'None';
+};
+
 export function findHeadlessBrowser() {
   return [
     'C:/Program Files/Google/Chrome/Application/chrome-headless-shell.exe',
@@ -56,7 +65,7 @@ export function buildHeadlessBrowserArgs({ userDataDir, url = 'about:blank', wid
   ];
 }
 
-export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 }, instrumentWebSocketClose = false, extraHeaders = {} }: AnyRecord): Promise<any> {
+export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-browser-smoke-', viewport = { width: 1100, height: 800 }, instrumentWebSocketClose = false, extraHeaders = {}, cookies = [] }: AnyRecord): Promise<any> {
   const hasExtraHeaders = Object.keys(extraHeaders ?? {}).length > 0;
   const userDataDir = mkdtempSync(join(tmpdir(), userDataPrefix));
   const child: any = spawnHiddenPostureProcess(browserPath, buildHeadlessBrowserArgs({ userDataDir, url: hasExtraHeaders ? 'about:blank' : url, width: viewport.width, height: viewport.height }), { stdio: ['ignore', 'ignore', 'pipe'], posture: 'test_child' });
@@ -236,6 +245,17 @@ export async function openCdpPage({ browserPath, url, userDataPrefix = 'narada-b
   await send('Network.enable');
   if (hasExtraHeaders) {
     await send('Network.setExtraHTTPHeaders', { headers: extraHeaders });
+  }
+  for (const cookie of cookies as BrowserCookie[]) {
+    const result = await send('Network.setCookie', {
+      name: cookie.name,
+      value: cookie.value,
+      url: cookie.url,
+      secure: cookie.secure ?? true,
+      httpOnly: cookie.httpOnly ?? true,
+      ...(cookie.sameSite ? { sameSite: cookie.sameSite } : {}),
+    });
+    if (result?.success !== true) throw new Error(`cdp_cookie_install_failed:${cookie.name}`);
   }
   if (instrumentWebSocketClose) {
     await send('Page.addScriptToEvaluateOnNewDocument', {

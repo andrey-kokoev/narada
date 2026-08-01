@@ -1,5 +1,6 @@
 import {
   createHostGatewayClient,
+  createHostRecord,
   openHostFleetRegistry,
   projectHostFleetOverview,
   refusal,
@@ -10,6 +11,8 @@ import {
   type HostRecord,
   type HostRecordInput,
   type HostGatewayTransport,
+  type HostGatewayCredentialClass,
+  type HostFleetGatewayObservation,
 } from '@narada2/host-fleet';
 import type { Command } from 'commander';
 import { directCommandAction, type CommanderOptionValues } from '../lib/command-wrapper.js';
@@ -18,8 +21,10 @@ import { emitCommandResult, formattedResult, resolveCommandFormat, type CliForma
 const LIST_SCHEMA = 'narada.host_fleet.list.v1' as const;
 const SHOW_SCHEMA = 'narada.host_fleet.show.v1' as const;
 const REGISTER_SCHEMA = 'narada.host_fleet.register.v1' as const;
+const REGISTER_PREFLIGHT_SCHEMA = 'narada.host_fleet.register_preflight.v1' as const;
 const LIFECYCLE_SCHEMA = 'narada.host_fleet.lifecycle.v1' as const;
 const AUDIT_SCHEMA = 'narada.host_fleet.audit_list.v1' as const;
+const OBSERVATIONS_SCHEMA = 'narada.host_fleet.gateway_observations.v1' as const;
 const PROBE_SCHEMA = 'narada.host_fleet.probe.v1' as const;
 
 function asFormat(value: unknown): CliFormat {
@@ -149,32 +154,78 @@ export interface FleetRegisterCommandOptions {
   endpoint: string;
   transport: HostGatewayTransport;
   credentialRef: string;
+  credentialClass?: HostGatewayCredentialClass;
   admittedPath: string[];
   capability?: string[];
   site?: string[];
   allowReenrollment?: boolean;
+  dryRun?: boolean;
   format?: unknown;
 }
 
 export async function fleetRegisterCommand(options: FleetRegisterCommandOptions): Promise<{ exitCode: number; result: unknown }> {
   const registryPath = resolveHostFleetRegistryDbPath();
+  const input: HostRecordInput = {
+    host_id: options.hostId,
+    host_instance_id: options.hostInstanceId,
+    display_name: options.displayName,
+    platform: options.platform,
+    narada_version: options.naradaVersion,
+    gateway: {
+      endpoint: options.endpoint,
+      transport: options.transport,
+      admitted_paths: options.admittedPath,
+      ...(options.credentialClass ? {
+        credential: {
+          schema: 'narada.host_fleet.gateway_credential.v1' as const,
+          class: options.credentialClass,
+          not_before: null,
+          expires_at: null,
+        },
+      } : {}),
+    },
+    credential_ref: options.credentialRef,
+    capabilities: options.capability,
+    admitted_sites: options.site,
+  };
+  if (options.dryRun === true) {
+    try {
+      const candidate = createHostRecord(input);
+      const format = asFormat(options.format);
+      const result = {
+        schema: REGISTER_PREFLIGHT_SCHEMA,
+        status: 'ready',
+        mutation_performed: false,
+        registry_path: registryPath,
+        host: serializeHost(candidate),
+        allow_reenrollment: options.allowReenrollment === true,
+        reason: null,
+      };
+      return {
+        exitCode: 0,
+        result: withHuman(result, format, [
+          `Fleet registration preflight ready: ${humanHost(candidate)}`,
+          `No registry mutation performed. Registry: ${registryPath}`,
+        ]),
+      };
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      return {
+        exitCode: 1,
+        result: withHuman({
+          schema: REGISTER_PREFLIGHT_SCHEMA,
+          status: 'refused',
+          mutation_performed: false,
+          registry_path: registryPath,
+          host: null,
+          allow_reenrollment: options.allowReenrollment === true,
+          reason,
+        }, asFormat(options.format), [`Fleet registration preflight refused: ${reason}`, `No registry mutation performed. Registry: ${registryPath}`]),
+      };
+    }
+  }
   const registry = openHostFleetRegistry(registryPath);
   try {
-    const input: HostRecordInput = {
-      host_id: options.hostId,
-      host_instance_id: options.hostInstanceId,
-      display_name: options.displayName,
-      platform: options.platform,
-      narada_version: options.naradaVersion,
-      gateway: {
-        endpoint: options.endpoint,
-        transport: options.transport,
-        admitted_paths: options.admittedPath,
-      },
-      credential_ref: options.credentialRef,
-      capabilities: options.capability,
-      admitted_sites: options.site,
-    };
     return registryOperationResult(
       REGISTER_SCHEMA,
       registryPath,
@@ -253,6 +304,65 @@ export async function fleetAuditCommand(options: FleetAuditCommandOptions): Prom
       result: withHuman(result, format, [
         `Audit entries (${entries.length})`,
         ...entries.map((entry) => `${entry.recorded_at}  ${entry.operation}  ${entry.status}  ${entry.host.host_id}@${entry.host.host_instance_id}${entry.reason ? `  ${entry.reason}` : ''}`),
+        `Registry: ${registryPath}`,
+      ]),
+    };
+  } finally {
+    registry.close();
+  }
+}
+
+export interface FleetObservationsCommandOptions {
+  hostId?: string;
+  hostInstanceId?: string;
+  limit?: number;
+  format?: unknown;
+}
+
+function humanObservation(observation: HostFleetGatewayObservation): string {
+  const host = `${observation.host.host_id}@${observation.host.host_instance_id}`;
+  const status = observation.status === null ? '-' : String(observation.status);
+  const reason = observation.reason ? `  ${observation.reason}` : '';
+  return `${observation.observed_at}  ${host}  ${observation.method} ${observation.path}  ${observation.outcome} ${status}  ${observation.duration_ms}ms${reason}`;
+}
+
+export async function fleetObservationsCommand(options: FleetObservationsCommandOptions): Promise<{ exitCode: number; result: unknown }> {
+  const registryPath = resolveHostFleetRegistryDbPath();
+  const registry = openHostFleetRegistry(registryPath);
+  try {
+    const hasHostId = options.hostId !== undefined;
+    const hasHostInstanceId = options.hostInstanceId !== undefined;
+    const format = asFormat(options.format);
+    if (hasHostId !== hasHostInstanceId) {
+      const result = {
+        ...refusal({ reason: 'host_observation_filter_requires_host_id_and_instance' }),
+        schema: OBSERVATIONS_SCHEMA,
+        registry_path: registryPath,
+      };
+      return {
+        exitCode: 1,
+        result: withHuman(result, format, [
+          'Fleet observations refused: --host-id and --instance must be supplied together',
+          `Registry: ${registryPath}`,
+        ]),
+      };
+    }
+    const host = hasHostId && hasHostInstanceId
+      ? exactHostKey(options.hostId!, options.hostInstanceId!)
+      : undefined;
+    const observations = registry.listGatewayObservations({ host, limit: options.limit });
+    const result = {
+      schema: OBSERVATIONS_SCHEMA,
+      status: 'ok',
+      registry_path: registryPath,
+      count: observations.length,
+      observations,
+    };
+    return {
+      exitCode: 0,
+      result: withHuman(result, format, [
+        `Gateway observations (${observations.length})`,
+        ...observations.map(humanObservation),
         `Registry: ${registryPath}`,
       ]),
     };
@@ -343,10 +453,12 @@ export function registerFleetCommands(program: Command): void {
     .requiredOption('--endpoint <url>', 'Declared Host Gateway endpoint')
     .requiredOption('--transport <transport>', 'loopback, ssh-tunnel, https, or cloudflare')
     .requiredOption('--credential-ref <ref>', 'Secret reference, for example env://NARADA_ZIMA_GATEWAY_TOKEN')
+    .option('--credential-class <class>', 'bridge_compatibility or dedicated_host_gateway', 'bridge_compatibility')
     .requiredOption('--admitted-path <path...>', 'Explicit Host Gateway paths, for example /health /console/routes')
     .option('--capability <name...>', 'Declared host capability')
     .option('--site <site-id...>', 'Site admitted on this host')
     .option('--allow-reenrollment', 'Explicitly retire an active sibling instance with the same host ID')
+    .option('--dry-run', 'Validate and render the enrollment candidate without mutating the registry')
     .option('--format <format>', 'Output format: json, human, or auto', 'auto')
     .action(directCommandAction<[CommanderOptionValues]>({
       command: 'fleet register', emit: emitCommandResult,
@@ -360,10 +472,12 @@ export function registerFleetCommands(program: Command): void {
         endpoint: opts.endpoint as string,
         transport: opts.transport as HostGatewayTransport,
         credentialRef: opts.credentialRef as string,
+        credentialClass: opts.credentialClass as HostGatewayCredentialClass,
         admittedPath: opts.admittedPath as string[],
         capability: opts.capability as string[] | undefined,
         site: opts.site as string[] | undefined,
         allowReenrollment: opts.allowReenrollment === true,
+        dryRun: opts.dryRun === true,
         format: asFormat(opts.format),
       }),
     }));
@@ -393,6 +507,23 @@ export function registerFleetCommands(program: Command): void {
       command: 'fleet audit', emit: emitCommandResult,
       format: (opts: CommanderOptionValues) => asFormat(opts.format),
       invocation: (opts) => fleetAuditCommand({
+        hostId: opts.hostId as string | undefined,
+        hostInstanceId: opts.instance as string | undefined,
+        limit: Number(opts.limit),
+        format: asFormat(opts.format),
+      }),
+    }));
+
+  fleet.command('observations')
+    .description('List bounded redacted Host Gateway request observations')
+    .option('--host-id <host-id>', 'Filter by exact host ID; requires --instance')
+    .option('--instance <host-instance-id>', 'Filter by exact host instance ID')
+    .option('--limit <n>', 'Maximum observations', '100')
+    .option('--format <format>', 'Output format: json, human, or auto', 'auto')
+    .action(directCommandAction<[CommanderOptionValues]>({
+      command: 'fleet observations', emit: emitCommandResult,
+      format: (opts: CommanderOptionValues) => asFormat(opts.format),
+      invocation: (opts) => fleetObservationsCommand({
         hostId: opts.hostId as string | undefined,
         hostInstanceId: opts.instance as string | undefined,
         limit: Number(opts.limit),

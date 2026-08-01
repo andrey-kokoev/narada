@@ -232,6 +232,10 @@ export async function runTurn(
           tool_name: toolName,
           tool_call_id: toolCallId,
           status: invocationRecord?.status ?? 'unknown',
+          // Preserve the concrete capability invocation for result-driven
+          // lifecycle hooks. The status-only event was insufficient for NARS
+          // hooks that must consume structured MCP follow-up evidence.
+          result: invocation,
           effect_confirmation: 'not-confirmed',
         });
         if (invocationRecord?.status === 'interrupted') {

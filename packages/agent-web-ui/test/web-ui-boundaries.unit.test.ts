@@ -359,6 +359,13 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(stop).not.toHaveBeenCalled();
     expect(errorSink).not.toHaveBeenCalled();
 
+    streamPhase.value = 'opening';
+    await nextTick();
+    expect(topology.topology.value.status).toBe('reconnecting');
+    streamPhase.value = 'replaying';
+    await nextTick();
+    expect(topology.topology.value.status).toBe('reconnecting');
+
     streamPhase.value = 'live';
     streamReason.value = null;
     streamLive.value = true;
@@ -481,7 +488,7 @@ describe('agent-web-ui runtime boundaries', () => {
     expect(topology.verdictLabel).toBe('attached');
   });
 
-  it('hard-fails once when a live attachment enters a red topology state', async () => {
+  it('keeps a live attachment usable when a recoverable topology state appears', async () => {
     const streamText = shallowRef('stream connected');
     const streamLive = shallowRef(true);
     const healthText = shallowRef('healthy');
@@ -520,14 +527,20 @@ describe('agent-web-ui runtime boundaries', () => {
     await nextTick();
 
     expect(guard.fault.value).toMatchObject({ previousStatus: 'live', currentStatus: 'degraded' });
-    expect(stop).toHaveBeenCalledOnce();
+    expect(guard.fault.value?.severity).toBe('recoverable');
+    expect(stop).not.toHaveBeenCalled();
     expect(onFault).toHaveBeenCalledOnce();
     expect(errorSink).toHaveBeenCalledOnce();
 
     healthBody.value = { status: 'error', session_id: 'session-1' };
     await nextTick();
-    expect(stop).toHaveBeenCalledOnce();
-    expect(errorSink).toHaveBeenCalledOnce();
+    expect(topology.topology.value.status).toBe('unavailable');
+    expect(stop).not.toHaveBeenCalled();
+    expect(errorSink).toHaveBeenCalledTimes(2);
+
+    healthBody.value = { status: 'error', session_id: 'session-1' };
+    await nextTick();
+    expect(errorSink).toHaveBeenCalledTimes(2);
   });
 
   it('does not treat startup red state as a fatal transition until live attachment is observed', async () => {
@@ -569,7 +582,52 @@ describe('agent-web-ui runtime boundaries', () => {
     streamLive.value = false;
     await nextTick();
 
+    expect(stop).not.toHaveBeenCalled();
+    expect(errorSink).toHaveBeenCalledOnce();
+  });
+
+  it('stops and exposes a fatal diagnostic only when authority becomes stale', async () => {
+    const streamText = shallowRef('stream connected');
+    const streamLive = shallowRef(true);
+    const healthText = shallowRef('healthy');
+    const healthBody = shallowRef<Record<string, unknown> | null>({ status: 'healthy', session_id: 'session-1' });
+    const sessionIdentity = shallowRef({ siteId: 'sonar', agentId: 'sonar.resident', role: 'resident', sessionId: 'session-1', title: 'sonar.resident', subtitle: 'session-1' });
+    const authorityTransition = shallowRef<Record<string, unknown> | null>(null);
+    const topology = useRuntimeTopology({
+      eventEndpoint: 'ws://127.0.0.1/events',
+      healthEndpoint: 'http://127.0.0.1/health',
+      inputEndpoint: 'http://127.0.0.1/input',
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      authorityTransition,
+      mcpInventory: shallowRef({ operationalState: 'healthy', serverCount: 1, startupFailureCount: 0, runtimeFaultCount: 0, servers: [], source: 'health' }),
+    });
+    const stop = vi.fn();
+    const onFault = vi.fn();
+    const errorSink = vi.fn();
+    const guard = useRuntimeTopologyFailFast({
+      topology: topology.topology,
+      streamText,
+      streamLive,
+      healthText,
+      healthBody,
+      sessionIdentity,
+      activeTurnId: shallowRef<string | boolean | null>(null),
+      stop,
+      onFault,
+      errorSink,
+    });
+
+    authorityTransition.value = { stale_source: true, input_policy: 'sealed' };
+    await nextTick();
+
+    expect(topology.topology.value.status).toBe('stale');
+    expect(guard.fault.value?.severity).toBe('fatal');
     expect(stop).toHaveBeenCalledOnce();
+    expect(onFault).toHaveBeenCalledOnce();
     expect(errorSink).toHaveBeenCalledOnce();
   });
 

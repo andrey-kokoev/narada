@@ -1,6 +1,6 @@
 import { computed, type Ref } from 'vue';
 import type { NarsTransportPhase } from '../../protocol/sessionTransportAdapters';
-import type { McpInventorySummary } from './useMcpInventory';
+import { formatMcpServerCount, type McpInventorySummary } from './useMcpInventory';
 import type { SessionIdentitySummary } from './useNarsEvents';
 
 export interface RuntimeTopologyNode {
@@ -11,8 +11,20 @@ export interface RuntimeTopologyNode {
   metadata: { label: string; value: string }[];
 }
 
+export function formatMcpServerDetail(mcp: unknown, childCount: number): string {
+  const advertisedCount = numberField(mcp, 'server_count');
+  const count = formatMcpServerCount(advertisedCount, childCount);
+  if (count === 'not advertised') return 'server count not advertised';
+  return `${count} server${count === '1' ? '' : 's'}`;
+}
+
 function isRecoverableStreamReconnect(options: RuntimeTopologyOptions): boolean {
-  return options.streamPhase?.value === 'reconnecting';
+  const phase = options.streamPhase?.value;
+  if (phase === 'reconnecting') return true;
+  if (/^reconnecting\b/i.test(options.streamText.value.trim())) return true;
+  return (phase === 'opening' || phase === 'replaying')
+    && Boolean(options.streamReason?.value)
+    && options.streamReason?.value !== 'event_view_changed';
 }
 
 function controlInputBridgeNode(bridge: Record<string, unknown> | null): RuntimeTopologyNode {
@@ -177,7 +189,7 @@ function canonicalRuntimeTopology(health: Record<string, unknown> | null): Runti
         id: 'mcp',
         label: 'MCP Children',
         state: stringField(mcp, 'operational_state') ?? 'not advertised',
-        detail: `${numberField(mcp, 'server_count') ?? mcpChildren.length} server${(numberField(mcp, 'server_count') ?? mcpChildren.length) === 1 ? '' : 's'}`,
+        detail: formatMcpServerDetail(mcp, mcpChildren.length),
         metadata: compactMetadata([
           ['Startup failures', numberField(mcp, 'startup_failure_count')],
           ['Runtime faults', numberField(mcp, 'runtime_fault_count')],
@@ -394,12 +406,11 @@ function endpointNode(label: string, endpoint: string | null, state: string): Ru
 }
 
 function fallbackMcpNode(inventory: McpInventorySummary): RuntimeTopologyNode {
-  const serverCount = inventory.serverCount ?? inventory.servers.length;
   return {
     id: 'mcp',
     label: 'MCP Children',
     state: inventory.operationalState ?? 'not advertised',
-    detail: `${serverCount} server${serverCount === 1 ? '' : 's'}`,
+    detail: formatMcpServerDetail({ server_count: inventory.serverCount }, inventory.servers.length),
     metadata: compactMetadata([
       ['Startup failures', inventory.startupFailureCount],
       ['Runtime faults', inventory.runtimeFaultCount],
@@ -487,7 +498,7 @@ function runtimePosture({
   if (status=== 'degraded') {
     return {
       verdictLabel: 'attached, degraded',
-      primaryCause: 'Runtime health is degraded, but authority is not stale.',
+      primaryCause: 'Runtime health or a required surface is degraded, but authority is not stale.',
       operatorHint: 'Check endpoints and heartbeat before starting sensitive work.',
       canSendInput: true,
     };

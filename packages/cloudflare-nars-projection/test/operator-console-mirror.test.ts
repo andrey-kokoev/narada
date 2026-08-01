@@ -1,5 +1,5 @@
 import { createServer, type Server } from 'node:http';
-import { createHash, createSign, generateKeyPairSync } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
 import { projectOperatorWorkspaceRouteDirectory } from '@narada2/operator-console-contract';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
@@ -136,29 +136,38 @@ describe('Cloudflare Operator Console mirror', () => {
       }
       if (request.url === '/sessions/session-a') {
         response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-        response.end('<script type="application/json" id="nars-config">{"eventEndpoint":"ws://127.0.0.1:61729/sessions/session-a/events","healthEndpoint":"/sessions/session-a/api/health"}</script>');
+        response.end('<script type="application/json" id="nars-config">{"eventEndpoint":"ws://127.0.0.1:61729/sessions/session-a/events","inputEndpoint":"http://127.0.0.1:61729/sessions/session-a/input","healthEndpoint":"http://127.0.0.1:61729/sessions/session-a/api/health"}</script>');
         return;
       }
       response.writeHead(200, { 'content-type': 'application/json' });
       response.end(JSON.stringify({ status: 'ok', method: request.method, path: request.url }));
     });
     const gatewayUrl = await listen(gateway);
+    const configuredGatewayUrl = 'https://gateway.example.test';
     let upstreamWebSocket: MockWebSocket | null = null;
     const worker = createCloudflareNarsProjectionWorker({
+      require_operator_console_secret: false,
       fetch_fn: async (input, init) => {
         const target = input instanceof Request ? new URL(input.url) : new URL(String(input));
-        if (target.origin === gatewayUrl && target.pathname === '/sessions/session-a/events') {
+        if (target.origin === configuredGatewayUrl && target.pathname === '/sessions/session-a/events') {
           upstreamWebSocket = new MockWebSocket();
           return { status: 101, webSocket: upstreamWebSocket } as unknown as Response;
+        }
+        if (target.origin === configuredGatewayUrl) {
+          const localTarget = new URL(target.pathname + target.search, gatewayUrl);
+          return input instanceof Request
+            ? fetch(new Request(localTarget, input))
+            : fetch(localTarget, init);
         }
         return fetch(input, init);
       },
     });
     const assetRequests: string[] = [];
     const env = {
-      OPERATOR_CONSOLE_GATEWAY_URL: gatewayUrl,
-      OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: gatewayUrl,
+      OPERATOR_CONSOLE_GATEWAY_URL: configuredGatewayUrl,
+      OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: configuredGatewayUrl,
       OPERATOR_CONSOLE_GATEWAY_TOKEN: bridgeToken,
+      NARADA_HOST_FLEET_REGISTRY: JSON.stringify({ schema: 'narada.cloudflare.host_fleet_registry.v1', revision: 1, hosts: [] }),
       ASSETS: {
         fetch: (request: Request) => {
           const path = new URL(request.url).pathname;
@@ -219,6 +228,8 @@ describe('Cloudflare Operator Console mirror', () => {
       const sessionBody = await session.text();
       expect(session.status, sessionBody).toBe(200);
       expect(sessionBody).toContain('"eventEndpoint":"wss://console.example.test/sessions/session-a/events"');
+      expect(sessionBody).toContain('"inputEndpoint":"https://console.example.test/sessions/session-a/input"');
+      expect(sessionBody).toContain('"healthEndpoint":"https://console.example.test/sessions/session-a/api/health"');
       expect(sessionBody).not.toContain('127.0.0.1');
       const previousPair = (globalThis as typeof globalThis & { WebSocketPair?: typeof MockWebSocketPair }).WebSocketPair;
       const runtimeGlobal = globalThis as typeof globalThis & { WebSocketPair?: typeof MockWebSocketPair };
@@ -249,6 +260,8 @@ describe('Cloudflare Operator Console mirror', () => {
       const documentBody = await document.text();
       expect(documentBody).toContain('/api/nars/operator-console/routes');
       expect(documentBody).toContain('"timeoutMs":30000');
+      expect(documentBody).toContain('"apiBasePath":"/api/narada/fleet/hosts"');
+      expect(documentBody).toContain('"routeShape":"cloudflare-projection"');
       expect(assetRequests).toEqual(['/console/']);
 
       const health = await worker.fetch(new Request('https://console.example.test/api/nars/operator-console/health'), env);
@@ -267,18 +280,22 @@ describe('Cloudflare Operator Console mirror', () => {
     }
   });
 
-  test('requires a real Cloudflare Access assertion when protected mode is enabled', async () => {
+  test('requires the Narada shared secret when protected mode is enabled', async () => {
     const worker = createCloudflareNarsProjectionWorker();
     const response = await worker.fetch(new Request('https://console.example.test/console/registry'), {
       OPERATOR_CONSOLE_GATEWAY_URL: 'https://gateway.example.test',
       OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: 'https://gateway.example.test',
       OPERATOR_CONSOLE_GATEWAY_TOKEN: bridgeToken,
-      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
-      OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com',
-      OPERATOR_CONSOLE_ACCESS_AUDIENCE: 'audience',
+      NARADA_OPERATOR_CONSOLE_SHARED_SECRET: 'operator-console-shared-secret',
     });
-    expect(response.status).toBe(401);
-    expect(await response.json()).toEqual({ status: 'refused', code: 'operator_console_access_required' });
+    expect(response.status).toBe(303);
+    expect(new URL(response.headers.get('location') ?? '').pathname).toBe('/auth/operator-console');
+
+    const apiResponse = await worker.fetch(new Request('https://console.example.test/api/nars/operator-console/routes'), {
+      NARADA_OPERATOR_CONSOLE_SHARED_SECRET: 'operator-console-shared-secret',
+    });
+    expect(apiResponse.status).toBe(401);
+    expect(await apiResponse.json()).toEqual({ status: 'refused', code: 'operator_console_shared_secret_required' });
   });
 
   test('uses the tunnel-backed TCP binding for the WebSocket leg', async () => {
@@ -320,7 +337,7 @@ describe('Cloudflare Operator Console mirror', () => {
         pair = this;
       }
     };
-    const worker = createCloudflareNarsProjectionWorker({ require_operator_console_access: false });
+    const worker = createCloudflareNarsProjectionWorker({ require_operator_console_secret: false });
     const parity = {
       schema: 'narada.operator_console.http_route_parity.v1',
       status: 'complete',
@@ -379,7 +396,7 @@ describe('Cloudflare Operator Console mirror', () => {
   });
 
   test('reports a degraded health state when the VPC WebSocket binding is absent', async () => {
-    const worker = createCloudflareNarsProjectionWorker({ require_operator_console_access: false });
+    const worker = createCloudflareNarsProjectionWorker({ require_operator_console_secret: false });
     const response = await worker.fetch(new Request('https://console.example.test/api/nars/operator-console/health'), {
       OPERATOR_CONSOLE_GATEWAY_URL: 'http://operator-console.internal',
       OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: 'http://operator-console.internal',
@@ -457,7 +474,7 @@ describe('Cloudflare Operator Console mirror', () => {
     });
     const gatewayUrl = await listen(gateway);
     const vpcRequests: string[] = [];
-    const worker = createCloudflareNarsProjectionWorker({ require_operator_console_access: false });
+    const worker = createCloudflareNarsProjectionWorker({ require_operator_console_secret: false });
     const env = {
       OPERATOR_CONSOLE_GATEWAY_URL: 'http://operator-console.internal',
       OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: 'http://operator-console.internal',
@@ -473,7 +490,6 @@ describe('Cloudflare Operator Console mirror', () => {
             : fetch(gatewayTarget, init);
         },
       },
-      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
     };
     try {
       const response = await worker.fetch(new Request('https://console.example.test/console/registry/api/sites'), env);
@@ -497,12 +513,11 @@ describe('Cloudflare Operator Console mirror', () => {
       expect(await mutation.json()).toMatchObject({ status: 'ok', method: 'POST', path: '/console/registry/api/operations/plan' });
       expect(seen).toContainEqual({ path: '/console/registry/api/operations/plan', bridge: bridgeToken, method: 'POST', body: mutationBody });
 
-      const publicHttpWorker = createCloudflareNarsProjectionWorker({ require_operator_console_access: false });
+      const publicHttpWorker = createCloudflareNarsProjectionWorker({ require_operator_console_secret: false });
       const publicHttpResponse = await publicHttpWorker.fetch(new Request('https://console.example.test/console/registry/api/sites'), {
         OPERATOR_CONSOLE_GATEWAY_URL: 'http://operator-console.internal',
         OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: 'http://operator-console.internal',
         OPERATOR_CONSOLE_GATEWAY_TOKEN: bridgeToken,
-        OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
       });
       expect(publicHttpResponse.status).toBe(503);
     } finally {
@@ -510,46 +525,45 @@ describe('Cloudflare Operator Console mirror', () => {
     }
   });
 
-  test('verifies the Access JWT signature, issuer, audience, and expiry before serving the Console', async () => {
-    const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
-    const issuer = 'https://team.cloudflareaccess.com';
-    const audience = 'audience';
-    const header = base64Url(JSON.stringify({ alg: 'RS256', kid: 'test-key' }));
-    const payload = base64Url(JSON.stringify({ iss: issuer, aud: [audience], exp: Math.floor(Date.now() / 1000) + 60 }));
-    const signingInput = `${header}.${payload}`;
-    const signer = createSign('RSA-SHA256');
-    signer.update(signingInput);
-    signer.end();
-    const signature = signer.sign(privateKey).toString('base64url');
-    const jwt = `${signingInput}.${signature}`;
-    const jwk = publicKey.export({ format: 'jwk' });
-    const worker = createCloudflareNarsProjectionWorker({
-      fetch_fn: async (input) => new URL(String(input)).pathname.endsWith('/cdn-cgi/access/certs')
-        ? new Response(JSON.stringify({ keys: [{ ...jwk, kid: 'test-key', alg: 'RS256' }] }), { headers: { 'content-type': 'application/json' } })
-        : fetch(input),
-    });
+  test('accepts the shared secret from automation and from the browser login session', async () => {
+    const worker = createCloudflareNarsProjectionWorker();
     const env = {
       OPERATOR_CONSOLE_GATEWAY_URL: 'https://gateway.example.test',
       OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: 'https://gateway.example.test',
       OPERATOR_CONSOLE_GATEWAY_TOKEN: bridgeToken,
-      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
-      OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN: issuer,
-      OPERATOR_CONSOLE_ACCESS_AUDIENCE: audience,
+      NARADA_OPERATOR_CONSOLE_SHARED_SECRET: 'operator-console-shared-secret',
       ASSETS: {
         fetch: () => new Response('<html>console</html>', { headers: { 'content-type': 'text/html; charset=utf-8' } }),
       },
     };
     const accepted = await worker.fetch(new Request('https://console.example.test/console/registry', {
-      headers: { 'cf-access-jwt-assertion': jwt },
+      headers: { authorization: 'Bearer operator-console-shared-secret' },
     }), env);
     expect(accepted.status).toBe(200);
-    const rejected = await worker.fetch(new Request('https://console.example.test/console/registry', {
-      headers: { 'cf-access-jwt-assertion': `${jwt.slice(0, -2)}xx` },
+    const login = await worker.fetch(new Request('https://console.example.test/auth/operator-console?return_to=%2Fconsole%2Fregistry', {
+      method: 'POST',
+      headers: { accept: 'application/json', 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'secret=operator-console-shared-secret&return_to=%2Fconsole%2Fregistry',
     }), env);
-    expect(rejected.status).toBe(403);
+    expect(login.status).toBe(200);
+    expect(await login.json()).toEqual({ status: 'ok', return_to: '/console/registry' });
+    const sessionCookie = login.headers.get('set-cookie');
+    expect(sessionCookie).toContain('narada_operator_console_session=');
+    const sessionAccepted = await worker.fetch(new Request('https://console.example.test/console/registry', {
+      headers: { cookie: sessionCookie?.split(';', 1)[0] ?? '' },
+    }), env);
+    expect(sessionAccepted.status).toBe(200);
+    const logout = await worker.fetch(new Request('https://console.example.test/auth/operator-console/logout', {
+      method: 'POST',
+      headers: { accept: 'application/json', cookie: sessionCookie?.split(';', 1)[0] ?? '' },
+    }), env);
+    expect(logout.status).toBe(200);
+    expect(await logout.json()).toEqual({ status: 'ok' });
+    expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
+    const rejected = await worker.fetch(new Request('https://console.example.test/api/nars/operator-console/routes', {
+      headers: { authorization: 'Bearer wrong-shared-secret' },
+    }), env);
+    expect(rejected.status).toBe(401);
+    expect(await rejected.json()).toEqual({ status: 'refused', code: 'operator_console_shared_secret_required' });
   });
 });
-
-function base64Url(value: string): string {
-  return Buffer.from(value).toString('base64url');
-}

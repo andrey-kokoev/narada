@@ -1,8 +1,8 @@
 /**
  * Operator Console HTTP API routes.
  *
- * Read-only GET endpoints for cross-Site observation plus a single POST
- * control endpoint that routes through ControlRequestRouter.
+ * Read-only GET endpoints for cross-Site observation plus explicitly governed
+ * POST control endpoints.
  *
  * Authority boundary:
  * - GET routes are strictly read-only; they never mutate registry or Site state.
@@ -11,6 +11,8 @@
  * - POST /console/registry/api/sites/:id/launch runs the plan-first sites-launch ensure
  *   (dry-run unless the body explicitly sets dry_run: false).
  * - Registry plan/apply POSTs delegate through the RegistryMutationGateway.
+ * - Host Fleet lifecycle/enrollment POSTs delegate to the User Site Host
+ *   Registry's typed, confirmed, idempotent mutation APIs.
  * - No other direct Site mutation from route handlers.
  */
 
@@ -48,10 +50,11 @@ import {
   OPERATOR_CONSOLE_SESSIONS_PATH,
   OPERATOR_CONSOLE_HOSTS_PATH,
   OPERATOR_CONSOLE_HOSTS_API_PATH,
-  OPERATOR_CONSOLE_HOSTS_HEALTH_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_LIFECYCLE_PREFLIGHT_API_PATH,
   OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH,
-  OPERATOR_CONSOLE_HOSTS_TARGET_LAUNCH_API_PATH,
-  OPERATOR_CONSOLE_HOSTS_TARGET_STOP_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_API_PATH,
+  OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_SCHEMA,
   formatOperatorSiteAgentInvariantViolation,
   validateOperatorSiteAgentOverviewInvariants,
   type OperatorSiteAgentOverviewWireResponse,
@@ -74,6 +77,10 @@ import { onboardingStartCommand, onboardingStatusCommand } from './onboarding.js
 import { silentCommandContext } from '../lib/command-wrapper.js';
 import {
   createHostGatewayClient,
+  HOST_FLEET_ENROLLMENT_RESULT_SCHEMA,
+  HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
+  HOST_FLEET_LIFECYCLE_RESULT_SCHEMA,
+  preflightHostFleetLifecycleIntent,
   resolveHostGatewayCredential,
   resolveHostGatewayEnvironmentCredential,
   resolveRuntimeTarget,
@@ -259,6 +266,33 @@ function hostFleetSelection(searchParams: URLSearchParams): { host_id: string; h
   return { host_id: hostId, host_instance_id: instanceId };
 }
 
+function decodeHostFleetSegment(value: string): string | null {
+  try {
+    const decoded = decodeURIComponent(value);
+    return decoded && !decoded.includes('/') && !decoded.includes('\\') && !decoded.includes('..') ? decoded : null;
+  } catch {
+    return null;
+  }
+}
+
+function hostFleetDocumentSuffix(value: string | undefined): string | null {
+  if (!value) return '/console';
+  try {
+    const decoded = decodeURIComponent(value);
+    if (!decoded || decoded.includes('\\') || decoded.includes('..') || /[\u0000-\u001f\u007f]/u.test(decoded)) return null;
+    return `/console/${decoded.replace(/^\/+/, '')}`;
+  } catch {
+    return null;
+  }
+}
+
+function rewriteHostFleetDocument(body: Uint8Array, contentType: string, mountPath: string): Uint8Array {
+  if (!/^(?:text\/html|text\/javascript|application\/javascript|text\/css)/i.test(contentType)) return body;
+  const text = Buffer.from(body).toString('utf8');
+  const rewritten = text.replaceAll('/console', mountPath);
+  return Buffer.from(rewritten, 'utf8');
+}
+
 function onboardingHandoff(
   onboarding: Record<string, unknown> | null,
   start: Record<string, unknown> | null,
@@ -435,6 +469,17 @@ function setCorsHeaders(res: ServerResponse, origin: string | undefined): boolea
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
   return true;
+}
+
+function hostFleetMutationActor(req: IncomingMessage, payload: Record<string, unknown>): string | null {
+  if (payload.operator_confirmed !== true) return null;
+  const origin = req.headers.origin;
+  if (!isLocalOrigin(origin)) return null;
+  const address = req.socket.remoteAddress?.replace(/^::ffff:/u, '') ?? '';
+  if (address && address !== '127.0.0.1' && address !== '::1' && address !== 'localhost') return null;
+  const actor = optionalString(payload.actor);
+  if (actor && actor.trim().length > 128) return null;
+  return actor?.trim() || 'operator-console';
 }
 
 export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): RouteHandler[] {
@@ -767,6 +812,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
             const client = createHostGatewayClient(host, {
               fetch_fn: ctx.hostFleetFetch,
               credential_resolver: ctx.hostFleetCredentialResolver ?? resolveHostGatewayEnvironmentCredential,
+              observe_request: (observation) => ctx.hostFleetRegistry?.recordGatewayObservation(observation),
             });
             const discovery = await client.sessions();
             projections.push({
@@ -791,6 +837,211 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           hosts: projections,
           refusals,
         });
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-lifecycle-preflight',
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_LIFECYCLE_PREFLIGHT_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
+      handler: async (_req, res, _params, searchParams) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const base = {
+          schema: 'narada.host_fleet.lifecycle_preflight.v1',
+          mutation_performed: false as const,
+        };
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, {
+            ...base,
+            status: 'refused',
+            intent: null,
+            current_revision: null,
+            current_lifecycle_state: null,
+            refusals: ['host_fleet_registry_unavailable'],
+          });
+          return;
+        }
+        const hostId = searchParams.get('host_id')?.trim() ?? '';
+        const instanceId = searchParams.get('host_instance_id')?.trim() ?? '';
+        const host = hostId && instanceId
+          ? (() => {
+              try { return ctx.hostFleetRegistry!.getHost({ host_id: hostId, host_instance_id: instanceId }); }
+              catch { return null; }
+            })()
+          : null;
+        const rawRevision = searchParams.get('expected_revision');
+        const expectedRevision = rawRevision === null ? Number.NaN : Number(rawRevision);
+        const preflight = preflightHostFleetLifecycleIntent({
+          schema: HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
+          request_id: searchParams.get('request_id')?.trim() ?? '',
+          operation: searchParams.get('operation')?.trim() ?? '',
+          host: { host_id: hostId, host_instance_id: instanceId },
+          expected_revision: expectedRevision,
+          confirmation: searchParams.get('confirmation') ?? '',
+          reason: searchParams.get('reason'),
+        }, host);
+        jsonResponse(res, preflight.status === 'ready' ? 200 : 409, preflight);
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-lifecycle',
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_LIFECYCLE_API_PATH),
+      remote_disposition: 'local-only',
+      remote_kind: 'intent',
+      remote_intent: 'host_fleet.lifecycle',
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_LIFECYCLE_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: 'origin_not_allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const intent = payload && isRecord(payload.intent) ? payload.intent : null;
+        const actor = payload ? hostFleetMutationActor(req, payload) : null;
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: HOST_FLEET_LIFECYCLE_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: 'host_fleet_registry_unavailable' });
+          return;
+        }
+        if (!intent || !actor) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_LIFECYCLE_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: !actor ? 'operator_confirmation_required' : 'host_lifecycle_intent_required' });
+          return;
+        }
+        const result = ctx.hostFleetRegistry.applyLifecycleIntent(intent, { actor });
+        jsonResponse(res, result.status === 'refused' ? 409 : 200, result);
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-enrollment',
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_ENROLLMENT_API_PATH),
+      remote_disposition: 'local-only',
+      remote_kind: 'intent',
+      remote_intent: 'host_fleet.enrollment',
+      handler: async (req, res) => {
+        const origin = req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_ENROLLMENT_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: 'origin_not_allowed' });
+          return;
+        }
+        const payload = await requestJson(req);
+        const intent = payload && isRecord(payload.intent) ? payload.intent : null;
+        const actor = payload ? hostFleetMutationActor(req, payload) : null;
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { schema: HOST_FLEET_ENROLLMENT_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: 'host_fleet_registry_unavailable' });
+          return;
+        }
+        if (!intent || !actor) {
+          jsonResponse(res, 403, { schema: HOST_FLEET_ENROLLMENT_RESULT_SCHEMA, status: 'refused', mutation_performed: false, reason: !actor ? 'operator_confirmation_required' : 'host_enrollment_intent_required' });
+          return;
+        }
+        const result = ctx.hostFleetRegistry.applyEnrollmentIntent(intent, { actor });
+        jsonResponse(res, result.status === 'refused' ? 409 : 200, result);
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-observations',
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
+      handler: async (_req, res, _params, searchParams) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const base = {
+          schema: OPERATOR_CONSOLE_HOSTS_OBSERVATIONS_SCHEMA,
+          generated_at: new Date().toISOString(),
+        };
+        if (!ctx.hostFleetRegistry) {
+          jsonResponse(res, 503, { ...base, status: 'refused', observations: [], refusals: ['host_fleet_registry_unavailable'] });
+          return;
+        }
+        const selection = hostFleetSelection(searchParams);
+        if (selection && 'reason' in selection) {
+          jsonResponse(res, 400, { ...base, status: 'refused', observations: [], refusals: [selection.reason] });
+          return;
+        }
+        const rawLimit = searchParams.get('limit');
+        const limit = rawLimit ? Number(rawLimit) : 100;
+        if (!Number.isInteger(limit) || limit < 1 || limit > 1_000) {
+          jsonResponse(res, 400, { ...base, status: 'refused', observations: [], refusals: ['host_gateway_observation_limit_invalid'] });
+          return;
+        }
+        try {
+          const observations = ctx.hostFleetRegistry.listGatewayObservations({
+            ...(selection ? { host: selection } : {}),
+            limit,
+          });
+          jsonResponse(res, 200, { ...base, status: 'success', observations, refusals: [] });
+        } catch (error) {
+          jsonResponse(res, 503, { ...base, status: 'refused', observations: [], refusals: [error instanceof Error ? error.message : String(error)] });
+        }
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-health',
+      method: 'GET',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_HOSTS_API_PATH, '/([^/]+)/([^/]+)/health$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
+      handler: async (_req, res, params) => {
+        const origin = _req.headers.origin;
+        if (!setCorsHeaders(res, origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        const hostId = decodeHostFleetSegment(params[1] ?? '');
+        const instanceId = decodeHostFleetSegment(params[2] ?? '');
+        const observedAt = new Date().toISOString();
+        if (!hostId || !instanceId) {
+          jsonResponse(res, 400, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason: 'host_fleet_health_target_invalid' });
+          return;
+        }
+        const host = ctx.hostFleetRegistry?.getHost({ host_id: hostId, host_instance_id: instanceId });
+        if (!host) {
+          jsonResponse(res, 404, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason: 'host_not_registered' });
+          return;
+        }
+        if (host.lifecycle_state === 'revoked' || host.lifecycle_state === 'retired') {
+          jsonResponse(res, 409, { schema: 'narada.host_fleet.refusal.v1', status: 'refused', reason: `host_${host.lifecycle_state}` });
+          return;
+        }
+        try {
+          const client = createHostGatewayClient(host, {
+            fetch_fn: ctx.hostFleetFetch,
+            credential_resolver: ctx.hostFleetCredentialResolver ?? resolveHostGatewayEnvironmentCredential,
+            observe_request: (observation) => ctx.hostFleetRegistry?.recordGatewayObservation(observation),
+          });
+          const health = await client.health();
+          jsonResponse(res, health.status === 'online' ? 200 : 503, {
+            schema: health.schema,
+            host: health.host,
+            status: health.status,
+            observed_at: health.observed_at || observedAt,
+            gateway_schema: health.gateway_schema,
+            detail: health.detail,
+          });
+        } catch (error) {
+          jsonResponse(res, 503, {
+            schema: 'narada.host_fleet.gateway_health.v1',
+            host: { host_id: host.host_id, host_instance_id: host.host_instance_id },
+            status: 'offline',
+            observed_at: observedAt,
+            gateway_schema: null,
+            detail: error instanceof Error ? error.message : String(error),
+          });
+        }
       },
     },
     {
@@ -836,6 +1087,7 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           const client = createHostGatewayClient(host, {
             fetch_fn: ctx.hostFleetFetch,
             credential_resolver: ctx.hostFleetCredentialResolver ?? resolveHostGatewayEnvironmentCredential,
+            observe_request: (observation) => ctx.hostFleetRegistry?.recordGatewayObservation(observation),
           });
           const discovery = await client.sessions();
           const resolution = resolveRuntimeTarget(discovery.sessions, {

@@ -351,6 +351,7 @@ async function handleHostFleetSessionUpgrade(args: {
     const client = createHostGatewayClient(host, {
       fetch_fn: args.fetchFn,
       credential_resolver: args.credentialResolver ?? resolveHostGatewayEnvironmentCredential,
+      observe_request: (observation) => args.registry.recordGatewayObservation(observation),
     });
     const discovery = await client.sessions();
     const resolution = resolveRuntimeTarget(discovery.sessions, {

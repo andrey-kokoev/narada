@@ -1091,7 +1091,7 @@ test('operator input delivery reserves steering for conversation.steer', () => {
   ]);
 
   assert.equal(projection.phase, OPERATOR_INPUT_DELIVERY_PHASES.STEERING);
-  assert.equal(projection.label, 'Steering the active turn');
+  assert.equal(projection.label, 'Applying input to the active turn…');
   assert.deepEqual(projection.history, [
     OPERATOR_INPUT_DELIVERY_PHASES.DRAFT,
     OPERATOR_INPUT_DELIVERY_PHASES.SUBMITTING,

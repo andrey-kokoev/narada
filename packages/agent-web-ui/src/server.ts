@@ -24,6 +24,7 @@ type AgentWebUiOptions = {
   cloudflareProjectionId?: string | null;
   cloudflareAuthoritySessionId?: string | null;
   cloudflareApiBaseUrl?: string | null;
+  cloudflareBrowserToken?: string | null;
   publicBasePath?: string | null;
   publicEventEndpoint?: string | null;
   publicHealthEndpoint?: string | null;
@@ -122,6 +123,11 @@ export function parseAgentWebUiArgs(args: readonly string[] = []): AgentWebUiOpt
     }
     if (arg === '--cloudflare-api-base-url' || arg === '--api-base-url') {
       options.cloudflareApiBaseUrl = args[index + 1] ?? null;
+      index += 1;
+      continue;
+    }
+    if (arg === '--cloudflare-browser-token' || arg === '--browser-token') {
+      options.cloudflareBrowserToken = args[index + 1] ?? null;
       index += 1;
       continue;
     }
@@ -310,13 +316,14 @@ function onboardingConfig(options: AgentWebUiOptions): UnknownRecord {
 export function buildClientConfig(options: AgentWebUiOptions): ClientConfig {
   const localAdmittedMethods = options.admittedMethods ?? AGENT_WEB_UI_NARS_METHOD_LIST;
   if (options.cloudflareAuthoritySessionId && options.cloudflareApiBaseUrl) {
-    const config = buildAgentWebUiCloudflareAuthorityConfig({ session_id: options.cloudflareAuthoritySessionId, api_base_url: options.cloudflareApiBaseUrl });
+    const config = buildAgentWebUiCloudflareAuthorityConfig({ session_id: options.cloudflareAuthoritySessionId, api_base_url: options.cloudflareApiBaseUrl, browser_token_fingerprint: options.cloudflareBrowserToken });
     return {
       cloudflareAuthoritySessionId: options.cloudflareAuthoritySessionId,
       cloudflareApiBaseUrl: options.cloudflareApiBaseUrl,
       authoritySessionId: options.cloudflareAuthoritySessionId,
       sessionId: options.cloudflareAuthoritySessionId,
       apiBaseUrl: options.cloudflareApiBaseUrl,
+      browserToken: config.browser_token_fingerprint ?? null,
       eventEndpoint: config.event_endpoint,
       healthEndpoint: config.health_endpoint,
       inputEndpoint: config.input_endpoint,
@@ -339,6 +346,7 @@ export function buildClientConfig(options: AgentWebUiOptions): ClientConfig {
       projectionId: options.cloudflareProjectionId,
       sessionId: options.sessionId ?? options.cloudflareProjectionId,
       apiBaseUrl: options.cloudflareApiBaseUrl,
+      browserToken: options.cloudflareBrowserToken ?? null,
       healthTransport: 'cloudflare-projection',
       artifactBasePath: `${String(options.cloudflareApiBaseUrl).replace(/\/+$/, '')}/api/nars/projections/${encodeURIComponent(options.cloudflareProjectionId)}/artifacts`,
       artifactTransport: 'cloudflare-projection',

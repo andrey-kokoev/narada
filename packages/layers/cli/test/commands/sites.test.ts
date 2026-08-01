@@ -69,12 +69,18 @@ vi.mock('@narada2/linux-site', () => ({
   getSiteHealth: vi.fn(),
   isLinuxSite: vi.fn(() => false),
   resolveLinuxSiteMode: vi.fn(() => null),
+  resolveSiteRoot: vi.fn((siteId: string, mode: string) => `/tmp/narada/${mode}/${siteId}`),
+  checkSite: vi.fn(async () => ([
+    { name: 'site-directory', status: 'pass', detail: 'Site directory exists' },
+    { name: 'coordinator-db', status: 'pass', detail: 'Coordinator database readable' },
+  ])),
 }), { virtual: true });
 
 const {
   sitesListCommand,
   sitesDiscoverCommand,
   sitesShowCommand,
+  sitesDoctorCommand,
   sitesRemoveCommand,
   sitesInitCommand,
   sitesTaskLifecycleInitCommand,
@@ -90,6 +96,33 @@ describe('sites commands', () => {
       all: vi.fn(() => []),
       get: vi.fn(() => null),
       run: vi.fn(() => ({ changes: 0 })),
+    });
+  });
+
+  describe('sitesDoctorCommand', () => {
+    it('routes Linux doctor through the Linux Site adapter without USERPROFILE', async () => {
+      const previousUserProfile = process.env.USERPROFILE;
+      delete process.env.USERPROFILE;
+
+      try {
+        const ctx = createMockContext();
+        const result = await sitesDoctorCommand('personal', { kind: 'linux-user', format: 'json' }, ctx);
+
+        expect(result.exitCode).toBe(ExitCode.SUCCESS);
+        const data = result.result as {
+          site_kind: string;
+          mode: string;
+          site_root: string;
+          checks: Array<{ name: string; message: string }>;
+        };
+        expect(data.site_kind).toBe('linux-user');
+        expect(data.mode).toBe('user');
+        expect(data.site_root).toBe('/tmp/narada/user/personal');
+        expect(data.checks.map((check) => check.name)).toEqual(['site-directory', 'coordinator-db']);
+      } finally {
+        if (previousUserProfile === undefined) delete process.env.USERPROFILE;
+        else process.env.USERPROFILE = previousUserProfile;
+      }
     });
   });
 

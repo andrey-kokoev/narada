@@ -17,6 +17,26 @@ const record = createHostRecord({
   admitted_sites: ['sonar'],
 });
 
+const dedicatedRecord = createHostRecord({
+  host_id: 'zima-board-2',
+  host_instance_id: 'instance-dedicated',
+  display_name: 'ZimaBoard 2 dedicated gateway',
+  platform: 'linux',
+  gateway: {
+    endpoint: 'http://127.0.0.1:61730',
+    transport: 'ssh-tunnel',
+    admitted_paths: ['/health'],
+    credential: {
+      schema: 'narada.host_fleet.gateway_credential.v1',
+      class: 'dedicated_host_gateway',
+      not_before: null,
+      expires_at: '2026-08-01T12:00:00.000Z',
+    },
+  },
+  credential_ref: 'secret://narada/zima-dedicated-gateway',
+  admitted_sites: ['sonar'],
+});
+
 test('projects existing host-local gateway health into a qualified envelope', async () => {
   let request: Request | null = null;
   const client = createHostGatewayClient(record, {
@@ -38,6 +58,56 @@ test('projects existing host-local gateway health into a qualified envelope', as
   assert.equal(request?.headers.get('x-narada-host-id'), 'zima-board-2');
   assert.equal(request?.headers.get('x-narada-host-instance-id'), 'instance-z');
   assert.equal(request?.headers.get('x-narada-operator-console-bridge-token'), 'runtime-secret-not-stored');
+});
+
+test('uses the dedicated host gateway header and enforces its expiry', async () => {
+  let request: Request | null = null;
+  const client = createHostGatewayClient(dedicatedRecord, {
+    credential_resolver: () => 'dedicated-secret',
+    now: () => '2026-07-31T12:00:00.000Z',
+    fetch_fn: async (_input, init) => {
+      request = new Request(String(_input), init);
+      return new Response(JSON.stringify({ status: 'healthy' }), { status: 200 });
+    },
+  });
+  await client.health();
+  assert.equal(request?.headers.get('x-narada-host-gateway-token'), 'dedicated-secret');
+  assert.equal(request?.headers.get('x-narada-operator-console-bridge-token'), null);
+
+  const expired = createHostGatewayClient(dedicatedRecord, {
+    credential_resolver: () => 'dedicated-secret',
+    now: () => '2026-08-01T12:00:00.000Z',
+  });
+  await assert.rejects(() => expired.requestJson('/health'), /host_gateway_credential_expired/);
+});
+
+test('emits bounded host-qualified request observations without payloads or credentials', async () => {
+  const observations: Array<Record<string, unknown>> = [];
+  const client = createHostGatewayClient(record, {
+    credential_resolver: () => 'secret-that-must-not-be-observed',
+    now: () => '2026-07-31T12:00:00.000Z',
+    observe_request: (observation) => observations.push(observation),
+    fetch_fn: async (_input, init) => {
+      const request = new Request(String(_input), init);
+      assert.match(request.headers.get('x-request-id') ?? '', /^[0-9a-f-]{36}$/u);
+      return new Response(JSON.stringify({ status: 'healthy' }), { status: 200 });
+    },
+  });
+  await client.health();
+  assert.equal(observations.length, 1);
+  assert.deepEqual(observations[0], {
+    schema: 'narada.host_fleet.gateway_request_observation.v1',
+    request_id: observations[0]?.request_id,
+    host: { host_id: 'zima-board-2', host_instance_id: 'instance-z' },
+    method: 'GET',
+    path: '/health',
+    status: 200,
+    outcome: 'success',
+    duration_ms: observations[0]?.duration_ms,
+    reason: null,
+    observed_at: '2026-07-31T12:00:00.000Z',
+  });
+  assert.doesNotMatch(JSON.stringify(observations), /secret-that-must-not-be-observed/u);
 });
 
 test('refuses paths that are not declared by the host gateway', async () => {
@@ -127,6 +197,12 @@ test('does not allow request headers to override gateway identity or credentials
     () => client.requestJson('/console/routes', { headers: { 'x-narada-host-id': 'other-host' } }),
     /host_gateway_reserved_header_override/,
   );
+});
+
+test('rejects untrusted request identifiers and query-bearing observation paths', async () => {
+  const client = createHostGatewayClient(record, { credential_resolver: () => 'secret', fetch_fn: async () => new Response('{}') });
+  await assert.rejects(() => client.requestJson('/health', { request_id: 'bad id' }), /host_gateway_request_id_invalid/);
+  await assert.rejects(() => client.requestJson('/health?token=secret'), /host_gateway_path_not_admitted/);
 });
 
 test('resolves documented env credential references without exposing the value in the reference', () => {

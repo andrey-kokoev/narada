@@ -5,12 +5,21 @@ export const HOST_SESSION_DISCOVERY_SCHEMA = 'narada.host_fleet.session_discover
 export const HOST_QUALIFIED_EVENT_SCHEMA = 'narada.host_fleet.qualified_event.v1' as const;
 export const HOST_FLEET_REFUSAL_SCHEMA = 'narada.host_fleet.refusal.v1' as const;
 export const HOST_FLEET_OVERVIEW_SCHEMA = 'narada.host_fleet.overview.v1' as const;
+export const HOST_GATEWAY_CREDENTIAL_SCHEMA = 'narada.host_fleet.gateway_credential.v1' as const;
+export const HOST_FLEET_LIFECYCLE_INTENT_SCHEMA = 'narada.host_fleet.lifecycle_intent.v1' as const;
+export const HOST_FLEET_LIFECYCLE_RESULT_SCHEMA = 'narada.host_fleet.lifecycle_result.v1' as const;
+export const HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA = 'narada.host_fleet.lifecycle_preflight.v1' as const;
+export const HOST_FLEET_ENROLLMENT_INTENT_SCHEMA = 'narada.host_fleet.enrollment_intent.v1' as const;
+export const HOST_FLEET_ENROLLMENT_RESULT_SCHEMA = 'narada.host_fleet.enrollment_result.v1' as const;
+export const HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA = 'narada.host_fleet.enrollment_preflight.v1' as const;
 
 export type HostPlatform = 'windows' | 'linux' | 'macos' | 'cloudflare' | 'unknown';
 export type HostGatewayTransport = 'loopback' | 'ssh-tunnel' | 'https' | 'cloudflare';
 export type HostLifecycleState = 'pending' | 'active' | 'revoked' | 'retired';
 export type HostHealthStatus = 'unknown' | 'online' | 'degraded' | 'offline' | 'stale' | 'unauthenticated' | 'revoked';
 export type RuntimeSessionState = 'active' | 'starting' | 'degraded' | 'closed' | 'stale';
+export type HostGatewayCredentialClass = 'bridge_compatibility' | 'dedicated_host_gateway';
+export type HostFleetLifecycleOperation = 'revoke' | 'retire';
 
 const IDENTIFIER_PATTERN = /^[a-z0-9][a-z0-9._-]{0,63}$/;
 const INSTANCE_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
@@ -27,10 +36,23 @@ export interface RuntimeTarget extends HostKey {
   runtime_session_id: string;
 }
 
-export interface HostGatewayBinding {
+export interface HostGatewayBindingInput {
   endpoint: string;
   transport: HostGatewayTransport;
   admitted_paths: readonly string[];
+  /** Existing records default to the bridge header during migration. */
+  credential?: HostGatewayCredentialPolicy;
+}
+
+export interface HostGatewayBinding extends Omit<HostGatewayBindingInput, 'credential'> {
+  credential: HostGatewayCredentialPolicy;
+}
+
+export interface HostGatewayCredentialPolicy {
+  schema: typeof HOST_GATEWAY_CREDENTIAL_SCHEMA;
+  class: HostGatewayCredentialClass;
+  not_before: string | null;
+  expires_at: string | null;
 }
 
 export interface HostHealthSnapshot {
@@ -59,17 +81,88 @@ export interface HostRecord {
   revision: number;
 }
 
+/** The registry state needed to validate a lifecycle intent without mutation. */
+export interface HostFleetLifecycleCurrent {
+  host_id: string;
+  host_instance_id: string;
+  lifecycle_state: HostLifecycleState;
+  revision: number;
+}
+
 export interface HostRecordInput {
   host_id: string;
   host_instance_id: string;
   display_name: string;
   platform: HostPlatform;
   narada_version?: string | null;
-  gateway: HostGatewayBinding;
+  gateway: HostGatewayBindingInput;
   capabilities?: readonly string[];
   admitted_sites?: readonly string[];
   credential_ref: string;
   lifecycle_state?: HostLifecycleState;
+}
+
+export interface HostFleetLifecycleIntent {
+  schema: typeof HOST_FLEET_LIFECYCLE_INTENT_SCHEMA;
+  request_id: string;
+  operation: HostFleetLifecycleOperation;
+  host: HostKey;
+  expected_revision: number;
+  confirmation: string;
+  reason: string | null;
+}
+
+export interface HostFleetEnrollmentIntent {
+  schema: typeof HOST_FLEET_ENROLLMENT_INTENT_SCHEMA;
+  request_id: string;
+  host: HostRecordInput;
+  expected_revision: number | null;
+  allow_reenrollment: boolean;
+  confirmation: string;
+}
+
+export interface HostFleetLifecycleResult {
+  schema: typeof HOST_FLEET_LIFECYCLE_RESULT_SCHEMA;
+  status: 'applied' | 'replayed' | 'unchanged' | 'refused';
+  mutation_performed: boolean;
+  request_id: string;
+  operation: HostFleetLifecycleOperation | null;
+  host: HostKey | null;
+  lifecycle_state: HostLifecycleState | null;
+  revision: number | null;
+  reason: string | null;
+}
+
+export interface HostFleetLifecyclePreflight {
+  schema: typeof HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA;
+  status: 'ready' | 'refused';
+  mutation_performed: false;
+  intent: HostFleetLifecycleIntent | null;
+  current_revision: number | null;
+  current_lifecycle_state: HostLifecycleState | null;
+  refusals: readonly string[];
+}
+
+export interface HostFleetEnrollmentResult {
+  schema: typeof HOST_FLEET_ENROLLMENT_RESULT_SCHEMA;
+  status: 'applied' | 'replayed' | 'unchanged' | 'refused';
+  mutation_performed: boolean;
+  request_id: string;
+  host: HostKey | null;
+  lifecycle_state: HostLifecycleState | null;
+  revision: number | null;
+  reason: string | null;
+}
+
+export interface HostFleetEnrollmentPreflight {
+  schema: typeof HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA;
+  status: 'ready' | 'refused';
+  mutation_performed: false;
+  intent: HostFleetEnrollmentIntent | null;
+  candidate: HostRecord | null;
+  current_revision: number | null;
+  current_lifecycle_state: HostLifecycleState | null;
+  refusals: readonly string[];
 }
 
 export interface HostGatewayHealthProjection {
@@ -192,6 +285,32 @@ function normalizeCredentialRef(value: unknown): string {
   return ref;
 }
 
+function normalizeCredentialPolicy(value: unknown): HostGatewayCredentialPolicy {
+  if (value === undefined || value === null) {
+    return {
+      schema: HOST_GATEWAY_CREDENTIAL_SCHEMA,
+      class: 'bridge_compatibility',
+      not_before: null,
+      expires_at: null,
+    };
+  }
+  if (!isRecord(value) || value.schema !== HOST_GATEWAY_CREDENTIAL_SCHEMA
+    || (value.class !== 'bridge_compatibility' && value.class !== 'dedicated_host_gateway')) {
+    throw new Error('host_gateway_credential_policy_invalid');
+  }
+  const notBefore = value.not_before == null ? null : timestamp(value.not_before, 'host_gateway_credential_not_before_invalid');
+  const expiresAt = value.expires_at == null ? null : timestamp(value.expires_at, 'host_gateway_credential_expires_at_invalid');
+  if (notBefore && expiresAt && Date.parse(expiresAt) <= Date.parse(notBefore)) {
+    throw new Error('host_gateway_credential_expiry_order_invalid');
+  }
+  return {
+    schema: HOST_GATEWAY_CREDENTIAL_SCHEMA,
+    class: value.class,
+    not_before: notBefore,
+    expires_at: expiresAt,
+  };
+}
+
 function normalizePath(value: string): string {
   if (!value.startsWith('/') || value.includes('..') || value.includes('\\') || value.includes('?') || value.includes('#')) {
     throw new Error('host_gateway_admitted_path_invalid');
@@ -205,6 +324,244 @@ export function validateHostKey(value: unknown): HostKey {
     host_id: identifier(value.host_id, 'host_id_invalid'),
     host_instance_id: instanceIdentifier(value.host_instance_id, 'host_instance_id_invalid'),
   };
+}
+
+export function validateHostFleetLifecycleIntent(value: unknown): HostFleetLifecycleIntent {
+  if (!isRecord(value) || value.schema !== HOST_FLEET_LIFECYCLE_INTENT_SCHEMA) {
+    throw new Error('host_lifecycle_intent_schema_invalid');
+  }
+  const requestId = requiredString(value.request_id, 'host_lifecycle_request_id_required', 128);
+  if (!/^[A-Za-z0-9._:-]{1,128}$/u.test(requestId)) throw new Error('host_lifecycle_request_id_invalid');
+  if (value.operation !== 'revoke' && value.operation !== 'retire') throw new Error('host_lifecycle_operation_invalid');
+  const host = validateHostKey(value.host);
+  if (!Number.isInteger(value.expected_revision) || Number(value.expected_revision) < 1) {
+    throw new Error('host_lifecycle_expected_revision_invalid');
+  }
+  if (value.confirmation !== hostKey(host)) throw new Error('host_lifecycle_confirmation_invalid');
+  const reason = value.reason == null ? null : requiredString(value.reason, 'host_lifecycle_reason_invalid', 256);
+  return {
+    schema: HOST_FLEET_LIFECYCLE_INTENT_SCHEMA,
+    request_id: requestId,
+    operation: value.operation,
+    host,
+    expected_revision: Number(value.expected_revision),
+    confirmation: hostKey(host),
+    reason,
+  };
+}
+
+function normalizedHostInput(record: HostRecord): HostRecordInput {
+  return {
+    host_id: record.host_id,
+    host_instance_id: record.host_instance_id,
+    display_name: record.display_name,
+    platform: record.platform,
+    narada_version: record.narada_version,
+    gateway: {
+      endpoint: record.gateway.endpoint,
+      transport: record.gateway.transport,
+      admitted_paths: [...record.gateway.admitted_paths],
+      credential: { ...record.gateway.credential },
+    },
+    capabilities: [...record.capabilities],
+    admitted_sites: [...record.admitted_sites],
+    credential_ref: record.credential_ref,
+    lifecycle_state: record.lifecycle_state,
+  };
+}
+
+export function validateHostFleetEnrollmentIntent(value: unknown): HostFleetEnrollmentIntent {
+  if (!isRecord(value) || value.schema !== HOST_FLEET_ENROLLMENT_INTENT_SCHEMA) {
+    throw new Error('host_enrollment_intent_schema_invalid');
+  }
+  const requestId = requiredString(value.request_id, 'host_enrollment_request_id_required', 128);
+  if (!/^[A-Za-z0-9._:-]{1,128}$/u.test(requestId)) throw new Error('host_enrollment_request_id_invalid');
+  if (!isRecord(value.host)) throw new Error('host_enrollment_host_required');
+  const candidate = createHostRecord(value.host as unknown as HostRecordInput);
+  const expectedRevision = value.expected_revision == null ? null : value.expected_revision;
+  if (expectedRevision !== null && (!Number.isInteger(expectedRevision) || Number(expectedRevision) < 1)) {
+    throw new Error('host_enrollment_expected_revision_invalid');
+  }
+  if (value.allow_reenrollment !== true && value.allow_reenrollment !== false) {
+    throw new Error('host_enrollment_allow_reenrollment_invalid');
+  }
+  if (value.confirmation !== hostKey(candidate)) throw new Error('host_enrollment_confirmation_invalid');
+  return {
+    schema: HOST_FLEET_ENROLLMENT_INTENT_SCHEMA,
+    request_id: requestId,
+    host: normalizedHostInput(candidate),
+    expected_revision: expectedRevision === null ? null : Number(expectedRevision),
+    allow_reenrollment: value.allow_reenrollment,
+    confirmation: hostKey(candidate),
+  };
+}
+
+/**
+ * Validate a lifecycle intent without changing the registry. The eventual
+ * mutation authority must perform the same revision check immediately before
+ * applying the intent; this function is a preview, not an authorization.
+ */
+export function preflightHostFleetLifecycleIntent(
+  value: unknown,
+  current: HostFleetLifecycleCurrent | null,
+): HostFleetLifecyclePreflight {
+  try {
+    const intent = validateHostFleetLifecycleIntent(value);
+    if (!current) {
+      return {
+        schema: HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        intent,
+        current_revision: null,
+        current_lifecycle_state: null,
+        refusals: ['host_not_registered'],
+      };
+    }
+    if (!hostKeysEqual(intent.host, current)) {
+      return {
+        schema: HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        intent,
+        current_revision: current.revision,
+        current_lifecycle_state: current.lifecycle_state,
+        refusals: ['host_key_mismatch'],
+      };
+    }
+    if (intent.expected_revision !== current.revision) {
+      return {
+        schema: HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        intent,
+        current_revision: current.revision,
+        current_lifecycle_state: current.lifecycle_state,
+        refusals: ['host_revision_conflict'],
+      };
+    }
+    const desiredState: HostLifecycleState = intent.operation === 'revoke' ? 'revoked' : 'retired';
+    if (current.lifecycle_state === 'revoked' && desiredState === 'retired') {
+      return {
+        schema: HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        intent,
+        current_revision: current.revision,
+        current_lifecycle_state: current.lifecycle_state,
+        refusals: ['host_revoked'],
+      };
+    }
+    if (current.lifecycle_state === 'retired' && desiredState === 'revoked') {
+      return {
+        schema: HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        intent,
+        current_revision: current.revision,
+        current_lifecycle_state: current.lifecycle_state,
+        refusals: ['host_retired'],
+      };
+    }
+    return {
+      schema: HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA,
+      status: 'ready',
+      mutation_performed: false,
+      intent,
+      current_revision: current.revision,
+      current_lifecycle_state: current.lifecycle_state,
+      refusals: [],
+    };
+  } catch (error) {
+    return {
+      schema: HOST_FLEET_LIFECYCLE_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent: null,
+      current_revision: current?.revision ?? null,
+      current_lifecycle_state: current?.lifecycle_state ?? null,
+      refusals: [error instanceof Error ? error.message : String(error)],
+    };
+  }
+}
+
+export function preflightHostFleetEnrollmentIntent(
+  value: unknown,
+  current: HostRecord | null,
+): HostFleetEnrollmentPreflight {
+  try {
+    const intent = validateHostFleetEnrollmentIntent(value);
+    const candidate = createHostRecord(intent.host);
+    if (!current) {
+      return {
+        schema: HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA,
+        status: 'ready',
+        mutation_performed: false,
+        intent,
+        candidate,
+        current_revision: null,
+        current_lifecycle_state: null,
+        refusals: [],
+      };
+    }
+    if (!hostKeysEqual(intent.host, current)) {
+      return {
+        schema: HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA,
+        status: intent.allow_reenrollment ? 'ready' : 'refused',
+        mutation_performed: false,
+        intent,
+        candidate,
+        current_revision: current.revision,
+        current_lifecycle_state: current.lifecycle_state,
+        refusals: intent.allow_reenrollment ? [] : ['host_instance_conflict_requires_explicit_reenrollment'],
+      };
+    }
+    if (intent.expected_revision !== current.revision) {
+      return {
+        schema: HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        intent,
+        candidate,
+        current_revision: current.revision,
+        current_lifecycle_state: current.lifecycle_state,
+        refusals: ['host_revision_conflict'],
+      };
+    }
+    if (current.lifecycle_state === 'revoked' && !intent.allow_reenrollment) {
+      return {
+        schema: HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA,
+        status: 'refused',
+        mutation_performed: false,
+        intent,
+        candidate,
+        current_revision: current.revision,
+        current_lifecycle_state: current.lifecycle_state,
+        refusals: ['host_revoked_requires_explicit_reenrollment'],
+      };
+    }
+    return {
+      schema: HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA,
+      status: 'ready',
+      mutation_performed: false,
+      intent,
+      candidate,
+      current_revision: current.revision,
+      current_lifecycle_state: current.lifecycle_state,
+      refusals: [],
+    };
+  } catch (error) {
+    return {
+      schema: HOST_FLEET_ENROLLMENT_PREFLIGHT_SCHEMA,
+      status: 'refused',
+      mutation_performed: false,
+      intent: null,
+      candidate: null,
+      current_revision: current?.revision ?? null,
+      current_lifecycle_state: current?.lifecycle_state ?? null,
+      refusals: [error instanceof Error ? error.message : String(error)],
+    };
+  }
 }
 
 export function validateRuntimeTarget(value: unknown): RuntimeTarget {
@@ -241,6 +598,7 @@ export function createHostRecord(input: HostRecordInput, now = new Date()): Host
       endpoint: normalizeEndpoint(input.gateway?.endpoint, transport),
       transport,
       admitted_paths: admittedPaths,
+      credential: normalizeCredentialPolicy(input.gateway?.credential),
     },
     capabilities: uniqueStrings(input.capabilities, 'host_capabilities_invalid', 256),
     admitted_sites: uniqueStrings(input.admitted_sites, 'host_admitted_sites_invalid', 256),
@@ -271,6 +629,10 @@ export function validateHostRecord(value: unknown): HostRecord {
   }
   return {
     ...record,
+    gateway: {
+      ...record.gateway,
+      credential: normalizeCredentialPolicy(isRecord(value.gateway) ? value.gateway.credential : undefined),
+    },
     created_at: createdAt,
     updated_at: updatedAt,
     last_seen_at: lastSeenAt,

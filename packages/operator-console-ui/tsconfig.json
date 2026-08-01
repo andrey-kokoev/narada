@@ -24,6 +24,9 @@
       "@narada2/site-registry-contract": [
         "../site-registry-contract/src/index.ts"
       ],
+      "@narada2/host-fleet/contract": [
+        "../host-fleet/src/contract.ts"
+      ],
       "@narada2/ui-vue": [
         "../ui-vue/src/index.ts"
       ],

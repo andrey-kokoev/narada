@@ -47,11 +47,12 @@ export interface CloudflareNarsProjectionWorkerEnv {
   OPERATOR_CONSOLE_GATEWAY_NETWORK?: CloudflareNarsOperatorConsoleGatewayNetworkBinding;
   OPERATOR_CONSOLE_GATEWAY_TCP_HOST?: string;
   OPERATOR_CONSOLE_GATEWAY_TCP_PORT?: string | number;
-  OPERATOR_CONSOLE_ACCESS_REQUIRED?: string | boolean;
-  OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN?: string;
-  OPERATOR_CONSOLE_ACCESS_AUDIENCE?: string;
+  NARADA_OPERATOR_CONSOLE_SHARED_SECRET?: string;
   OPERATOR_CONSOLE_GATEWAY_TIMEOUT_MS?: string | number;
   NARADA_HOST_FLEET_REGISTRY?: string;
+  NARADA_HOST_FLEET_UI_API_BASE_PATH?: string;
+  NARADA_HOST_FLEET_UI_ROUTE_SHAPE?: string;
+  NARADA_HOST_FLEET_OBSERVABILITY?: string;
 }
 
 export interface CloudflareNarsOperatorConsoleGatewayBinding {
@@ -220,7 +221,8 @@ export interface CloudflareNarsProjectionWorkerOptions {
   now?: () => string;
   require_authority_credential?: boolean;
   fetch_fn?: typeof fetch;
-  require_operator_console_access?: boolean;
+  require_operator_console_secret?: boolean;
+  host_fleet_observation_sink?: (observation: import('./cloudflare-host-fleet.js').CloudflareHostFleetRequestObservation) => void;
 }
 
 export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProjectionWorkerOptions = {}) {
@@ -240,30 +242,38 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       const url = new URL(request.url);
       const path = trimPath(url.pathname);
       const directProjectionEntry = url.pathname === '/' && url.searchParams.has('cloudflare_projection_id');
+      if (isOperatorConsoleAuthPath(url.pathname)) {
+        return handleOperatorConsoleAuth(request, env);
+      }
       if (isCloudflareHostFleetPath(url.pathname)) {
-        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
-        if (accessFailure) return accessFailure;
-        const response = await handleCloudflareHostFleetRequest(request, env, now, fetchFn);
+        const secretFailure = await authorizeOperatorConsoleSecret(request, env, options);
+        if (secretFailure) return secretFailure;
+        const response = await handleCloudflareHostFleetRequest(request, env, now, fetchFn, {
+          observe_request: options.host_fleet_observation_sink
+            ?? (env.NARADA_HOST_FLEET_OBSERVABILITY === 'log'
+              ? (observation) => console.log(JSON.stringify({ event: 'host_fleet_gateway_observation', ...observation }))
+              : undefined),
+        });
         if (response) return response;
       }
-      if (isOperatorConsolePath(url.pathname) || (url.pathname === '/' && !directProjectionEntry && (operatorConsoleGatewayConfigured(env) || operatorConsoleAccessRequired(env, options)))) {
-        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
-        if (accessFailure) return accessFailure;
+      if (isOperatorConsolePath(url.pathname) || (url.pathname === '/' && !directProjectionEntry && (operatorConsoleGatewayConfigured(env) || operatorConsoleSharedSecretRequired(env, options)))) {
+        const secretFailure = await authorizeOperatorConsoleSecret(request, env, options);
+        if (secretFailure) return secretFailure;
         if (isOperatorConsoleApiPath(url.pathname)) {
           return proxyAdmittedOperatorWorkspaceRoute(request, env, fetchFn, now);
         }
       }
       if (operatorConsoleGatewayConfigured(env)
         && (isPotentialOperatorWorkspaceRoute(url.pathname) || isOperatorConsoleGatewayPath(url.pathname))) {
-        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
-        if (accessFailure) return accessFailure;
+        const secretFailure = await authorizeOperatorConsoleSecret(request, env, options);
+        if (secretFailure) return secretFailure;
         return proxyAdmittedOperatorWorkspaceRoute(request, env, fetchFn, now);
       }
       if (!path.startsWith('api/nars/')) return serveStaticAsset(request, env, workspaceDirectory, now, fetchFn);
       if (request.method === 'OPTIONS') return corsResponse();
       if (path === 'api/nars/operator-console/routes' || path === 'api/nars/operator-console/health') {
-        const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
-        if (accessFailure) return accessFailure;
+        const secretFailure = await authorizeOperatorConsoleSecret(request, env, options);
+        if (secretFailure) return secretFailure;
       }
       if (path === 'api/nars/operator-console/routes' && request.method === 'GET') {
         return readOperatorConsoleRouteDirectory(request, env, fetchFn, now);
@@ -1161,6 +1171,15 @@ function isOperatorConsolePath(pathname: string): boolean {
   return pathname === OPERATOR_CONSOLE_PATH || pathname.startsWith(`${OPERATOR_CONSOLE_PATH}/`);
 }
 
+const OPERATOR_CONSOLE_AUTH_PATH = '/auth/operator-console';
+const OPERATOR_CONSOLE_LOGOUT_PATH = '/auth/operator-console/logout';
+const OPERATOR_CONSOLE_SESSION_COOKIE = 'narada_operator_console_session';
+const OPERATOR_CONSOLE_SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
+
+function isOperatorConsoleAuthPath(pathname: string): boolean {
+  return pathname === OPERATOR_CONSOLE_AUTH_PATH || pathname === OPERATOR_CONSOLE_LOGOUT_PATH;
+}
+
 const OPERATOR_CONSOLE_STATIC_DOCUMENT_PATHS = new Set([
   `${OPERATOR_CONSOLE_PATH}/agents`,
   `${OPERATOR_CONSOLE_PATH}/registry`,
@@ -1196,13 +1215,12 @@ function isOperatorConsoleGatewayPath(pathname: string): boolean {
     && !isOperatorConsoleStaticDocumentPath(pathname);
 }
 
-function operatorConsoleAccessRequired(
+function operatorConsoleSharedSecretRequired(
   env: CloudflareNarsProjectionWorkerEnv,
   options: CloudflareNarsProjectionWorkerOptions,
 ): boolean {
-  if (options.require_operator_console_access !== undefined) return options.require_operator_console_access;
-  const value = env.OPERATOR_CONSOLE_ACCESS_REQUIRED;
-  return value === true || value === 'true';
+  if (options.require_operator_console_secret !== undefined) return options.require_operator_console_secret;
+  return Boolean(env.NARADA_OPERATOR_CONSOLE_SHARED_SECRET?.trim()) || operatorConsoleGatewayConfigured(env);
 }
 
 function operatorConsoleGatewayTransport(env: CloudflareNarsProjectionWorkerEnv): 'public-tunnel' | 'vpc-service' | null {
@@ -1270,7 +1288,7 @@ function operatorConsoleGatewayConfiguration(
     if (target.username || target.password || target.search || target.hash || target.pathname !== '/') return null;
     if (pin.username || pin.password || pin.search || pin.hash || pin.pathname !== '/') return null;
     if (target.origin !== pin.origin) return null;
-    if ((env.OPERATOR_CONSOLE_ACCESS_REQUIRED === true || env.OPERATOR_CONSOLE_ACCESS_REQUIRED === 'true') && transport !== 'vpc-service') {
+    if (transport === 'public-tunnel') {
       if (target.protocol !== 'https:' || pin.protocol !== 'https:') return null;
     }
     return { baseUrl: target.toString().replace(/\/$/, ''), token, transport };
@@ -1283,114 +1301,139 @@ function operatorConsoleGatewayConfigured(env: CloudflareNarsProjectionWorkerEnv
   return Boolean(operatorConsoleGatewayConfiguration(env));
 }
 
-interface AccessJwk extends JsonWebKey {
-  kid?: string;
-}
-
-interface AccessJwkSet {
-  keys: AccessJwk[];
-  expiresAt: number;
-}
-
-const accessJwkCache = new Map<string, AccessJwkSet>();
-
-async function authorizeOperatorConsoleAccess(
+async function authorizeOperatorConsoleSecret(
   request: Request,
   env: CloudflareNarsProjectionWorkerEnv,
   options: CloudflareNarsProjectionWorkerOptions,
-  fetchFn: typeof fetch,
 ): Promise<Response | null> {
-  if (!operatorConsoleAccessRequired(env, options)) return null;
-  const token = request.headers.get('cf-access-jwt-assertion')?.trim();
-  if (!token) return json(refusal('operator_console_access_required'), 401);
-  const issuer = normalizeAccessTeamDomain(env.OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN);
-  const audience = env.OPERATOR_CONSOLE_ACCESS_AUDIENCE?.trim();
-  if (!issuer || !audience) return json(refusal('operator_console_access_validation_not_configured'), 503);
+  if (!operatorConsoleSharedSecretRequired(env, options)) return null;
+  const expected = env.NARADA_OPERATOR_CONSOLE_SHARED_SECRET?.trim();
+  if (!expected) return json(refusal('operator_console_shared_secret_not_configured'), 503);
+  const presented = operatorConsoleSecretFromRequest(request);
+  if (presented && await sharedSecretEquals(presented, expected)) return null;
+  const pathname = new URL(request.url).pathname;
+  if (request.method === 'GET' && !pathname.startsWith('/api/') && !isOperatorConsoleApiPath(pathname)) {
+    return redirectToOperatorConsoleLogin(request);
+  }
+  const headers = withCorsHeaders({
+    'www-authenticate': 'Bearer realm="narada-operator-console"',
+  });
+  return new Response(JSON.stringify(refusal('operator_console_shared_secret_required')), {
+    status: 401,
+    headers,
+  });
+}
+
+function operatorConsoleSecretFromRequest(request: Request): string | null {
+  const authorization = request.headers.get('authorization')?.trim() ?? '';
+  if (authorization.toLowerCase().startsWith('bearer ')) {
+    const token = authorization.slice(7).trim();
+    if (token) return token;
+  }
+  const cookies = request.headers.get('cookie')?.split(';') ?? [];
+  for (const item of cookies) {
+    const separator = item.indexOf('=');
+    if (separator < 0 || item.slice(0, separator).trim() !== OPERATOR_CONSOLE_SESSION_COOKIE) continue;
+    const raw = item.slice(separator + 1).trim();
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+  return null;
+}
+
+async function sharedSecretEquals(left: string, right: string): Promise<boolean> {
+  const [leftDigest, rightDigest] = await Promise.all([
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(left)),
+    crypto.subtle.digest('SHA-256', new TextEncoder().encode(right)),
+  ]);
+  const leftBytes = new Uint8Array(leftDigest);
+  const rightBytes = new Uint8Array(rightDigest);
+  let difference = 0;
+  for (let index = 0; index < leftBytes.length; index += 1) difference |= leftBytes[index] ^ rightBytes[index];
+  return difference === 0;
+}
+
+function redirectToOperatorConsoleLogin(request: Request): Response {
+  const loginUrl = new URL(OPERATOR_CONSOLE_AUTH_PATH, request.url);
+  loginUrl.searchParams.set('return_to', operatorConsoleReturnPath(request.url));
+  return new Response(null, {
+    status: 303,
+    headers: withCorsHeaders({ location: loginUrl.toString(), 'cache-control': 'no-store' }),
+  });
+}
+
+function operatorConsoleReturnPath(value: string): string {
   try {
-    await verifyCloudflareAccessJwt(token, issuer, audience, fetchFn);
-    return null;
+    const parsed = new URL(value, 'https://narada.invalid');
+    const path = `${parsed.pathname}${parsed.search}`;
+    return path.startsWith('/') && !path.startsWith('//') && path !== OPERATOR_CONSOLE_AUTH_PATH
+      ? path
+      : `${OPERATOR_CONSOLE_PATH}/agents`;
   } catch {
-    return json(refusal('operator_console_access_invalid'), 403);
+    return `${OPERATOR_CONSOLE_PATH}/agents`;
   }
 }
 
-async function verifyCloudflareAccessJwt(
-  token: string,
-  issuer: string,
-  audience: string,
-  fetchFn: typeof fetch,
-): Promise<void> {
-  const parts = token.split('.');
-  if (parts.length !== 3) throw new Error('access_jwt_shape_invalid');
-  const header = parseBase64UrlJson(parts[0]);
-  const claims = parseBase64UrlJson(parts[1]);
-  if (header.alg !== 'RS256' || typeof header.kid !== 'string') throw new Error('access_jwt_header_invalid');
-  if (claims.iss !== issuer) throw new Error('access_jwt_issuer_invalid');
-  const audiences = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
-  if (!audiences.includes(audience)) throw new Error('access_jwt_audience_invalid');
-  const nowSeconds = Math.floor(Date.now() / 1000);
-  if (typeof claims.exp !== 'number' || claims.exp <= nowSeconds) throw new Error('access_jwt_expired');
-  if (typeof claims.nbf === 'number' && claims.nbf > nowSeconds + 30) throw new Error('access_jwt_not_yet_valid');
-  let keySet = await readCloudflareAccessJwks(issuer, fetchFn, false);
-  let key = keySet.keys.find((candidate) => candidate.kid === header.kid);
-  if (!key) {
-    keySet = await readCloudflareAccessJwks(issuer, fetchFn, true);
-    key = keySet.keys.find((candidate) => candidate.kid === header.kid);
+async function handleOperatorConsoleAuth(request: Request, env: CloudflareNarsProjectionWorkerEnv): Promise<Response> {
+  if (new URL(request.url).pathname === OPERATOR_CONSOLE_LOGOUT_PATH) {
+    if (request.method !== 'POST') return json(refusal('operator_console_logout_method_not_allowed'), 405);
+    const headers = withCorsHeaders({
+      location: OPERATOR_CONSOLE_AUTH_PATH,
+      'cache-control': 'no-store',
+      'set-cookie': `${OPERATOR_CONSOLE_SESSION_COOKIE}=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0`,
+    });
+    if ((request.headers.get('accept') ?? '').includes('application/json')) {
+      return new Response(JSON.stringify({ status: 'ok' }), { status: 200, headers });
+    }
+    return new Response(null, { status: 303, headers });
   }
-  if (!key) throw new Error('access_jwt_key_not_found');
-  const cryptoKey = await globalThis.crypto.subtle.importKey(
-    'jwk',
-    key,
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['verify'],
-  );
-  const valid = await globalThis.crypto.subtle.verify(
-    'RSASSA-PKCS1-v1_5',
-    cryptoKey,
-    toArrayBuffer(decodeBase64Url(parts[2])),
-    new TextEncoder().encode(`${parts[0]}.${parts[1]}`),
-  );
-  if (!valid) throw new Error('access_jwt_signature_invalid');
-}
-
-async function readCloudflareAccessJwks(issuer: string, fetchFn: typeof fetch, forceRefresh: boolean): Promise<AccessJwkSet> {
-  const cached = accessJwkCache.get(issuer);
-  if (!forceRefresh && cached && cached.expiresAt > Date.now()) return cached;
-  const response = await fetchFn(`${issuer}/cdn-cgi/access/certs`, { signal: AbortSignal.timeout(5_000) });
-  const payload: unknown = await response.json().catch(() => null);
-  const record = objectRecord(payload);
-  if (!response.ok || !record || !Array.isArray(record.keys)) throw new Error('access_jwks_unavailable');
-  const keys = record.keys.filter((value): value is AccessJwk => value !== null && typeof value === 'object' && !Array.isArray(value));
-  const next = { keys, expiresAt: Date.now() + 5 * 60_000 };
-  accessJwkCache.set(issuer, next);
-  return next;
-}
-
-function normalizeAccessTeamDomain(value: string | undefined): string | null {
-  const raw = value?.trim();
-  if (!raw) return null;
-  try {
-    const parsed = new URL(raw.includes('://') ? raw : `https://${raw}`);
-    if (parsed.protocol !== 'https:' || parsed.username || parsed.password || parsed.pathname !== '/' || parsed.search || parsed.hash) return null;
-    return parsed.toString().replace(/\/$/, '');
-  } catch {
-    return null;
+  if (request.method === 'GET') return operatorConsoleLoginPage(request);
+  if (request.method !== 'POST') return json(refusal('operator_console_auth_method_not_allowed'), 405);
+  const expected = env.NARADA_OPERATOR_CONSOLE_SHARED_SECRET?.trim();
+  if (!expected) return json(refusal('operator_console_shared_secret_not_configured'), 503);
+  const body = await readOperatorConsoleAuthBody(request);
+  const secret = typeof body.secret === 'string' ? body.secret.trim() : '';
+  if (!secret || !(await sharedSecretEquals(secret, expected))) {
+    return json(refusal('operator_console_shared_secret_invalid'), 401);
   }
+  const requestedReturnTo = typeof body.return_to === 'string' && body.return_to.trim()
+    ? body.return_to
+    : new URL(request.url).searchParams.get('return_to') ?? `${OPERATOR_CONSOLE_PATH}/agents`;
+  const returnTo = operatorConsoleReturnPath(requestedReturnTo);
+  const headers = withCorsHeaders({
+    location: returnTo,
+    'cache-control': 'no-store',
+    'set-cookie': `${OPERATOR_CONSOLE_SESSION_COOKIE}=${encodeURIComponent(secret)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${OPERATOR_CONSOLE_SESSION_MAX_AGE_SECONDS}`,
+  });
+  if ((request.headers.get('accept') ?? '').includes('application/json')) {
+    return new Response(JSON.stringify({ status: 'ok', return_to: returnTo }), { status: 200, headers });
+  }
+  return new Response(null, { status: 303, headers });
 }
 
-function parseBase64UrlJson(value: string): Record<string, unknown> {
-  const parsed: unknown = JSON.parse(new TextDecoder().decode(decodeBase64Url(value)));
-  if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('access_jwt_json_invalid');
-  return parsed as Record<string, unknown>;
+async function readOperatorConsoleAuthBody(request: Request): Promise<Record<string, unknown>> {
+  const contentLength = Number(request.headers.get('content-length') ?? 0);
+  if (contentLength > 64 * 1024) return {};
+  const raw = (await request.text()).slice(0, 64 * 1024);
+  const contentType = request.headers.get('content-type') ?? '';
+  if (contentType.includes('application/json')) {
+    try { return objectRecord(JSON.parse(raw)) ?? {}; } catch { return {}; }
+  }
+  const params = new URLSearchParams(raw);
+  return { secret: params.get('secret') ?? '', return_to: params.get('return_to') ?? '' };
 }
 
-function decodeBase64Url(value: string): Uint8Array {
-  const normalized = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
-  const binary = atob(normalized);
-  const bytes = new Uint8Array(binary.length);
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
-  return bytes;
+function operatorConsoleLoginPage(request: Request): Response {
+  const returnTo = operatorConsoleReturnPath(new URL(request.url).searchParams.get('return_to') ?? `${OPERATOR_CONSOLE_PATH}/agents`);
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Narada Operator Console</title><style>body{font:16px system-ui,sans-serif;max-width:32rem;margin:12vh auto;padding:2rem;color:#202124}form{display:grid;gap:1rem}input,button{font:inherit;padding:.7rem}button{cursor:pointer}</style></head><body><main><h1>Narada Operator Console</h1><p>Enter the shared operator secret to continue.</p><form method="post" action="${OPERATOR_CONSOLE_AUTH_PATH}"><input type="hidden" name="return_to" value="${escapeHtml(returnTo)}"><label for="secret">Shared secret</label><input id="secret" name="secret" type="password" autocomplete="current-password" required autofocus><button type="submit">Continue</button></form></main></body></html>`;
+  return new Response(html, { status: 200, headers: withCorsHeaders({ 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' }) });
+}
+
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character] ?? character));
 }
 
 function operatorConsoleGatewayTimeoutMs(env: CloudflareNarsProjectionWorkerEnv): number {
@@ -1533,15 +1576,26 @@ function rewriteOperatorConsoleSessionDocument(request: Request, body: string): 
   const config = objectRecord(parsed);
   if (!config) return { ok: false };
   const sourceUrl = new URL(request.url);
+  const sessionPath = sourceUrl.pathname.replace(/\/+$/, '');
   const eventEndpoint = new URL(sourceUrl.origin);
   eventEndpoint.protocol = sourceUrl.protocol === 'https:' ? 'wss:' : 'ws:';
-  eventEndpoint.pathname = `${sourceUrl.pathname.replace(/\/+$/, '')}/events`;
+  eventEndpoint.pathname = `${sessionPath}/events`;
   eventEndpoint.search = '';
+  const inputEndpoint = new URL(sourceUrl.origin);
+  inputEndpoint.pathname = `${sessionPath}/input`;
+  inputEndpoint.search = '';
+  const healthEndpoint = new URL(sourceUrl.origin);
+  healthEndpoint.pathname = `${sessionPath}/api/health`;
+  healthEndpoint.search = '';
   const rewrittenConfig: Record<string, unknown> = {
     ...config,
     eventEndpoint: eventEndpoint.toString(),
+    inputEndpoint: inputEndpoint.toString(),
+    healthEndpoint: healthEndpoint.toString(),
   };
   if ('event_endpoint' in config) rewrittenConfig.event_endpoint = eventEndpoint.toString();
+  if ('input_endpoint' in config) rewrittenConfig.input_endpoint = inputEndpoint.toString();
+  if ('health_endpoint' in config) rewrittenConfig.health_endpoint = healthEndpoint.toString();
   return {
     ok: true,
     body: body.replace(script[0], `${script[1]}${serializeHtmlJson(rewrittenConfig)}${script[3]}`),
@@ -2234,7 +2288,7 @@ async function serveStaticAsset(
   const uiConfig = objectRecord(lease?.ui_config);
   if (sessionDocument && !uiConfig) return json(refusal('workspace_session_route_not_found'), 404);
   const consoleRouteDirectory = objectRecord(uiConfig?.workspace_route_directory);
-  const consoleConfig = consoleRouteDirectory
+  const baseConsoleConfig = consoleRouteDirectory
     ? {
       routeDirectory: {
         endpoint: stringOrUndefined(consoleRouteDirectory.endpoint) ?? null,
@@ -2251,7 +2305,11 @@ async function serveStaticAsset(
             timeoutMs: operatorConsoleGatewayTimeoutMs(env),
           },
         }
-        : {};
+         : {};
+  const hostFleetConfig = operatorConsoleHostFleetUiConfig(env);
+  const consoleConfig = hostFleetConfig
+    ? { ...baseConsoleConfig, hostFleet: hostFleetConfig }
+    : baseConsoleConfig;
   const content = await response.text();
   const headers = new Headers(response.headers);
   // The body is no longer the immutable asset returned by ASSETS. Do not
@@ -2272,6 +2330,16 @@ async function serveStaticAsset(
     statusText: response.statusText,
     headers,
   });
+}
+
+function operatorConsoleHostFleetUiConfig(env: CloudflareNarsProjectionWorkerEnv): Record<string, string> | null {
+  const configuredPath = env.NARADA_HOST_FLEET_UI_API_BASE_PATH?.trim();
+  const apiBasePath = configuredPath || (env.NARADA_HOST_FLEET_REGISTRY ? '/api/narada/fleet/hosts' : '');
+  if (!apiBasePath || !apiBasePath.startsWith('/') || apiBasePath.includes('//') || apiBasePath.includes('..') || apiBasePath.includes('\\') || apiBasePath.includes('?') || apiBasePath.includes('#')) return null;
+  const routeShape = env.NARADA_HOST_FLEET_UI_ROUTE_SHAPE?.trim()
+    || (apiBasePath === '/api/narada/fleet/hosts' ? 'cloudflare-projection' : 'local-console');
+  if (routeShape !== 'cloudflare-projection' && routeShape !== 'local-console') return null;
+  return { apiBasePath, routeShape };
 }
 
 function isDocumentPath(pathname: string, prefix: string): boolean {

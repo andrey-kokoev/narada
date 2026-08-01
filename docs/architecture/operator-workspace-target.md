@@ -27,6 +27,13 @@ require the bridge capability. The directory contains descriptors and redacted
 bindings only; browser tokens are used for authorization and are never emitted
 in the directory response.
 
+The complete host-local Operator Console mirror is defined separately in
+[`operator-console-cloudflare-mirror-target.md`](operator-console-cloudflare-mirror-target.md).
+That target adds a Cloudflare Access-protected Worker and a governed local
+projection gateway behind tunnel transport. Until that gateway and its parity
+gate are active, the Cloudflare workspace is a leased route projection rather
+than a full mirror of the local Operator Console.
+
 ## Shape
 
 The layers are intentionally distinct:

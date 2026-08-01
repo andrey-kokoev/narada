@@ -68,8 +68,8 @@ mode.
 Choose exactly one authority mode:
 
 ```bash
-# Personal user Site; no root privilege required.
-narada sites init personal --substrate linux-user
+# Named user-scoped Site; no root privilege required.
+narada sites init work --substrate linux-user
 
 # System Site; requires the permissions needed for the selected root.
 narada sites init production --substrate linux-system
@@ -91,9 +91,9 @@ the Site root.
 ## Enable Unattended Operation
 
 ```bash
-narada sites enable personal
-systemctl --user enable narada-site-personal.timer
-systemctl --user start narada-site-personal.timer
+narada sites enable work
+systemctl --user enable narada-site-work.timer
+systemctl --user start narada-site-work.timer
 
 narada sites enable production
 systemctl enable narada-site-production.timer
@@ -111,11 +111,11 @@ user session or insufficient system privilege is reported as `refused`. The
 CLI may plan or apply these operations through the same boundary:
 
 ```bash
-narada sites supervisor personal status --dry-run
-narada sites supervisor personal enable --apply
-narada sites supervisor personal start --apply
-narada sites supervisor personal stop --apply
-narada sites supervisor personal disable --apply
+narada sites supervisor work status --dry-run
+narada sites supervisor work enable --apply
+narada sites supervisor work start --apply
+narada sites supervisor work stop --apply
+narada sites supervisor work disable --apply
 ```
 
 Unregistering removes only Narada supervisor declarations and preserves the
@@ -142,9 +142,9 @@ presence of a credential.
 Inspect readiness and evidence with:
 
 ```bash
-narada sites doctor personal --kind linux-user
+narada sites doctor work --kind linux-user
 narada sites list
-journalctl --user -u narada-site-personal.service
+journalctl --user -u narada-site-work.service
 ```
 
 ## First Resident Use
@@ -152,14 +152,23 @@ journalctl --user -u narada-site-personal.service
 The Linux first-use path is CLI-owned and does not require PowerShell:
 
 ```bash
-narada onboarding start --platform linux --scope user-site --interactive
+narada onboarding start --scope user-site --interactive
+narada onboarding status --scope user-site
 ```
+
+The CLI detects the native Linux host when `--platform` is omitted. Pass
+`--platform linux` only as an explicit override for a controlled test or a
+cross-host administrative workflow. User Site onboarding is a separate
+first-use boundary from an explicitly named Linux Site: the User Site defaults
+to `${XDG_DATA_HOME:-$HOME/.local/share}/narada/user`, while
+`narada sites init <site-id> --substrate linux-user` creates the named Site at
+`${XDG_DATA_HOME:-$HOME/.local/share}/narada/<site-id>`.
 
 It creates or discovers one User Site and one `resident` launch record. The
 runtime and admitted operator surface start only after the User Site has an
 explicit intelligence launch context, principal binding, and provider
 readiness. On a clean installation, the command can therefore return a
-successful `blocked` onboarding result with
+`blocked` onboarding result with a nonzero process exit code and
 `intelligence_catalog_setup_required`; it does not fabricate authority or
 start a runtime without that setup. Use `--demo` for the no-credential
 introduction path, or complete the User Site intelligence setup and rerun the
@@ -186,24 +195,24 @@ The Linux lifecycle coordinator exposes the plan/apply boundary explicitly:
 ```bash
 # Inspect first; this does not change the Site.
 narada install linux-lifecycle upgrade \
-  --site-id personal --site-root "$HOME/.local/share/narada/personal" \
+  --site-id work --site-root "$HOME/.local/share/narada/work" \
   --mode user --target-version 0.2.0 --supervisor-registered
 
 # Persist the Site-owned receipt after the package/supervisor boundary is ready.
 narada install linux-lifecycle upgrade \
-  --site-id personal --site-root "$HOME/.local/share/narada/personal" \
+  --site-id work --site-root "$HOME/.local/share/narada/work" \
   --mode user --target-version 0.2.0 --supervisor-registered --apply
 
 narada install linux-lifecycle uninstall \
-  --site-id personal --site-root "$HOME/.local/share/narada/personal" \
+  --site-id work --site-root "$HOME/.local/share/narada/work" \
   --mode user --supervisor-registered --apply
 
 narada install linux-lifecycle rollback \
-  --site-id personal --site-root "$HOME/.local/share/narada/personal" \
+  --site-id work --site-root "$HOME/.local/share/narada/work" \
   --mode user --rollback-to 0.1.0 --apply
 
 narada install linux-lifecycle migrate \
-  --site-id personal --site-root "$HOME/.local/share/narada/personal" \
+  --site-id work --site-root "$HOME/.local/share/narada/work" \
   --mode user --target-schema-version 2 \
   --migration-artifact task://migration/2 --apply
 ```
@@ -222,9 +231,9 @@ After installation, the minimum proof is:
 
 ```bash
 narada --version
-narada sites init personal --substrate linux-user --dry-run
-narada sites doctor personal --kind linux-user
-narada onboarding start --platform linux --scope user-site --no-exec
+narada sites init work --substrate linux-user --dry-run
+narada sites doctor work --kind linux-user
+narada onboarding start --scope user-site --no-exec
 ```
 
 The clean-environment E2E path must additionally prove package contents,

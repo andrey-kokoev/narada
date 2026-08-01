@@ -13,6 +13,9 @@ export const OPERATOR_CONSOLE_REMOTE_GATEWAY_HEALTH_SCHEMA = 'narada.operator_co
 export const OPERATOR_CONSOLE_REMOTE_GATEWAY_REFUSAL_SCHEMA = 'narada.operator_console_remote_gateway.refusal.v1' as const;
 
 const BRIDGE_TOKEN_HEADER = 'x-narada-operator-console-bridge-token';
+const HOST_GATEWAY_TOKEN_HEADER = 'x-narada-host-gateway-token';
+const HOST_ID_HEADER = 'x-narada-host-id';
+const HOST_INSTANCE_ID_HEADER = 'x-narada-host-instance-id';
 const DEFAULT_PORT = 61_730;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_ROUTE_POLICY_TTL_MS = 5_000;
@@ -36,6 +39,8 @@ export interface OperatorConsoleRemoteGatewayConfig {
   router_url: string;
   router_token: string;
   bridge_token: string;
+  /** Optional dedicated credential for host-qualified fleet crossings. */
+  host_gateway_token?: string;
   host?: string;
   port?: number;
   timeout_ms?: number;
@@ -108,6 +113,9 @@ export function createOperatorConsoleRemoteGateway(
   const routerUrl = normalizeRouterUrl(config.router_url);
   const routerToken = requireSecret(config.router_token, 'router_token');
   const bridgeToken = requireSecret(config.bridge_token, 'bridge_token');
+  const hostGatewayToken = config.host_gateway_token === undefined
+    ? null
+    : requireSecret(config.host_gateway_token, 'host_gateway_token');
   const host = normalizeLoopbackHost(config.host ?? '127.0.0.1');
   const port = normalizePort(config.port ?? DEFAULT_PORT, true);
   const timeoutMs = normalizeBound(config.timeout_ms ?? DEFAULT_TIMEOUT_MS, 100, 120_000, 'timeout_ms');
@@ -280,9 +288,10 @@ export function createOperatorConsoleRemoteGateway(
     const method = (req.method ?? 'GET').toUpperCase();
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? `${host}:${port}`}`);
     const path = requestUrl.pathname;
-    if (!constantTimeEqual(readBridgeToken(req), bridgeToken)) {
-      refuseUpgrade(client, 401, 'operator_console_gateway_bridge_credential_required');
-      audit({ schema: 'narada.operator_console_remote_gateway.audit.v1', event: 'request_refused', method, path, status: 401, reason: 'operator_console_gateway_bridge_credential_required', occurred_at: now() });
+    const credential = authorizeCredential(req, bridgeToken, hostGatewayToken);
+    if (!credential.ok) {
+      refuseUpgrade(client, 401, credential.reason);
+      audit({ schema: 'narada.operator_console_remote_gateway.audit.v1', event: 'request_refused', method, path, status: 401, reason: credential.reason, occurred_at: now() });
       return;
     }
     let policy: readonly OperatorConsoleHttpRouteParityEntry[];
@@ -381,8 +390,9 @@ export function createOperatorConsoleRemoteGateway(
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? `${host}:${port}`}`);
     const method = req.method ?? 'GET';
     const path = requestUrl.pathname;
-    if (!constantTimeEqual(readBridgeToken(req), bridgeToken)) {
-      refusal(res, 401, 'operator_console_gateway_bridge_credential_required', method, path);
+    const credential = authorizeCredential(req, bridgeToken, hostGatewayToken);
+    if (!credential.ok) {
+      refusal(res, 401, credential.reason, method, path);
       return;
     }
     if (path === '/health' && method === 'GET') {
@@ -494,9 +504,20 @@ function isSafePath(pathname: string): boolean {
   return !decoded.split('/').some((segment) => segment === '.' || segment === '..');
 }
 
-function readBridgeToken(req: IncomingMessage): string {
-  const value = req.headers[BRIDGE_TOKEN_HEADER];
-  return typeof value === 'string' ? value : '';
+function authorizeCredential(
+  req: IncomingMessage,
+  bridgeToken: string,
+  hostGatewayToken: string | null,
+): { ok: true; class: 'bridge_compatibility' | 'dedicated_host_gateway' } | { ok: false; reason: string } {
+  const hostQualified = Boolean(readHeader(req, HOST_ID_HEADER) || readHeader(req, HOST_INSTANCE_ID_HEADER));
+  if (hostQualified && hostGatewayToken !== null) {
+    return constantTimeEqual(readHeader(req, HOST_GATEWAY_TOKEN_HEADER) ?? '', hostGatewayToken)
+      ? { ok: true, class: 'dedicated_host_gateway' }
+      : { ok: false, reason: 'operator_console_gateway_host_credential_required' };
+  }
+  return constantTimeEqual(readHeader(req, BRIDGE_TOKEN_HEADER) ?? '', bridgeToken)
+    ? { ok: true, class: 'bridge_compatibility' }
+    : { ok: false, reason: 'operator_console_gateway_bridge_credential_required' };
 }
 
 function readHeader(req: IncomingMessage, name: string): string | undefined {

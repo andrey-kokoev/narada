@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { MailboxContextStrategy } from "../../../src/foreman/mailbox/context-strategy.js";
 import {
   AdmittedMailContextStrategy,
+  evaluateMailFactAdmission,
   TimerContextStrategy,
   CampaignRequestContextFormation,
   OperationIntakeContextFormation,
@@ -334,6 +335,29 @@ describe("AdmittedMailContextStrategy", () => {
 
     const contexts = strategy.formContexts(facts, "scope-1");
     expect(contexts).toHaveLength(0);
+  });
+
+  it("returns a stable mechanical rejection reason and bounded evidence", () => {
+    const fact = {
+      ...makeNormalizedMailFact("conv-reason", "rec-reason", "person@example.net", {
+        folderRefs: ["inbox"],
+      }),
+      created_at: new Date().toISOString(),
+    } as Fact;
+
+    const decision = evaluateMailFactAdmission(fact, {
+      included_folder_refs: ["inbox"],
+      allowed_sender_domains: ["company.com"],
+      unknown_sender_behavior: "ignore",
+    });
+
+    expect(decision).toEqual({
+      admitted: false,
+      reason: "sender_not_allowed",
+      fact_type: "mail.message.discovered",
+      folder_refs: ["inbox"],
+      sender_email: "person@example.net",
+    });
   });
 });
 

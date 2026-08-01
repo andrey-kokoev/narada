@@ -90,6 +90,7 @@ export function resolveAttachConfig(
     ? buildAgentWebUiCloudflareAuthorityConfig({
       session_id: cloudflareAuthoritySessionId,
       api_base_url: cloudflareApiBaseUrl,
+      browser_token_fingerprint: browserToken,
     }) as unknown as RemoteConfig
     : null;
   const cloudflareConfig: RemoteConfig | null = cloudflareProjectionId && cloudflareApiBaseUrl

@@ -10,9 +10,7 @@ export interface OperatorConsoleMirrorDeployInput {
   gateway_token?: string;
   bridge_token?: string;
   gateway_transport?: string;
-  access_required?: string | boolean;
-  access_team_domain?: string;
-  access_audience?: string;
+  operator_console_shared_secret?: string;
 }
 
 export interface OperatorConsoleMirrorDeployPlan {
@@ -40,9 +38,7 @@ export function operatorConsoleMirrorDeployInputFromEnv(
     gateway_token: env.OPERATOR_CONSOLE_GATEWAY_TOKEN,
     bridge_token: env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN,
     gateway_transport: env.OPERATOR_CONSOLE_GATEWAY_TRANSPORT ?? 'public-tunnel',
-    access_required: env.OPERATOR_CONSOLE_ACCESS_REQUIRED ?? 'true',
-    access_team_domain: env.OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN,
-    access_audience: env.OPERATOR_CONSOLE_ACCESS_AUDIENCE,
+    operator_console_shared_secret: env.NARADA_OPERATOR_CONSOLE_SHARED_SECRET,
   };
 }
 
@@ -60,10 +56,7 @@ export function buildOperatorConsoleMirrorDeployPlan(
   if (gatewayOrigin && pinnedOrigin && gatewayOrigin !== pinnedOrigin) {
     errors.push('gateway_url_and_origin_pin_must_match');
   }
-  const accessTeamDomain = parseOrigin(input.access_team_domain, 'access_team_domain', errors, false);
-  const accessAudience = input.access_audience?.trim();
-  if (!accessAudience) errors.push('access_audience_required');
-  if (!isTrue(input.access_required)) errors.push('access_required_must_be_true');
+  if (!input.operator_console_shared_secret?.trim()) errors.push('operator_console_shared_secret_required');
   if (!input.gateway_token?.trim()) errors.push('gateway_token_required');
   if (!input.bridge_token?.trim()) errors.push('bridge_token_required');
   if (input.gateway_token?.trim() && input.bridge_token?.trim() && input.gateway_token.trim() !== input.bridge_token.trim()) {
@@ -75,11 +68,8 @@ export function buildOperatorConsoleMirrorDeployPlan(
       OPERATOR_CONSOLE_GATEWAY_URL: gatewayOrigin as string,
       OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: pinnedOrigin as string,
       OPERATOR_CONSOLE_GATEWAY_TRANSPORT: gatewayTransport,
-      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true',
-      OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN: accessTeamDomain as string,
-      OPERATOR_CONSOLE_ACCESS_AUDIENCE: accessAudience as string,
     },
-    secret_names: ['OPERATOR_CONSOLE_GATEWAY_TOKEN'],
+    secret_names: ['NARADA_OPERATOR_CONSOLE_SHARED_SECRET', 'OPERATOR_CONSOLE_GATEWAY_TOKEN'],
   };
 }
 
@@ -92,7 +82,10 @@ export async function deployOperatorConsoleMirror(
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'narada-operator-console-mirror-'));
   const secretsFile = join(temporaryRoot, 'secrets.json');
   try {
-    await writeFile(secretsFile, `${JSON.stringify({ OPERATOR_CONSOLE_GATEWAY_TOKEN: input.gateway_token })}\n`, { encoding: 'utf8', mode: 0o600 });
+    await writeFile(secretsFile, `${JSON.stringify({
+      NARADA_OPERATOR_CONSOLE_SHARED_SECRET: input.operator_console_shared_secret,
+      OPERATOR_CONSOLE_GATEWAY_TOKEN: input.gateway_token,
+    })}\n`, { encoding: 'utf8', mode: 0o600 });
     const command = options.command ?? (process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm');
     const args = ['exec', 'wrangler', 'deploy', '--config', 'wrangler.toml', '--keep-vars'];
     for (const [key, value] of Object.entries(plan.variables)) args.push('--var', `${key}:${value}`);
@@ -122,10 +115,6 @@ function parseOrigin(value: string | undefined, field: string, errors: string[],
     errors.push(`${field}_must_be_https_origin`);
     return null;
   }
-}
-
-function isTrue(value: string | boolean | undefined): boolean {
-  return value === true || value === 'true';
 }
 
 function runChild(command: string, args: string[], cwd: string): Promise<void> {

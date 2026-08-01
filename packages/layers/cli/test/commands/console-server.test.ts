@@ -323,6 +323,8 @@ describe('console server', () => {
       expect(parity.routes).toEqual(expect.arrayContaining([
         expect.objectContaining({ routeId: 'operator-console.registry-apply', method: 'POST', disposition: 'proxy' }),
         expect.objectContaining({ routeId: 'operator-console.workspace-route-directory', method: 'GET', disposition: 'proxy' }),
+        expect.objectContaining({ routeId: 'operator-console.host-fleet-lifecycle', method: 'POST', disposition: 'local-only' }),
+        expect.objectContaining({ routeId: 'operator-console.host-fleet-enrollment', method: 'POST', disposition: 'local-only' }),
       ]));
 
       const ingress = await fetch(url, { redirect: 'manual' });
@@ -1354,6 +1356,12 @@ describe('console server', () => {
           const request = new Request(String(input), init);
           const hostId = request.headers.get('x-narada-host-id') ?? 'unknown';
           assert.equal(request.headers.get('x-narada-operator-console-bridge-token'), hostId === 'zima-board-2' ? 'zima-token' : 'desktop-token');
+          if (new URL(request.url).pathname === '/health') {
+            return new Response(JSON.stringify({
+              schema: 'narada.operator_console_remote_gateway.health.v1',
+              status: 'healthy',
+            }), { status: 200, headers: { 'content-type': 'application/json' } });
+          }
           const sessionId = sessionsByHost.get(hostId);
           return new Response(JSON.stringify({
             schema: 'narada.operator_console.agent_sessions.v1',
@@ -1390,6 +1398,125 @@ describe('console server', () => {
         const partialResponse = await fetch(`${url}/console/hosts/api/sessions?host_id=zima-board-2`);
         expect(partialResponse.status).toBe(400);
         expect((await partialResponse.json() as { refusals: string[] }).refusals).toContain('host_session_filter_requires_host_id_and_instance_id');
+
+        const healthResponse = await fetch(`${url}/console/hosts/api/zima-board-2/zima-instance/health`);
+        const healthBody = await healthResponse.json() as { schema: string; status: string; host: { host_id: string; host_instance_id: string } };
+        expect(healthResponse.status).toBe(200);
+        expect(healthBody.schema).toBe('narada.host_fleet.gateway_health.v1');
+        expect(healthBody.status).toBe('online');
+        expect(healthBody.host).toEqual({ host_id: 'zima-board-2', host_instance_id: 'zima-instance' });
+
+        const observationsResponse = await fetch(`${url}/console/hosts/api/observations?host_id=zima-board-2&host_instance_id=zima-instance`);
+        const observationsBody = await observationsResponse.json() as {
+          schema: string;
+          status: string;
+          observations: Array<Record<string, unknown>>;
+        };
+        expect(observationsResponse.status).toBe(200);
+        expect(observationsBody.schema).toBe('narada.operator_console.host_fleet_observations.v1');
+        expect(observationsBody.status).toBe('success');
+        expect(observationsBody.observations.length).toBeGreaterThan(0);
+        expect(observationsBody.observations[0]).toMatchObject({
+          host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' },
+          method: 'GET',
+        });
+        expect(observationsBody.observations[0]).not.toHaveProperty('credential_ref');
+
+        const preflightQuery = new URLSearchParams({
+          host_id: 'zima-board-2',
+          host_instance_id: 'zima-instance',
+          operation: 'revoke',
+          expected_revision: '1',
+          request_id: 'host-revoke-preflight-1',
+          confirmation: 'zima-board-2@zima-instance',
+        });
+        const preflightResponse = await fetch(`${url}/console/hosts/api/lifecycle/preflight?${preflightQuery}`);
+        const preflightBody = await preflightResponse.json() as { schema: string; status: string; mutation_performed: boolean; refusals: string[] };
+        expect(preflightResponse.status).toBe(200);
+        expect(preflightBody.schema).toBe('narada.host_fleet.lifecycle_preflight.v1');
+        expect(preflightBody.status).toBe('ready');
+        expect(preflightBody.mutation_performed).toBe(false);
+
+        const staleQuery = new URLSearchParams({
+          ...Object.fromEntries(preflightQuery.entries()),
+          expected_revision: '2',
+          request_id: 'host-revoke-preflight-stale',
+        });
+        const staleResponse = await fetch(`${url}/console/hosts/api/lifecycle/preflight?${staleQuery}`);
+        const staleBody = await staleResponse.json() as { status: string; mutation_performed: boolean; refusals: string[] };
+        expect(staleResponse.status).toBe(409);
+        expect(staleBody.status).toBe('refused');
+        expect(staleBody.mutation_performed).toBe(false);
+        expect(staleBody.refusals).toContain('host_revision_conflict');
+
+        const lifecycleIntent = {
+          schema: 'narada.host_fleet.lifecycle_intent.v1',
+          request_id: 'host-revoke-1',
+          operation: 'revoke',
+          host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' },
+          expected_revision: 1,
+          confirmation: 'zima-board-2@zima-instance',
+          reason: 'operator_test',
+        };
+        const unconfirmedLifecycle = await httpPost(`${url}/console/hosts/api/lifecycle`, { intent: lifecycleIntent });
+        expect(unconfirmedLifecycle.status).toBe(403);
+        expect((unconfirmedLifecycle.body as { mutation_performed: boolean }).mutation_performed).toBe(false);
+        expect(hostRegistry.getHost({ host_id: 'zima-board-2', host_instance_id: 'zima-instance' })?.lifecycle_state).toBe('pending');
+
+        const oversizedActor = await httpPost(`${url}/console/hosts/api/lifecycle`, {
+          intent: lifecycleIntent,
+          operator_confirmed: true,
+          actor: 'x'.repeat(129),
+        });
+        expect(oversizedActor.status).toBe(403);
+        expect(hostRegistry.getHost({ host_id: 'zima-board-2', host_instance_id: 'zima-instance' })?.lifecycle_state).toBe('pending');
+
+        const appliedLifecycle = await httpPost(`${url}/console/hosts/api/lifecycle`, {
+          intent: lifecycleIntent,
+          operator_confirmed: true,
+          actor: 'browser-operator',
+        });
+        expect(appliedLifecycle.status).toBe(200);
+        expect(appliedLifecycle.body).toMatchObject({ status: 'applied', mutation_performed: true, revision: 2 });
+        expect(hostRegistry.getHost({ host_id: 'zima-board-2', host_instance_id: 'zima-instance' })?.lifecycle_state).toBe('revoked');
+
+        const replayedLifecycle = await httpPost(`${url}/console/hosts/api/lifecycle`, {
+          intent: lifecycleIntent,
+          operator_confirmed: true,
+          actor: 'different-browser-operator',
+        });
+        expect(replayedLifecycle.status).toBe(200);
+        expect(replayedLifecycle.body).toMatchObject({ status: 'replayed', mutation_performed: false, revision: 2 });
+
+        const enrollmentIntent = {
+          schema: 'narada.host_fleet.enrollment_intent.v1',
+          request_id: 'host-enrollment-1',
+          host: {
+            host_id: 'zima-board-3',
+            host_instance_id: 'zima-instance-new',
+            display_name: 'ZimaBoard 3',
+            platform: 'linux',
+            gateway: {
+              endpoint: 'http://127.0.0.1:61731',
+              transport: 'ssh-tunnel',
+              admitted_paths: ['/health', '/console/routes'],
+            },
+            credential_ref: 'secret://narada/zima-board-3-gateway',
+            admitted_sites: ['sonar'],
+          },
+          expected_revision: null,
+          allow_reenrollment: false,
+          confirmation: 'zima-board-3@zima-instance-new',
+        };
+        const appliedEnrollment = await httpPost(`${url}/console/hosts/api/enrollment`, {
+          intent: enrollmentIntent,
+          operator_confirmed: true,
+          actor: 'browser-operator',
+        });
+        expect(appliedEnrollment.status).toBe(200);
+        expect(appliedEnrollment.body).toMatchObject({ status: 'applied', mutation_performed: true, revision: 1 });
+        expect(JSON.stringify(appliedEnrollment.body)).not.toContain('secret://narada/zima-board-3-gateway');
+        expect(hostRegistry.getHost({ host_id: 'zima-board-3', host_instance_id: 'zima-instance-new' })?.lifecycle_state).toBe('pending');
       } finally {
         await server.stop();
         hostRegistry.close();

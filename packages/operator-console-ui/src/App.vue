@@ -8,6 +8,7 @@ import AgentSessionsPage from './pages/AgentSessionsPage.vue';
 import SiteAgentsPage from './pages/SiteAgentsPage.vue';
 import SiteRegistryMutationPage from './pages/SiteRegistryMutationPage.vue';
 import SiteRegistryPage from './pages/SiteRegistryPage.vue';
+import HostFleetPage from './pages/HostFleetPage.vue';
 import { resolveOperatorConsoleRoute } from './console/routes';
 import {
   createOperatorWorkspaceRouteDirectoryState,
@@ -20,6 +21,7 @@ interface OperatorConsoleRuntimeConfig {
     endpoint?: string | null;
     projectionId?: string | null;
     browserToken?: string | null;
+    timeoutMs?: number | null;
   } | null;
 }
 
@@ -41,6 +43,7 @@ const routeDirectory = createOperatorWorkspaceRouteDirectoryState(createOperator
   {
     projectionId: runtimeConfig.routeDirectory?.projectionId,
     browserToken: runtimeConfig.routeDirectory?.browserToken,
+    timeoutMs: runtimeConfig.routeDirectory?.timeoutMs ?? undefined,
   },
 ));
 provideOperatorWorkspaceRouteDirectory(routeDirectory);
@@ -76,6 +79,7 @@ onUnmounted(() => {
 <template>
   <OperatorConsoleLoading v-if="routeDirectory.loading.value && !routeDirectory.directory.value && !routeDirectory.hasAttempted.value" />
   <SiteAgentsPage v-else-if="route.kind === 'site-agents'" />
+  <HostFleetPage v-else-if="route.kind === 'host-fleet'" />
   <SiteRegistryPage v-else-if="route.kind === 'site-registry'" />
   <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-add'" mode="add" />
   <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-manage'" mode="manage" />
