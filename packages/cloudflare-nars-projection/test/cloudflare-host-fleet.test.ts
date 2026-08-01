@@ -263,6 +263,51 @@ describe('Cloudflare Host Fleet projection', () => {
     expect(JSON.stringify(auditBody)).not.toContain('zima-secret');
   });
 
+  it('bounds audit retention, deduplicates HostKey request IDs, and exports newest first', async () => {
+    const state = new CloudflareHostFleetAuditState(new MemoryDurableObjectState());
+    const observations = Array.from({ length: 10_005 }, (_, index) => ({
+      schema: 'narada.cloudflare.host_fleet.gateway_request_observation.v1',
+      request_id: `retention-${index}`,
+      host: { host_id: 'zima-board-2', host_instance_id: 'zima-instance' },
+      method: 'GET',
+      path: '/health',
+      status: 200,
+      outcome: 'success',
+      duration_ms: 1,
+      reason: null,
+      observed_at: new Date(Date.UTC(2026, 6, 31, 12, 0, index)).toISOString(),
+    }));
+    const stored = await state.fetch(new Request('https://host-fleet-audit.internal/internal/host-fleet/audit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ observations }),
+    }));
+    expect(stored.status).toBe(200);
+    expect(await stored.json()).toMatchObject({ status: 'stored', count: 10_000 });
+
+    const duplicate = await state.fetch(new Request('https://host-fleet-audit.internal/internal/host-fleet/audit', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ observations: [observations.at(-1)] }),
+    }));
+    expect(duplicate.status).toBe(200);
+
+    const exported = await state.fetch(new Request('https://host-fleet-audit.internal/internal/host-fleet/audit?limit=1000'));
+    const body = await exported.json() as {
+      count: number;
+      retention_limit: number;
+      metrics: { total: number; oldest_observed_at: string | null; newest_observed_at: string | null };
+      observations: Array<{ request_id: string }>;
+    };
+    expect(body.count).toBe(1_000);
+    expect(body.retention_limit).toBe(10_000);
+    expect(body.metrics.total).toBe(10_000);
+    expect(body.metrics.oldest_observed_at).toBe(observations[5]?.observed_at);
+    expect(body.metrics.newest_observed_at).toBe(observations.at(-1)?.observed_at);
+    expect(body.observations[0]?.request_id).toBe('retention-10004');
+    expect(body.observations.at(-1)?.request_id).toBe('retention-9005');
+  });
+
   it('keeps session discovery and target resolution host-qualified', async () => {
     const env = environment();
     const sessions = await handleCloudflareHostFleetRequest(
