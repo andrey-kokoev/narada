@@ -1,17 +1,19 @@
 import { computed, onMounted, ref, type Ref } from 'vue';
 import type {
   HostFleetEnrollmentIntent,
+  HostFleetLaunchIntent,
   HostFleetLifecycleOperation,
 } from '@narada-core/host-fleet/contract';
 import {
   createHostFleetAdapter,
   type HostFleetClient,
+  type HostFleetLaunchPreflight,
   type HostFleetLifecyclePreflight,
   type HostFleetMutationResult,
   type HostFleetRecord,
 } from '../adapter';
 import type { HostFleetMutationScope } from '../transport';
-import { createHostFleetLifecycleIntent } from '../workflows';
+import { createHostFleetLaunchIntent, createHostFleetLifecycleIntent, type HostFleetLaunchDraft } from '../workflows';
 import { useHostFleetSession, type UseHostFleetSessionState } from './useHostFleetSession';
 
 export interface UseHostFleetState extends UseHostFleetSessionState {
@@ -30,13 +32,18 @@ export interface UseHostFleetState extends UseHostFleetSessionState {
   preflightBusy: Ref<boolean>;
   preflightError: Ref<string | null>;
   lifecyclePreflight: Ref<HostFleetLifecyclePreflight | null>;
+  launchPreflight: Ref<HostFleetLaunchPreflight | null>;
+  launchPreflightError: Ref<string | null>;
   createLifecycleIntent: (host: HostFleetRecord, operation: HostFleetLifecycleOperation, reason: string) => ReturnType<typeof createHostFleetLifecycleIntent>;
+  createLaunchIntent: (host: HostFleetRecord, draft: HostFleetLaunchDraft) => ReturnType<typeof createHostFleetLaunchIntent>;
   preflightLifecycle: (intent: ReturnType<typeof createHostFleetLifecycleIntent>) => Promise<HostFleetLifecyclePreflight | null>;
+  preflightLaunch: (intent: ReturnType<typeof createHostFleetLaunchIntent>) => Promise<HostFleetLaunchPreflight | null>;
   applyLifecycleIntent: (intent: ReturnType<typeof createHostFleetLifecycleIntent>) => Promise<void>;
   applyLifecycle: (host: HostFleetRecord, operation: HostFleetLifecycleOperation, reason: string) => Promise<void>;
   applyEnrollment: (intent: HostFleetEnrollmentIntent) => Promise<void>;
   clearMutationFeedback: () => void;
   clearLifecyclePreflight: () => void;
+  clearLaunchPreflight: () => void;
   load: () => Promise<void>;
 }
 
@@ -55,6 +62,8 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
   const preflightBusy = ref(false);
   const preflightError = ref<string | null>(null);
   const lifecyclePreflight = ref<HostFleetLifecyclePreflight | null>(null);
+  const launchPreflight = ref<HostFleetLaunchPreflight | null>(null);
+  const launchPreflightError = ref<string | null>(null);
   const session = useHostFleetSession(client);
 
   function clearMutationFeedback(): void {
@@ -65,6 +74,11 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
   function clearLifecyclePreflight(): void {
     preflightError.value = null;
     lifecyclePreflight.value = null;
+  }
+
+  function clearLaunchPreflight(): void {
+    launchPreflight.value = null;
+    launchPreflightError.value = null;
   }
 
   function hostConsolePath(host: Pick<HostFleetRecord, 'hostId' | 'hostInstanceId'>): string | null {
@@ -91,6 +105,10 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
     return createHostFleetLifecycleIntent(host, operation, reason);
   }
 
+  function createLaunchIntent(host: HostFleetRecord, draft: HostFleetLaunchDraft) {
+    return createHostFleetLaunchIntent(host, draft);
+  }
+
   async function preflightLifecycle(intent: ReturnType<typeof createHostFleetLifecycleIntent>): Promise<HostFleetLifecyclePreflight | null> {
     preflightBusy.value = true;
     clearLifecyclePreflight();
@@ -105,6 +123,26 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
       return result;
     } catch (cause) {
       preflightError.value = cause instanceof Error ? cause.message : 'Host lifecycle preflight failed.';
+      return null;
+    } finally {
+      preflightBusy.value = false;
+    }
+  }
+
+  async function preflightLaunch(intent: ReturnType<typeof createHostFleetLaunchIntent>): Promise<HostFleetLaunchPreflight | null> {
+    preflightBusy.value = true;
+    clearLaunchPreflight();
+    try {
+      if (!client.preflightLaunch) {
+        launchPreflightError.value = 'Host launch planning is unavailable on this operator surface.';
+        return null;
+      }
+      const result = await client.preflightLaunch(intent);
+      launchPreflight.value = result;
+      if (result.status === 'refused') launchPreflightError.value = result.refusals.join(', ') || 'Host launch preflight was refused.';
+      return result;
+    } catch (cause) {
+      launchPreflightError.value = cause instanceof Error ? cause.message : 'Host launch preflight failed.';
       return null;
     } finally {
       preflightBusy.value = false;
@@ -168,13 +206,18 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
     preflightBusy,
     preflightError,
     lifecyclePreflight,
+    launchPreflight,
+    launchPreflightError,
     createLifecycleIntent,
+    createLaunchIntent,
     preflightLifecycle,
+    preflightLaunch,
     applyLifecycleIntent,
     applyLifecycle,
     applyEnrollment,
     clearMutationFeedback,
     clearLifecyclePreflight,
+    clearLaunchPreflight,
     load,
     ...session,
   };

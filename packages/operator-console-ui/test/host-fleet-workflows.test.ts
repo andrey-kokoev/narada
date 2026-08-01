@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createHostFleetEnrollmentIntent,
+  createHostFleetLaunchIntent,
   createHostFleetLifecycleIntent,
   hostFleetEnrollmentDraftFingerprint,
 } from '../src/host-fleet/workflows.ts';
@@ -30,6 +31,32 @@ test('host fleet lifecycle workflow is exact-host and revision fenced', () => {
   assert.equal(intent.expected_revision, 7);
   assert.equal(intent.confirmation, 'zima-board-2@instance-z');
   assert.equal(intent.reason, 'operator test');
+});
+
+test('host fleet launch planning preserves exact HostKey and revision fencing', () => {
+  const intent = createHostFleetLaunchIntent({
+    hostId: 'desktop-sunroom-2',
+    hostInstanceId: 'desktop-instance-2026-07',
+    displayName: 'Desktop Sunroom 2',
+    platform: 'windows',
+    naradaVersion: '0.1.0',
+    transport: 'loopback',
+    admittedPathCount: 4,
+    capabilities: ['sessions', 'events'],
+    admittedSites: ['sonar'],
+    lifecycleState: 'active',
+    healthStatus: 'online',
+    healthObservedAt: null,
+    healthDetail: null,
+    lastSeenAt: null,
+    revision: 12,
+  }, { siteId: 'sonar', agentId: 'resident', operatorSurface: 'agent-web-ui' });
+
+  assert.deepEqual(intent.host, { host_id: 'desktop-sunroom-2', host_instance_id: 'desktop-instance-2026-07' });
+  assert.equal(intent.expected_revision, 12);
+  assert.equal(intent.site_id, 'sonar');
+  assert.equal(intent.operator_surface, 'agent-web-ui');
+  assert.equal(intent.confirmation, 'desktop-sunroom-2@desktop-instance-2026-07');
 });
 
 test('host fleet enrollment workflow carries a credential reference, never a secret', () => {

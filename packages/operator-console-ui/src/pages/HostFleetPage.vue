@@ -2,6 +2,7 @@
 import { computed, reactive, ref, watch } from 'vue';
 import type {
   HostFleetEnrollmentIntent,
+  HostFleetLaunchIntent,
   HostFleetLifecycleOperation,
 } from '@narada-core/host-fleet/contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
@@ -35,6 +36,13 @@ const lifecycleReason = ref('');
 const lifecyclePlan = ref<ReturnType<typeof fleet.createLifecycleIntent> | null>(null);
 const lifecycleConfirmed = ref(false);
 const lifecyclePlanError = ref<string | null>(null);
+const launchPlan = ref<HostFleetLaunchIntent | null>(null);
+const launchPlanError = ref<string | null>(null);
+const launchDraft = reactive({
+  siteId: '',
+  agentId: 'resident',
+  operatorSurface: 'agent-web-ui',
+});
 const enrollmentPlan = ref<HostFleetEnrollmentIntent | null>(null);
 const enrollmentConfirmed = ref(false);
 const enrollmentError = ref<string | null>(null);
@@ -89,7 +97,25 @@ function selectHost(hostId: string, hostInstanceId: string): void {
   lifecyclePlanError.value = null;
   lifecycleReason.value = '';
   fleet.clearLifecyclePreflight();
+  fleet.clearLaunchPreflight();
+  launchPlan.value = null;
+  launchPlanError.value = null;
   fleet.clearMutationFeedback();
+}
+
+async function planLaunch(): Promise<void> {
+  const host = selectedHostRecord.value;
+  launchPlan.value = null;
+  launchPlanError.value = null;
+  fleet.clearLaunchPreflight();
+  if (!host) return;
+  try {
+    const intent = fleet.createLaunchIntent(host, launchDraft);
+    const result = await fleet.preflightLaunch(intent);
+    if (result?.status === 'ready') launchPlan.value = intent;
+  } catch (cause) {
+    launchPlanError.value = cause instanceof Error ? cause.message : 'Launch plan is incomplete.';
+  }
 }
 
 async function planLifecycle(operation: HostFleetLifecycleOperation): Promise<void> {
@@ -281,6 +307,27 @@ function submitOnEnter(event: KeyboardEvent): void {
           <p>Use the User Site authority console for enrollment, re-enrollment, revoke, or retire. This projection can inspect hosts, sessions, health, and events only.</p>
         </section>
 
+        <section v-if="selectedHostRecord" class="workflow-panel launch-planning" aria-label="Exact host launch planning">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Exact HostKey planning</span><h3>Plan a runtime launch</h3><small>This is a non-mutating revision and Site-admission check. Host launch execution remains an explicit authority capability.</small></div>
+            <span class="status" data-status="connected">preflight only</span>
+          </div>
+          <form class="inline-form" @submit.prevent="planLaunch">
+            <label class="field"><span>Site ID</span><input v-model="launchDraft.siteId" required autocomplete="off" :placeholder="selectedHostRecord.admittedSites[0] ?? 'sonar'" /></label>
+            <label class="field"><span>Agent ID</span><input v-model="launchDraft.agentId" required autocomplete="off" placeholder="resident" /></label>
+            <label class="field"><span>Operator surface</span><input v-model="launchDraft.operatorSurface" autocomplete="off" placeholder="agent-web-ui" /></label>
+            <div class="workflow-actions"><button class="action" type="submit" :disabled="fleet.preflightBusy.value || selectedHostRecord.lifecycleState === 'revoked' || selectedHostRecord.lifecycleState === 'retired'">Plan exact launch</button></div>
+          </form>
+          <p v-if="launchPlanError || fleet.launchPreflightError.value" class="notice error" role="alert">{{ launchPlanError ?? fleet.launchPreflightError.value }}</p>
+          <p v-if="fleet.launchPreflight.value" class="notice workflow-check" :class="{ error: fleet.launchPreflight.value.status === 'refused' }" role="status">
+            Launch authority preflight: {{ fleet.launchPreflight.value.status }}<span v-if="fleet.launchPreflight.value.currentRevision !== null"> · current revision {{ fleet.launchPreflight.value.currentRevision }}</span><span v-if="fleet.launchPreflight.value.currentLifecycleState"> · {{ fleet.launchPreflight.value.currentLifecycleState }}</span><span v-if="fleet.launchPreflight.value.refusals.length"> · {{ fleet.launchPreflight.value.refusals.join(', ') }}</span>
+          </p>
+          <div v-if="launchPlan" class="plan-card">
+            <div><span class="status" data-status="success">preflight ready</span><strong>{{ launchPlan.site_id }} / {{ launchPlan.agent_id }} on {{ launchPlan.host.host_id }}@{{ launchPlan.host.host_instance_id }}</strong><small>Surface {{ launchPlan.operator_surface ?? 'registry default' }} · revision {{ launchPlan.expected_revision }} · request {{ launchPlan.request_id }}</small></div>
+            <p class="workflow-help">The exact-host launch route is intentionally not enabled in this projection yet. Use this plan as the reviewed input for the future host-authority execution step.</p>
+          </div>
+        </section>
+
         <section v-if="fleet.aggregateObserving.value" class="aggregate-panel" aria-label="Aggregate fleet observation">
           <div class="panel-heading">
             <div><span class="eyebrow">Read-only aggregate observation</span><h3>All active sessions</h3><small>Each event keeps its HostKey and session cursor. No global event sequence is synthesized.</small></div>
@@ -355,6 +402,7 @@ button:disabled { cursor: not-allowed; opacity: .6; }
 .notice.success { color: var(--operator); background: var(--activity-chip-bg); }
 .notice.warning, .empty { color: var(--muted); background: var(--surface-muted); }
 .authority-panel { overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
+.workflow-panel { overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
 .projection-notice { border-color: var(--line); }
 .projection-notice > p { margin: 0; padding: 12px 16px 15px; color: var(--muted); font-size: 13px; line-height: 1.45; }
 .workflow-block, .workflow-details { padding: 14px 16px; border-bottom: 1px solid var(--line); }

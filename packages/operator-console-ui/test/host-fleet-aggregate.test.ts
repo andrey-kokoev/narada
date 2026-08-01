@@ -91,3 +91,48 @@ test('aggregate host observation fans out exact targets and keeps independent cu
     'zima-board-2@zima-instance:zima-session',
   ]);
 });
+
+test('selected host session input is isolated to the attached HostKey', async () => {
+  const handlers = new Map<string, { open?: () => void; message?: (payload: unknown) => void; close?: (message: string) => void }>();
+  const sent: Array<{ target: string; payload: any }> = [];
+  const closed: string[] = [];
+  const client = {
+    resolveTarget: async (target: any) => ({ status: 'resolved' as const, target, session: null, refusal: null }),
+    openEvents: (target: any, eventHandlers: { open?: () => void; message?: (payload: unknown) => void; close?: (message: string) => void }) => {
+      const key = `${target.hostId}@${target.hostInstanceId}:${target.runtimeSessionId}`;
+      handlers.set(key, eventHandlers);
+      const connection = {
+        readyState: 1,
+        send(payload: any) {
+          sent.push({ target: key, payload });
+          return true;
+        },
+        close() { closed.push(key); },
+      };
+      queueMicrotask(() => eventHandlers.open?.());
+      return connection;
+    },
+  };
+  const state = useHostFleetSession(client as any);
+  const first = session('desktop-sunroom-2', 'desktop-instance', 'desktop-session');
+  const second = session('zima-board-2', 'zima-instance', 'zima-session');
+
+  await state.attach(first);
+  await new Promise((resolve) => setImmediate(resolve));
+  state.input.value = 'message for desktop';
+  state.sendInput();
+  await state.attach(second);
+  await new Promise((resolve) => setImmediate(resolve));
+  state.input.value = 'message for zima';
+  state.sendInput();
+
+  assert.deepEqual(sent.map((entry) => ({ target: entry.target, method: entry.payload.method, message: entry.payload.params?.message })), [
+    { target: 'desktop-sunroom-2@desktop-instance:desktop-session', method: 'session.events.subscribe', message: undefined },
+    { target: 'desktop-sunroom-2@desktop-instance:desktop-session', method: 'conversation.send', message: 'message for desktop' },
+    { target: 'zima-board-2@zima-instance:zima-session', method: 'session.events.subscribe', message: undefined },
+    { target: 'zima-board-2@zima-instance:zima-session', method: 'conversation.send', message: 'message for zima' },
+  ]);
+  assert.deepEqual(closed, ['desktop-sunroom-2@desktop-instance:desktop-session']);
+  assert.equal(handlers.size, 2);
+  state.detach();
+});

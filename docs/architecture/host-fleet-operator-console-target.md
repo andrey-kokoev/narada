@@ -56,9 +56,11 @@ WebSocket protocol. In Cloudflare mode, session discovery fans out only to
 declared registry hosts and returns a canonical host-qualified projection; it
 does not select a host implicitly. The page exposes inventory, exact
 attachment, replay/live observation, explicit read-only aggregate observation
-with per-HostKey cursors, and operator input only. Launch, stop, refresh-health,
-enrollment, and revoke/retire remain governed server operations rather than
-client-only controls. A redacted Cloudflare registry example is checked in at
+with per-HostKey cursors, and operator input only. It also presents a
+revision-checked exact-host launch preflight, but does not execute a host launch
+from the projection. Launch, stop, refresh-health, enrollment, and
+revoke/retire remain governed server operations rather than client-only
+controls. A redacted Cloudflare registry example is checked in at
 `packages/cloudflare-nars-projection/config/host-fleet.registry.example.json`.
 They do not claim that a production host has been enrolled or that the
 physical two-host live test has passed; that test is opt-in through
@@ -300,10 +302,11 @@ secret references and declared metadata, requires `operator_confirmed: true`,
 performs the revision and explicit re-enrollment checks immediately before
 mutation, persists a request-id/hash result, and records the actor/request in
 the audit ledger. It returns the same typed applied/replayed/unchanged/refused
-shape without returning a credential value. The Host Fleet page does not yet
-present the enrollment form; until it does, the CLI remains the ergonomic
-enrollment surface and the HTTP route is an authority contract for trusted
-server-side callers.
+shape without returning a credential value. The Host Fleet page now presents
+the reviewed enrollment form and remains the ergonomic local-authority
+surface; the CLI and HTTP route remain available for trusted server-side
+callers. The browser still carries only the secret reference, never the raw
+credential.
 
 ## Implemented Session and Relay Boundary
 
