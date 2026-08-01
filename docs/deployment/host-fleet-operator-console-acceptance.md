@@ -38,6 +38,7 @@ contain:
 {
   "host_id": "desktop-sunroom-2",
   "host_instance_id": "desktop-instance-YYYY-MM",
+  "platform": "windows",
   "endpoint": "http://127.0.0.1:61730",
   "credential": "<process-local gateway credential>",
   "credential_class": "dedicated_host_gateway",
@@ -47,7 +48,9 @@ contain:
 }
 ```
 
-The second entry uses the Linux host's HostKey and the same `local_port` value.
+The second entry uses `"platform": "linux"`, the Linux host's HostKey, and the
+same `local_port` value. The live lane refuses the fixture unless it contains
+both platforms, distinct HostKeys, and one shared local port.
 The endpoint may be a separately secured tunnel endpoint; it must not be an
 arbitrary browser-supplied URL.
 

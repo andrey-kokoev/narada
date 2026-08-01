@@ -4,10 +4,12 @@ import assert from 'node:assert/strict';
 interface LiveHost {
   host_id: string;
   host_instance_id: string;
+  platform: 'windows' | 'linux';
   endpoint: string;
   credential: string;
   credential_class?: 'bridge_compatibility' | 'dedicated_host_gateway';
   admitted_site: string;
+  local_port: number;
   expected_session_id: string;
 }
 
@@ -19,8 +21,12 @@ function liveHosts(): LiveHost[] {
   return parsed.map((value) => {
     if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('host_fleet_live_e2e_host_invalid');
     const item = value as Record<string, unknown>;
-    for (const key of ['host_id', 'host_instance_id', 'endpoint', 'credential', 'admitted_site']) {
+    for (const key of ['host_id', 'host_instance_id', 'platform', 'endpoint', 'credential', 'admitted_site']) {
       if (typeof item[key] !== 'string' || !item[key]) throw new Error(`host_fleet_live_e2e_${key}_required`);
+    }
+    if (item.platform !== 'windows' && item.platform !== 'linux') throw new Error('host_fleet_live_e2e_platform_invalid');
+    if (!Number.isInteger(item.local_port) || Number(item.local_port) < 1 || Number(item.local_port) > 65535) {
+      throw new Error('host_fleet_live_e2e_local_port_invalid');
     }
     if (item.credential_class !== undefined && item.credential_class !== 'bridge_compatibility' && item.credential_class !== 'dedicated_host_gateway') {
       throw new Error('host_fleet_live_e2e_credential_class_invalid');
@@ -39,6 +45,9 @@ test('live host fleet health and session discovery keeps two physical hosts qual
   const keys = new Set(hosts.map((host) => `${host.host_id}@${host.host_instance_id}`));
   assert.equal(keys.size, hosts.length, 'physical hosts must have distinct HostKeys');
   assert.equal(new Set(hosts.map((host) => host.host_instance_id)).size, hosts.length, 'physical hosts must have distinct instance IDs');
+  assert.ok(hosts.some((host) => host.platform === 'windows'), 'physical acceptance requires a Windows host');
+  assert.ok(hosts.some((host) => host.platform === 'linux'), 'physical acceptance requires a Linux host');
+  assert.equal(new Set(hosts.map((host) => host.local_port)).size, 1, 'physical acceptance requires the same local port on each host');
   const observations = await Promise.all(hosts.map(async (host) => {
     const endpoint = new URL(host.endpoint);
     const endpointPort = endpoint.port
