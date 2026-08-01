@@ -2,14 +2,16 @@ import { computed, onMounted, ref, type Ref } from 'vue';
 import type {
   HostFleetEnrollmentIntent,
   HostFleetLifecycleOperation,
-} from '@narada2/host-fleet/contract';
+} from '@narada-core/host-fleet/contract';
 import {
   createHostFleetAdapter,
   type HostFleetClient,
+  type HostFleetLifecyclePreflight,
   type HostFleetMutationResult,
   type HostFleetRecord,
 } from '../adapter';
 import type { HostFleetMutationScope } from '../transport';
+import { createHostFleetLifecycleIntent } from '../workflows';
 import { useHostFleetSession, type UseHostFleetSessionState } from './useHostFleetSession';
 
 export interface UseHostFleetState extends UseHostFleetSessionState {
@@ -24,14 +26,18 @@ export interface UseHostFleetState extends UseHostFleetSessionState {
   mutationBusy: Ref<boolean>;
   mutationError: Ref<string | null>;
   mutationResult: Ref<HostFleetMutationResult | null>;
+  hostConsolePath: (host: Pick<HostFleetRecord, 'hostId' | 'hostInstanceId'>) => string | null;
+  preflightBusy: Ref<boolean>;
+  preflightError: Ref<string | null>;
+  lifecyclePreflight: Ref<HostFleetLifecyclePreflight | null>;
+  createLifecycleIntent: (host: HostFleetRecord, operation: HostFleetLifecycleOperation, reason: string) => ReturnType<typeof createHostFleetLifecycleIntent>;
+  preflightLifecycle: (intent: ReturnType<typeof createHostFleetLifecycleIntent>) => Promise<HostFleetLifecyclePreflight | null>;
+  applyLifecycleIntent: (intent: ReturnType<typeof createHostFleetLifecycleIntent>) => Promise<void>;
   applyLifecycle: (host: HostFleetRecord, operation: HostFleetLifecycleOperation, reason: string) => Promise<void>;
   applyEnrollment: (intent: HostFleetEnrollmentIntent) => Promise<void>;
+  clearMutationFeedback: () => void;
+  clearLifecyclePreflight: () => void;
   load: () => Promise<void>;
-}
-
-function requestId(prefix: string): string {
-  const randomUuid = globalThis.crypto?.randomUUID?.();
-  return randomUuid ? `${prefix}:${randomUuid}` : `${prefix}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function useHostFleet(client: HostFleetClient = createHostFleetAdapter()): UseHostFleetState {
@@ -46,7 +52,24 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
   const mutationBusy = ref(false);
   const mutationError = ref<string | null>(null);
   const mutationResult = ref<HostFleetMutationResult | null>(null);
+  const preflightBusy = ref(false);
+  const preflightError = ref<string | null>(null);
+  const lifecyclePreflight = ref<HostFleetLifecyclePreflight | null>(null);
   const session = useHostFleetSession(client);
+
+  function clearMutationFeedback(): void {
+    mutationError.value = null;
+    mutationResult.value = null;
+  }
+
+  function clearLifecyclePreflight(): void {
+    preflightError.value = null;
+    lifecyclePreflight.value = null;
+  }
+
+  function hostConsolePath(host: Pick<HostFleetRecord, 'hostId' | 'hostInstanceId'>): string | null {
+    return client.hostConsolePath?.(host) ?? null;
+  }
 
   async function runMutation(action: () => Promise<HostFleetMutationResult>): Promise<void> {
     mutationBusy.value = true;
@@ -64,25 +87,46 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
     }
   }
 
-  async function applyLifecycle(host: HostFleetRecord, operation: HostFleetLifecycleOperation, reason: string): Promise<void> {
+  function createLifecycleIntent(host: HostFleetRecord, operation: HostFleetLifecycleOperation, reason: string) {
+    return createHostFleetLifecycleIntent(host, operation, reason);
+  }
+
+  async function preflightLifecycle(intent: ReturnType<typeof createHostFleetLifecycleIntent>): Promise<HostFleetLifecyclePreflight | null> {
+    preflightBusy.value = true;
+    clearLifecyclePreflight();
+    try {
+      if (mutationScope.value !== 'local-authority' || !client.preflightLifecycle) {
+        preflightError.value = 'Host lifecycle planning is available only from the local User Site authority console.';
+        return null;
+      }
+      const result = await client.preflightLifecycle(intent);
+      lifecyclePreflight.value = result;
+      if (result.status === 'refused') preflightError.value = result.refusals.join(', ') || 'Host lifecycle preflight was refused.';
+      return result;
+    } catch (cause) {
+      preflightError.value = cause instanceof Error ? cause.message : 'Host lifecycle preflight failed.';
+      return null;
+    } finally {
+      preflightBusy.value = false;
+    }
+  }
+
+  async function applyLifecycleIntent(intent: ReturnType<typeof createHostFleetLifecycleIntent>): Promise<void> {
     if (mutationScope.value !== 'local-authority' || !client.applyLifecycle) {
+      clearMutationFeedback();
       mutationError.value = 'Host lifecycle control is available only from the local User Site authority console.';
       return;
     }
-    const intent = {
-      schema: 'narada.host_fleet.lifecycle_intent.v1' as const,
-      request_id: requestId('host-lifecycle'),
-      operation,
-      host: { host_id: host.hostId, host_instance_id: host.hostInstanceId },
-      expected_revision: host.revision,
-      confirmation: `${host.hostId}@${host.hostInstanceId}`,
-      reason: reason.trim() || null,
-    };
     await runMutation(() => client.applyLifecycle!(intent, 'operator-console.host-fleet'));
+  }
+
+  async function applyLifecycle(host: HostFleetRecord, operation: HostFleetLifecycleOperation, reason: string): Promise<void> {
+    await applyLifecycleIntent(createLifecycleIntent(host, operation, reason));
   }
 
   async function applyEnrollment(intent: HostFleetEnrollmentIntent): Promise<void> {
     if (mutationScope.value !== 'local-authority' || !client.applyEnrollment) {
+      clearMutationFeedback();
       mutationError.value = 'Host enrollment is available only from the local User Site authority console.';
       return;
     }
@@ -120,8 +164,17 @@ export function useHostFleet(client: HostFleetClient = createHostFleetAdapter())
     mutationBusy,
     mutationError,
     mutationResult,
+    hostConsolePath,
+    preflightBusy,
+    preflightError,
+    lifecyclePreflight,
+    createLifecycleIntent,
+    preflightLifecycle,
+    applyLifecycleIntent,
     applyLifecycle,
     applyEnrollment,
+    clearMutationFeedback,
+    clearLifecyclePreflight,
     load,
     ...session,
   };

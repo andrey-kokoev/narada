@@ -1,7 +1,7 @@
 import {
   OPERATOR_CONSOLE_HOSTS_API_PATH,
-} from '@narada2/operator-console-contract';
-import type { HostFleetEnrollmentIntent, HostFleetLifecycleIntent } from '@narada2/host-fleet/contract';
+} from '@narada-core/operator-console-contract';
+import type { HostFleetEnrollmentIntent, HostFleetLifecycleIntent } from '@narada-core/host-fleet/contract';
 import type { HostFleetEventConnection, HostFleetEventHandlers, HostFleetTarget } from './adapter';
 
 export type HostFleetFetch = (input: string, init?: RequestInit) => Promise<Response>;
@@ -16,6 +16,7 @@ export interface HostFleetTransportOptions {
 
 export interface HostFleetTransport {
   mutationScope?: HostFleetMutationScope;
+  hostConsolePath?(host: Pick<HostFleetTarget, 'hostId' | 'hostInstanceId'>): string | null;
   list(): Promise<unknown>;
   sessions?(): Promise<unknown>;
   resolveTarget?(target: HostFleetTarget): Promise<unknown>;
@@ -250,6 +251,10 @@ export function createHostFleetTransport(
 
   return {
     mutationScope: routeShape === 'local-console' ? 'local-authority' : 'projection-only',
+    hostConsolePath(host: Pick<HostFleetTarget, 'hostId' | 'hostInstanceId'>): string | null {
+      if (routeShape !== 'local-console') return null;
+      return `${basePath}/${encodeURIComponent(host.hostId)}/${encodeURIComponent(host.hostInstanceId)}/console/`;
+    },
     async list(): Promise<unknown> {
       return routeShape === 'local-console'
         ? readOverviewWithHealth(await jsonRequest(basePath))

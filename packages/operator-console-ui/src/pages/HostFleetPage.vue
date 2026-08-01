@@ -1,7 +1,16 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { computed, reactive, ref, watch } from 'vue';
+import type {
+  HostFleetEnrollmentIntent,
+  HostFleetLifecycleOperation,
+} from '@narada-core/host-fleet/contract';
 import OperatorConsoleShell from '../components/OperatorConsoleShell.vue';
 import { useHostFleet } from '../host-fleet/composables/useHostFleet';
+import {
+  createHostFleetEnrollmentIntent,
+  hostFleetEnrollmentDraftFingerprint,
+  type HostFleetEnrollmentDraft,
+} from '../host-fleet/workflows';
 
 const fleet = useHostFleet();
 
@@ -20,6 +29,134 @@ function targetLabel(target: { hostId: string; hostInstanceId: string; siteId: s
 }
 
 const selectedHost = computed(() => fleet.sessionsByHost.value.find((host) => hostKey(host) === fleet.selectedHostKey.value) ?? null);
+const selectedHostRecord = computed(() => fleet.hosts.value.find((host) => hostKey(host) === fleet.selectedHostKey.value) ?? null);
+const localAuthority = computed(() => fleet.mutationScope.value === 'local-authority');
+const lifecycleReason = ref('');
+const lifecyclePlan = ref<ReturnType<typeof fleet.createLifecycleIntent> | null>(null);
+const lifecycleConfirmed = ref(false);
+const lifecyclePlanError = ref<string | null>(null);
+const enrollmentPlan = ref<HostFleetEnrollmentIntent | null>(null);
+const enrollmentConfirmed = ref(false);
+const enrollmentError = ref<string | null>(null);
+const enrollmentPlanFingerprint = ref<string | null>(null);
+const enrollmentDraft = reactive<HostFleetEnrollmentDraft>({
+  hostId: '',
+  hostInstanceId: '',
+  displayName: '',
+  platform: 'linux',
+  naradaVersion: '',
+  endpoint: 'http://127.0.0.1:64930',
+  transport: 'ssh-tunnel',
+  admittedPaths: '/health\n/sessions\n/target\n/events',
+  credentialRef: 'env://NARADA_HOST_GATEWAY_TOKEN',
+  capabilities: 'sessions\nevents',
+  admittedSites: '',
+  allowReenrollment: false,
+});
+
+const enrollmentExpectedRevision = computed(() => {
+  const host = fleet.hosts.value.find((candidate) => hostKey(candidate) === `${enrollmentDraft.hostId.trim()}@${enrollmentDraft.hostInstanceId.trim()}`);
+  return host?.revision ?? null;
+});
+
+const lifecyclePlanCurrent = computed(() => {
+  const plan = lifecyclePlan.value;
+  const host = selectedHostRecord.value;
+  return Boolean(
+    plan
+      && host
+      && plan.host.host_id === host.hostId
+      && plan.host.host_instance_id === host.hostInstanceId
+      && plan.expected_revision === host.revision
+      && plan.reason === (lifecycleReason.value.trim() || null),
+  );
+});
+
+const enrollmentPlanCurrent = computed(() => Boolean(
+  enrollmentPlan.value
+    && enrollmentPlanFingerprint.value === hostFleetEnrollmentDraftFingerprint(enrollmentDraft)
+    && enrollmentPlan.value.expected_revision === enrollmentExpectedRevision.value
+));
+
+function mutationSucceeded(status: string | undefined): boolean {
+  return status === 'applied' || status === 'replayed' || status === 'unchanged';
+}
+
+function selectHost(hostId: string, hostInstanceId: string): void {
+  fleet.selectHost(hostId, hostInstanceId);
+  lifecyclePlan.value = null;
+  lifecycleConfirmed.value = false;
+  lifecyclePlanError.value = null;
+  lifecycleReason.value = '';
+  fleet.clearLifecyclePreflight();
+  fleet.clearMutationFeedback();
+}
+
+async function planLifecycle(operation: HostFleetLifecycleOperation): Promise<void> {
+  const host = selectedHostRecord.value;
+  if (!host || !localAuthority.value) return;
+  lifecyclePlan.value = null;
+  lifecycleConfirmed.value = false;
+  lifecyclePlanError.value = null;
+  fleet.clearMutationFeedback();
+  const intent = fleet.createLifecycleIntent(host, operation, lifecycleReason.value);
+  const result = await fleet.preflightLifecycle(intent);
+  if (result?.status === 'ready') {
+    lifecyclePlan.value = intent;
+    lifecycleConfirmed.value = false;
+  } else {
+    lifecyclePlan.value = null;
+  }
+}
+
+async function applyLifecyclePlan(): Promise<void> {
+  if (!lifecyclePlan.value || !lifecycleConfirmed.value) return;
+  if (!lifecyclePlanCurrent.value) {
+    lifecycleConfirmed.value = false;
+    lifecyclePlanError.value = 'The selected host, revision, or reason changed. Review the lifecycle plan again.';
+    return;
+  }
+  lifecyclePlanError.value = null;
+  await fleet.applyLifecycleIntent(lifecyclePlan.value);
+  lifecycleConfirmed.value = false;
+  if (mutationSucceeded(fleet.mutationResult.value?.status)) {
+    lifecyclePlan.value = null;
+    fleet.clearLifecyclePreflight();
+  }
+}
+
+function planEnrollment(): void {
+  enrollmentError.value = null;
+  enrollmentPlan.value = null;
+  enrollmentPlanFingerprint.value = null;
+  enrollmentConfirmed.value = false;
+  fleet.clearMutationFeedback();
+  try {
+    enrollmentPlan.value = createHostFleetEnrollmentIntent(enrollmentDraft, enrollmentExpectedRevision.value);
+    enrollmentPlanFingerprint.value = hostFleetEnrollmentDraftFingerprint(enrollmentDraft);
+  } catch (cause) {
+    enrollmentError.value = cause instanceof Error ? cause.message : 'Enrollment form is incomplete.';
+  }
+}
+
+async function applyEnrollmentPlan(): Promise<void> {
+  if (!enrollmentPlan.value || !enrollmentConfirmed.value) return;
+  if (!enrollmentPlanCurrent.value) {
+    enrollmentConfirmed.value = false;
+    enrollmentError.value = 'The enrollment draft changed. Review the enrollment intent again.';
+    return;
+  }
+  await fleet.applyEnrollment(enrollmentPlan.value);
+  enrollmentConfirmed.value = false;
+  if (mutationSucceeded(fleet.mutationResult.value?.status)) {
+    enrollmentPlan.value = null;
+    enrollmentPlanFingerprint.value = null;
+  }
+}
+
+watch(enrollmentDraft, () => {
+  if (enrollmentPlan.value) enrollmentConfirmed.value = false;
+}, { deep: true });
 
 function submitOnEnter(event: KeyboardEvent): void {
   if (event.shiftKey) return;
@@ -46,6 +183,7 @@ function submitOnEnter(event: KeyboardEvent): void {
         <div class="summary"><span>Registered</span><strong>{{ fleet.count.value }}</strong></div>
         <div class="summary"><span>Online</span><strong>{{ fleet.onlineCount.value }}</strong></div>
         <div class="summary"><span>Selected host</span><strong>{{ fleet.selectedHostKey.value ?? 'None' }}</strong></div>
+        <div class="summary"><span>Registry read</span><strong>{{ formatTimestamp(fleet.generatedAt.value) }}</strong></div>
         <button class="refresh" type="button" :disabled="fleet.loading.value || fleet.sessionsLoading.value" @click="fleet.load">Refresh</button>
         <button class="refresh" type="button" :disabled="fleet.sessionsLoading.value || !fleet.sessionsByHost.value.some((host) => host.sessions.some((session) => session.state !== 'closed' && session.healthStatus !== 'revoked'))" @click="fleet.aggregateObserving.value ? fleet.stopAggregateObservation() : fleet.startAggregateObservation()">
           {{ fleet.aggregateObserving.value ? 'Stop fleet observation' : 'Observe all active sessions' }}
@@ -55,11 +193,14 @@ function submitOnEnter(event: KeyboardEvent): void {
       <p v-if="fleet.error.value" class="notice error" role="alert">{{ fleet.error.value }}</p>
       <p v-if="fleet.sessionsError.value" class="notice error" role="alert">{{ fleet.sessionsError.value }}</p>
       <p v-if="fleet.refusals.value.length" class="notice warning">{{ fleet.refusals.value.join(', ') }}</p>
+      <p v-if="fleet.mutationError.value" class="notice error" role="alert">{{ fleet.mutationError.value }}</p>
+      <p v-if="fleet.mutationResult.value && fleet.mutationResult.value.status !== 'refused'" class="notice success" role="status" aria-live="polite">
+        Host Fleet mutation {{ fleet.mutationResult.value.status }}.
+      </p>
       <p v-if="fleet.loading.value" class="empty">Reading the User Site Host Registry...</p>
-      <p v-else-if="!fleet.hosts.value.length" class="empty">No hosts are enrolled. Use <code>narada fleet register</code> to enroll a host instance.</p>
 
-      <section v-else class="fleet-layout" aria-label="Host fleet">
-        <div class="table-wrap">
+      <section v-else class="fleet-layout" aria-label="Host fleet" :aria-busy="fleet.sessionsLoading.value">
+        <div v-if="fleet.hosts.value.length" class="table-wrap">
           <table>
             <thead><tr><th scope="col">Host</th><th scope="col">Platform</th><th scope="col">Health</th><th scope="col">Sites</th><th scope="col">Last seen</th><th scope="col">Context</th></tr></thead>
             <tbody>
@@ -67,13 +208,78 @@ function submitOnEnter(event: KeyboardEvent): void {
                 <th scope="row"><strong>{{ host.displayName }}</strong><code>{{ hostKey(host) }}</code><small>Revision {{ host.revision }}</small></th>
                 <td>{{ host.platform }}<small>{{ host.transport }}</small></td>
                 <td><span class="status" :data-status="host.healthStatus">{{ host.healthStatus }}</span><small v-if="host.healthDetail">{{ host.healthDetail }}</small><small v-else>{{ formatTimestamp(host.healthObservedAt) }}</small></td>
-                <td>{{ host.admittedSites.length ? host.admittedSites.join(', ') : 'None declared' }}</td>
+                <td>{{ host.admittedSites.length ? host.admittedSites.join(', ') : 'None declared' }}<small>{{ host.lifecycleState }}</small></td>
                 <td>{{ formatTimestamp(host.lastSeenAt) }}</td>
-                <td><button class="link-button" type="button" @click="fleet.selectHost(host.hostId, host.hostInstanceId)">{{ hostKey(host) === fleet.selectedHostKey.value ? 'Selected' : 'Use host' }}</button></td>
+                <td><button class="link-button" type="button" :aria-pressed="hostKey(host) === fleet.selectedHostKey.value" :aria-label="`Select ${host.displayName} (${hostKey(host)})`" @click="selectHost(host.hostId, host.hostInstanceId)">{{ hostKey(host) === fleet.selectedHostKey.value ? 'Selected' : 'Use host' }}</button><a v-if="fleet.hostConsolePath(host)" class="link-button console-link" :href="fleet.hostConsolePath(host) ?? undefined" target="_blank" rel="noopener">Open host console</a></td>
               </tr>
             </tbody>
           </table>
         </div>
+        <p v-else class="empty">No hosts are enrolled yet. Use the enrollment form below to add the first Host instance.</p>
+
+        <section v-if="localAuthority" class="authority-panel" aria-label="Host authority controls">
+          <div class="panel-heading">
+            <div><span class="eyebrow">Local User Site authority</span><h3>Host lifecycle and enrollment</h3><small>These controls write the canonical registry. Cloudflare never receives these mutations.</small></div>
+            <span class="status" data-status="online">local-authority</span>
+          </div>
+
+          <div v-if="selectedHostRecord" class="workflow-block">
+            <div class="workflow-heading"><div><strong>Selected host lifecycle</strong><small>{{ hostKey(selectedHostRecord) }} · revision {{ selectedHostRecord.revision }} · {{ selectedHostRecord.lifecycleState }}</small></div></div>
+            <div class="inline-form">
+              <label class="field"><span>Reason</span><input v-model="lifecycleReason" type="text" maxlength="256" placeholder="planned maintenance or security response" /></label>
+              <div class="workflow-actions">
+                <button class="action" type="button" :disabled="fleet.mutationBusy.value || fleet.preflightBusy.value || selectedHostRecord.lifecycleState === 'revoked' || selectedHostRecord.lifecycleState === 'retired'" @click="planLifecycle('revoke')">Plan revoke</button>
+                <button class="action" type="button" :disabled="fleet.mutationBusy.value || fleet.preflightBusy.value || selectedHostRecord.lifecycleState === 'revoked' || selectedHostRecord.lifecycleState === 'retired'" @click="planLifecycle('retire')">Plan retire</button>
+              </div>
+            </div>
+            <p v-if="fleet.preflightError.value" class="notice error" role="alert">{{ fleet.preflightError.value }}</p>
+            <p v-if="lifecyclePlanError" class="notice error" role="alert">{{ lifecyclePlanError }}</p>
+            <p v-if="fleet.lifecyclePreflight.value" class="notice workflow-check" :class="{ error: fleet.lifecyclePreflight.value.status === 'refused' }" role="status">
+              Authority preflight: {{ fleet.lifecyclePreflight.value.status }}<span v-if="fleet.lifecyclePreflight.value.currentRevision !== null"> · current revision {{ fleet.lifecyclePreflight.value.currentRevision }}</span><span v-if="fleet.lifecyclePreflight.value.currentLifecycleState"> · {{ fleet.lifecyclePreflight.value.currentLifecycleState }}</span>
+            </p>
+            <p v-if="lifecyclePlan && !lifecyclePlanCurrent" class="notice warning" role="alert">The host or reason changed after planning. Review the lifecycle plan again before applying it.</p>
+            <div v-if="lifecyclePlan" class="plan-card" :data-stale="!lifecyclePlanCurrent">
+              <div><span class="status" data-status="success">preflight ready</span><strong>{{ lifecyclePlan.operation }} {{ lifecyclePlan.host.host_id }}@{{ lifecyclePlan.host.host_instance_id }}</strong><small>Revision {{ lifecyclePlan.expected_revision }} · request {{ lifecyclePlan.request_id }}</small></div>
+              <label class="confirm-label"><input v-model="lifecycleConfirmed" type="checkbox" :disabled="fleet.mutationBusy.value || !lifecyclePlanCurrent" /> <span>I reviewed this revision-checked plan and want to apply it.</span></label>
+              <button class="action danger-action" type="button" :disabled="!lifecycleConfirmed || fleet.mutationBusy.value || !lifecyclePlanCurrent" @click="applyLifecyclePlan">Apply {{ lifecyclePlan.operation }}</button>
+            </div>
+          </div>
+          <p v-else class="empty inline-empty">Select a registered host to plan lifecycle changes.</p>
+
+          <details class="workflow-details">
+            <summary>Enroll or re-enroll a host</summary>
+            <p class="workflow-help">Only a credential reference is accepted. The browser never receives or stores the gateway secret itself.</p>
+            <form class="enrollment-form" @submit.prevent="planEnrollment">
+              <div class="field-grid">
+                <label class="field"><span>Host ID</span><input v-model="enrollmentDraft.hostId" required autocomplete="off" placeholder="zima-board-2" /></label>
+                <label class="field"><span>Host instance ID</span><input v-model="enrollmentDraft.hostInstanceId" required autocomplete="off" placeholder="zima-instance-2026-07" /></label>
+                <label class="field"><span>Display name</span><input v-model="enrollmentDraft.displayName" required autocomplete="off" placeholder="ZimaBoard 2" /></label>
+                <label class="field"><span>Narada version</span><input v-model="enrollmentDraft.naradaVersion" autocomplete="off" placeholder="0.1.0" /></label>
+                <label class="field"><span>Platform</span><select v-model="enrollmentDraft.platform"><option value="windows">Windows</option><option value="linux">Linux</option><option value="macos">macOS</option><option value="cloudflare">Cloudflare</option><option value="unknown">Unknown</option></select></label>
+                <label class="field"><span>Gateway transport</span><select v-model="enrollmentDraft.transport"><option value="ssh-tunnel">SSH tunnel</option><option value="loopback">Loopback</option><option value="https">HTTPS</option><option value="cloudflare">Cloudflare</option></select></label>
+                <label class="field field-wide"><span>Gateway endpoint</span><input v-model="enrollmentDraft.endpoint" required type="url" autocomplete="off" placeholder="http://127.0.0.1:64930" /></label>
+                <label class="field field-wide"><span>Credential reference</span><input v-model="enrollmentDraft.credentialRef" required autocomplete="off" placeholder="env://NARADA_HOST_GATEWAY_TOKEN" /></label>
+                <label class="field field-wide"><span>Admitted paths</span><textarea v-model="enrollmentDraft.admittedPaths" rows="3" placeholder="one path per line" /></label>
+                <label class="field"><span>Capabilities</span><textarea v-model="enrollmentDraft.capabilities" rows="3" placeholder="sessions&#10;events" /></label>
+                <label class="field"><span>Admitted Sites</span><textarea v-model="enrollmentDraft.admittedSites" rows="3" placeholder="sonar" /></label>
+              </div>
+              <label class="confirm-label"><input v-model="enrollmentDraft.allowReenrollment" type="checkbox" /> <span>Allow explicit re-enrollment if this Host ID has another active instance.</span></label>
+              <div class="workflow-actions"><button class="action" type="submit">Review enrollment</button></div>
+            </form>
+            <p v-if="enrollmentError" class="notice error" role="alert">{{ enrollmentError }}</p>
+            <p v-if="enrollmentPlan && !enrollmentPlanCurrent" class="notice warning" role="alert">The enrollment draft changed after review. Review the intent again before applying it.</p>
+            <div v-if="enrollmentPlan" class="plan-card" :data-stale="!enrollmentPlanCurrent">
+              <div><span class="status" data-status="success">intent ready</span><strong>{{ enrollmentPlan.host.display_name }} · {{ enrollmentPlan.host.host_id }}@{{ enrollmentPlan.host.host_instance_id }}</strong><small>Expected revision {{ enrollmentPlan.expected_revision ?? 'new host' }} · request {{ enrollmentPlan.request_id }}</small></div>
+              <dl class="plan-details"><div><dt>Endpoint</dt><dd>{{ enrollmentPlan.host.gateway.endpoint }}</dd></div><div><dt>Transport</dt><dd>{{ enrollmentPlan.host.gateway.transport }}</dd></div><div><dt>Credential ref</dt><dd>{{ enrollmentPlan.host.credential_ref }}</dd></div><div><dt>Sites</dt><dd>{{ enrollmentPlan.host.admitted_sites?.join(', ') || 'None declared' }}</dd></div></dl>
+              <label class="confirm-label"><input v-model="enrollmentConfirmed" type="checkbox" :disabled="fleet.mutationBusy.value || !enrollmentPlanCurrent" /> <span>I reviewed this enrollment intent and want the User Site authority to apply it.</span></label>
+              <button class="action" type="button" :disabled="!enrollmentConfirmed || fleet.mutationBusy.value || !enrollmentPlanCurrent" @click="applyEnrollmentPlan">Apply enrollment</button>
+            </div>
+          </details>
+        </section>
+        <section v-else class="authority-panel projection-notice" aria-label="Projection scope notice">
+          <div class="panel-heading"><div><span class="eyebrow">Cloudflare projection</span><h3>Read-only Host Fleet view</h3><small>Host enrollment and lifecycle mutations belong to the local User Site authority.</small></div><span class="status" data-status="connected">projection-only</span></div>
+          <p>Use the User Site authority console for enrollment, re-enrollment, revoke, or retire. This projection can inspect hosts, sessions, health, and events only.</p>
+        </section>
 
         <section v-if="fleet.aggregateObserving.value" class="aggregate-panel" aria-label="Aggregate fleet observation">
           <div class="panel-heading">
@@ -139,14 +345,48 @@ function submitOnEnter(event: KeyboardEvent): void {
 .summary span, .eyebrow { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
 .summary strong { font-size: 14px; font-weight: 650; overflow-wrap: anywhere; }
 .refresh, .action, .link-button { padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font: inherit; cursor: pointer; }
+.console-link { display: inline-block; margin-top: 6px; text-decoration: none; }
 .refresh { align-self: center; margin-left: auto; }
 .refresh:hover:not(:disabled), .action:hover:not(:disabled), .link-button:hover:not(:disabled) { border-color: var(--operator); background: var(--surface-muted); }
-button:disabled { cursor: wait; opacity: .6; }
+button:focus-visible, .workflow-details summary:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+button:disabled { cursor: not-allowed; opacity: .6; }
 .notice, .empty { margin: 12px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); font-size: 13px; line-height: 1.4; }
 .notice.error { color: var(--danger); }
+.notice.success { color: var(--operator); background: var(--activity-chip-bg); }
 .notice.warning, .empty { color: var(--muted); background: var(--surface-muted); }
+.authority-panel { overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); }
+.projection-notice { border-color: var(--line); }
+.projection-notice > p { margin: 0; padding: 12px 16px 15px; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.workflow-block, .workflow-details { padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.workflow-details { border-bottom: 0; }
+.workflow-details summary { cursor: pointer; font-size: 13px; font-weight: 650; }
+.workflow-heading { margin-bottom: 10px; }
+.workflow-heading strong { display: block; font-size: 13px; }
+.inline-form { display: flex; align-items: end; gap: 12px; flex-wrap: wrap; }
+.field { display: grid; gap: 5px; min-width: 180px; flex: 1; color: var(--muted); font-size: 11px; }
+.field input, .field select, .field textarea { width: 100%; min-height: 35px; border: 1px solid var(--line-strong); border-radius: calc(var(--radius) - 2px); padding: 7px 9px; background: var(--control-bg); color: var(--text); font: inherit; font-size: 12px; }
+.field textarea { min-height: 68px; resize: vertical; }
+.field input:focus-visible, .field select:focus-visible, .field textarea:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 1px; }
+.workflow-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.danger-action { color: var(--danger); }
+.plan-card { display: grid; gap: 10px; margin-top: 12px; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface-muted); }
+.plan-card > div:first-child { display: grid; gap: 5px; }
+.plan-card > div:first-child strong { font-size: 13px; }
+.plan-card .status { width: fit-content; }
+.confirm-label { display: flex; align-items: flex-start; gap: 8px; color: var(--text); font-size: 12px; line-height: 1.4; }
+.confirm-label input { flex: 0 0 auto; margin-top: 2px; }
+.workflow-help { margin: 9px 0 14px; color: var(--muted); font-size: 12px; line-height: 1.45; }
+.enrollment-form { display: grid; gap: 12px; margin-top: 14px; }
+.field-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; }
+.field-wide { grid-column: 1 / -1; }
+.plan-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; margin: 0; }
+.plan-details div { min-width: 0; }
+.plan-details dt { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .04em; }
+.plan-details dd { margin: 3px 0 0; font: 11px/1.4 var(--mono); overflow-wrap: anywhere; }
+.inline-empty { margin: 0; border: 0; border-radius: 0; }
 .fleet-layout { display: grid; gap: 16px; }
-.table-wrap, .session-panel, .attachment-panel { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.table-wrap { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.session-panel, .attachment-panel { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 .aggregate-panel { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 table { width: 100%; border-collapse: collapse; min-width: 940px; font-size: 12px; }
 th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
@@ -180,5 +420,5 @@ small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; f
 .composer { display: flex; align-items: flex-end; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); }
 .composer textarea { min-height: 54px; flex: 1; resize: vertical; padding: 9px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius); background: var(--surface); color: var(--text); font: 13px/1.4 inherit; }
 .composer textarea:focus { outline: 2px solid color-mix(in srgb, var(--operator) 42%, transparent); outline-offset: 1px; }
-@media (max-width: 760px) { .console-main { padding: 18px 12px 28px; } .refresh { margin-left: 0; } .panel-heading, .session-row, .composer { align-items: stretch; flex-direction: column; } .panel-actions { justify-content: space-between; } .action { align-self: flex-start; } }
+@media (max-width: 760px) { .console-main { padding: 18px 12px 28px; } .refresh { margin-left: 0; } .panel-heading, .session-row, .composer { align-items: stretch; flex-direction: column; } .panel-actions { justify-content: space-between; } .action { align-self: flex-start; } .field-grid, .plan-details { grid-template-columns: 1fr; } .field-wide { grid-column: auto; } }
 </style>

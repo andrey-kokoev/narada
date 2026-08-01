@@ -2,12 +2,12 @@ import type {
   OperatorHostFleetHealthStatus,
   OperatorHostFleetOverviewWireResponse,
   OperatorHostFleetWireRecord,
-} from '@narada2/operator-console-contract';
+} from '@narada-core/operator-console-contract';
 import type {
   HostFleetEnrollmentIntent,
   HostFleetLifecycleIntent,
   HostFleetLifecycleOperation,
-} from '@narada2/host-fleet/contract';
+} from '@narada-core/host-fleet/contract';
 import { createHostFleetTransport, type HostFleetMutationScope, type HostFleetTransport } from './transport';
 
 export interface HostFleetTarget {
@@ -83,6 +83,7 @@ export interface HostFleetOverview {
 
 export interface HostFleetClient {
   mutationScope?: HostFleetMutationScope;
+  hostConsolePath?(host: Pick<HostFleetTarget, 'hostId' | 'hostInstanceId'>): string | null;
   list(): Promise<HostFleetOverview>;
   sessions(): Promise<HostFleetSessionsOverview>;
   resolveTarget(target: HostFleetTarget): Promise<HostFleetTargetResolution>;
@@ -484,6 +485,7 @@ export function createHostFleetAdapter(
 ): HostFleetClient {
   return {
     mutationScope: transport.mutationScope,
+    hostConsolePath: transport.hostConsolePath?.bind(transport),
     async list(): Promise<HostFleetOverview> {
       const response = parseOverview(await transport.list());
       if (!response) throw new HostFleetApiError('invalid_response', 'Host Fleet response did not match its contract.');
