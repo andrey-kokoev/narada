@@ -29,6 +29,8 @@ export interface OperatorConsoleMirrorOptions {
   router_state_root?: string;
   router_token?: string;
   bridge_token?: string;
+  /** Optional dedicated credential for host-qualified fleet crossings. */
+  host_gateway_token?: string;
   cloudflared_binary?: string;
   wrangler_binary?: string;
   tunnel_runner?: OperatorConsoleMirrorTunnelRunner;
@@ -131,6 +133,7 @@ interface NormalizedOptions {
   routerStateRoot: string | undefined;
   routerToken: string | undefined;
   bridgeToken: string | undefined;
+  hostGatewayToken: string | undefined;
   cloudflaredBinary: string;
   wranglerBinary: string;
   tunnelRunner: OperatorConsoleMirrorTunnelRunner | undefined;
@@ -505,6 +508,7 @@ export async function runOperatorConsoleMirror(options: OperatorConsoleMirrorOpt
       router_url: normalized.routerUrl,
       router_token: normalized.routerToken ?? await readRouterToken(normalized.routerStateRoot),
       bridge_token: normalized.bridgeToken ?? '',
+      ...(normalized.hostGatewayToken ? { host_gateway_token: normalized.hostGatewayToken } : {}),
       host: normalized.host,
       port: normalized.gatewayPort,
       fetch_fn: normalized.fetchFn,
@@ -633,6 +637,7 @@ function normalizeOptions(options: OperatorConsoleMirrorOptions): NormalizedOpti
     || defaultRouterStateRoot(env);
   const routerToken = options.router_token?.trim() || env.NARADA_OPERATOR_ROUTER_TOKEN?.trim() || undefined;
   const bridgeToken = options.bridge_token?.trim() || env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN?.trim() || undefined;
+  const hostGatewayToken = options.host_gateway_token?.trim() || env.NARADA_HOST_GATEWAY_TOKEN?.trim() || undefined;
   const tunnelToken = options.tunnel_token?.trim() || env.TUNNEL_TOKEN?.trim() || env.NARADA_CLOUDFLARE_TUNNEL_TOKEN?.trim();
   const tunnelTokenFile = options.tunnel_token_file?.trim() || env.TUNNEL_TOKEN_FILE?.trim() || env.NARADA_CLOUDFLARE_TUNNEL_TOKEN_FILE?.trim();
   const tunnelName = options.tunnel_name?.trim() || env.NARADA_CLOUDFLARE_TUNNEL_NAME?.trim();
@@ -657,6 +662,7 @@ function normalizeOptions(options: OperatorConsoleMirrorOptions): NormalizedOpti
     routerStateRoot,
     routerToken,
     bridgeToken,
+    hostGatewayToken,
     cloudflaredBinary: options.cloudflared_binary?.trim() || env.NARADA_CLOUDFLARED_BINARY?.trim() || 'cloudflared',
     wranglerBinary: options.wrangler_binary?.trim() || env.NARADA_WRANGLER_BINARY?.trim() || (process.platform === 'win32' ? 'wrangler.cmd' : 'wrangler'),
     tunnelRunner: options.tunnel_runner?.trim() ? normalizeTunnelRunner(options.tunnel_runner.trim()) : (env.NARADA_CLOUDFLARE_TUNNEL_RUNNER?.trim() ? normalizeTunnelRunner(env.NARADA_CLOUDFLARE_TUNNEL_RUNNER.trim()) : undefined),

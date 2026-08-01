@@ -197,6 +197,7 @@ export function registerConsoleCommands(program: Command): void {
     .option('--router-state-root <path>', 'Operator Router state root used to read its registration token')
     .option('--router-token <token>', 'Router token; prefer NARADA_OPERATOR_ROUTER_TOKEN or the state root file')
     .option('--bridge-token <token>', 'Bridge token; prefer NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN')
+    .option('--host-gateway-token <token>', 'Dedicated Host Gateway token; prefer NARADA_HOST_GATEWAY_TOKEN')
     .action(async (opts: CommanderOptionValues) => {
       const started = await consoleGatewayCommand({
         host: String(opts.host ?? '127.0.0.1'),
@@ -205,6 +206,7 @@ export function registerConsoleCommands(program: Command): void {
         router_state_root: opts.routerStateRoot as string | undefined,
         router_token: opts.routerToken as string | undefined,
         bridge_token: opts.bridgeToken as string | undefined,
+        host_gateway_token: opts.hostGatewayToken as string | undefined,
       }, silentCommandContext());
       emitLongLivedCommandStartup([
         `Operator Console remote gateway: ${started.url}`,
