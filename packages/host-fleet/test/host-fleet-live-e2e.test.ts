@@ -11,9 +11,9 @@ interface LiveHost {
   expected_session_id: string;
 }
 
-function liveHosts(): LiveHost[] | null {
+function liveHosts(): LiveHost[] {
   const raw = process.env.NARADA_HOST_FLEET_LIVE_E2E_JSON?.trim();
-  if (!raw) return null;
+  if (!raw) throw new Error('host_fleet_live_e2e_fixture_required');
   const parsed = JSON.parse(raw) as unknown;
   if (!Array.isArray(parsed) || parsed.length < 2) throw new Error('host_fleet_live_e2e_requires_two_hosts');
   return parsed.map((value) => {
@@ -35,7 +35,7 @@ function liveHosts(): LiveHost[] | null {
 const liveEnabled = process.env.NARADA_ENABLE_LIVE_E2E === '1';
 
 test('live host fleet health and session discovery keeps two physical hosts qualified', { skip: !liveEnabled }, async () => {
-  const hosts = liveHosts()!;
+  const hosts = liveHosts();
   const keys = new Set(hosts.map((host) => `${host.host_id}@${host.host_instance_id}`));
   assert.equal(keys.size, hosts.length, 'physical hosts must have distinct HostKeys');
   assert.equal(new Set(hosts.map((host) => host.host_instance_id)).size, hosts.length, 'physical hosts must have distinct instance IDs');

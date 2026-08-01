@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHostFleetAdapter } from '../src/host-fleet/adapter.ts';
+import type { HostFleetEnrollmentIntent } from '@narada-core/host-fleet/contract';
 
 test('host fleet adapter preserves qualified host identity and bounded health state', async () => {
   const client = createHostFleetAdapter({
@@ -105,4 +106,44 @@ test('host fleet adapter exposes typed target refusal instead of inventing a ses
     openEvents: () => { throw new Error('not used'); },
   });
   await assert.rejects(() => client.resolveTarget({ hostId: 'zima-board-2', hostInstanceId: 'instance-z', siteId: 'sonar', agentId: 'resident', runtimeSessionId: 'session-z' }), /runtime_target_ambiguous/);
+});
+
+test('host fleet adapter accepts enrollment results without lifecycle-only operation fields', async () => {
+  const intent: HostFleetEnrollmentIntent = {
+    schema: 'narada.host_fleet.enrollment_intent.v1',
+    request_id: 'host-enrollment:adapter',
+    host: {
+      host_id: 'zima-board-2',
+      host_instance_id: 'instance-z',
+      display_name: 'ZimaBoard 2',
+      platform: 'linux',
+      gateway: {
+        endpoint: 'http://127.0.0.1:61730',
+        transport: 'ssh-tunnel',
+        admitted_paths: ['/health'],
+      },
+      credential_ref: 'env:ZIMA_TOKEN',
+      admitted_sites: ['sonar'],
+      capabilities: ['sessions'],
+    },
+    expected_revision: null,
+    allow_reenrollment: false,
+    confirmation: 'zima-board-2@instance-z',
+  };
+  const client = createHostFleetAdapter({
+    list: async () => ({ schema: 'narada.operator_console.host_fleet.v1', status: 'success', generated_at: '2026-07-31T12:00:00.000Z', count: 0, hosts: [], refusals: [] }),
+    applyEnrollment: async () => ({
+      schema: 'narada.host_fleet.enrollment_result.v1',
+      status: 'applied',
+      mutation_performed: true,
+      request_id: intent.request_id,
+      host: { host_id: 'zima-board-2', host_instance_id: 'instance-z' },
+      lifecycle_state: 'pending',
+      revision: 1,
+      reason: null,
+    }),
+  });
+  const result = await client.applyEnrollment?.(intent, 'operator-console.test');
+  assert.equal(result?.status, 'applied');
+  assert.equal(result?.operation, null);
 });
