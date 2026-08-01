@@ -11,10 +11,13 @@ NARS_AUTHORITY_REQUIRE_CREDENTIAL = "true"
 # HTTPS provider adapters require an explicit deployment capability. Workers
 # AI is the default provider route for this worker.
 NARS_OUTBOUND_PROVIDER_ENABLED = "false"
-# The remote Operator Console mirror is enabled only after its Narada-owned
-# shared secret and gateway secret are configured. The shared secret is a
-# Wrangler secret, not a vars value, and may be copied to explicitly
-# authorized host clients that need to use this mirror.
+# The remote Operator Console mirror is enabled only after Cloudflare Access
+# admission and the gateway bridge secret are configured. Access issuer and
+# audience are non-secret deployment variables; the gateway token remains a
+# Wrangler secret and is never projected to the browser.
+# OPERATOR_CONSOLE_ACCESS_REQUIRED = "true"
+# OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN = "https://team.cloudflareaccess.com"
+# OPERATOR_CONSOLE_ACCESS_AUDIENCE = "application-audience"
 # OPERATOR_CONSOLE_GATEWAY_URL = "https://console-gateway.example.test"
 # OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN = "https://console-gateway.example.test"
 # The gateway is reached through a private Workers VPC service. The URL is an
@@ -24,28 +27,6 @@ OPERATOR_CONSOLE_GATEWAY_URL = "http://operator-console.internal"
 OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN = "http://operator-console.internal"
 OPERATOR_CONSOLE_GATEWAY_TCP_HOST = "127.0.0.1"
 OPERATOR_CONSOLE_GATEWAY_TCP_PORT = "61730"
-# Optional fleet projection. The canonical User Site registry is materialized
-# into this variable by deployment tooling; keep gateway bindings and tokens
-# out of the browser and out of this JSON. See config/host-fleet.registry.example.json.
-# NARADA_HOST_FLEET_REGISTRY = "..."
-# Optional authority bridge for confirmed fleet mutations. The URL is a
-# non-secret HTTPS origin; NARADA_HOST_FLEET_AUTHORITY_TOKEN must be provisioned
-# with `wrangler secret put` and is never placed in [vars]. Without both values
-# Cloudflare remains a read/stream projection and refuses mutations.
-# NARADA_HOST_FLEET_AUTHORITY_URL = "https://user-site.example"
-# Secret binding: NARADA_HOST_FLEET_AUTHORITY_TOKEN
-# When NARADA_HOST_FLEET_REGISTRY is set, the Operator Console asset is
-# injected with the native Cloudflare fleet API and route shape. Override
-# these only when the deployment intentionally fronts the fleet API elsewhere.
-# NARADA_HOST_FLEET_UI_API_BASE_PATH = "/api/narada/fleet/hosts"
-# NARADA_HOST_FLEET_UI_ROUTE_SHAPE = "cloudflare-projection"
-# Set to "log" only when structured, secret-free gateway relay observations
-# are desired in Worker diagnostics. This does not persist payloads.
-# NARADA_HOST_FLEET_OBSERVABILITY = "log"
-# HOST_FLEET_AUDIT is a separate Durable Object binding. It stores only
-# bounded, secret-free relay observations and is readable through the
-# authenticated fleet route /api/narada/fleet/observations.
-
 [ai]
 binding = "AI"
 
@@ -62,10 +43,6 @@ class_name = "NarsProjectionState"
 name = "NARS_WORKSPACE_DIRECTORY"
 class_name = "NarsWorkspaceDirectory"
 
-[[durable_objects.bindings]]
-name = "HOST_FLEET_AUDIT"
-class_name = "CloudflareHostFleetAuditState"
-
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["NarsProjectionState"]
@@ -77,6 +54,10 @@ new_sqlite_classes = ["NarsWorkspaceDirectory"]
 [[migrations]]
 tag = "v3"
 new_sqlite_classes = ["CloudflareHostFleetAuditState"]
+
+[[migrations]]
+tag = "v4"
+deleted_classes = ["CloudflareHostFleetAuditState"]
 
 [assets]
 directory = "public"
