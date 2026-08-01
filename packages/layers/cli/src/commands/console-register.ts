@@ -291,6 +291,7 @@ function addMirrorOptions(command: Command): Command {
     .option('--router-url <url>', 'Stable local Operator Router URL', 'http://127.0.0.1:61729')
     .option('--router-state-root <path>', 'Operator Router state root')
     .option('--bridge-token-file <path>', 'User-local file containing the mirror bridge token')
+    .option('--host-gateway-token <token>', 'Dedicated Host Gateway token; prefer NARADA_HOST_GATEWAY_TOKEN')
     .option('--cloudflared-binary <path>', 'cloudflared executable', 'cloudflared')
     .option('--wrangler-binary <path>', 'Wrangler executable for managed named tunnels')
     .option('--tunnel-runner <runner>', 'Tunnel runner: cloudflared or wrangler')
@@ -313,6 +314,7 @@ function mirrorOptionsFromCommander(opts: CommanderOptionValues): ConsoleMirrorC
     router_url: opts.routerUrl as string | undefined,
     router_state_root: opts.routerStateRoot as string | undefined,
     bridge_token_file: opts.bridgeTokenFile as string | undefined,
+    host_gateway_token: opts.hostGatewayToken as string | undefined,
     cloudflared_binary: opts.cloudflaredBinary as string | undefined,
     wrangler_binary: opts.wranglerBinary as string | undefined,
     tunnel_runner: opts.tunnelRunner as ConsoleMirrorCommandOptions['tunnel_runner'],

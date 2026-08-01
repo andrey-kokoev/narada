@@ -21,6 +21,13 @@ the child environment and is never written to the state document. The state
 document records the file path so a later `restart` or `rotate` can recover the
 credential from a fresh shell.
 
+When this gateway is enrolled as a Host Fleet target, configure its separate
+host credential with `NARADA_HOST_GATEWAY_TOKEN` (or the explicit
+`--host-gateway-token` option on `narada console mirror start`, `restart`, or
+`rotate`). Host-qualified requests use this credential and header; they do not
+reuse the bridge token. The value is passed to the gateway process only and is
+never written to mirror state.
+
 The runtime serializes `start`, `restart`, `rotate`, and `stop` with a
 heartbeat-backed `<mirror-state-root>/mirror.lock`. A competing lifecycle
 request waits for the bounded lock timeout and then returns

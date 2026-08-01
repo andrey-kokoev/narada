@@ -21,6 +21,7 @@ export function consoleMirrorRuntimeOptions(options: ConsoleMirrorCommandOptions
     router_state_root: options.router_state_root,
     router_token: options.router_token,
     bridge_token: options.bridge_token,
+    host_gateway_token: options.host_gateway_token,
     cloudflared_binary: options.cloudflared_binary,
     wrangler_binary: options.wrangler_binary,
     tunnel_runner: options.tunnel_runner,
