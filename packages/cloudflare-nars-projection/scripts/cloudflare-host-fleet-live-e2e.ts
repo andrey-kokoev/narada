@@ -32,7 +32,7 @@ if (args.help) {
   process.stdout.write([
     'Cloudflare Host Fleet read-only live browser smoke',
     '',
-    'Planning mode (default):',
+    'Planning mode (explicit; direct invocation without --live is also non-live):',
     '  pnpm --filter @narada-core/cloudflare-nars-projection plan:host-fleet-live',
     '',
     'Live mode with a Cloudflare Access service token:',
