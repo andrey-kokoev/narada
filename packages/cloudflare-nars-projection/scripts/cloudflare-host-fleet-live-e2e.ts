@@ -203,6 +203,35 @@ async function run(): Promise<AnyRecord> {
     assert.deepEqual(resolved.body?.target, target, 'target resolution must preserve the qualified session target');
     evidence.checks.target = { target, passed: true };
 
+    const launchPreflightQuery = new URLSearchParams({
+      host_id: String(target.host_id),
+      host_instance_id: String(target.host_instance_id),
+      expected_revision: String(selected.host.revision),
+      site_id: String(target.site_id),
+      agent_id: String(target.agent_id),
+      operator_surface: 'agent-web-ui',
+      request_id: 'cloudflare-host-fleet-live-launch-preflight',
+      confirmation: `${target.host_id}@${target.host_instance_id}`,
+    });
+    const launchPreflight = await requestJson(
+      boundary.origin,
+      `/api/narada/fleet/hosts/launch/preflight?${launchPreflightQuery}`,
+      headers,
+    );
+    assert.equal(launchPreflight.response.status, 200, compact(launchPreflight));
+    assert.equal(launchPreflight.body?.schema, 'narada.host_fleet.launch_preflight.v1', compact(launchPreflight));
+    assert.equal(launchPreflight.body?.status, 'ready', compact(launchPreflight));
+    assert.equal(launchPreflight.body?.mutation_performed, false, compact(launchPreflight));
+    evidence.checks.launch_preflight = {
+      host_key: `${target.host_id}@${target.host_instance_id}`,
+      site_id: target.site_id,
+      agent_id: target.agent_id,
+      operator_surface: 'agent-web-ui',
+      expected_revision: selected.host.revision,
+      mutation_performed: false,
+      passed: true,
+    };
+
     const browserPath = findHeadlessBrowser();
     assert.ok(browserPath, 'a supported headless browser is required for browser-level acceptance');
     const page = await openCdpPage({

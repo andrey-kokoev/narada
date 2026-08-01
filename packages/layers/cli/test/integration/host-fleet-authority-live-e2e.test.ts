@@ -259,6 +259,11 @@ test('live local authority journey performs enrollment, browser attachment, and 
     const selectHost = page.getByRole('button', { name: /Select Live Host 1 \(live-host-1@live-instance-1\)/ });
     await selectHost.click();
     await page.getByText('live-session-1', { exact: true }).waitFor();
+    await page.getByLabel('Site ID', { exact: true }).fill('live-site');
+    await page.getByLabel('Agent ID', { exact: true }).fill('resident');
+    await page.getByLabel('Operator surface', { exact: true }).fill('agent-web-ui');
+    await page.getByRole('button', { name: 'Plan exact launch', exact: true }).click();
+    await page.getByText('preflight ready', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Attach', exact: true }).click();
     await page.getByText(/session_events_replay_completed/).waitFor();
 
