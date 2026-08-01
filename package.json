@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "homepage": "https://narada.systems",
   "scripts": {
     "narada:install-shim": "bash scripts/install-narada-shim.sh",
     "narada:guard-task-db": "bash scripts/guard-task-lifecycle-db.sh",

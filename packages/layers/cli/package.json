@@ -2,6 +2,7 @@
   "name": "@narada2/cli",
   "version": "0.1.0",
   "description": "CLI for the Narada deterministic state compiler and control plane",
+  "homepage": "https://narada.systems",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
@@ -228,7 +229,6 @@
     "typescript": "^5.3.0",
     "vitest": "^4.1.10"
   },
-  "homepage": "https://github.com/andrey-kokoev/narada",
   "bugs": {
     "url": "https://github.com/andrey-kokoev/narada/issues"
   }
