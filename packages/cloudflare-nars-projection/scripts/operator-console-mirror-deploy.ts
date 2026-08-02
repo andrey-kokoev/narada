@@ -128,9 +128,24 @@ function isTrue(value: string | boolean | undefined): boolean {
   return value === true || value === 'true';
 }
 
+export function operatorConsoleMirrorChildOptions(
+  command: string,
+  cwd: string,
+  platform = process.platform,
+) {
+  const windowsCommandShim = platform === 'win32' && /\.(?:cmd|bat)$/i.test(command);
+  return {
+    cwd,
+    env: process.env,
+    stdio: 'inherit' as const,
+    windowsHide: true,
+    shell: windowsCommandShim,
+  };
+}
+
 function runChild(command: string, args: string[], cwd: string): Promise<void> {
   return new Promise((resolvePromise, reject) => {
-    const child = spawn(command, args, { cwd, env: process.env, stdio: 'inherit', windowsHide: true });
+    const child = spawn(command, args, operatorConsoleMirrorChildOptions(command, cwd));
     child.once('error', (error) => reject(new Error(`wrangler_deploy_spawn_failed:${error.message}`)));
     child.once('exit', (code, signal) => {
       if (code === 0) resolvePromise();

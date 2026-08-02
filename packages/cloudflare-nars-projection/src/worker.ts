@@ -21,6 +21,7 @@ import {
   type CloudflareNarsWorkspaceDirectoryService,
 } from './workspace-directory.js';
 import {
+  OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH,
   OPERATOR_CONSOLE_PATH,
 } from '@narada-core/operator-console-contract';
 import type {
@@ -238,6 +239,9 @@ export function createCloudflareNarsProjectionWorker(options: CloudflareNarsProj
       const url = new URL(request.url);
       const path = trimPath(url.pathname);
       const directProjectionEntry = url.pathname === '/' && url.searchParams.has('cloudflare_projection_id');
+      if (isHostFleetObservationIngress(request)) {
+        return proxyAdmittedOperatorWorkspaceRoute(request, env, fetchFn, now);
+      }
       if (isOperatorConsolePath(url.pathname) || (url.pathname === '/' && !directProjectionEntry && (operatorConsoleGatewayConfigured(env) || operatorConsoleAccessRequired(env, options)))) {
         const accessFailure = await authorizeOperatorConsoleAccess(request, env, options, fetchFn);
         if (accessFailure) return accessFailure;
@@ -1153,6 +1157,11 @@ function isOperatorConsolePath(pathname: string): boolean {
   return pathname === OPERATOR_CONSOLE_PATH || pathname.startsWith(`${OPERATOR_CONSOLE_PATH}/`);
 }
 
+function isHostFleetObservationIngress(request: Request): boolean {
+  return request.method === 'POST'
+    && new URL(request.url).pathname === OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH;
+}
+
 const OPERATOR_CONSOLE_STATIC_DOCUMENT_PATHS = new Set([
   `${OPERATOR_CONSOLE_PATH}/agents`,
   `${OPERATOR_CONSOLE_PATH}/registry`,
@@ -1403,7 +1412,12 @@ async function fetchOperatorConsoleGateway(
   const sourceUrl = new URL(request.url);
   const target = new URL(pathname + sourceUrl.search, `${configuration.baseUrl}/`);
   const headers = new Headers();
-  for (const name of ['accept', 'content-type', 'if-none-match', 'if-modified-since', 'cache-control', 'x-request-id']) {
+  const forwardedHeaders = [
+    'accept', 'content-type', 'if-none-match', 'if-modified-since', 'cache-control', 'x-request-id',
+    'x-narada-host-fleet-key-id', 'x-narada-host-fleet-timestamp', 'x-narada-host-fleet-nonce',
+    'x-narada-host-fleet-signature',
+  ];
+  for (const name of forwardedHeaders) {
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }

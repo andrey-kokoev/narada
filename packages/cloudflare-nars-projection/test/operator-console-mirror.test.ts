@@ -1,7 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import { createHash, createSign, generateKeyPairSync } from 'node:crypto';
 import { describe, expect, test } from 'vitest';
-import { projectOperatorWorkspaceRouteDirectory } from '@narada-core/operator-console-contract';
+import {
+  OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH,
+  projectOperatorWorkspaceRouteDirectory,
+} from '@narada-core/operator-console-contract';
 import { createCloudflareNarsProjectionWorker } from '../src/worker.js';
 
 const bridgeToken = 'operator-console-bridge-token-012345';
@@ -279,6 +282,84 @@ describe('Cloudflare Operator Console mirror', () => {
     });
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ status: 'refused', code: 'operator_console_access_required' });
+  });
+
+  test('admits the signed Host Fleet ingress without browser access and preserves its signature envelope', async () => {
+    const admitted: Array<{ path: string; headers: Record<string, string>; body: string }> = [];
+    const gatewayUrl = 'https://gateway.example.test';
+    const worker = createCloudflareNarsProjectionWorker({
+      require_operator_console_access: true,
+      fetch_fn: async (input) => {
+        const request = input instanceof Request ? input : new Request(input);
+        const target = new URL(request.url);
+        if (target.pathname === '/console/routes') {
+          const directory = projectOperatorWorkspaceRouteDirectory({
+            workspaceHost: { kind: 'local', id: 'operator-console', origin: null },
+          });
+          return Response.json({
+            ...directory,
+            httpRouteParity: {
+              schema: 'narada.operator_console.http_route_parity.v1',
+              status: 'complete',
+              source: 'local_operator_console_route_table',
+              generatedAt: new Date().toISOString(),
+              routes: [{
+                routeId: 'operator-console.host-fleet-observation-admit',
+                method: 'POST',
+                protocol: 'http',
+                pattern: '^\\/console\\/fleet\\/api\\/observations$',
+                disposition: 'proxy',
+                kind: 'mutation',
+                intentKind: 'host_fleet_observation_admit',
+              }],
+            },
+          });
+        }
+        const headers = Object.fromEntries(request.headers.entries());
+        admitted.push({ path: target.pathname, headers, body: await request.text() });
+        return Response.json({ status: 'admitted' });
+      },
+    });
+    const heartbeat = JSON.stringify({ schema: 'narada.host_fleet.heartbeat.v1' });
+    const response = await worker.fetch(new Request(`https://console.example.test${OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-narada-host-fleet-key-id': 'fleet-2026-08',
+        'x-narada-host-fleet-timestamp': '2026-08-02T04:00:00.000Z',
+        'x-narada-host-fleet-nonce': 'abcdefghijklmnop',
+        'x-narada-host-fleet-signature': 'a'.repeat(64),
+      },
+      body: heartbeat,
+    }), {
+      OPERATOR_CONSOLE_GATEWAY_URL: gatewayUrl,
+      OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: gatewayUrl,
+      OPERATOR_CONSOLE_GATEWAY_TOKEN: bridgeToken,
+      OPERATOR_CONSOLE_GATEWAY_TRANSPORT: 'public-tunnel',
+    });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ status: 'admitted' });
+    expect(admitted).toEqual([{
+      path: OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH,
+      headers: expect.objectContaining({
+        'x-narada-host-fleet-key-id': 'fleet-2026-08',
+        'x-narada-host-fleet-timestamp': '2026-08-02T04:00:00.000Z',
+        'x-narada-host-fleet-nonce': 'abcdefghijklmnop',
+        'x-narada-host-fleet-signature': 'a'.repeat(64),
+        'x-narada-operator-console-bridge-token': bridgeToken,
+      }),
+      body: heartbeat,
+    }]);
+
+    const browserRoute = await worker.fetch(new Request('https://console.example.test/console/registry'), {
+      OPERATOR_CONSOLE_GATEWAY_URL: gatewayUrl,
+      OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: gatewayUrl,
+      OPERATOR_CONSOLE_GATEWAY_TOKEN: bridgeToken,
+      OPERATOR_CONSOLE_GATEWAY_TRANSPORT: 'public-tunnel',
+    });
+    expect(browserRoute.status).toBe(401);
+    expect(await browserRoute.json()).toEqual({ status: 'refused', code: 'operator_console_access_required' });
   });
 
   test('uses the tunnel-backed TCP binding for the WebSocket leg', async () => {

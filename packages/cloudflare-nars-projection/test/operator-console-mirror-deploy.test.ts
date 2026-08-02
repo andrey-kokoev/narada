@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   buildOperatorConsoleMirrorDeployPlan,
   operatorConsoleMirrorDeployInputFromEnv,
+  operatorConsoleMirrorChildOptions,
   OperatorConsoleMirrorDeployError,
 } from '../scripts/operator-console-mirror-deploy.js';
 
@@ -87,5 +88,15 @@ describe('operator console mirror deployment preflight', () => {
     expect(input.gateway_url).toBe('https://origin.example.test');
     expect(input.gateway_transport).toBe('vpc-service');
     expect(input.gateway_token).toBe('token');
+  });
+
+  it('uses shell mediation only for Windows command shims', () => {
+    expect(operatorConsoleMirrorChildOptions('pnpm.cmd', 'D:/code/narada', 'win32')).toMatchObject({
+      cwd: 'D:/code/narada',
+      shell: true,
+      windowsHide: true,
+    });
+    expect(operatorConsoleMirrorChildOptions('pnpm', 'D:/code/narada', 'win32').shell).toBe(false);
+    expect(operatorConsoleMirrorChildOptions('pnpm.cmd', 'D:/code/narada', 'linux').shell).toBe(false);
   });
 });
