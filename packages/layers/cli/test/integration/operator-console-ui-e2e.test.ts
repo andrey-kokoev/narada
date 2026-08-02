@@ -32,6 +32,18 @@ const site = {
   retire_reason: null,
 };
 
+const hostFleetSnapshot = {
+  schema: 'narada.host_fleet.snapshot.v1',
+  generated_at: '2026-08-01T12:00:00.000Z',
+  hosts: [{
+    schema: 'narada.host_fleet.host.v1',
+    identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
+    reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z' },
+    health: { status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: 'All host checks passed.' },
+    operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
+  }],
+};
+
 const launchedAgentSessionId = 'session-agent-launched';
 
 function siteAgent(agentId, role, runtimeState, workState, sessionId = null) {
@@ -289,7 +301,7 @@ async function startFixtureServer({
         });
         return;
       }
-      if (req.method === 'GET' && ['/console/agents', '/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/onboarding', '/console/sessions'].includes(pathname)) {
+      if (req.method === 'GET' && ['/console/agents', '/console/fleet', '/console/registry', '/console/registry/add', '/console/registry/manage', '/console/launch', '/console/onboarding', '/console/sessions'].includes(pathname)) {
         const body = readOperatorConsoleUiDocument();
         res.writeHead(200, {
           'Content-Type': 'text/html; charset=utf-8',
@@ -309,6 +321,10 @@ async function startFixtureServer({
       }
       if (req.method === 'GET' && pathname === '/console/agents/api/overview') {
         sendJson(res, 200, siteAgentOverview(siteAgentLaunched, { userSiteResidentAmbiguous }));
+        return;
+      }
+      if (req.method === 'GET' && pathname === '/console/fleet/api/hosts') {
+        sendJson(res, 200, hostFleetSnapshot);
         return;
       }
       if (req.method === 'GET' && pathname === '/console/agents/api/pending') {
@@ -556,6 +572,32 @@ test('[fixture-boundary] Operator Console Vue registry projection works at deskt
     await page.reload();
     await page.locator('.site-tile').waitFor();
     await assertNoHorizontalOverflow(page, 'operator console mobile');
+  } finally {
+    await browser.close();
+    await fixture.close();
+  }
+});
+
+test('[fixture-boundary] Operator Console Host Fleet renders the bounded host-only projection', async () => {
+  const fixture = await startFixtureServer();
+  const browser = await chromium.launch();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
+    const response = await page.goto(fixture.url + '/console/fleet');
+    assert.equal(response?.status(), 200);
+    await page.getByRole('heading', { level: 1, name: 'Hosts' }).waitFor();
+    await page.getByRole('rowheader', { name: /Desktop/ }).waitFor();
+    assert.equal(await page.locator('tbody tr').count(), 1);
+    assert.match(await page.locator('tbody').textContent() ?? '', /reachable/);
+    assert.match(await page.locator('tbody').textContent() ?? '', /healthy/);
+    assert.equal(await page.getByRole('link', { name: 'Open' }).getAttribute('href'), 'https://desktop.example.test/console');
+    assert.doesNotMatch(await page.locator('tbody').textContent() ?? '', /site|agent|session|runtime/i);
+    await assertNoHorizontalOverflow(page, 'host fleet desktop');
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.reload();
+    await page.getByRole('rowheader', { name: /Desktop/ }).waitFor();
+    await assertNoHorizontalOverflow(page, 'host fleet mobile');
   } finally {
     await browser.close();
     await fixture.close();
