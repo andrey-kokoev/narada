@@ -39,7 +39,8 @@ export interface OperatorWorkspaceRouteDirectoryRequestOptions {
 }
 
 function isAuthorityKind(value: unknown): value is OperatorSurfaceAuthorityKind {
-  return value === 'user-site'
+  return value === 'host-fleet'
+    || value === 'user-site'
     || value === 'operator-console'
     || value === 'site'
     || value === 'nars-session-index'
@@ -48,7 +49,8 @@ function isAuthorityKind(value: unknown): value is OperatorSurfaceAuthorityKind 
 }
 
 function isProjectionKind(value: unknown): value is OperatorSurfaceProjectionKind {
-  return value === 'workspace'
+  return value === 'host-fleet-inventory'
+    || value === 'workspace'
     || value === 'registry'
     || value === 'site-agent-overview'
     || value === 'launcher'
@@ -146,7 +148,8 @@ function isString(value: unknown): value is string {
 }
 
 function isSurfaceId(value: unknown): value is OperatorSurfaceId {
-  return value === 'site-agents'
+  return value === 'host-fleet'
+    || value === 'site-agents'
     || value === 'site-registry'
     || value === 'launcher'
     || value === 'site-operations'
@@ -168,7 +171,8 @@ function isTargetKind(value: unknown): value is OperatorSurfaceRouteTarget['kind
 }
 
 function isNavigationKey(value: unknown): value is OperatorSurfaceNavigationKey {
-  return value === 'agents'
+  return value === 'fleet'
+    || value === 'agents'
     || value === 'sites'
     || value === 'add'
     || value === 'manage'
@@ -178,7 +182,7 @@ function isNavigationKey(value: unknown): value is OperatorSurfaceNavigationKey 
 }
 
 function isScope(value: unknown): value is OperatorSurfaceScope {
-  return value === 'user-site' || value === 'operator-console' || value === 'local-site' || value === 'nars-session';
+  return value === 'host-fleet' || value === 'user-site' || value === 'operator-console' || value === 'local-site' || value === 'nars-session';
 }
 
 function parseTarget(value: unknown): OperatorSurfaceRouteTarget | undefined | null {

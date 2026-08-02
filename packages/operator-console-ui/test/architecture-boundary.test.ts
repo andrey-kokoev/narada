@@ -20,6 +20,8 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   const launchPage = read('pages/OperatorConsoleLaunchPage.vue');
   const siteAgentsPage = read('pages/SiteAgentsPage.vue');
   const sessionsPage = read('pages/AgentSessionsPage.vue');
+  const hostFleetPage = read('pages/HostFleetPage.vue');
+  const hostFleetAdapter = read('host-fleet/adapter.ts');
   const routes = read('console/routes.ts');
 
   assert.match(app, /resolveOperatorConsoleRoute/);
@@ -27,6 +29,11 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.doesNotMatch(registryPage, /fetch\s*\(/);
   assert.doesNotMatch(mutationPage, /fetch\s*\(/);
   assert.doesNotMatch(launchPage, /fetch\s*\(/);
+  assert.doesNotMatch(hostFleetPage, /fetch\s*\(/);
+  assert.doesNotMatch(hostFleetPage, /site_id|agent_id|session_id|runtime_session_id/);
+  assert.doesNotMatch(hostFleetPage, /enroll|revoke|retire|launch|stop|delete/i);
+  assert.match(hostFleetPage, /operator_console\.status === 'available' && host\.operator_console\.url/);
+  assert.match(hostFleetAdapter, /validateHostFleetSnapshot/);
   assert.doesNotMatch(registryComposable, /fetch\s*\(/);
   assert.doesNotMatch(registryComposable, /parseSiteRegistry/);
   assert.match(registryTransport, /createSiteRegistryTransport/);

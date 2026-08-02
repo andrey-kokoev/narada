@@ -1,0 +1,49 @@
+{
+  "name": "@narada-core/host-fleet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "description": "Host-only Fleet contract and authenticated read model",
+  "narada": {
+    "package_role": "host_fleet_contract_and_read_model",
+    "surface": "host_fleet",
+    "presentation_only": false,
+    "authority_owner": "@narada-core/host-fleet"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./contract": {
+      "types": "./dist/contract.d.ts",
+      "import": "./dist/contract.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "node --import tsx scripts/build.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/narada-core/narada.git",
+    "directory": "packages/host-fleet"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

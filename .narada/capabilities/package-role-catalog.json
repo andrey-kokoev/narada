@@ -489,10 +489,10 @@
       "package": "@narada-core/host-fleet",
       "path": "packages/host-fleet",
       "roles": [
-        "runtime_authority",
+        "descriptor_contract",
         "domain_model"
       ],
-      "posture": "user_site_host_registry_and_bounded_gateway_contract"
+      "posture": "host_only_fleet_contract_and_immutable_read_model"
     },
     {
       "package": "@narada-core/operator-console-contract",

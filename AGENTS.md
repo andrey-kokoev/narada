@@ -141,6 +141,7 @@ Operator-facing browser UI stack:
 | `@narada-core/ui-vue` | `packages/ui-vue` | Vue renderer primitives built on `@narada-core/ui` |
 | `@narada-core/operator-console-ui` | `packages/operator-console-ui` | Browser Operator Console UI (`/console/registry` and related pages); presentation-only |
 | `@narada-core/operator-console-contract` | `packages/operator-console-contract` | Shared operator surface catalog, v3 route directory, redacted session wire records |
+| `@narada-core/host-fleet` | `packages/host-fleet` | Strict host-only Fleet contract and immutable authenticated read model; no Site, agent, session, or runtime knowledge |
 | `@narada-core/agent-web-ui` | `packages/agent-web-ui` | Production per-session browser UI for one NARS session |
 
 The workspace landing page (`/`) and console HTTP server live in `@narada-core/cli` (`packages/layers/cli/src/commands/operator-workspace-page.ts`, `console-server.ts`, `console-server-routes.ts`, `console-register.ts`).

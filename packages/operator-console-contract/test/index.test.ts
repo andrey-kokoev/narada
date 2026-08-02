@@ -17,13 +17,14 @@ import {
   formatOperatorSiteAgentInvariantViolation,
 } from '../src/index.ts';
 
-test('operator surface catalog describes canonical registry and launcher routes', () => {
-  assert.equal(operatorSurfaceDescriptors.length, 7);
+test('operator surface catalog describes canonical host, registry, and launcher routes', () => {
+  assert.equal(operatorSurfaceDescriptors.length, 8);
   assert.equal(findOperatorSurfaceRoute('/console/agents')?.surface.id, 'site-agents');
   assert.equal(findOperatorSurfaceRoute('/console/registry/')?.surface.id, 'site-registry');
   assert.equal(findOperatorSurfaceRoute('/console/registry/add')?.route.kind, 'workflow');
   assert.equal(findOperatorSurfaceRoute('/console/launch')?.surface.id, 'launcher');
   assert.equal(findOperatorSurfaceRoute('/console/onboarding')?.surface.id, 'onboarding');
+  assert.equal(findOperatorSurfaceRoute('/console/fleet')?.surface.id, 'host-fleet');
   assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors[0])?.path, '/console/agents');
   assert.equal(operatorSurfaceRoutePath('agent-sessions', 'sessions'), '/console/sessions');
   assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.authority.kind, 'operator-console');
@@ -67,6 +68,7 @@ test('live route binding derives scoped authority without changing surface owner
 test('navigation projection follows descriptor availability and labels', () => {
   assert.deepEqual(projectOperatorSurfaceNavigation().map((item) => item.label), [
     'Agents',
+    'Hosts',
     'Sites',
     'Add Site',
     'Manage',
@@ -76,6 +78,7 @@ test('navigation projection follows descriptor availability and labels', () => {
   ]);
   assert.deepEqual(projectOperatorSurfaceNavigation({ availability: { launcher: 'unavailable' } }).map((item) => item.key), [
     'agents',
+    'fleet',
     'sites',
     'add',
     'manage',
@@ -93,7 +96,7 @@ test('launcher descriptor projection is owned by the console UI, not the groupin
 test('navigation projection excludes routes that are unavailable within an available surface', () => {
   assert.deepEqual(projectOperatorSurfaceNavigation({
     routeAvailability: { 'site-registry': { add: 'unavailable', manage: 'unavailable' } },
-  }).map((item) => item.key), ['agents', 'sites', 'launcher', 'onboarding', 'sessions']);
+  }).map((item) => item.key), ['agents', 'fleet', 'sites', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('availability projection preserves planned and unavailable states', () => {
@@ -129,7 +132,7 @@ test('workspace route directory preserves concrete and template route availabili
   assert.deepEqual(projectOperatorSurfaceNavigation({
     availability: { artifacts: 'available' },
     routeAvailability: { artifacts: { artifact: 'available' } },
-  }).map((item) => item.key), ['agents', 'sites', 'add', 'manage', 'launcher', 'onboarding', 'sessions']);
+  }).map((item) => item.key), ['agents', 'fleet', 'sites', 'add', 'manage', 'launcher', 'onboarding', 'sessions']);
 });
 
 test('workspace route directory admits live concrete routes without replacing templates', () => {

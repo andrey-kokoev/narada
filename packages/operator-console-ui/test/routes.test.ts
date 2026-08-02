@@ -6,10 +6,14 @@ import {
   siteRegistryNavigation,
 } from '../src/console/routes.ts';
 
-test('operator console route resolver admits canonical agents, registry, launcher, and onboarding routes', () => {
+test('operator console route resolver admits canonical host, agent, registry, launcher, and onboarding routes', () => {
   assert.deepEqual(resolveOperatorConsoleRoute('/console/agents/'), {
     kind: 'site-agents',
     path: '/console/agents',
+  });
+  assert.deepEqual(resolveOperatorConsoleRoute('/console/fleet/'), {
+    kind: 'host-fleet',
+    path: '/console/fleet',
   });
   assert.deepEqual(resolveOperatorConsoleRoute('/console/registry/'), {
     kind: 'site-registry',
@@ -58,6 +62,7 @@ test('operator navigation marks exactly one current route and includes launcher 
   assert.equal(items.find((item) => item.current)?.href, '/console/registry/manage');
   assert.equal(items.find((item) => item.key === 'launcher')?.href, '/console/launch');
   assert.equal(items.find((item) => item.key === 'sessions')?.href, '/console/sessions');
+  assert.equal(items.find((item) => item.key === 'fleet')?.href, '/console/fleet');
 
   const launcherItems = operatorConsoleNavigation('launcher');
   assert.equal(launcherItems.filter((item) => item.current).length, 1);

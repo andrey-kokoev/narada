@@ -5,6 +5,7 @@ import OperatorConsoleLoading from './components/OperatorConsoleLoading.vue';
 import OperatorConsoleLaunchPage from './pages/OperatorConsoleLaunchPage.vue';
 import OperatorConsoleOnboardingPage from './pages/OperatorConsoleOnboardingPage.vue';
 import AgentSessionsPage from './pages/AgentSessionsPage.vue';
+import HostFleetPage from './pages/HostFleetPage.vue';
 import SiteAgentsPage from './pages/SiteAgentsPage.vue';
 import SiteRegistryMutationPage from './pages/SiteRegistryMutationPage.vue';
 import SiteRegistryPage from './pages/SiteRegistryPage.vue';
@@ -76,6 +77,7 @@ onUnmounted(() => {
 <template>
   <OperatorConsoleLoading v-if="routeDirectory.loading.value && !routeDirectory.directory.value && !routeDirectory.hasAttempted.value" />
   <SiteAgentsPage v-else-if="route.kind === 'site-agents'" />
+  <HostFleetPage v-else-if="route.kind === 'host-fleet'" />
   <SiteRegistryPage v-else-if="route.kind === 'site-registry'" />
   <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-add'" mode="add" />
   <SiteRegistryMutationPage v-else-if="route.kind === 'site-registry-manage'" mode="manage" />

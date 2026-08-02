@@ -3,6 +3,8 @@ export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_SCHEMA = 'narada.operator_worksp
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_PATH = '/console/routes' as const;
 export const OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA = 'narada.operator_console.http_route_parity.v1' as const;
 export const OPERATOR_CONSOLE_PATH = '/console' as const;
+export const OPERATOR_CONSOLE_FLEET_PATH = `${OPERATOR_CONSOLE_PATH}/fleet` as const;
+export const OPERATOR_CONSOLE_FLEET_API_PATH = `${OPERATOR_CONSOLE_FLEET_PATH}/api` as const;
 export const OPERATOR_CONSOLE_REGISTRY_PATH = '/console/registry' as const;
 export const OPERATOR_CONSOLE_REGISTRY_API_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/api` as const;
 export const OPERATOR_CONSOLE_REGISTRY_ADD_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/add` as const;
@@ -92,6 +94,7 @@ export interface OperatorConsoleHttpRouteParity {
 }
 
 export type OperatorSurfaceId =
+  | 'host-fleet'
   | 'site-registry'
   | 'site-agents'
   | 'launcher'
@@ -101,12 +104,14 @@ export type OperatorSurfaceId =
   | 'onboarding';
 
 export type OperatorSurfaceScope =
+  | 'host-fleet'
   | 'user-site'
   | 'operator-console'
   | 'local-site'
   | 'nars-session';
 
 export type OperatorSurfaceAuthorityKind =
+  | 'host-fleet'
   | 'user-site'
   | 'operator-console'
   | 'site'
@@ -139,6 +144,7 @@ export interface OperatorSurfaceHostRef {
 }
 
 export type OperatorSurfaceProjectionKind =
+  | 'host-fleet-inventory'
   | 'workspace'
   | 'registry'
   | 'site-agent-overview'
@@ -179,7 +185,7 @@ export type OperatorSurfaceAvailability = 'available' | 'unavailable' | 'planned
 
 export type OperatorSurfaceRouteKind = 'page' | 'workflow';
 
-export type OperatorSurfaceNavigationKey = 'agents' | 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
+export type OperatorSurfaceNavigationKey = 'fleet' | 'agents' | 'sites' | 'add' | 'manage' | 'launcher' | 'sessions' | 'onboarding';
 
 export interface OperatorSurfaceNavigationItem {
   key: OperatorSurfaceNavigationKey;
@@ -952,6 +958,27 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
       available: 'Inspect admitted agents by Site, start stopped agents, and open healthy sessions.',
       unavailable: 'The Sites and Agents projection is not reachable from this host.',
       planned: 'The Sites and Agents projection is not yet available from this host.',
+    },
+  },
+  {
+    schema: OPERATOR_SURFACE_DESCRIPTOR_SCHEMA,
+    id: 'host-fleet',
+    name: 'Hosts',
+    scope: 'host-fleet',
+    owner: 'Host Fleet',
+    authority: { kind: 'host-fleet', id: '@narada-core/host-fleet' },
+    authorityHost: { kind: 'local', id: 'host-fleet', origin: null },
+    projection: { kind: 'host-fleet-inventory', owner: '@narada-core/operator-console-ui' },
+    intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] },
+    diagnosticOnly: false,
+    routes: [
+      { id: 'fleet', path: OPERATOR_CONSOLE_FLEET_PATH, kind: 'page', label: 'Hosts', navigationKey: 'fleet' },
+    ],
+    defaultAvailability: 'available',
+    detail: {
+      available: 'Inspect authenticated Fleet hosts and their Operator Console locations.',
+      unavailable: 'The host-only Fleet projection is not reachable from this host.',
+      planned: 'The host-only Fleet projection is not yet available from this host.',
     },
   },
   {

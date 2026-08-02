@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createServer } from 'node:http';
+import type { HostFleetReadModel } from '@narada-core/host-fleet';
 import {
   createConsoleServer,
   ensureConsoleServer,
@@ -473,6 +474,71 @@ describe('console server', () => {
 
       const workbench = await fetch(`${url}/workbench`);
       expect(workbench.status).toBe(404);
+      await server.stop();
+    });
+  });
+
+  describe('GET /console/fleet', () => {
+    it('serves only the injected host snapshot through a read-only route', async () => {
+      const hostFleet: HostFleetReadModel = {
+        list: vi.fn(async () => ({
+          schema: 'narada.host_fleet.snapshot.v1',
+          generated_at: '2026-08-01T12:00:00.000Z',
+          hosts: [{
+            schema: 'narada.host_fleet.host.v1',
+            identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
+            reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z' },
+            health: { status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: null },
+            operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
+          }],
+        })),
+      };
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', hostFleet });
+      const url = await server.start();
+
+      const page = await fetch(`${url}/console/fleet`);
+      expect(page.status).toBe(200);
+      expect(page.headers.get('content-type')).toContain('text/html');
+
+      const response = await httpGet(`${url}/console/fleet/api/hosts`);
+      expect(response.status).toBe(200);
+      expect(response.body).toMatchObject({
+        schema: 'narada.host_fleet.snapshot.v1',
+        hosts: [{ identity: { host_id: 'desktop' } }],
+      });
+      expect(JSON.stringify(response.body)).not.toMatch(/site_id|agent_id|session_id|runtime_session_id/);
+      expect(hostFleet.list).toHaveBeenCalledTimes(1);
+
+      const mutation = await fetch(`${url}/console/fleet/api/hosts`, { method: 'POST' });
+      expect(mutation.status).toBe(405);
+      await server.stop();
+    });
+
+    it('refuses an upstream read model that leaks internal-host identity', async () => {
+      const hostFleet = {
+        list: vi.fn(async () => ({
+          schema: 'narada.host_fleet.snapshot.v1',
+          generated_at: '2026-08-01T12:00:00.000Z',
+          hosts: [{
+            schema: 'narada.host_fleet.host.v1',
+            identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
+            reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z' },
+            health: { status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: null },
+            operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
+            site_id: 'must-not-cross-fleet-boundary',
+          }],
+        })),
+      } as unknown as HostFleetReadModel;
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', hostFleet });
+      const url = await server.start();
+
+      const response = await httpGet(`${url}/console/fleet/api/hosts`);
+      expect(response.status).toBe(503);
+      expect(response.body).toMatchObject({
+        status: 'refused',
+        code: 'host_fleet_read_unavailable',
+      });
+      expect(JSON.stringify(response.body)).not.toContain('must-not-cross-fleet-boundary');
       await server.stop();
     });
   });

@@ -22,6 +22,7 @@ import type {
   SiteControlClientFactory,
 } from '@narada-core/windows-site';
 import type { ConsoleControlRequest } from '@narada-core/windows-site';
+import { validateHostFleetSnapshot, type HostFleetReadModel } from '@narada-core/host-fleet';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
@@ -37,6 +38,8 @@ import {
   OPERATOR_CONSOLE_AGENTS_STOP_API_PATH,
   OPERATOR_CONSOLE_AGENTS_PATH,
   OPERATOR_CONSOLE_ASSET_PATH,
+  OPERATOR_CONSOLE_FLEET_API_PATH,
+  OPERATOR_CONSOLE_FLEET_PATH,
   OPERATOR_CONSOLE_PATH,
   OPERATOR_CONSOLE_REGISTRY_PATH,
   OPERATOR_CONSOLE_REGISTRY_ADD_PATH,
@@ -106,6 +109,7 @@ export interface ConsoleServerRouteContext {
   siteAgentAdmission?: SiteAgentAdmissionGateway;
   siteAgentLifecycle?: SiteAgentLifecycleGateway;
   siteAgentPending?: SiteAgentPendingTracker;
+  hostFleet: HostFleetReadModel;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
   onboardingPlatform?: 'windows' | 'linux';
@@ -434,6 +438,46 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
         }
         res.writeHead(200, { 'Content-Type': asset.contentType, 'Content-Length': asset.body.byteLength, 'Cache-Control': 'no-cache' });
         res.end(asset.body);
+      },
+    },
+
+    // Host Fleet is a GET-only projection of an injected host read model.
+    {
+      route_id: 'operator-console.host-fleet-page',
+      method: 'GET',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_FLEET_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'document',
+      remote_intent: null,
+      handler: async (req, res) => {
+        if (!setCorsHeaders(res, req.headers.origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        htmlResponse(res, 200, readOperatorConsoleUiDocument(ctx.operatorConsoleUiRoot));
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-list',
+      method: 'GET',
+      pattern: suffixPathPattern(OPERATOR_CONSOLE_FLEET_API_PATH, '/hosts$'),
+      remote_disposition: 'proxy',
+      remote_kind: 'observation',
+      remote_intent: null,
+      handler: async (req, res) => {
+        if (!setCorsHeaders(res, req.headers.origin)) {
+          jsonResponse(res, 403, { error: 'Origin not allowed' });
+          return;
+        }
+        try {
+          jsonResponse(res, 200, validateHostFleetSnapshot(await ctx.hostFleet.list()));
+        } catch (error) {
+          jsonResponse(res, 503, {
+            status: 'refused',
+            code: 'host_fleet_read_unavailable',
+            reason: error instanceof Error ? error.message : String(error),
+          });
+        }
       },
     },
 
