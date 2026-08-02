@@ -549,6 +549,7 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
   const stateRoot = await mkdtemp(join(tmpdir(), 'narada-operator-router-'));
   let observedOrigin: string | undefined;
   let observedCsrf: string | undefined;
+  let observedHostFleetHeaders: Record<string, string | undefined> = {};
   const upstream = createServer((req, res) => {
     if (req.url === '/health') {
       res.writeHead(200, { 'content-type': 'text/plain' });
@@ -557,6 +558,12 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     }
     if (req.url === '/headers') {
       observedCsrf = Array.isArray(req.headers['x-csrf-token']) ? req.headers['x-csrf-token'][0] : req.headers['x-csrf-token'];
+      observedHostFleetHeaders = Object.fromEntries([
+        'x-narada-host-fleet-key-id',
+        'x-narada-host-fleet-timestamp',
+        'x-narada-host-fleet-nonce',
+        'x-narada-host-fleet-signature',
+      ].map((name) => [name, Array.isArray(req.headers[name]) ? req.headers[name][0] : req.headers[name]]));
       res.writeHead(302, { location: '/next', 'set-cookie': ['router_a=1', 'router_b=2'] });
       res.end();
       return;
@@ -599,11 +606,23 @@ test('router registers, health-checks, proxies, projects, renews, and removes a 
     assert.equal(foreignLoopbackOrigin.status, 421);
     const headersForwarded = await fetch(`${routerUrl}/sessions/demo/headers`, {
       redirect: 'manual',
-      headers: { 'x-csrf-token': 'csrf-demo' },
+      headers: {
+        'x-csrf-token': 'csrf-demo',
+        'x-narada-host-fleet-key-id': 'fleet-key',
+        'x-narada-host-fleet-timestamp': '2026-08-02T06:00:00.000Z',
+        'x-narada-host-fleet-nonce': 'nonce-1234567890123456',
+        'x-narada-host-fleet-signature': 'a'.repeat(64),
+      },
     });
     assert.equal(headersForwarded.status, 302);
     assert.equal(headersForwarded.headers.get('location'), '/next');
     assert.equal(observedCsrf, 'csrf-demo');
+    assert.deepEqual(observedHostFleetHeaders, {
+      'x-narada-host-fleet-key-id': 'fleet-key',
+      'x-narada-host-fleet-timestamp': '2026-08-02T06:00:00.000Z',
+      'x-narada-host-fleet-nonce': 'nonce-1234567890123456',
+      'x-narada-host-fleet-signature': 'a'.repeat(64),
+    });
     assert.match(headersForwarded.headers.get('set-cookie') ?? '', /router_a=1/);
     const traversal = await requestStatusPath(routerUrl, '/sessions/demo/%2e%2e/admin');
     assert.equal(traversal, 400);

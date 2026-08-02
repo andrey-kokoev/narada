@@ -416,7 +416,7 @@ async function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<Rec
 
 function forwardedHeaders(req: IncomingMessage): Record<string, string> {
   const headers: Record<string, string> = {};
-  for (const name of ['accept', 'accept-encoding', 'accept-language', 'authorization', 'content-type', 'cookie', 'if-match', 'if-modified-since', 'if-none-match', 'origin', 'range', 'referer', 'user-agent', 'x-csrf-token', 'x-requested-with', 'x-xsrf-token']) {
+  for (const name of ['accept', 'accept-encoding', 'accept-language', 'authorization', 'content-type', 'cookie', 'if-match', 'if-modified-since', 'if-none-match', 'origin', 'range', 'referer', 'user-agent', 'x-csrf-token', 'x-requested-with', 'x-xsrf-token', 'x-narada-host-fleet-key-id', 'x-narada-host-fleet-timestamp', 'x-narada-host-fleet-nonce', 'x-narada-host-fleet-signature']) {
     const value = headerValue(req.headers[name]);
     if (value) headers[name] = value;
   }
