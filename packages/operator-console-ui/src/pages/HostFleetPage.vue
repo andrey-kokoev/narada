@@ -24,6 +24,8 @@ function formatTimestamp(value: string | null): string {
       <div class="summary-row" aria-label="Host summary">
         <div class="summary"><span>Hosts</span><strong>{{ fleet.hosts.value.length }}</strong></div>
         <div class="summary"><span>Reachable</span><strong>{{ fleet.reachableCount.value }}</strong></div>
+        <div class="summary"><span>Authority</span><strong>{{ fleet.authorityHostId.value ?? 'Unknown' }}</strong></div>
+        <div class="summary"><span>Runtime</span><strong>{{ fleet.runtimeStatus.value ?? 'checking' }}</strong></div>
         <div class="summary"><span>Read at</span><strong>{{ formatTimestamp(fleet.generatedAt.value) }}</strong></div>
         <button class="refresh" type="button" :disabled="fleet.loading.value" title="Refresh hosts" @click="fleet.load">
           <RefreshCw :size="14" aria-hidden="true" />
@@ -32,6 +34,11 @@ function formatTimestamp(value: string | null): string {
       </div>
 
       <p v-if="fleet.error.value" class="notice error" role="alert">{{ fleet.error.value }}</p>
+      <p v-else-if="fleet.runtimeStatus.value && fleet.runtimeStatus.value !== 'ready'" class="notice error" role="status">
+        Host Fleet authority is {{ fleet.runtimeStatus.value }}.
+        <code v-if="fleet.runtimeDetailCode.value">{{ fleet.runtimeDetailCode.value }}</code>
+        <small v-if="fleet.correlationId.value">Diagnostic reference: {{ fleet.correlationId.value }}</small>
+      </p>
       <p v-if="fleet.loading.value && !fleet.hosts.value.length" class="empty">Reading authenticated hosts...</p>
       <p v-else-if="!fleet.hosts.value.length" class="empty">No authenticated hosts are currently projected.</p>
 
@@ -42,6 +49,7 @@ function formatTimestamp(value: string | null): string {
               <th scope="col">Host</th>
               <th scope="col">Platform</th>
               <th scope="col">Reachability</th>
+              <th scope="col">Publisher</th>
               <th scope="col">Health</th>
               <th scope="col">Operator Console</th>
             </tr>
@@ -58,7 +66,12 @@ function formatTimestamp(value: string | null): string {
                 <small>{{ formatTimestamp(host.reachability.observed_at) }}</small>
               </td>
               <td>
+                <span class="status" :data-state="host.reachability.publisher_freshness">{{ host.reachability.publisher_freshness }}</span>
+                <small>{{ formatTimestamp(host.reachability.heartbeat_received_at) }}</small>
+              </td>
+              <td>
                 <span class="status" :data-state="host.health.status">{{ host.health.status }}</span>
+                <small v-if="host.health.status !== host.health.reported_status">reported {{ host.health.reported_status }}</small>
                 <small>{{ host.health.detail ?? formatTimestamp(host.health.observed_at) }}</small>
               </td>
               <td>
@@ -100,8 +113,8 @@ tbody th { font-weight: 600; }
 code { font: 12px/1.4 var(--mono); overflow-wrap: anywhere; }
 small { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; font-weight: 400; overflow-wrap: anywhere; }
 .status { display: inline-block; padding: 3px 7px; border-radius: calc(var(--radius) - 2px); background: var(--control-bg); color: var(--muted); font-size: 11px; }
-.status[data-state="reachable"], .status[data-state="healthy"] { color: var(--operator); background: var(--activity-chip-bg); }
-.status[data-state="degraded"], .status[data-state="unreachable"], .status[data-state="unavailable"] { color: var(--danger); }
+.status[data-state="reachable"], .status[data-state="healthy"], .status[data-state="fresh"] { color: var(--operator); background: var(--activity-chip-bg); }
+.status[data-state="degraded"], .status[data-state="unreachable"], .status[data-state="unavailable"], .status[data-state="stale"] { color: var(--danger); }
 .open-link { color: var(--operator); font-size: 12px; font-weight: 650; text-decoration: none; }
 .open-link:hover { text-decoration: underline; }
 .unavailable { color: var(--muted); font-size: 12px; }

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { createServer } from 'node:http';
-import type { HostFleetReadModel } from '@narada-core/host-fleet';
+import type { HostFleetProjectionReader } from '@narada-core/host-fleet-runtime/client';
 import {
   createConsoleServer,
   ensureConsoleServer,
@@ -509,26 +509,32 @@ describe('console server', () => {
       const fleet = await httpGet(`${url}/console/fleet/api/hosts`);
       expect(fleet.status).toBe(200);
       expect(fleet.body).toMatchObject({
-        schema: 'narada.host_fleet.snapshot.v1',
-        hosts: [],
+        schema: 'narada.host_fleet.read_response.v1',
+        runtime: { status: 'unconfigured' },
+        snapshot: null,
       });
       expect(JSON.stringify(fleet.body)).not.toContain('site-must-remain-inside-host');
       await server.stop();
     });
 
     it('serves only the injected host snapshot through a read-only route', async () => {
-      const hostFleet: HostFleetReadModel = {
-        list: vi.fn(async () => ({
-          schema: 'narada.host_fleet.snapshot.v1',
-          generated_at: '2026-08-01T12:00:00.000Z',
-          hosts: [{
-            schema: 'narada.host_fleet.host.v1',
-            identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
-            reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z' },
-            health: { status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: null },
-            operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
-          }],
+      const hostFleet: HostFleetProjectionReader = {
+        read: vi.fn(async () => ({
+          schema: 'narada.host_fleet.read_response.v1',
+          runtime: { status: 'ready', authority_host_id: 'desktop', checked_at: '2026-08-01T12:00:00.000Z', detail_code: null, correlation_id: null },
+          snapshot: {
+            schema: 'narada.host_fleet.snapshot.v2',
+            generated_at: '2026-08-01T12:00:00.000Z',
+            hosts: [{
+              schema: 'narada.host_fleet.host.v2',
+              identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
+              reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z', publisher_freshness: 'fresh', heartbeat_received_at: '2026-08-01T12:00:00.000Z' },
+              health: { status: 'healthy', reported_status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: null },
+              operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
+            }],
+          },
         })),
+        forwardHeartbeat: vi.fn(),
       };
       const server = await createConsoleServer({ port: 0, host: '127.0.0.1', hostFleet });
       const url = await server.start();
@@ -540,11 +546,11 @@ describe('console server', () => {
       const response = await httpGet(`${url}/console/fleet/api/hosts`);
       expect(response.status).toBe(200);
       expect(response.body).toMatchObject({
-        schema: 'narada.host_fleet.snapshot.v1',
-        hosts: [{ identity: { host_id: 'desktop' } }],
+        schema: 'narada.host_fleet.read_response.v1',
+        snapshot: { hosts: [{ identity: { host_id: 'desktop' } }] },
       });
       expect(JSON.stringify(response.body)).not.toMatch(/site_id|agent_id|session_id|runtime_session_id/);
-      expect(hostFleet.list).toHaveBeenCalledTimes(1);
+      expect(hostFleet.read).toHaveBeenCalledTimes(1);
 
       const mutation = await fetch(`${url}/console/fleet/api/hosts`, { method: 'POST' });
       expect(mutation.status).toBe(405);
@@ -553,19 +559,24 @@ describe('console server', () => {
 
     it('refuses an upstream read model that leaks internal-host identity', async () => {
       const hostFleet = {
-        list: vi.fn(async () => ({
-          schema: 'narada.host_fleet.snapshot.v1',
-          generated_at: '2026-08-01T12:00:00.000Z',
-          hosts: [{
-            schema: 'narada.host_fleet.host.v1',
-            identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
-            reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z' },
-            health: { status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: null },
-            operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
-            site_id: 'must-not-cross-fleet-boundary',
-          }],
+        read: vi.fn(async () => ({
+          schema: 'narada.host_fleet.read_response.v1',
+          runtime: { status: 'ready', authority_host_id: 'desktop', checked_at: '2026-08-01T12:00:00.000Z', detail_code: null, correlation_id: null },
+          snapshot: {
+            schema: 'narada.host_fleet.snapshot.v2',
+            generated_at: '2026-08-01T12:00:00.000Z',
+            hosts: [{
+              schema: 'narada.host_fleet.host.v2',
+              identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
+              reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z', publisher_freshness: 'fresh', heartbeat_received_at: '2026-08-01T12:00:00.000Z' },
+              health: { status: 'healthy', reported_status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: null },
+              operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
+              site_id: 'must-not-cross-fleet-boundary',
+            }],
+          },
         })),
-      } as unknown as HostFleetReadModel;
+        forwardHeartbeat: vi.fn(),
+      } as unknown as HostFleetProjectionReader;
       const server = await createConsoleServer({ port: 0, host: '127.0.0.1', hostFleet });
       const url = await server.start();
 
@@ -576,6 +587,33 @@ describe('console server', () => {
         code: 'host_fleet_read_unavailable',
       });
       expect(JSON.stringify(response.body)).not.toContain('must-not-cross-fleet-boundary');
+      await server.stop();
+    });
+
+    it('forwards the bounded signed heartbeat body without requiring a Console bridge credential', async () => {
+      const forwardHeartbeat = vi.fn(async () => ({ status: 202, body: { status: 'accepted', host_id: 'zima' } }));
+      const hostFleet: HostFleetProjectionReader = {
+        read: vi.fn(),
+        forwardHeartbeat,
+      };
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1', hostFleet });
+      const url = await server.start();
+      const body = '{"schema":"narada.host_fleet.heartbeat.v1","fleet_id":"home","host_id":"zima"}';
+      const response = await fetch(`${url}/console/fleet/api/observations`, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-narada-host-fleet-key-id': 'active',
+          'x-narada-host-fleet-timestamp': '2026-08-01T12:00:00.000Z',
+          'x-narada-host-fleet-nonce': 'abcdefghijklmnop',
+          'x-narada-host-fleet-signature': 'a'.repeat(64),
+        },
+        body,
+      });
+      expect(response.status).toBe(202);
+      expect(forwardHeartbeat).toHaveBeenCalledTimes(1);
+      expect((forwardHeartbeat.mock.calls[0]![0] as Buffer).toString('utf8')).toBe(body);
+      expect(forwardHeartbeat.mock.calls[0]![1]['x-narada-host-fleet-key-id']).toBe('active');
       await server.stop();
     });
   });

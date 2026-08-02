@@ -36,6 +36,15 @@ const routePolicy: readonly OperatorConsoleHttpRouteParityEntry[] = [
     intentKind: 'registry.plan',
   },
   {
+    routeId: 'operator-console.host-fleet-observation-admit',
+    method: 'POST',
+    protocol: 'http',
+    pattern: '^\\/console\\/fleet\\/api\\/observations\\/?$',
+    disposition: 'proxy',
+    kind: 'intent',
+    intentKind: 'host_fleet_observation_admit',
+  },
+  {
     routeId: 'router.session-a.websocket.get',
     method: 'GET',
     protocol: 'websocket',
@@ -71,6 +80,12 @@ test('requires the bridge credential and forwards admitted requests to the loopb
       }));
       return;
     }
+    if (req.url === '/console/fleet/api/observations') {
+      assert.equal(req.headers['x-narada-host-fleet-key-id'], 'active');
+      assert.equal(req.headers['x-narada-host-fleet-timestamp'], '2026-08-01T12:00:00.000Z');
+      assert.equal(req.headers['x-narada-host-fleet-nonce'], 'abcdefghijklmnop');
+      assert.equal(req.headers['x-narada-host-fleet-signature'], 'a'.repeat(64));
+    }
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ path: req.url, method: req.method }));
   });
@@ -98,6 +113,21 @@ test('requires the bridge credential and forwards admitted requests to the loopb
       headers: { 'x-narada-operator-console-bridge-token': bridgeToken },
     });
     assert.equal(unknown.status, 404);
+    const unsignedHeartbeat = await fetch(`${gatewayUrl}/console/fleet/api/observations`, { method: 'POST', body: '{}' });
+    assert.equal(unsignedHeartbeat.status, 401);
+    const signedHeartbeat = await fetch(`${gatewayUrl}/console/fleet/api/observations`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-narada-host-fleet-key-id': 'active',
+        'x-narada-host-fleet-timestamp': '2026-08-01T12:00:00.000Z',
+        'x-narada-host-fleet-nonce': 'abcdefghijklmnop',
+        'x-narada-host-fleet-signature': 'a'.repeat(64),
+      },
+      body: '{}',
+    });
+    assert.equal(signedHeartbeat.status, 200);
+    assert.deepEqual(await signedHeartbeat.json(), { path: '/console/fleet/api/observations', method: 'POST' });
   } finally {
     await gateway.stop();
     await new Promise<void>((resolve, reject) => router.close((error) => error ? reject(error) : resolve()));

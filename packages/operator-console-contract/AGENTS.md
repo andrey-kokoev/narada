@@ -20,7 +20,7 @@ It does not own:
 - browser rendering (`operator-console-ui`);
 - Cloudflare route publication lifecycle (bridge-owned);
 - Site or session authority.
-- Host Fleet membership or host observation authority; `@narada-core/host-fleet` owns that host-only contract.
+- Host Fleet membership or host observation authority; `@narada-core/host-fleet-runtime` owns authority and `@narada-core/host-fleet` owns its host-only contracts.
 
 ## Boundary Rules
 

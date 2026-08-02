@@ -7,7 +7,7 @@ import {
   consoleOverlayCommand,
   consoleGatewayCommand,
 } from './console.js';
-import { DEFAULT_OPERATOR_CONSOLE_PORT, createConsoleServer } from './console-server.js';
+import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada-core/operator-router';
 import {
   OPERATOR_CONSOLE_LAUNCH_PATH,
   OPERATOR_CONSOLE_ONBOARDING_PATH,
@@ -97,7 +97,7 @@ export function registerConsoleCommands(program: Command): void {
     .command('restart')
     .description('Stop and start the local Operator Workspace projection')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
-    .option('--port <port>', 'Stable Operator Router port', String(DEFAULT_OPERATOR_CONSOLE_PORT))
+    .option('--port <port>', 'Stable Operator Router port', String(DEFAULT_OPERATOR_ROUTER_PORT))
     .option('--open', 'Open the Operator Workspace in the default browser after startup', true)
     .option('--no-open', 'Do not open the Operator Workspace in the default browser', false)
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
@@ -141,7 +141,7 @@ export function registerConsoleCommands(program: Command): void {
     .command('stop')
     .description('Stop the local Operator Workspace projection and remove its route')
     .option('--host <host>', 'Operator Router host', '127.0.0.1')
-    .option('--port <port>', 'Stable Operator Router port', String(DEFAULT_OPERATOR_CONSOLE_PORT))
+    .option('--port <port>', 'Stable Operator Router port', String(DEFAULT_OPERATOR_ROUTER_PORT))
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (opts: CommanderOptionValues) => {
@@ -182,7 +182,7 @@ export function registerConsoleCommands(program: Command): void {
     .command('serve')
     .description('Start the local Operator Workspace host for browser UI')
     .option('--host <host>', 'Host to bind to', '127.0.0.1')
-    .option('--port <port>', `Stable Operator Router port (0 for diagnostic ephemeral mode)`, String(DEFAULT_OPERATOR_CONSOLE_PORT))
+    .option('--port <port>', `Stable Operator Router port (0 for diagnostic ephemeral mode)`, String(DEFAULT_OPERATOR_ROUTER_PORT))
     .option('--open', 'Open the Operator Workspace in the default browser after startup', true)
     .option('--no-open', 'Do not open the Operator Workspace in the default browser', false)
     .addOption(new Option('--runtime-instance <nonce>', 'Internal Operator Console runtime identity nonce').hideHelp())
@@ -330,6 +330,7 @@ function mirrorOptionsFromCommander(opts: CommanderOptionValues): ConsoleMirrorC
 
 async function runConsoleServe(opts: CommanderOptionValues): Promise<void> {
   // Long-lived process surface: keep direct lifecycle output and SIGINT handling.
+  const { createConsoleServer } = await import('./console-server.js');
   const host = (opts.host as string) ?? '127.0.0.1';
   const port = opts.port ? Number.parseInt(String(opts.port), 10) : 0;
   if (port === 0) {

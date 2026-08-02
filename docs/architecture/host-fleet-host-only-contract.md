@@ -2,54 +2,112 @@
 
 ## Objective
 
-Host Fleet is a read-only projection of hosts that belong to one Fleet. It does not know what any host contains.
+Host Fleet is a read-only projection of machines that belong to one Fleet. A
+Fleet is a set of hosts; it has no knowledge of the Sites, users, agents,
+sessions, runtimes, or launchers inside a host.
 
-## Authority Boundary
+## Factorization
 
-A Fleet member is exactly one host. A host observation crosses into the Fleet read model only when it presents the host-level `host_fleet_membership_secret` configured by the Fleet membership authority. The proof is checked at admission and is never persisted or projected.
+The implementation has four orthogonal owners:
 
-The membership authority has one legal scope: `host`. User Site, Site, agent, session, runtime, and launcher scopes are invalid at this boundary.
+1. `@narada-core/host-fleet` owns the strict host-only wire contracts.
+2. `@narada-core/host-fleet-runtime` owns machine configuration, the Fleet
+   authority and publisher processes, HMAC admission, SQLite state, active
+   reachability probes, and OS-service plans.
+3. The host gateway (`@narada-core/operator-console-remote-gateway`) carries
+   signed heartbeat bytes to the authority host. It does not decide membership.
+4. Operator Console reads the authority snapshot and renders it. It does not
+   discover members or mutate Fleet state.
+
+No component derives Fleet membership from a User Site or Site registry.
+
+## Authority Topology
+
+One rostered host is the Fleet authority. Its machine-level configuration owns
+the complete host roster and runs a loopback-only HTTP authority. Every other
+host runs a publisher service with an empty roster and a remote ingress URL.
+
+The data path is:
+
+```text
+member host publisher
+  -> HTTPS Host Gateway ingress
+  -> authority-host Operator Console ingress
+  -> loopback Host Fleet authority
+  -> SQLite observation state
+  -> read-only Fleet snapshot
+```
+
+The gateway and console preserve the signed request body and HMAC headers. Only
+the loopback authority validates membership, Fleet identity, roster admission,
+clock skew, key lifetime, signature, and nonce replay.
+
+## Membership Trust
+
+All Fleet hosts share one machine-level `host_fleet_membership_secret`. The
+secret proves membership in a Fleet, not a unique machine identity. Therefore
+any holder can sign a heartbeat that asserts any host ID already admitted by
+the authority roster. Per-host attestation is deliberately outside this
+shared-secret model.
+
+Every signed heartbeat carries `fleet_id`; the authority rejects a heartbeat
+for another Fleet even when key material was accidentally reused. The secret
+is read from a protected machine file and is never stored in SQLite, returned
+by an API, or projected to a surface.
+
+Rotation has two authority slots: `active` and a time-bounded `previous`.
+Publishers hold only the active credential. Configuration changes take effect
+through validated service reload, not implicit file watching.
 
 ## Projected Codomain
 
-Each admitted host projects exactly four domains:
+Each rostered host projects exactly four domains:
 
-1. **Identity**: stable host ID, display name, and platform.
-2. **Reachability**: whether the host was reachable and when that was observed.
-3. **Health**: host health status, observation time, and bounded diagnostic detail.
-4. **Operator Console location**: availability and an HTTP(S) URL when known.
+1. **Identity**: stable host ID, display name, and platform from the authority roster.
+2. **Reachability**: an independent authority-owned probe result and observation time.
+3. **Health**: freshness-adjusted health plus the last status reported by the publisher.
+4. **Operator Console location**: availability and an HTTP(S) URL when configured.
 
-The Fleet snapshot adds only its schema and generation time. It does not contain Site IDs, Site lists, agent IDs, session IDs, runtime targets, capabilities inside a host, or lifecycle commands.
+Publisher freshness and reachability are separate. A fresh heartbeat does not
+prove that the Operator Console endpoint is reachable, and a successful probe
+does not make a stale heartbeat fresh. Once a heartbeat exceeds
+`stale_after_ms`, effective health becomes `unknown` while the reported status
+remains visible as historical evidence.
 
-## Read Model
+## Runtime Availability
 
-`@narada-core/host-fleet` builds an immutable snapshot from authenticated host observations. Its public registry API exposes only `list()`. It has no enrollment, update, delete, launch, stop, credential-rotation, gateway-control, event-stream, or discovery method.
+Authority and publisher processes expose loopback `/health`. Publisher health
+records the last publish attempt, success, and bounded failure code, so an
+unreachable authority does not make the publisher process invisible. The
+authority additionally exposes `/v1/snapshot` and `/v1/observations` on
+loopback.
 
-The Operator Console consumes the same snapshot through a GET-only endpoint and renders a read-only host table. It does not become Fleet authority.
-
-The first implementation has no implicit discovery source. A host-level collector may supply authenticated observations through the read-model construction boundary. Without one, the Operator Console returns a valid empty Fleet snapshot. It must not populate that snapshot by consulting a User Site, Site registry, agent inventory, or runtime-session index.
+Operator Console returns an explicit `unconfigured`, `degraded`, or `ready`
+runtime envelope. It derives the authority endpoint from validated machine
+configuration; it does not assume the default port or treat a publisher as a
+local authority.
 
 ## Mechanical Enforcement
 
-The package test suite must fail when:
+Tests fail when:
 
 - a host or snapshot carries Site, agent, session, or runtime identity fields;
-- membership authority has any scope other than `host`;
 - Fleet source imports a Site, agent, session, NARS, launcher, or lifecycle package;
-- the package gains a production package dependency;
-- the membership secret appears in a projected snapshot;
-- the registry gains a mutation method.
-- the Operator Console derives Fleet hosts from a populated Site registry when no host read model is supplied.
-
-The strict runtime validators reject unknown keys at every wire boundary, so a structurally valid Site-aware extension cannot be smuggled through TypeScript's open object assignability.
+- a heartbeat omits `fleet_id`, crosses Fleet identity, replays a nonce, or has an invalid signature;
+- runtime source imports anything beyond the host contract and SQLite foundation;
+- a publisher configuration contains a roster or a previous credential;
+- the authority listener is not loopback-only;
+- Operator Console derives hosts from Site state or ignores the configured authority endpoint;
+- a service reload activates invalid configuration without restoring the prior valid file.
 
 ## Explicit Non-Goals
 
-- discovering Sites, agents, sessions, or runtimes inside a host;
-- controlling host or internal-host lifecycle;
-- choosing an authority runtime;
-- managing per-host credentials;
-- defining Cloudflare persistence or replication;
-- exposing an MCP mutation surface.
+- discovering or controlling anything inside a host;
+- per-host cryptographic identity or hardware attestation;
+- remote shell or host lifecycle control;
+- exposing Fleet mutation through MCP;
+- silently discovering peers;
+- making Operator Console or Host Gateway the membership authority.
 
-Those concerns require separate authority contracts. They cannot be added by widening the Host Fleet record.
+Deployment and rotation procedures live in
+[`host-fleet.md`](../operator/host-fleet.md).

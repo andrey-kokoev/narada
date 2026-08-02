@@ -3,7 +3,6 @@ import { directCommandAction, silentCommandContext } from '../lib/command-wrappe
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
 import { explainMcpCommand } from './launcher-mcp-authority.js';
 import { launcherArtifactCheckCommand, launcherArtifactEnsureCommand } from './launcher-artifact.js';
-import { workspaceLaunchCommand, workspaceLaunchPlanCommand } from './workspace-launch-application.js';
 import type { ExplainMcpOptions } from './launcher-mcp-authority.js';
 import type { LauncherArtifactOptions } from './launcher-artifact.js';
 import type { WorkspaceLaunchPlanOptions } from './workspace-launch-types.js';
@@ -86,27 +85,30 @@ export function registerLauncherCommands(program: Command): void {
         emitCommandResult(result, format);
       },
       format: (opts: LauncherCommandOptions) => opts.format,
-      invocation: (opts) => workspaceLaunchPlanCommand({
-        agent: opts.agent,
-        all: opts.all,
-        role: opts.role,
-        site: opts.site,
-        configPath: opts.configPath,
-        registryPath: opts.registryPath,
-        operatorSurface: opts.operatorSurface,
-        runtime: opts.runtime,
-        authority: opts.authority,
-        mcpScope: opts.mcpScope,
-        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
-        resultPath: opts.resultPath,
-        suppressResultOutput: opts.suppressResultOutput,
-        enableNativeShell: opts.enableNativeShell,
-        noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
-        visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
-        smoke: opts.smoke,
-        dryRun: opts.dryRun,
-        format: resolveCommandFormat(opts.format, 'auto'),
-      }, silentCommandContext()),
+      invocation: async (opts) => {
+        const { workspaceLaunchPlanCommand } = await import('./workspace-launch-application.js');
+        return workspaceLaunchPlanCommand({
+          agent: opts.agent,
+          all: opts.all,
+          role: opts.role,
+          site: opts.site,
+          configPath: opts.configPath,
+          registryPath: opts.registryPath,
+          operatorSurface: opts.operatorSurface,
+          runtime: opts.runtime,
+          authority: opts.authority,
+          mcpScope: opts.mcpScope,
+          cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
+          resultPath: opts.resultPath,
+          suppressResultOutput: opts.suppressResultOutput,
+          enableNativeShell: opts.enableNativeShell,
+          noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
+          visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
+          smoke: opts.smoke,
+          dryRun: opts.dryRun,
+          format: resolveCommandFormat(opts.format, 'auto'),
+        }, silentCommandContext());
+      },
     }));
 
   launcher
@@ -142,27 +144,30 @@ export function registerLauncherCommands(program: Command): void {
         emitCommandResult(result, format);
       },
       format: (opts: LauncherCommandOptions) => opts.format,
-      invocation: (opts) => workspaceLaunchCommand({
-        agent: opts.agent,
-        all: opts.all,
-        role: opts.role,
-        site: opts.site,
-        configPath: opts.configPath,
-        registryPath: opts.registryPath,
-        operatorSurface: opts.operatorSurface,
-        runtime: opts.runtime,
-        authority: opts.authority,
-        mcpScope: opts.mcpScope,
-        cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
-        resultPath: opts.resultPath,
-        suppressResultOutput: opts.suppressResultOutput,
-        enableNativeShell: opts.enableNativeShell,
-        noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
-        visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
-        smoke: opts.smoke,
-        dryRun: opts.dryRun,
-        format: resolveCommandFormat(opts.format, 'auto'),
-      }, silentCommandContext()),
+      invocation: async (opts) => {
+        const { workspaceLaunchCommand } = await import('./workspace-launch-application.js');
+        return workspaceLaunchCommand({
+          agent: opts.agent,
+          all: opts.all,
+          role: opts.role,
+          site: opts.site,
+          configPath: opts.configPath,
+          registryPath: opts.registryPath,
+          operatorSurface: opts.operatorSurface,
+          runtime: opts.runtime,
+          authority: opts.authority,
+          mcpScope: opts.mcpScope,
+          cloudflareApiBaseUrl: opts.cloudflareApiBaseUrl,
+          resultPath: opts.resultPath,
+          suppressResultOutput: opts.suppressResultOutput,
+          enableNativeShell: opts.enableNativeShell,
+          noWaitForEnterBeforeExec: opts.noWaitForEnterBeforeExec,
+          visibleRuntimeTerminal: opts.visibleRuntimeTerminal,
+          smoke: opts.smoke,
+          dryRun: opts.dryRun,
+          format: resolveCommandFormat(opts.format, 'auto'),
+        }, silentCommandContext());
+      },
     }));
 
   launcher

@@ -5,12 +5,12 @@
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
-  "description": "Host-only Fleet contract and authenticated read model",
+  "description": "Strict host-only Fleet contracts and deterministic read-model primitives",
   "narada": {
     "package_role": "host_fleet_contract_and_read_model",
     "surface": "host_fleet",
     "presentation_only": false,
-    "authority_owner": "@narada-core/host-fleet"
+    "authority_owner": "@narada-core/host-fleet-runtime"
   },
   "exports": {
     ".": {

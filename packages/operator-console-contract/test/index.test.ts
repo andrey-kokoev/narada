@@ -25,6 +25,10 @@ test('operator surface catalog describes canonical host, registry, and launcher 
   assert.equal(findOperatorSurfaceRoute('/console/launch')?.surface.id, 'launcher');
   assert.equal(findOperatorSurfaceRoute('/console/onboarding')?.surface.id, 'onboarding');
   assert.equal(findOperatorSurfaceRoute('/console/fleet')?.surface.id, 'host-fleet');
+  assert.equal(
+    operatorSurfaceDescriptors.find((surface) => surface.id === 'host-fleet')?.authority.id,
+    '@narada-core/host-fleet-runtime',
+  );
   assert.equal(primaryOperatorSurfaceRoute(operatorSurfaceDescriptors[0])?.path, '/console/agents');
   assert.equal(operatorSurfaceRoutePath('agent-sessions', 'sessions'), '/console/sessions');
   assert.equal(operatorSurfaceDescriptors.find((surface) => surface.id === 'launcher')?.authority.kind, 'operator-console');

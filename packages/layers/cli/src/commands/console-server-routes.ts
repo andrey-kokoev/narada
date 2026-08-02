@@ -22,7 +22,8 @@ import type {
   SiteControlClientFactory,
 } from '@narada-core/windows-site';
 import type { ConsoleControlRequest } from '@narada-core/windows-site';
-import { validateHostFleetSnapshot, type HostFleetReadModel } from '@narada-core/host-fleet';
+import { validateHostFleetReadResponse } from '@narada-core/host-fleet';
+import type { HostFleetProjectionReader } from '@narada-core/host-fleet-runtime/client';
 import type { SiteRegistryReadModel } from './site-registry-read-model.js';
 import type { RegistryMutationGateway, RegistryMutationInput, RegistryMutationOperation } from './site-registry-management-gateway.js';
 import type { AgentSessionReadModel } from './agent-session-read-model.js';
@@ -39,6 +40,7 @@ import {
   OPERATOR_CONSOLE_AGENTS_PATH,
   OPERATOR_CONSOLE_ASSET_PATH,
   OPERATOR_CONSOLE_FLEET_API_PATH,
+  OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH,
   OPERATOR_CONSOLE_FLEET_PATH,
   OPERATOR_CONSOLE_PATH,
   OPERATOR_CONSOLE_REGISTRY_PATH,
@@ -109,7 +111,7 @@ export interface ConsoleServerRouteContext {
   siteAgentAdmission?: SiteAgentAdmissionGateway;
   siteAgentLifecycle?: SiteAgentLifecycleGateway;
   siteAgentPending?: SiteAgentPendingTracker;
-  hostFleet: HostFleetReadModel;
+  hostFleet: HostFleetProjectionReader;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
   onboardingPlatform?: 'windows' | 'linux';
@@ -470,13 +472,49 @@ export function createConsoleServerRoutes(ctx: ConsoleServerRouteContext): Route
           return;
         }
         try {
-          jsonResponse(res, 200, validateHostFleetSnapshot(await ctx.hostFleet.list()));
-        } catch (error) {
+          jsonResponse(res, 200, validateHostFleetReadResponse(await ctx.hostFleet.read()));
+        } catch {
           jsonResponse(res, 503, {
             status: 'refused',
             code: 'host_fleet_read_unavailable',
-            reason: error instanceof Error ? error.message : String(error),
           });
+        }
+      },
+    },
+    {
+      route_id: 'operator-console.host-fleet-observation-admit',
+      method: 'POST',
+      pattern: exactPathPattern(OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH),
+      remote_disposition: 'proxy',
+      remote_kind: 'intent',
+      remote_intent: 'host_fleet_observation_admit',
+      handler: async (req, res) => {
+        const chunks: Buffer[] = [];
+        let total = 0;
+        for await (const chunk of req) {
+          const next = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          total += next.byteLength;
+          if (total > 65_536) {
+            jsonResponse(res, 413, { status: 'refused', code: 'host_fleet_heartbeat_body_too_large' });
+            return;
+          }
+          chunks.push(next);
+        }
+        const headers: Record<string, string | undefined> = {};
+        for (const name of [
+          'x-narada-host-fleet-key-id',
+          'x-narada-host-fleet-timestamp',
+          'x-narada-host-fleet-nonce',
+          'x-narada-host-fleet-signature',
+        ]) {
+          const value = req.headers[name];
+          headers[name] = Array.isArray(value) ? value[0] : value;
+        }
+        try {
+          const forwarded = await ctx.hostFleet.forwardHeartbeat(Buffer.concat(chunks, total), headers);
+          jsonResponse(res, forwarded.status, forwarded.body);
+        } catch {
+          jsonResponse(res, 503, { status: 'refused', code: 'host_fleet_authority_unavailable' });
         }
       },
     },

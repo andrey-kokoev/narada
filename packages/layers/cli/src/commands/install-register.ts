@@ -1,7 +1,6 @@
 import type { Command } from 'commander';
 import { directCommandAction, silentCommandContext, type CommanderOptionValues } from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { windowsUserSiteInstallCommand } from './install.js';
 import { linuxInstallationLifecycleCommand } from './linux-installation-lifecycle.js';
 
 export function registerInstallCommands(program: Command): void {
@@ -21,13 +20,16 @@ export function registerInstallCommands(program: Command): void {
       command: 'install windows-user-site',
       emit: emitCommandResult,
       format: (opts: CommanderOptionValues) => opts.format,
-      invocation: (opts) => windowsUserSiteInstallCommand({
-        siteRoot: opts.siteRoot as string | undefined,
-        registryPath: opts.registryPath as string | undefined,
-        profile: opts.profile as string | undefined,
-        repair: opts.repair as boolean | undefined,
-        format: resolveCommandFormat(opts.format, 'human'),
-      }, silentCommandContext()),
+      invocation: async (opts) => {
+        const { windowsUserSiteInstallCommand } = await import('./install.js');
+        return windowsUserSiteInstallCommand({
+          siteRoot: opts.siteRoot as string | undefined,
+          registryPath: opts.registryPath as string | undefined,
+          profile: opts.profile as string | undefined,
+          repair: opts.repair as boolean | undefined,
+          format: resolveCommandFormat(opts.format, 'human'),
+        }, silentCommandContext());
+      },
     }));
 
   install

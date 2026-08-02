@@ -5,6 +5,7 @@ export const OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA = 'narada.operator_consol
 export const OPERATOR_CONSOLE_PATH = '/console' as const;
 export const OPERATOR_CONSOLE_FLEET_PATH = `${OPERATOR_CONSOLE_PATH}/fleet` as const;
 export const OPERATOR_CONSOLE_FLEET_API_PATH = `${OPERATOR_CONSOLE_FLEET_PATH}/api` as const;
+export const OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH = `${OPERATOR_CONSOLE_FLEET_API_PATH}/observations` as const;
 export const OPERATOR_CONSOLE_REGISTRY_PATH = '/console/registry' as const;
 export const OPERATOR_CONSOLE_REGISTRY_API_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/api` as const;
 export const OPERATOR_CONSOLE_REGISTRY_ADD_PATH = `${OPERATOR_CONSOLE_REGISTRY_PATH}/add` as const;
@@ -966,7 +967,7 @@ export const operatorSurfaceDescriptors: readonly OperatorSurfaceDescriptor[] = 
     name: 'Hosts',
     scope: 'host-fleet',
     owner: 'Host Fleet',
-    authority: { kind: 'host-fleet', id: '@narada-core/host-fleet' },
+    authority: { kind: 'host-fleet', id: '@narada-core/host-fleet-runtime' },
     authorityHost: { kind: 'local', id: 'host-fleet', origin: null },
     projection: { kind: 'host-fleet-inventory', owner: '@narada-core/operator-console-ui' },
     intent: { kind: 'none', endpoint: null, endpointBase: null, protocols: [] },

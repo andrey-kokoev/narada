@@ -33,7 +33,7 @@ test('Operator Console pages stay behind the route and workflow boundaries', () 
   assert.doesNotMatch(hostFleetPage, /site_id|agent_id|session_id|runtime_session_id/);
   assert.doesNotMatch(hostFleetPage, /enroll|revoke|retire|launch|stop|delete/i);
   assert.match(hostFleetPage, /operator_console\.status === 'available' && host\.operator_console\.url/);
-  assert.match(hostFleetAdapter, /validateHostFleetSnapshot/);
+  assert.match(hostFleetAdapter, /validateHostFleetReadResponse/);
   assert.doesNotMatch(registryComposable, /fetch\s*\(/);
   assert.doesNotMatch(registryComposable, /parseSiteRegistry/);
   assert.match(registryTransport, /createSiteRegistryTransport/);

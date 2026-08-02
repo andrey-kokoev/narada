@@ -1,0 +1,72 @@
+{
+  "name": "@narada-core/host-fleet-runtime",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "description": "Machine-level Host Fleet authority and publisher runtime",
+  "narada": {
+    "package_role": "host_fleet_authority_runtime",
+    "surface": "host_fleet",
+    "presentation_only": false,
+    "authority_owner": "@narada-core/host-fleet-runtime"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js"
+    },
+    "./config": {
+      "types": "./dist/config.d.ts",
+      "import": "./dist/config.js"
+    },
+    "./health": {
+      "types": "./dist/health.d.ts",
+      "import": "./dist/health.js"
+    },
+    "./local-health": {
+      "types": "./dist/local-health.d.ts",
+      "import": "./dist/local-health.js"
+    },
+    "./publisher": {
+      "types": "./dist/publisher.d.ts",
+      "import": "./dist/publisher.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
+    },
+    "./service-plan": {
+      "types": "./dist/service-plan.d.ts",
+      "import": "./dist/service-plan.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@narada-core/host-fleet": "workspace:*",
+    "@narada-core/sqlite": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "license": "MIT",
+  "engines": {
+    "node": ">=22.0.0"
+  }
+}

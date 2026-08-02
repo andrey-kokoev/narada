@@ -1,7 +1,6 @@
 import type { Command } from 'commander';
 import {directCommandAction, silentCommandContext, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { emitCommandResult, resolveCommandFormat } from '../lib/cli-output.js';
-import { onboardingRoleApprovalCommand, onboardingRoleMaterializeCommand, onboardingStartCommand, onboardingStatusCommand } from './onboarding.js';
 
 export function registerOnboardingCommands(program: Command): void {
   const onboarding = program
@@ -23,16 +22,19 @@ export function registerOnboardingCommands(program: Command): void {
       command: 'onboarding start',
       emit: emitCommandResult,
       format: (opts: CommanderOptionValues) => opts.format,
-      invocation: (opts) => onboardingStartCommand({
-        platform: opts.platform as string | undefined,
-        scope: opts.scope as string | undefined,
-        siteRoot: opts.siteRoot as string | undefined,
-        registryPath: opts.registryPath as string | undefined,
-        interactive: opts.interactive as boolean | undefined,
-        demo: opts.demo as boolean | undefined,
-        noExec: opts.exec === false || opts.noExec === true,
-        format: resolveCommandFormat(opts.format, 'human'),
-      }, silentCommandContext()),
+      invocation: async (opts) => {
+        const { onboardingStartCommand } = await import('./onboarding.js');
+        return onboardingStartCommand({
+          platform: opts.platform as string | undefined,
+          scope: opts.scope as string | undefined,
+          siteRoot: opts.siteRoot as string | undefined,
+          registryPath: opts.registryPath as string | undefined,
+          interactive: opts.interactive as boolean | undefined,
+          demo: opts.demo as boolean | undefined,
+          noExec: opts.exec === false || opts.noExec === true,
+          format: resolveCommandFormat(opts.format, 'human'),
+        }, silentCommandContext());
+      },
     }));
 
   onboarding
@@ -47,13 +49,16 @@ export function registerOnboardingCommands(program: Command): void {
       command: 'onboarding status',
       emit: emitCommandResult,
       format: (opts: CommanderOptionValues) => opts.format,
-      invocation: (opts) => onboardingStatusCommand({
-        platform: opts.platform as string | undefined,
-        scope: opts.scope as string | undefined,
-        siteRoot: opts.siteRoot as string | undefined,
-        session: opts.session as string | undefined,
-        format: resolveCommandFormat(opts.format, 'human'),
-      }, silentCommandContext()),
+      invocation: async (opts) => {
+        const { onboardingStatusCommand } = await import('./onboarding.js');
+        return onboardingStatusCommand({
+          platform: opts.platform as string | undefined,
+          scope: opts.scope as string | undefined,
+          siteRoot: opts.siteRoot as string | undefined,
+          session: opts.session as string | undefined,
+          format: resolveCommandFormat(opts.format, 'human'),
+        }, silentCommandContext());
+      },
     }));
 
   const roles = onboarding
@@ -73,14 +78,17 @@ export function registerOnboardingCommands(program: Command): void {
       command: 'onboarding roles approve',
       emit: emitCommandResult,
       format: (opts: CommanderOptionValues) => opts.format,
-      invocation: (opts) => onboardingRoleApprovalCommand({
-        platform: opts.platform as string | undefined,
-        scope: opts.scope as string | undefined,
-        siteRoot: opts.siteRoot as string | undefined,
-        roles: opts.roles as string[] | undefined,
-        confirm: opts.confirm as boolean | undefined,
-        format: resolveCommandFormat(opts.format, 'human'),
-      }, silentCommandContext()),
+      invocation: async (opts) => {
+        const { onboardingRoleApprovalCommand } = await import('./onboarding.js');
+        return onboardingRoleApprovalCommand({
+          platform: opts.platform as string | undefined,
+          scope: opts.scope as string | undefined,
+          siteRoot: opts.siteRoot as string | undefined,
+          roles: opts.roles as string[] | undefined,
+          confirm: opts.confirm as boolean | undefined,
+          format: resolveCommandFormat(opts.format, 'human'),
+        }, silentCommandContext());
+      },
     }));
 
   roles
@@ -95,12 +103,15 @@ export function registerOnboardingCommands(program: Command): void {
       command: 'onboarding roles materialize',
       emit: emitCommandResult,
       format: (opts: CommanderOptionValues) => opts.format,
-      invocation: (opts) => onboardingRoleMaterializeCommand({
-        platform: opts.platform as string | undefined,
-        scope: opts.scope as string | undefined,
-        siteRoot: opts.siteRoot as string | undefined,
-        roles: opts.roles as string[] | undefined,
-        format: resolveCommandFormat(opts.format, 'human'),
-      }, silentCommandContext()),
+      invocation: async (opts) => {
+        const { onboardingRoleMaterializeCommand } = await import('./onboarding.js');
+        return onboardingRoleMaterializeCommand({
+          platform: opts.platform as string | undefined,
+          scope: opts.scope as string | undefined,
+          siteRoot: opts.siteRoot as string | undefined,
+          roles: opts.roles as string[] | undefined,
+          format: resolveCommandFormat(opts.format, 'human'),
+        }, silentCommandContext());
+      },
     }));
 }

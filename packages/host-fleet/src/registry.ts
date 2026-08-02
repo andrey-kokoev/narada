@@ -4,6 +4,8 @@ import {
   HOST_FLEET_SNAPSHOT_SCHEMA,
   validateHostFleetAuthenticatedObservation,
   validateHostFleetMembershipAuthority,
+  validateHostFleetSnapshot,
+  validateHostFleetTimestamp,
   type HostFleetAuthenticatedObservation,
   type HostFleetHost,
   type HostFleetMembershipAuthority,
@@ -68,13 +70,15 @@ export function createHostFleetReadRegistry(input: {
     if (ids.has(host.identity.host_id)) throw new Error('host_fleet_host_duplicate');
     ids.add(host.identity.host_id);
   }
-  const generatedAt = input.generated_at ?? new Date().toISOString();
-  if (Number.isNaN(Date.parse(generatedAt))) throw new Error('host_fleet_snapshot_generated_at_invalid');
-  const snapshot: HostFleetSnapshot = {
+  const generatedAt = validateHostFleetTimestamp(
+    input.generated_at ?? new Date().toISOString(),
+    'host_fleet_snapshot_generated_at_invalid',
+  );
+  const snapshot = validateHostFleetSnapshot({
     schema: HOST_FLEET_SNAPSHOT_SCHEMA,
     generated_at: generatedAt,
     hosts: hosts.map(cloneHost),
-  };
+  });
   return Object.freeze({
     async list(): Promise<HostFleetSnapshot> {
       return cloneSnapshot(snapshot);

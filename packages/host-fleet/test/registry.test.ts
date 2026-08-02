@@ -16,8 +16,8 @@ function observation(hostId: string, proof = SECRET): HostFleetAuthenticatedObse
     host_fleet_membership_secret: proof,
     host: {
       identity: { host_id: hostId, display_name: hostId, platform: 'linux' },
-      reachability: { status: 'reachable', observed_at: NOW },
-      health: { status: 'healthy', observed_at: NOW, detail: null },
+      reachability: { status: 'reachable', observed_at: NOW, publisher_freshness: 'fresh', heartbeat_received_at: NOW },
+      health: { status: 'healthy', reported_status: 'healthy', observed_at: NOW, detail: null },
       operator_console: { status: 'available', url: `https://${hostId}.example.test/console` },
     },
   };
@@ -70,7 +70,7 @@ test('duplicate host identities are refused', () => {
 test('empty registry remains a valid read model', async () => {
   const registry = createEmptyHostFleetReadModel(() => new Date(NOW));
   assert.deepEqual(await registry.list(), {
-    schema: 'narada.host_fleet.snapshot.v1',
+    schema: 'narada.host_fleet.snapshot.v2',
     generated_at: NOW,
     hosts: [],
   });

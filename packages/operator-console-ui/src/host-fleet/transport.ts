@@ -33,10 +33,23 @@ async function readJson(response: Response): Promise<unknown> {
 export function createHostFleetTransport(
   basePath = OPERATOR_CONSOLE_FLEET_API_PATH,
   fetchLike: HostFleetFetch = (input, init) => fetch(input, init),
+  timeoutMs = 3_000,
 ): HostFleetTransport {
   return {
     async list(): Promise<unknown> {
-      const response = await fetchLike(`${basePath}/hosts`, { headers: { Accept: 'application/json' } });
+      let response: Response;
+      try {
+        response = await fetchLike(`${basePath}/hosts`, {
+          headers: { Accept: 'application/json' },
+          signal: AbortSignal.timeout(timeoutMs),
+        });
+      } catch {
+        throw new HostFleetTransportError(
+          'unavailable',
+          0,
+          'Host Fleet authority did not respond before the request deadline.',
+        );
+      }
       const payload = await readJson(response);
       if (!response.ok) {
         throw new HostFleetTransportError(

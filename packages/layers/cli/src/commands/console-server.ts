@@ -22,7 +22,10 @@ import { createSiteAgentLaunchGateway, type SiteAgentLaunchGateway } from './sit
 import { createSiteAgentAdmissionGateway, type SiteAgentAdmissionGateway } from './site-agent-admission-gateway.js';
 import { createSiteAgentLifecycleGateway, type SiteAgentLifecycleGateway } from './site-agent-lifecycle-gateway.js';
 import { createSiteAgentPendingTracker, type SiteAgentPendingTracker } from './site-agent-pending-tracker.js';
-import { createEmptyHostFleetReadModel, type HostFleetReadModel } from '@narada-core/host-fleet';
+import {
+  createDefaultHostFleetProjectionReader,
+  type HostFleetProjectionReader,
+} from '@narada-core/host-fleet-runtime/client';
 import { ensureLaunchArtifact, naradaProperRoot } from '../lib/launch-artifact.js';
 import {
   DEFAULT_OPERATOR_ROUTER_PORT,
@@ -267,7 +270,7 @@ export interface ConsoleServerConfig {
   siteAgentAdmission?: SiteAgentAdmissionGateway;
   siteAgentLifecycle?: SiteAgentLifecycleGateway;
   siteAgentPending?: SiteAgentPendingTracker;
-  hostFleet?: HostFleetReadModel;
+  hostFleet?: HostFleetProjectionReader;
   workspaceRouteDirectory?: () => Promise<OperatorWorkspaceRouteDirectory>;
   operatorConsoleUiRoot?: string;
 }
@@ -370,7 +373,7 @@ export async function createConsoleServer(config: ConsoleServerConfig): Promise<
     siteAgentAdmission,
     siteAgentLifecycle,
     siteAgentPending: config.siteAgentPending ?? createSiteAgentPendingTracker(),
-    hostFleet: config.hostFleet ?? createEmptyHostFleetReadModel(),
+    hostFleet: config.hostFleet ?? createDefaultHostFleetProjectionReader(),
     workspaceRouteDirectory: config.workspaceRouteDirectory ?? currentWorkspaceRouteDirectory,
     operatorConsoleUiRoot,
     onboardingPlatform: config.onboardingPlatform ?? (process.platform === 'win32' ? 'windows' : 'linux'),

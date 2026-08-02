@@ -1,6 +1,6 @@
 # AGENTS.md - @narada-core/host-fleet
 
-This package owns the host-only Fleet wire contract and immutable authenticated read model.
+This package owns the host-only Fleet wire contract and deterministic read-model primitives. The machine authority lives in `@narada-core/host-fleet-runtime`.
 
 ## Boundary
 

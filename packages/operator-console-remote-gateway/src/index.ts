@@ -4,6 +4,7 @@ import { connect as connectTcp } from 'node:net';
 import type { Duplex } from 'node:stream';
 import { connect as connectTls } from 'node:tls';
 import {
+  OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH,
   OPERATOR_CONSOLE_HTTP_ROUTE_PARITY_SCHEMA,
   type OperatorConsoleHttpRouteParityEntry,
 } from '@narada-core/operator-console-contract';
@@ -240,7 +241,11 @@ export function createOperatorConsoleRemoteGateway(
     }
     const target = new URL(path + requestUrl.search, `${routerUrl}/`);
     const headers = new Headers({ 'x-narada-router-token': routerToken });
-    for (const name of ['accept', 'content-type', 'if-none-match', 'if-modified-since', 'cache-control', 'x-request-id']) {
+    for (const name of [
+      'accept', 'content-type', 'if-none-match', 'if-modified-since', 'cache-control', 'x-request-id',
+      'x-narada-host-fleet-key-id', 'x-narada-host-fleet-timestamp', 'x-narada-host-fleet-nonce',
+      'x-narada-host-fleet-signature',
+    ]) {
       const value = req.headers[name];
       if (typeof value === 'string') headers.set(name, value);
     }
@@ -381,8 +386,13 @@ export function createOperatorConsoleRemoteGateway(
     const requestUrl = new URL(req.url ?? '/', `http://${req.headers.host ?? `${host}:${port}`}`);
     const method = req.method ?? 'GET';
     const path = requestUrl.pathname;
-    if (!constantTimeEqual(readBridgeToken(req), bridgeToken)) {
+    const isFleetHeartbeat = method === 'POST' && path === OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH;
+    if (!isFleetHeartbeat && !constantTimeEqual(readBridgeToken(req), bridgeToken)) {
       refusal(res, 401, 'operator_console_gateway_bridge_credential_required', method, path);
+      return;
+    }
+    if (isFleetHeartbeat && !hasFleetSigningHeaders(req)) {
+      refusal(res, 401, 'host_fleet_signing_headers_required', method, path);
       return;
     }
     if (path === '/health' && method === 'GET') {
@@ -497,6 +507,15 @@ function isSafePath(pathname: string): boolean {
 function readBridgeToken(req: IncomingMessage): string {
   const value = req.headers[BRIDGE_TOKEN_HEADER];
   return typeof value === 'string' ? value : '';
+}
+
+function hasFleetSigningHeaders(req: IncomingMessage): boolean {
+  return [
+    'x-narada-host-fleet-key-id',
+    'x-narada-host-fleet-timestamp',
+    'x-narada-host-fleet-nonce',
+    'x-narada-host-fleet-signature',
+  ].every((name) => typeof req.headers[name] === 'string' && req.headers[name]!.length > 0);
 }
 
 function readHeader(req: IncomingMessage, name: string): string | undefined {

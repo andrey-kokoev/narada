@@ -32,6 +32,7 @@ Implementation-facing architecture and ownership contracts.
 - [`operator-workspace-target.md`](architecture/operator-workspace-target.md) — Workspace route authority, projection, fallback, recovery, and acceptance target
 - [`operator-router-target.md`](architecture/operator-router-target.md) — Stable local Router projection and route-admission target
 - [`host-fleet-host-only-contract.md`](architecture/host-fleet-host-only-contract.md) — Host-only Fleet membership, projection, read-model, and mechanical boundary contract
+- [`host-fleet.md`](operator/host-fleet.md) — Machine configuration, authority/publisher provisioning, service lifecycle, and shared-secret rotation
 
 ## `product/`
 

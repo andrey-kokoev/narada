@@ -33,15 +33,19 @@ const site = {
 };
 
 const hostFleetSnapshot = {
-  schema: 'narada.host_fleet.snapshot.v1',
-  generated_at: '2026-08-01T12:00:00.000Z',
-  hosts: [{
-    schema: 'narada.host_fleet.host.v1',
-    identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
-    reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z' },
-    health: { status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: 'All host checks passed.' },
-    operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
-  }],
+  schema: 'narada.host_fleet.read_response.v1',
+  runtime: { status: 'ready', authority_host_id: 'desktop', checked_at: '2026-08-01T12:00:00.000Z', detail_code: null, correlation_id: null },
+  snapshot: {
+    schema: 'narada.host_fleet.snapshot.v2',
+    generated_at: '2026-08-01T12:00:00.000Z',
+    hosts: [{
+      schema: 'narada.host_fleet.host.v2',
+      identity: { host_id: 'desktop', display_name: 'Desktop', platform: 'windows' },
+      reachability: { status: 'reachable', observed_at: '2026-08-01T12:00:00.000Z', publisher_freshness: 'fresh', heartbeat_received_at: '2026-08-01T12:00:00.000Z' },
+      health: { status: 'healthy', reported_status: 'healthy', observed_at: '2026-08-01T12:00:00.000Z', detail: 'All host checks passed.' },
+      operator_console: { status: 'available', url: 'https://desktop.example.test/console' },
+    }],
+  },
 };
 
 const launchedAgentSessionId = 'session-agent-launched';

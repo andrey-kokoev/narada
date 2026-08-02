@@ -1,16 +1,14 @@
 # Host Fleet
 
-`@narada-core/host-fleet` is the host-only Fleet contract and authenticated read model.
+`@narada-core/host-fleet` owns the strict, host-only Fleet contracts and the
+bounded read-model interface. A projected host contains only identity,
+reachability, health, and Operator Console location.
 
-It accepts host observations only through a host-scoped `host_fleet_membership_secret`, strips the proof at admission, and projects only:
+The package does not discover hosts, run services, persist state, probe
+endpoints, or read Site registries. Machine configuration, HMAC admission,
+SQLite state, and publisher/authority processes belong to
+`@narada-core/host-fleet-runtime`.
 
-- host identity;
-- reachability;
-- health;
-- Operator Console location.
-
-The resulting registry is immutable and exposes only `list()`. Enrollment workflows, lifecycle control, remote execution, and discovery inside a host are outside this package.
-
-## Population Boundary
-
-This package does not discover hosts. A host-level observation collector must authenticate observations before constructing the read model. The Operator Console accepts that read model through an explicit injection boundary and otherwise projects a valid empty snapshot; it never derives Fleet membership from a User Site or Site registry.
+See the
+[`Host Fleet Host-Only Contract`](../../docs/architecture/host-fleet-host-only-contract.md)
+for the complete boundary.

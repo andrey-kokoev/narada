@@ -1,7 +1,4 @@
-import {
-  validateHostFleetSnapshot,
-  type HostFleetSnapshot,
-} from '@narada-core/host-fleet/contract';
+import { validateHostFleetReadResponse, type HostFleetReadResponse } from '@narada-core/host-fleet/contract';
 import {
   createHostFleetTransport,
   HostFleetTransportError,
@@ -9,7 +6,7 @@ import {
 } from './transport';
 
 export interface HostFleetClient {
-  list(): Promise<HostFleetSnapshot>;
+  read(): Promise<HostFleetReadResponse>;
 }
 
 export class HostFleetApiError extends Error {
@@ -26,9 +23,9 @@ export function createHostFleetAdapter(
   transport: HostFleetTransport = createHostFleetTransport(),
 ): HostFleetClient {
   return {
-    async list(): Promise<HostFleetSnapshot> {
+    async read(): Promise<HostFleetReadResponse> {
       try {
-        return validateHostFleetSnapshot(await transport.list());
+        return validateHostFleetReadResponse(await transport.list());
       } catch (error) {
         if (error instanceof HostFleetApiError || error instanceof HostFleetTransportError) throw error;
         throw new HostFleetApiError(
