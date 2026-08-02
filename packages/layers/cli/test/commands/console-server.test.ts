@@ -479,6 +479,43 @@ describe('console server', () => {
   });
 
   describe('GET /console/fleet', () => {
+    it('does not derive Fleet members from a populated Site registry', async () => {
+      mockDb.prepare.mockImplementation((sql: string) => {
+        if (sql.includes('site_registry')) {
+          return {
+            all: vi.fn(() => [{
+              site_id: 'site-must-remain-inside-host',
+              variant: 'native',
+              site_root: 'C:\\site',
+              substrate: 'windows',
+              aim_json: null,
+              control_endpoint: null,
+              last_seen_at: null,
+              created_at: '2026-08-01T12:00:00.000Z',
+            }]),
+            get: vi.fn(() => null),
+            run: vi.fn(() => ({ changes: 0 })),
+          };
+        }
+        return { all: vi.fn(() => []), get: vi.fn(() => null), run: vi.fn(() => ({ changes: 0 })) };
+      });
+      const server = await createConsoleServer({ port: 0, host: '127.0.0.1' });
+      const url = await server.start();
+
+      const sites = await httpGet(`${url}/console/sites`);
+      expect(sites.status).toBe(200);
+      expect(JSON.stringify(sites.body)).toContain('site-must-remain-inside-host');
+
+      const fleet = await httpGet(`${url}/console/fleet/api/hosts`);
+      expect(fleet.status).toBe(200);
+      expect(fleet.body).toMatchObject({
+        schema: 'narada.host_fleet.snapshot.v1',
+        hosts: [],
+      });
+      expect(JSON.stringify(fleet.body)).not.toContain('site-must-remain-inside-host');
+      await server.stop();
+    });
+
     it('serves only the injected host snapshot through a read-only route', async () => {
       const hostFleet: HostFleetReadModel = {
         list: vi.fn(async () => ({

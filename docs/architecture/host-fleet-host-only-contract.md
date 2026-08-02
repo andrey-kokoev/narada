@@ -39,6 +39,7 @@ The package test suite must fail when:
 - the package gains a production package dependency;
 - the membership secret appears in a projected snapshot;
 - the registry gains a mutation method.
+- the Operator Console derives Fleet hosts from a populated Site registry when no host read model is supplied.
 
 The strict runtime validators reject unknown keys at every wire boundary, so a structurally valid Site-aware extension cannot be smuggled through TypeScript's open object assignability.
 
