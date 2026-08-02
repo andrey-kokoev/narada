@@ -9,6 +9,7 @@ rmSync(resolve(root, 'dist'), { recursive: true, force: true });
 const result = spawnSync('pnpm', ['exec', 'tsc', '-p', resolve(root, 'tsconfig.build.json')], {
   cwd: root,
   stdio: 'inherit',
+  windowsHide: true,
 });
 if (result.error) throw result.error;
 process.exitCode = result.status ?? 1;
