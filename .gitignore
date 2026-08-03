@@ -53,6 +53,7 @@ task-*-report.json
 .narada/site-tool-surface.manifest.json
 .narada/tmp/
 .narada/evidence/
+.narada/e2e/
 .narada/runtime/local-history/
 .narada/runtime/mcp-audit/
 .narada/runtime/launch-artifact-locks/
@@ -69,6 +70,7 @@ packages/cloudflare-operator-projection/public/
 packages/cloudflare-operator-projection/scripts-dist/
 packages/cloudflare-operator-projection/worker-configuration.d.ts
 packages/layers/cli/tsx-*/
+/tsx-Andrey/
 packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-reconciliation/
 packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-command-results/
 packages/layers/cli/.ai/inbox.db
