@@ -64,10 +64,12 @@ The remote checkout therefore does not need a current Narada CLI or workspace
 installation. The secret value, SSH output, and publisher output are excluded
 from evidence.
 
-Run it from the authority host with an operator-approved deployment and the
-authority's existing membership secret:
+Run it from the authority host with an operator-approved deployment, the
+authority's existing membership secret, and the active credential key ID from
+the authority configuration. The key ID must match exactly; it is part of the
+signed admission contract:
 
-    pnpm --filter @narada-core/cloudflare-operator-projection smoke:host-fleet-cloudflare-live -- --live --cloudflare-api-base-url https://<operator-projection-worker> --membership-secret-file <authority-membership-secret> --ssh-target <publisher-user>@<publisher-host> --ssh-key <publisher-private-key> --remote-node-path <publisher-node>
+    pnpm --filter @narada-core/cloudflare-operator-projection smoke:host-fleet-cloudflare-live -- --live --cloudflare-api-base-url https://<operator-projection-worker> --membership-secret-file <authority-membership-secret> --key-id <authority-active-key-id> --ssh-target <publisher-user>@<publisher-host> --ssh-key <publisher-private-key> --remote-node-path <publisher-node>
 
 The runner builds and uploads a current standalone publisher bundle for each
 run, then executes it with the staged config. Use a dedicated test host or an

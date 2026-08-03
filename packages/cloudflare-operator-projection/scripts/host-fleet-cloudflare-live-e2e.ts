@@ -23,6 +23,7 @@ type LiveArgs = {
   help: boolean;
   cloudflareApiBaseUrl: string | null;
   membershipSecretFile: string | null;
+  keyId: string | null;
   sshTarget: string | null;
   sshKey: string | null;
   remoteNodePath: string;
@@ -55,6 +56,7 @@ if (args.help) {
     '  pnpm --filter @narada-core/cloudflare-operator-projection smoke:host-fleet-cloudflare-live --',
     '    --live --cloudflare-api-base-url https://<worker>',
     '    --membership-secret-file <authority-membership-secret>',
+    '    --key-id <authority-active-key-id>',
     '    --ssh-target <publisher-user>@<publisher-host>',
     '    --ssh-key <publisher-private-key>',
     '    --remote-node-path <publisher-node>',
@@ -81,7 +83,7 @@ async function run(): Promise<AnyRecord> {
       schema: 'narada.host_fleet.cloudflare_live_e2e.v1',
       status: 'planned',
       code: 'live_flag_required',
-      required: ['--live', '--cloudflare-api-base-url', '--membership-secret-file', '--ssh-target'],
+      required: ['--live', '--cloudflare-api-base-url', '--membership-secret-file', '--key-id', '--ssh-target'],
       evidence_path: evidencePath,
     }, evidencePath);
   }
@@ -89,6 +91,7 @@ async function run(): Promise<AnyRecord> {
   const missing = [
     ['cloudflare-api-base-url', args.cloudflareApiBaseUrl],
     ['membership-secret-file', args.membershipSecretFile],
+    ['key-id', args.keyId],
     ['ssh-target', args.sshTarget],
   ].filter(([, value]) => !value).map(([name]) => name);
   if (missing.length > 0) {
@@ -137,7 +140,7 @@ async function run(): Promise<AnyRecord> {
     const config = publisherConfig({
       ingressUrl: `${boundary.origin}${OPERATOR_CONSOLE_FLEET_OBSERVATIONS_API_PATH}`,
       secretPath: remoteSecretPath,
-      keyId: `live-${randomBytes(8).toString('hex')}`,
+      keyId: args.keyId!,
     });
     await writeFile(localSecretPath, secret, { encoding: 'utf8', mode: 0o600 });
     await writeFile(localConfigPath, `${JSON.stringify(config, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
@@ -201,6 +204,7 @@ async function run(): Promise<AnyRecord> {
     fleet_id: args.fleetId,
     host_id: args.hostId,
     authority_host_id: args.authorityHostId,
+    credential_key_id: args.keyId,
     publisher_execution: 'remote_ssh_temporary_bundle',
     checks,
     cleanup,
@@ -377,6 +381,7 @@ function parseArgs(values: string[]): LiveArgs {
     help: false,
     cloudflareApiBaseUrl: null,
     membershipSecretFile: null,
+    keyId: null,
     sshTarget: null,
     sshKey: null,
     remoteNodePath: 'node',
@@ -394,6 +399,7 @@ function parseArgs(values: string[]): LiveArgs {
     else if (value === '--help' || value === '-h') parsed.help = true;
     else if (value === '--cloudflare-api-base-url') parsed.cloudflareApiBaseUrl = values[++index] ?? null;
     else if (value === '--membership-secret-file') parsed.membershipSecretFile = values[++index] ?? null;
+    else if (value === '--key-id') parsed.keyId = values[++index] ?? null;
     else if (value === '--ssh-target') parsed.sshTarget = values[++index] ?? null;
     else if (value === '--ssh-key') parsed.sshKey = values[++index] ?? null;
     else if (value === '--remote-node-path') parsed.remoteNodePath = values[++index] ?? parsed.remoteNodePath;

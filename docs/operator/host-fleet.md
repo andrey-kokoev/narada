@@ -163,7 +163,7 @@ Worker to authority read-model path. It is intentionally separate from the
 in-process transport test. It uploads a current standalone publisher bundle,
 so the publisher host does not need a current Narada CLI or workspace install:
 
-    pnpm --filter @narada-core/cloudflare-operator-projection smoke:host-fleet-cloudflare-live -- --live --cloudflare-api-base-url https://<operator-projection-worker> --membership-secret-file <authority-membership-secret> --ssh-target <publisher-user>@<publisher-host> --ssh-key <publisher-private-key> --remote-node-path <publisher-node>
+    pnpm --filter @narada-core/cloudflare-operator-projection smoke:host-fleet-cloudflare-live -- --live --cloudflare-api-base-url https://<operator-projection-worker> --membership-secret-file <authority-membership-secret> --key-id <authority-active-key-id> --ssh-target <publisher-user>@<publisher-host> --ssh-key <publisher-private-key> --remote-node-path <publisher-node>
 
 The runner uses a unique temporary directory on the publisher host, copies the
 existing shared membership secret only for that run, invokes the staged bundle,
@@ -172,7 +172,9 @@ the directory in a `finally` path. Evidence contains only statuses,
 identifiers, and selected read-model fields; it does not contain the secret,
 secret path, SSH output, or publisher output. The command is an
 operator-approved live mutation and must not be run against an unrostered or
-unowned host. The deployed Worker gateway and the local authority
+unowned host. `--key-id` must equal the authority's active credential key ID;
+the key ID and shared secret are both part of the signed admission contract.
+The deployed Worker gateway and the local authority
 gateway/tunnel must be healthy before the run; otherwise the runner records a
 typed refusal and does not claim an end-to-end pass.
 
