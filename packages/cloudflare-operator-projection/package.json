@@ -34,6 +34,8 @@
     "smoke:local-origin-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-nars-web-projection-live-smoke.js",
     "smoke:cloudflare-origin-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-nars-authority-live-smoke.js",
     "smoke:provider-capable-live": "pnpm run build && pnpm run build:scripts && node scripts-dist/cloudflare-nars-provider-capable-live-smoke.js",
+    "build:publisher-bundle": "node scripts/build-host-fleet-publisher-bundle.mjs",
+    "smoke:host-fleet-cloudflare-live": "pnpm --filter @narada-core/host-fleet-runtime build && pnpm run build && pnpm run build:scripts && pnpm run build:publisher-bundle && node scripts-dist/host-fleet-cloudflare-live-e2e.js",
     "smoke:operator-console-mirror-live": "pnpm run build:scripts && node scripts-dist/operator-console-mirror-live-e2e.js",
     "smoke:live": "pnpm run smoke:local-origin-live",
     "smoke:authority-live": "pnpm run smoke:cloudflare-origin-live",
@@ -48,9 +50,11 @@
     "@narada-core/process-launch-posture": "workspace:*",
     "@narada-core/nars-client-projection-contract": "workspace:*",
     "@narada-core/site-paths": "workspace:*",
-    "@narada-core/invokable-intelligence-runtime": "workspace:*"
+    "@narada-core/invokable-intelligence-runtime": "workspace:*",
+    "@narada-core/host-fleet-runtime": "workspace:*"
   },
   "devDependencies": {
+    "esbuild": "^0.27.7",
     "typescript": "^5.3.0",
     "vitest": "^4.1.10"
   },

@@ -156,6 +156,26 @@ configuration. `uninstall` retains machine configuration and SQLite state.
 4. Verify publisher health and fresh heartbeats in Host Fleet.
 5. After `accept_until`, remove `previous` from the authority and reload again.
 
+## Cloudflare live E2E
+
+The committed Cloudflare runner verifies the real publisher-host to deployed
+Worker to authority read-model path. It is intentionally separate from the
+in-process transport test. It uploads a current standalone publisher bundle,
+so the publisher host does not need a current Narada CLI or workspace install:
+
+    pnpm --filter @narada-core/cloudflare-operator-projection smoke:host-fleet-cloudflare-live -- --live --cloudflare-api-base-url https://<operator-projection-worker> --membership-secret-file <authority-membership-secret> --ssh-target <publisher-user>@<publisher-host> --ssh-key <publisher-private-key> --remote-node-path <publisher-node>
+
+The runner uses a unique temporary directory on the publisher host, copies the
+existing shared membership secret only for that run, invokes the staged bundle,
+polls `/console/fleet/api/hosts` until the selected host is fresh, and removes
+the directory in a `finally` path. Evidence contains only statuses,
+identifiers, and selected read-model fields; it does not contain the secret,
+secret path, SSH output, or publisher output. The command is an
+operator-approved live mutation and must not be run against an unrostered or
+unowned host. The deployed Worker gateway and the local authority
+gateway/tunnel must be healthy before the run; otherwise the runner records a
+typed refusal and does not claim an end-to-end pass.
+
 Do not reuse one secret across different `fleet_id` values. The wire contract
 rejects cross-Fleet heartbeats, but key separation limits operational blast
 radius.
