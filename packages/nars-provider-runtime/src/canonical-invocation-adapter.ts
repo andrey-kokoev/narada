@@ -183,7 +183,15 @@ export function createCanonicalInvocationAdapter({
           }
           const codexSessionState = codexSessions.get(offering.id) ?? { threadId: null };
           codexSessions.set(offering.id, codexSessionState);
-          const request = buildCodexMcpRequest(messages, tools, { ...settings, codexSessionState });
+          // The NARS capability gateway is the authority for worker MCP
+          // tools. Nested Codex must use the carrier JSON tool protocol here;
+          // native Codex MCP discovery would bypass the projected gateway and
+          // is misleading when no nested server config is present.
+          const request = buildCodexMcpRequest(messages, tools, {
+            ...settings,
+            nativeMcpTools: false,
+            codexSessionState,
+          });
           await transition('shaped', { adapter_kind: adapterKind });
           await transition('dispatched', { adapter_kind: adapterKind, transport });
           await transition('admitting', { adapter_kind: adapterKind, transport });

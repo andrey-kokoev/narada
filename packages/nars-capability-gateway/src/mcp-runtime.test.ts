@@ -6,6 +6,7 @@ import {
   findToolBinding,
   normalizeMcpOutputReader,
   normalizeRuntimeMcpTools,
+  projectWorkerMcpFabricServers,
   providerToolNameForOriginal,
   sendMcpRequest,
 } from './mcp-runtime.js';
@@ -44,7 +45,23 @@ test('runtime worker MCP projection keeps only explicitly allowlisted tools', ()
   });
 
   assert.deepEqual(projected.task_lifecycle.tools.map((tool: AnyRecord) => tool.name), ['task_lifecycle_show']);
-  assert.deepEqual(projected.filesystem.tools, []);
+  assert.equal(projected.filesystem, undefined);
+});
+
+test('runtime worker MCP preflight excludes servers without an admitted declared tool', () => {
+  const projected = projectWorkerMcpFabricServers({
+    sop: { tools: ['sop_run_status'] },
+    worker: { tools: ['worker_run'] },
+    mailbox: { tools: ['mailbox_fact_show'] },
+    agent_context: { tools: ['agent_context_startup_sequence', 'agent_context_doctor'] },
+  }, {
+    native_mcp_mode: 'scoped',
+    mcp_tool_allowlist: ['mailbox_fact_show'],
+    include_startup_tools: true,
+    include_output_readback_tools: false,
+  });
+
+  assert.deepEqual(Object.keys(projected), ['mailbox', 'agent_context']);
 });
 
 test('runtime normalizes reader metadata in structured and serialized MCP output', async () => {

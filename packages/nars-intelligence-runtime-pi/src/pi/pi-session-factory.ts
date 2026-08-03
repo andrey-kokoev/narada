@@ -160,7 +160,11 @@ export function createInMemoryPiSession({ providerInvoker, sessionId, eventSink 
         const admittedProviderInvoker: any = typeof input.providerInvoker === 'function'
           ? input.providerInvoker
           : providerInvoker;
-        const outcome: any = await admittedProviderInvoker({ ...input, abortSignal: input.abortSignal ?? controller.signal });
+        const outcome: any = await runCompatibilityToolLoop({
+          providerInvoker: admittedProviderInvoker,
+          input,
+          controller,
+        });
         if (outcome?.response) continuation.push({ role: 'assistant', content: outcome.response?.choices?.[0]?.message?.content ?? outcome.response?.content ?? null });
         return outcome;
       } finally {
@@ -231,6 +235,162 @@ function providerResponseFromAssistantMessage(message: any) {
       content: assistantMessageContent(message),
       ...(Array.isArray(message.tool_calls) ? { tool_calls: structuredClone(message.tool_calls) } : {}),
     } }],
+  };
+}
+
+function providerResponseValue(value: any) {
+  if (value?.response && isProviderResponse(value.response)) return value.response;
+  if (isProviderResponse(value)) return value;
+  return null;
+}
+
+function providerAssistantMessage(value: any) {
+  const response: any = providerResponseValue(value);
+  if (!response) return null;
+  const choiceMessage: any = response.choices?.[0]?.message;
+  if (choiceMessage && typeof choiceMessage === 'object') return choiceMessage;
+  if (response.message && typeof response.message === 'object') return response.message;
+  if (response.role === 'assistant') return response;
+  return null;
+}
+
+function providerToolCalls(value: any) {
+  const response: any = providerResponseValue(value);
+  const message: any = providerAssistantMessage(value);
+  const calls: any = message?.tool_calls ?? response?.tool_calls ?? [];
+  return Array.isArray(calls) ? calls : [];
+}
+
+function providerToolCallName(toolCall: any) {
+  return String(toolCall?.function?.name ?? toolCall?.name ?? toolCall?.tool_name ?? '').trim();
+}
+
+function providerToolCallArguments(toolCall: any) {
+  const raw: any = toolCall?.function?.arguments ?? toolCall?.arguments ?? toolCall?.input ?? {};
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) return { value: raw, valid: true };
+  if (typeof raw !== 'string') return { value: {}, valid: false };
+  try {
+    const parsed: any = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? { value: parsed, valid: true }
+      : { value: {}, valid: false };
+  } catch {
+    return { value: {}, valid: false };
+  }
+}
+
+function compatibilityToolLoopMaxRounds(input: any) {
+  const candidates: any[] = [
+    input?.tool_loop?.execution_policy?.tool_loop?.max_rounds,
+    input?.execution_policy?.tool_loop?.max_rounds,
+    input?.tool_loop?.max_rounds,
+  ];
+  const candidate: any = candidates.find((value: any) => Number.isInteger(Number(value)));
+  const maxRounds: any = Number(candidate ?? 32);
+  return maxRounds >= 1 && maxRounds <= 500 ? maxRounds : 32;
+}
+
+function compatibilityToolResultText(result: any) {
+  if (Array.isArray(result?.content)) {
+    const text: any = result.content
+      .map((part: any) => typeof part === 'string' ? part : part?.type === 'text' ? part.text : '')
+      .filter(Boolean)
+      .join('');
+    if (text) return text;
+  }
+  return safeToolResultText(result);
+}
+
+function compatibilityInvalidArgumentsResult(toolName: any, toolCallId: any) {
+  return {
+    schema: 'narada.nars.pi.tool-proxy-result.v1',
+    status: 'denied',
+    admission_action: 'deny',
+    admission_reason: 'tool_arguments_invalid',
+    tool_name: toolName || null,
+    tool_call_id: toolCallId || null,
+    effect_confirmation: 'not-confirmed',
+  };
+}
+
+async function runCompatibilityToolLoop({ providerInvoker, input, controller }: any = {}) {
+  const admittedProviderInvoker: any = typeof input?.providerInvoker === 'function'
+    ? input.providerInvoker
+    : providerInvoker;
+  const capabilityGateway: any = input?.capability_gateway ?? input?.capabilityGateway ?? null;
+  const descriptors: any[] = Array.isArray(input?.tools) ? input.tools : [];
+  const toolsByName: any = new Map(descriptors.map((tool: any) => [externalToolName(tool), tool]));
+  const projectedMessages: any[] = Array.isArray(input?.messages) ? structuredClone(input.messages) : [];
+  const maxRounds: any = compatibilityToolLoopMaxRounds(input);
+  let outcome: any = await admittedProviderInvoker({
+    ...input,
+    abortSignal: input.abortSignal ?? controller.signal,
+    messages: projectedMessages,
+  });
+
+  for (let round = 1; round <= maxRounds; round += 1) {
+    if (input.abortSignal?.aborted || controller.signal.aborted) {
+      throw new Error('pi_tool_loop_aborted');
+    }
+    const calls: any[] = providerToolCalls(outcome);
+    if (calls.length === 0) return outcome;
+    const assistant: any = providerAssistantMessage(outcome);
+    if (assistant) {
+      projectedMessages.push({
+        role: 'assistant',
+        content: assistant.content ?? null,
+        tool_calls: structuredClone(calls),
+      });
+    }
+    for (const [callIndex, toolCall] of calls.entries()) {
+      const name: any = providerToolCallName(toolCall);
+      const toolCallId: any = String(toolCall?.id ?? `${name || 'tool'}:${round}:${callIndex}`);
+      const parsedArguments: any = providerToolCallArguments(toolCall);
+      let result: any;
+      if (!name || !parsedArguments.valid) {
+        result = compatibilityInvalidArgumentsResult(name, toolCallId);
+      } else if (!toolsByName.has(name)) {
+        const execute: any = typeof capabilityGateway?.execute === 'function'
+          ? capabilityGateway.execute.bind(capabilityGateway)
+          : typeof capabilityGateway?.invoke === 'function'
+            ? capabilityGateway.invoke.bind(capabilityGateway)
+            : null;
+        result = execute
+          ? await execute({
+            toolName: name,
+            tool_name: name,
+            arguments: parsedArguments.value,
+            toolCallId,
+            tool_call_id: toolCallId,
+            abortSignal: input.abortSignal ?? controller.signal,
+          })
+          : { status: 'failed', admission_reason: 'pi_capability_gateway_required', tool_name: name, tool_call_id: toolCallId };
+      } else {
+        const proxy: any = buildExternalPiTool(toolsByName.get(name), input, capabilityGateway);
+        result = await proxy.execute(toolCallId, parsedArguments.value, input.abortSignal ?? controller.signal);
+      }
+      projectedMessages.push({
+        role: 'tool',
+        tool_call_id: toolCallId,
+        content: compatibilityToolResultText(result),
+      });
+    }
+    outcome = await admittedProviderInvoker({
+      ...input,
+      abortSignal: input.abortSignal ?? controller.signal,
+      messages: projectedMessages,
+    });
+  }
+
+  return {
+    ...(outcome && typeof outcome === 'object' ? outcome : {}),
+    admission: 'failed',
+    transportSubmitted: outcome?.transportSubmitted ?? true,
+    error: {
+      code: 'pi_tool_loop_exhausted',
+      message: `The NARS compatibility tool loop exceeded its admitted limit of ${maxRounds} rounds.`,
+      max_rounds: maxRounds,
+    },
   };
 }
 

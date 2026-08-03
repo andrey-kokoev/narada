@@ -298,9 +298,11 @@ async function discoverAndStartMcpServers(siteRoot: string, ownershipContext: An
     });
   }
 
+  const workerProjection = workerMcpProjectionFromEnv();
+  const fabricServers = projectWorkerMcpFabricServers(fabric.servers, workerProjection);
   const servers: AnyRecord = {};
   const failures: any[] = [];
-  for (const [serverName, serverConfig] of Object.entries(fabric.servers as AnyRecord) as [string, AnyRecord][]) {
+  for (const [serverName, serverConfig] of Object.entries(fabricServers as AnyRecord) as [string, AnyRecord][]) {
     try {
       servers[serverName] = await createRuntimeMcpServer({ siteRoot, serverName, serverConfig, ownershipContext });
     } catch (err) {
@@ -743,18 +745,72 @@ function normalizeWorkerMcpToolList(value: any): string[] {
   return result;
 }
 
+function workerMcpAllowedToolNames(config: AnyRecord): Set<string> {
+  const allowed = new Set<string>();
+  if (config.include_startup_tools !== false) {
+    for (const name of WORKER_MCP_STARTUP_TOOL_NAMES) allowed.add(name);
+  }
+  if (config.native_mcp_mode === 'scoped') {
+    for (const name of config.mcp_tool_allowlist ?? []) allowed.add(name);
+  }
+  if (config.include_output_readback_tools === true) {
+    for (const name of WORKER_MCP_OUTPUT_READBACK_TOOL_NAMES) allowed.add(name);
+  }
+  return allowed;
+}
+
+function workerMcpDeclaredTools(server: AnyRecord): AnyRecord[] {
+  const declared: AnyRecord[] = [];
+  const append = (value: any) => {
+    if (!Array.isArray(value)) return;
+    for (const item of value) {
+      if (typeof item === 'string' && item.trim()) {
+        declared.push({ name: item });
+      } else if (item && typeof item === 'object' && item.name) {
+        declared.push(item);
+      }
+    }
+  };
+
+  append(server.tools);
+  append(server.allowed_tools);
+  append(server.tool_names);
+  append(server.surface_projection?.surface_descriptor?.tools);
+  if (declared.length > 0) return declared;
+
+  for (const [name, item] of Object.entries(server.registry_tools ?? {}) as [string, AnyRecord][]) {
+    if (!item || item.refused === true) continue;
+    declared.push({ ...item, name: item.name ?? name });
+  }
+  return declared;
+}
+
+function projectWorkerMcpFabricServers(mcpServers: AnyRecord, config: AnyRecord | null): AnyRecord {
+  if (!config || config.native_mcp_mode === 'full') return mcpServers;
+  const allowed = workerMcpAllowedToolNames(config);
+  const projected: AnyRecord = {};
+  for (const [serverName, server] of Object.entries(mcpServers ?? {}) as [string, AnyRecord][]) {
+    const seenProviderNames = new Set();
+    const tools = workerMcpDeclaredTools(server).filter((tool: AnyRecord) => workerMcpToolAllowed({
+      serverName,
+      tool,
+      allowed,
+      seenProviderNames,
+    }));
+    if (tools.length > 0) projected[serverName] = server;
+  }
+  return projected;
+}
+
 function applyWorkerMcpProjection(mcpServers: AnyRecord, config: AnyRecord | null = workerMcpProjectionFromEnv()): AnyRecord {
   if (!config || config.native_mcp_mode === 'full') return mcpServers;
-  const allowed = new Set();
-  if (config.include_startup_tools !== false) for (const name of WORKER_MCP_STARTUP_TOOL_NAMES) allowed.add(name);
-  if (config.native_mcp_mode === 'scoped') for (const name of config.mcp_tool_allowlist ?? []) allowed.add(name);
-  if (config.include_output_readback_tools === true) for (const name of WORKER_MCP_OUTPUT_READBACK_TOOL_NAMES) allowed.add(name);
+  const allowed = workerMcpAllowedToolNames(config);
 
   const projected: AnyRecord = {};
   for (const [serverName, server] of Object.entries(mcpServers ?? {}) as [string, AnyRecord][]) {
     const seenProviderNames = new Set();
     const tools = (server.tools ?? []).filter((tool: any) => workerMcpToolAllowed({ serverName, tool, allowed, seenProviderNames }));
-    projected[serverName] = { ...server, tools };
+    if (tools.length > 0) projected[serverName] = { ...server, tools };
   }
   attachMcpStartupFailures(projected, getMcpStartupFailures(mcpServers));
   Object.defineProperty(projected, '__mcp_worker_projection', {
@@ -949,6 +1005,7 @@ export {
   normalizeMcpOutputReader,
   workerMcpProjectionFromEnv,
   parseWorkerMcpProjectionConfig,
+  projectWorkerMcpFabricServers,
   applyWorkerMcpProjection,
   providerSafeToolName,
   providerToolNameForOriginal,

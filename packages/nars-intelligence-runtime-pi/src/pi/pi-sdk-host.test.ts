@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createPiSdkHost } from './pi-sdk-host.js';
-import { adaptExternalPiSession } from './pi-session-factory.js';
+import { adaptExternalPiSession, createInMemoryPiSession } from './pi-session-factory.js';
 import { assertPiRuntimeIsolation, createPiRuntimeIsolationConfig } from './pi-runtime-isolation.js';
 
 test('Pi isolation evidence distinguishes the in-process SDK from the filtered RPC child', () => {
@@ -119,4 +119,50 @@ test('Pi SDK host fails closed when the loaded SDK contradicts the admitted pin'
     host.start({ session_id: 'session-version-mismatch', agent_id: 'agent-version-mismatch' }),
     /pi_sdk_version_mismatch/,
   );
+});
+
+test('compatibility host executes projected tool calls through the NARS gateway and resumes the turn', async () => {
+  const providerInputs: any[] = [];
+  const gatewayInputs: any[] = [];
+  const session: any = createInMemoryPiSession({
+    sessionId: 'compat-tool-session',
+    providerInvoker: async (input: any) => {
+      providerInputs.push(input);
+      if (providerInputs.length === 1) {
+        return {
+          admission: 'acknowledged',
+          response: {
+            choices: [{
+              message: {
+                role: 'assistant',
+                content: null,
+                tool_calls: [{ id: 'compat-call-1', type: 'function', function: { name: 'read_note', arguments: '{}' } }],
+              },
+            }],
+          },
+        };
+      }
+      return { admission: 'acknowledged', response: { choices: [{ message: { role: 'assistant', content: 'done' } }] } };
+    },
+  });
+  const result: any = await session.runTurn({
+    turn_id: 'compat-tool-turn',
+    messages: [{ role: 'user', content: 'read the note' }],
+    tools: [{ type: 'function', function: { name: 'read_note', parameters: { type: 'object', properties: {} } }, nars_gateway_proxy: true }],
+    tool_loop: { execution_policy: { tool_loop: { max_rounds: 4 } } },
+    capability_gateway: {
+      async invoke(request: any) {
+        gatewayInputs.push(request);
+        return { status: 'completed', result: { note: 'hello' } };
+      },
+    },
+  });
+
+  assert.equal(result.response.choices[0].message.content, 'done');
+  assert.equal(providerInputs.length, 2);
+  assert.equal(gatewayInputs.length, 1);
+  assert.equal(gatewayInputs[0].toolName, 'read_note');
+  assert.equal(gatewayInputs[0].toolCallId, 'compat-call-1');
+  assert.deepEqual(providerInputs[1].messages.map((message: any) => message.role), ['user', 'assistant', 'tool']);
+  assert.match(providerInputs[1].messages[2].content, /hello/);
 });
