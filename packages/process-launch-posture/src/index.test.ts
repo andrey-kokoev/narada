@@ -2,18 +2,22 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { test } from 'node:test';
 import { EventEmitter } from 'node:events';
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   browserOpenCommand,
   createOperatorProjectionOpenRequest,
+  createScheduledCommandPlaceholderPlan,
+  createScheduledCommandLaunchPlan,
+  decodeScheduledCommandLaunchArguments,
   admitOperatorProjectionOpenRequest,
   execFileGovernedSync,
   executeOperatorProjectionOpenRequest,
   normalizeHiddenCommand,
   openBrowserUrl,
   processSupervisorEntrypoint,
+  scheduledCommandEntrypoint,
   runGovernedCommand,
   runGovernedCommandSync,
   spawnHiddenPostureProcess,
@@ -36,6 +40,62 @@ test('browserOpenCommand uses hidden helper-compatible Windows command', () => {
     command: 'cmd.exe',
     args: ['/c', 'start', '', 'http://127.0.0.1:3000'],
   });
+});
+
+test('scheduled command launch contract round-trips the exact target without a shell', () => {
+  const placeholder = createScheduledCommandPlaceholderPlan({ platform: 'win32', env: {} });
+  assert.deepEqual(placeholder.launcher_argv, ['--scheduled-noop-v1']);
+  assert.equal(placeholder.console_window_policy, 'native_create_no_window');
+  const plan = createScheduledCommandLaunchPlan(
+    '"C:\\Program Files\\nodejs\\node.exe"',
+    '"D:\\code\\site\\worker.js" --ticket "ticket 1"',
+    { platform: 'win32', env: {} },
+  );
+  assert.equal(plan.launcher_path, scheduledCommandEntrypoint({ platform: 'win32', env: {} }));
+  assert.equal(plan.console_window_policy, 'native_create_no_window');
+  assert.deepEqual(decodeScheduledCommandLaunchArguments(plan.launcher_arguments), {
+    target_command: 'C:\\Program Files\\nodejs\\node.exe',
+    target_arguments: '"D:\\code\\site\\worker.js" --ticket "ticket 1"',
+  });
+});
+
+test('Windows native supervisor is a no-console GUI-subsystem executable', { skip: !nativeSupervisorAvailable }, () => {
+  const image = readFileSync(nativeSupervisorPath!);
+  const peOffset = image.readUInt32LE(0x3c);
+  assert.equal(image.subarray(peOffset, peOffset + 4).toString('binary'), 'PE\0\0');
+  const optionalHeaderOffset = peOffset + 24;
+  assert.equal(image.readUInt16LE(optionalHeaderOffset + 0x44), 2, 'PE subsystem must be IMAGE_SUBSYSTEM_WINDOWS_GUI');
+});
+
+test('Windows scheduled mode executes the exact target and propagates its exit code', { skip: !nativeSupervisorAvailable }, async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'narada-scheduled-command-'));
+  const scriptPath = join(dir, 'scheduled-child.cjs');
+  const markerPath = join(dir, 'marker.txt');
+  const token = `scheduled:${Date.now()}`;
+  writeFileSync(
+    scriptPath,
+    "const fs = require('node:fs'); fs.writeFileSync(process.argv[2], process.argv[3], 'utf8'); process.exit(23);\n",
+    'utf8',
+  );
+  const plan = createScheduledCommandLaunchPlan(
+    process.execPath,
+    [scriptPath, markerPath, token].map(quoteWindowsArgument).join(' '),
+    { platform: 'win32' },
+  );
+  const child = spawn(plan.launcher_path, plan.launcher_argv, { stdio: 'ignore', windowsHide: true });
+  const placeholder = createScheduledCommandPlaceholderPlan({ platform: 'win32' });
+  const placeholderChild = spawn(placeholder.launcher_path, placeholder.launcher_argv, { stdio: 'ignore', windowsHide: true });
+  try {
+    const [placeholderCode] = await waitForExit(placeholderChild, 3_000);
+    assert.equal(placeholderCode, 0);
+    const [code] = await waitForExit(child, 3_000);
+    assert.equal(code, 23);
+    assert.equal(readFileSync(markerPath, 'utf8'), token);
+  } finally {
+    if (placeholderChild.exitCode === null) placeholderChild.kill();
+    if (child.exitCode === null) child.kill();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('spawnOperatorTerminal keeps visible terminal posture explicit', () => {
@@ -344,6 +404,25 @@ async function waitFor<T>(predicate: () => T | Promise<T>, timeoutMs: number): P
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
   throw new Error(`timed out after ${timeoutMs}ms`);
+}
+
+function quoteWindowsArgument(value: string): string {
+  if (value.length > 0 && !/[\s"]/u.test(value)) return value;
+  let quoted = '"';
+  let backslashes = 0;
+  for (const character of value) {
+    if (character === '\\') {
+      backslashes += 1;
+      continue;
+    }
+    if (character === '"') {
+      quoted += '\\'.repeat(backslashes * 2 + 1) + '"';
+    } else {
+      quoted += '\\'.repeat(backslashes) + character;
+    }
+    backslashes = 0;
+  }
+  return quoted + '\\'.repeat(backslashes * 2) + '"';
 }
 
 async function waitForJson(path: string, predicate: (value: any) => boolean, timeoutMs: number): Promise<any> {

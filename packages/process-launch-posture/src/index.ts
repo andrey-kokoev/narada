@@ -46,6 +46,103 @@ export function processSupervisorEntrypoint(options: { platform?: NodeJS.Platfor
   return resolve(dirname(fileURLToPath(import.meta.url)), '..', 'native', 'target', 'release', 'narada-process-supervisor.exe');
 }
 
+export function scheduledCommandEntrypoint(options: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv } = {}): string | null {
+  return processSupervisorEntrypoint(options);
+}
+
+export function scheduledCommandSourceEntrypoint(options: { platform?: NodeJS.Platform } = {}): string | null {
+  const platform = options.platform ?? process.platform;
+  if (platform !== 'win32') return null;
+  return resolve(dirname(fileURLToPath(import.meta.url)), '..', 'native', 'src', 'main.rs');
+}
+
+export interface ScheduledCommandLaunchPlan {
+  schema: 'narada.process_launch.scheduled_command.v1';
+  launcher_path: string;
+  launcher_arguments: string;
+  launcher_argv: [string, string];
+  target_command: string;
+  target_arguments: string;
+  console_window_policy: 'native_create_no_window';
+}
+
+export interface ScheduledCommandLaunchOptions {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+}
+
+export interface ScheduledCommandPlaceholderPlan {
+  schema: 'narada.process_launch.scheduled_command_placeholder.v1';
+  launcher_path: string;
+  launcher_arguments: '--scheduled-noop-v1';
+  launcher_argv: ['--scheduled-noop-v1'];
+  console_window_policy: 'native_create_no_window';
+}
+
+export function createScheduledCommandPlaceholderPlan(
+  options: ScheduledCommandLaunchOptions = {},
+): ScheduledCommandPlaceholderPlan {
+  const launcherPath = scheduledCommandEntrypoint(options);
+  if (!launcherPath) throw new Error(`scheduled_command_windows_only:${options.platform ?? process.platform}`);
+  return {
+    schema: 'narada.process_launch.scheduled_command_placeholder.v1',
+    launcher_path: launcherPath,
+    launcher_arguments: '--scheduled-noop-v1',
+    launcher_argv: ['--scheduled-noop-v1'],
+    console_window_policy: 'native_create_no_window',
+  };
+}
+
+export function createScheduledCommandLaunchPlan(
+  command: string,
+  argumentsText = '',
+  options: ScheduledCommandLaunchOptions = {},
+): ScheduledCommandLaunchPlan {
+  const targetCommand = unwrapExecutable(command);
+  const targetArguments = String(argumentsText ?? '');
+  if (targetCommand.includes('\0') || targetArguments.includes('\0')) {
+    throw new Error('scheduled_command_nul_refused');
+  }
+  const launcherPath = scheduledCommandEntrypoint(options);
+  if (!launcherPath) throw new Error(`scheduled_command_windows_only:${options.platform ?? process.platform}`);
+  const payload = Buffer.from(`${targetCommand}\0${targetArguments}`, 'utf8').toString('base64url');
+  return {
+    schema: 'narada.process_launch.scheduled_command.v1',
+    launcher_path: launcherPath,
+    launcher_arguments: `--scheduled-v1 ${payload}`,
+    launcher_argv: ['--scheduled-v1', payload],
+    target_command: targetCommand,
+    target_arguments: targetArguments,
+    console_window_policy: 'native_create_no_window',
+  };
+}
+
+export function decodeScheduledCommandLaunchArguments(argumentsText: string): Pick<ScheduledCommandLaunchPlan, 'target_command' | 'target_arguments'> {
+  const match = /^--scheduled-v1\s+([A-Za-z0-9_-]+)$/.exec(String(argumentsText ?? '').trim());
+  if (!match) throw new Error('scheduled_command_arguments_invalid');
+  const payload = Buffer.from(match[1]!, 'base64url');
+  if (payload.toString('base64url') !== match[1]) throw new Error('scheduled_command_payload_invalid');
+  const separator = payload.indexOf(0);
+  if (separator <= 0 || payload.indexOf(0, separator + 1) !== -1) {
+    throw new Error('scheduled_command_payload_invalid');
+  }
+  return {
+    target_command: payload.subarray(0, separator).toString('utf8'),
+    target_arguments: payload.subarray(separator + 1).toString('utf8'),
+  };
+}
+
+function unwrapExecutable(value: string): string {
+  const trimmed = String(value ?? '').trim();
+  if (!trimmed) throw new Error('scheduled_command_target_required');
+  if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
+    const unwrapped = trimmed.slice(1, -1);
+    if (!unwrapped) throw new Error('scheduled_command_target_required');
+    return unwrapped;
+  }
+  return trimmed;
+}
+
 export interface BrowserOpenOptions {
   platform?: NodeJS.Platform;
   spawnImpl?: SpawnImplementation;

@@ -1,3 +1,5 @@
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
 #[cfg(windows)]
 mod windows_supervisor {
     use std::env;
@@ -79,14 +81,37 @@ mod windows_supervisor {
     }
 
     pub fn run() -> Result<i32, String> {
+        let startup_args = env::args().skip(1).collect::<Vec<_>>();
+        if startup_args.as_slice() == ["--scheduled-noop-v1"] {
+            return Ok(0);
+        }
         let options = parse_args()?;
         let mut command = Command::new(&options.command);
-        command
-            .args(&options.args)
-            .stdin(Stdio::inherit())
-            .stdout(Stdio::inherit())
-            .stderr(Stdio::inherit())
-            .creation_flags(CREATE_NO_WINDOW);
+        match &options.arguments {
+            CommandArguments::Parsed(args) => {
+                command.args(args);
+            }
+            CommandArguments::Raw(arguments) => {
+                if !arguments.is_empty() {
+                    command.raw_arg(arguments);
+                }
+            }
+        }
+        match &options.mode {
+            LaunchMode::Supervised { .. } => {
+                command
+                    .stdin(Stdio::inherit())
+                    .stdout(Stdio::inherit())
+                    .stderr(Stdio::inherit());
+            }
+            LaunchMode::Scheduled => {
+                command
+                    .stdin(Stdio::null())
+                    .stdout(Stdio::null())
+                    .stderr(Stdio::null());
+            }
+        }
+        command.creation_flags(CREATE_NO_WINDOW);
         let mut child = command.spawn().map_err(|error| format!("managed_child_spawn_failed:{error}"))?;
         let child_pid = child.id();
         let job = unsafe { CreateJobObjectW(std::ptr::null_mut(), std::ptr::null()) };
@@ -116,30 +141,42 @@ mod windows_supervisor {
             return Err(format!("job_assign_failed:{}", io::Error::last_os_error()));
         }
 
-        let parent = unsafe {
-            OpenProcess(
-                PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE,
-                0,
-                options.parent_pid,
-            )
-        };
-        if parent.is_null() {
-            unsafe { CloseHandle(job); }
-            let _ = child.kill();
-            return Err(format!("parent_open_failed:{}", io::Error::last_os_error()));
-        }
-        write_identity(&options.identity_path, "live", child_pid, options.parent_pid)?;
-
-        let status = loop {
-            if let Some(status) = child.try_wait().map_err(|error| format!("managed_child_wait_failed:{error}"))? {
-                break status;
+        let status = match &options.mode {
+            LaunchMode::Scheduled => child
+                .wait()
+                .map_err(|error| format!("scheduled_child_wait_failed:{error}"))?,
+            LaunchMode::Supervised {
+                identity_path,
+                parent_pid,
+            } => {
+                let parent = unsafe {
+                    OpenProcess(
+                        PROCESS_QUERY_LIMITED_INFORMATION | SYNCHRONIZE,
+                        0,
+                        *parent_pid,
+                    )
+                };
+                if parent.is_null() {
+                    unsafe { CloseHandle(job); }
+                    let _ = child.kill();
+                    return Err(format!("parent_open_failed:{}", io::Error::last_os_error()));
+                }
+                write_identity(identity_path, "live", child_pid, *parent_pid)?;
+                let status = loop {
+                    if let Some(status) = child.try_wait().map_err(|error| format!("managed_child_wait_failed:{error}"))? {
+                        break status;
+                    }
+                    let parent_exited = unsafe { WaitForSingleObject(parent, 0) == WAIT_OBJECT_0 };
+                    if parent_exited {
+                        let _ = child.kill();
+                        break child.wait().map_err(|error| format!("managed_child_reap_failed:{error}"))?;
+                    }
+                    sleep(Duration::from_millis(100));
+                };
+                let _ = write_identity(identity_path, "closed", child_pid, *parent_pid);
+                unsafe { CloseHandle(parent); }
+                status
             }
-            let parent_exited = unsafe { WaitForSingleObject(parent, 0) == WAIT_OBJECT_0 };
-            if parent_exited {
-                let _ = child.kill();
-                break child.wait().map_err(|error| format!("managed_child_reap_failed:{error}"))?;
-            }
-            sleep(Duration::from_millis(100));
         };
         let code = status.code().unwrap_or_else(|| unsafe {
             let mut exit_code = STILL_ACTIVE;
@@ -149,23 +186,46 @@ mod windows_supervisor {
                 1
             }
         });
-        let _ = write_identity(&options.identity_path, "closed", child_pid, options.parent_pid);
         unsafe {
-            CloseHandle(parent);
             CloseHandle(job);
         }
         Ok(code)
     }
 
+    enum LaunchMode {
+        Supervised {
+            identity_path: PathBuf,
+            parent_pid: u32,
+        },
+        Scheduled,
+    }
+
+    enum CommandArguments {
+        Parsed(Vec<String>),
+        Raw(String),
+    }
+
     struct Options {
-        identity_path: PathBuf,
-        parent_pid: u32,
+        mode: LaunchMode,
         command: String,
-        args: Vec<String>,
+        arguments: CommandArguments,
     }
 
     fn parse_args() -> Result<Options, String> {
-        let mut args = env::args().skip(1);
+        let collected = env::args().skip(1).collect::<Vec<_>>();
+        if collected.first().map(String::as_str) == Some("--scheduled-v1") {
+            if collected.len() != 2 {
+                return Err("scheduled_payload_required".to_string());
+            }
+            let (command, arguments) = decode_scheduled_payload(&collected[1])?;
+            return Ok(Options {
+                mode: LaunchMode::Scheduled,
+                command,
+                arguments: CommandArguments::Raw(arguments),
+            });
+        }
+
+        let mut args = collected.into_iter();
         let mut identity_path = None;
         let mut parent_pid = None;
         let mut command_line = Vec::new();
@@ -185,11 +245,63 @@ mod windows_supervisor {
         }
         let command = command_line.first().cloned().ok_or("managed_command_required")?;
         Ok(Options {
-            identity_path: identity_path.ok_or("identity_path_required")?,
-            parent_pid: parent_pid.ok_or("parent_pid_required")?,
+            mode: LaunchMode::Supervised {
+                identity_path: identity_path.ok_or("identity_path_required")?,
+                parent_pid: parent_pid.ok_or("parent_pid_required")?,
+            },
             command,
-            args: command_line.into_iter().skip(1).collect(),
+            arguments: CommandArguments::Parsed(command_line.into_iter().skip(1).collect()),
         })
+    }
+
+    fn decode_scheduled_payload(value: &str) -> Result<(String, String), String> {
+        let bytes = decode_base64_url(value)?;
+        let separator = bytes
+            .iter()
+            .position(|byte| *byte == 0)
+            .ok_or("scheduled_payload_separator_missing")?;
+        if separator == 0 || bytes[separator + 1..].contains(&0) {
+            return Err("scheduled_payload_invalid".to_string());
+        }
+        let command = String::from_utf8(bytes[..separator].to_vec())
+            .map_err(|_| "scheduled_command_utf8_invalid")?;
+        let arguments = String::from_utf8(bytes[separator + 1..].to_vec())
+            .map_err(|_| "scheduled_arguments_utf8_invalid")?;
+        Ok((command, arguments))
+    }
+
+    fn decode_base64_url(value: &str) -> Result<Vec<u8>, String> {
+        if value.is_empty() {
+            return Err("scheduled_payload_required".to_string());
+        }
+        let mut output = Vec::with_capacity(value.len() * 3 / 4);
+        let mut buffer = 0_u32;
+        let mut bits = 0_u8;
+        for byte in value.bytes() {
+            let sextet = match byte {
+                b'A'..=b'Z' => byte - b'A',
+                b'a'..=b'z' => byte - b'a' + 26,
+                b'0'..=b'9' => byte - b'0' + 52,
+                b'-' => 62,
+                b'_' => 63,
+                _ => return Err("scheduled_payload_base64url_invalid".to_string()),
+            } as u32;
+            buffer = (buffer << 6) | sextet;
+            bits += 6;
+            if bits >= 8 {
+                bits -= 8;
+                output.push(((buffer >> bits) & 0xff) as u8);
+                buffer = if bits == 0 {
+                    0
+                } else {
+                    buffer & ((1_u32 << bits) - 1)
+                };
+            }
+        }
+        if bits > 0 && buffer != 0 {
+            return Err("scheduled_payload_base64url_invalid".to_string());
+        }
+        Ok(output)
     }
 
     fn write_identity(path: &PathBuf, state: &str, child_pid: u32, parent_pid: u32) -> Result<(), String> {

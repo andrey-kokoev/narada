@@ -21,6 +21,41 @@ export interface BrowserOpenResult {
   pid: number | null;
 }
 
+export interface ScheduledCommandPlaceholderPlan {
+  schema: 'narada.process_launch.scheduled_command_placeholder.v1';
+  launcher_path: string;
+  launcher_arguments: '--scheduled-noop-v1';
+  launcher_argv: ['--scheduled-noop-v1'];
+  console_window_policy: 'native_create_no_window';
+}
+
+export interface ScheduledCommandLaunchPlan {
+  schema: 'narada.process_launch.scheduled_command.v1';
+  launcher_path: string;
+  launcher_arguments: string;
+  launcher_argv: [string, string];
+  target_command: string;
+  target_arguments: string;
+  console_window_policy: 'native_create_no_window';
+}
+
+export interface ScheduledCommandLaunchOptions {
+  platform?: NodeJS.Platform;
+  env?: NodeJS.ProcessEnv;
+}
+
+export function processSupervisorEntrypoint(options?: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv }): string | null;
+
+export function scheduledCommandEntrypoint(options?: { platform?: NodeJS.Platform; env?: NodeJS.ProcessEnv }): string | null;
+
+export function scheduledCommandSourceEntrypoint(options?: { platform?: NodeJS.Platform }): string | null;
+
+export function createScheduledCommandPlaceholderPlan(options?: ScheduledCommandLaunchOptions): ScheduledCommandPlaceholderPlan;
+
+export function createScheduledCommandLaunchPlan(command: string, argumentsText?: string, options?: ScheduledCommandLaunchOptions): ScheduledCommandLaunchPlan;
+
+export function decodeScheduledCommandLaunchArguments(argumentsText: string): Pick<ScheduledCommandLaunchPlan, 'target_command' | 'target_arguments'>;
+
 export interface BrowserOpenOptions {
   platform?: NodeJS.Platform;
   spawnImpl?: typeof import('node:child_process').spawn;
