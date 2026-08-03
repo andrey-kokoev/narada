@@ -17,6 +17,18 @@ export interface OverlayRow {
   target?: string;
 }
 
+export async function publishOverlayDocument(
+  id: string,
+  input: OverlayDocumentInput,
+  options: OverlayPathOptions = {},
+): Promise<OverlayDocument> {
+  const normalizedId = requireId(id);
+  const normalized = createOverlayDocument({ ...input, id: normalizedId });
+  const paths = await ensureStateDirectory(normalizedId, options);
+  await writeJson(paths.document, normalized);
+  return normalized;
+}
+
 export interface OverlayAction {
   id: string;
   label: string;
@@ -43,6 +55,7 @@ export interface OverlayPaths {
   document: string;
   pid: string;
   preferences: string;
+  visibilityPolicy: string;
   refresh: string;
   focus: string;
   restartCommand: string;
@@ -72,7 +85,7 @@ export interface OverlayStatus {
   action_state: OverlayActionState | null;
 }
 
-interface OverlayInput extends Record<string, unknown> {
+export interface OverlayDocumentInput extends Record<string, unknown> {
   id?: unknown;
   title?: unknown;
   title_tone?: unknown;
@@ -93,7 +106,7 @@ interface OverlayLifecycleOptions extends OverlayPathOptions {
 
 interface StartOverlayOptions extends OverlayPathOptions {
   id?: string;
-  document?: OverlayInput | null;
+  document?: OverlayDocumentInput | null;
   visibilityPolicy?: OverlayVisibilityPolicy;
   refreshSeconds?: number;
   restartCommand?: readonly string[];
@@ -265,7 +278,7 @@ function normalizeActions(actions: unknown): OverlayAction[] {
   });
 }
 
-export function createOverlayDocument(input: OverlayInput = {}): OverlayDocument {
+export function createOverlayDocument(input: OverlayDocumentInput = {}): OverlayDocument {
   const id = requireId(input.id ?? 'narada-overlay');
   const titleTone = input.title_tone === undefined ? 'default' : String(input.title_tone);
   if (!VALID_TONES.has(titleTone)) throw new Error('overlay_title_tone_invalid');
@@ -297,6 +310,7 @@ export function overlayPaths(id: string, options: OverlayPathOptions = {}): Over
     document: join(stateDirectory, 'document.json'),
     pid: join(stateDirectory, 'overlay.pid'),
     preferences: join(stateDirectory, 'preferences.json'),
+    visibilityPolicy: join(stateDirectory, 'visibility.policy'),
     refresh: join(stateDirectory, 'refresh.signal'),
     focus: join(stateDirectory, 'focus.signal'),
     restartCommand: join(stateDirectory, 'restart.command.json'),
@@ -466,7 +480,7 @@ export async function readOverlayDocument({ id, stateRoot, env = process.env }: 
 export async function removeOverlayState({ id, stateRoot, env = process.env }: OverlayLifecycleOptions = {}): Promise<OverlayStatus> {
   const normalizedId = requireId(id);
   const paths = overlayPaths(normalizedId, { stateRoot, env });
-  for (const path of [paths.pid, paths.refresh, paths.restartCommand, paths.document]) {
+  for (const path of [paths.pid, paths.visibilityPolicy, paths.refresh, paths.restartCommand, paths.document]) {
     try { await unlink(path); } catch (error: unknown) { if (errorCode(error) !== 'ENOENT') throw error; }
   }
   return overlayStatus(normalizedId, { stateRoot, env });

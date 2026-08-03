@@ -1,0 +1,30 @@
+{
+  "name": "@narada-core/quota-meter",
+  "version": "0.1.0",
+  "description": "Provider-agnostic quota, usage, and glide-path domain with a Narada Windows overlay projection.",
+  "private": true,
+  "type": "module",
+  "main": "./src/core.js",
+  "exports": {
+    ".": "./src/core.js",
+    "./providers": "./src/providers.js",
+    "./overlay": "./src/overlay.js",
+    "./format": "./src/format.js",
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "quota-meter": "./src/cli.js",
+    "quota-meter-mcp": "./src/mcp.js"
+  },
+  "scripts": {
+    "check": "node --check src/core.js && node --check src/codex.js && node --check src/kimi.js && node --check src/providers.js && node --check src/format.js && node --check src/overlay.js && node --check src/overlay-worker.js && node --check src/cli.js && node --check src/mcp.js",
+    "test": "node --test",
+    "mcp": "node src/mcp.js"
+  },
+  "dependencies": {
+    "@narada-core/window-overlay-core": "workspace:*"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

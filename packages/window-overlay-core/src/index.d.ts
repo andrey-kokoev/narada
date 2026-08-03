@@ -33,6 +33,7 @@ export interface OverlayPaths {
   document: string;
   pid: string;
   preferences: string;
+  visibilityPolicy: string;
   refresh: string;
   focus: string;
   restartCommand: string;
@@ -59,7 +60,7 @@ export interface OverlayStatus {
   document: OverlayDocument | null;
   action_state: OverlayActionState | null;
 }
-interface OverlayInput extends Record<string, unknown> {
+export interface OverlayDocumentInput extends Record<string, unknown> {
   id?: unknown;
   title?: unknown;
   title_tone?: unknown;
@@ -77,7 +78,7 @@ interface OverlayLifecycleOptions extends OverlayPathOptions {
 }
 interface StartOverlayOptions extends OverlayPathOptions {
   id?: string;
-  document?: OverlayInput | null;
+  document?: OverlayDocumentInput | null;
   visibilityPolicy?: OverlayVisibilityPolicy;
   refreshSeconds?: number;
   restartCommand?: readonly string[];
@@ -89,7 +90,8 @@ export const OVERLAY_RESULT_SCHEMA: 'narada.window_surface_overlay.result.v1';
 export function normalizeOverlayEnvironment(env?: NodeJS.ProcessEnv): NodeJS.ProcessEnv;
 export function defaultLocalAppDataRoot(env?: NodeJS.ProcessEnv): string;
 export function requestOverlayFocus(id: string, options?: OverlayPathOptions): Promise<Record<string, unknown>>;
-export function createOverlayDocument(input?: OverlayInput): OverlayDocument;
+export function createOverlayDocument(input?: OverlayDocumentInput): OverlayDocument;
+export function publishOverlayDocument(id: string, input: OverlayDocumentInput, options?: OverlayPathOptions): Promise<OverlayDocument>;
 export function defaultOverlayStateRoot(env?: NodeJS.ProcessEnv): string;
 export function overlayStateDirectory(id: string, options?: OverlayPathOptions): string;
 export function overlayPaths(id: string, options?: OverlayPathOptions): OverlayPaths;
