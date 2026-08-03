@@ -27,26 +27,59 @@
     "node": ">=22.0.0"
   },
   "exports": {
-    "./compat/mcp-payload-file.legacy-site": "./compat/mcp-payload-file.legacy-site.ts",
-    "./generic-command-registry": "./src/generic-command-registry.ts",
-    "./mcp-freshness-service": "./src/mcp-freshness-service.ts",
-    "./operator-surface/mcp-runtime-instance-registry": "./src/operator-surface/mcp-runtime-instance-registry.ts",
-    "./operator-surface/carrier-restart-supervisor": "./src/operator-surface/carrier-restart-supervisor.ts",
+    "./compat/mcp-payload-file.legacy-site": {
+      "types": "./dist/compat/mcp-payload-file.legacy-site.d.ts",
+      "import": "./dist/compat/mcp-payload-file.legacy-site.js"
+    },
+    "./generic-command-registry": {
+      "types": "./dist/generic-command-registry.d.ts",
+      "import": "./dist/generic-command-registry.js"
+    },
+    "./mcp-freshness-service": {
+      "types": "./dist/mcp-freshness-service.d.ts",
+      "import": "./dist/mcp-freshness-service.js"
+    },
+    "./operator-surface/mcp-runtime-instance-registry": {
+      "types": "./dist/operator-surface/mcp-runtime-instance-registry.d.ts",
+      "import": "./dist/operator-surface/mcp-runtime-instance-registry.js"
+    },
+    "./operator-surface/carrier-restart-supervisor": {
+      "types": "./dist/operator-surface/carrier-restart-supervisor.d.ts",
+      "import": "./dist/operator-surface/carrier-restart-supervisor.js"
+    },
     "./site-layout": {
-      "types": "./src/site-layout.ts",
+      "types": "./dist/site-layout.d.ts",
       "import": "./dist/site-layout.js"
     },
-    "./site-locus-shim": "./src/site-locus-shim.ts",
-    "./task-lifecycle-mcp-resolution": "./src/task-lifecycle-mcp-resolution.ts",
-    "./incubation/write-file-utf8.ts": "./src/incubation/write-file-utf8.ts",
-    "./inbox/admission-log": "./src/inbox/admission-log.ts",
-    "./inbox/envelope-kinds": "./src/inbox/envelope-kinds.ts",
-    "./inbox/inbox-index": "./src/inbox/inbox-index.ts"
+    "./site-locus-shim": {
+      "types": "./dist/site-locus-shim.d.ts",
+      "import": "./dist/site-locus-shim.js"
+    },
+    "./task-lifecycle-mcp-resolution": {
+      "types": "./dist/task-lifecycle-mcp-resolution.d.ts",
+      "import": "./dist/task-lifecycle-mcp-resolution.js"
+    },
+    "./incubation/write-file-utf8.ts": {
+      "types": "./dist/incubation/write-file-utf8.d.ts",
+      "import": "./dist/incubation/write-file-utf8.js"
+    },
+    "./inbox/admission-log": {
+      "types": "./dist/inbox/admission-log.d.ts",
+      "import": "./dist/inbox/admission-log.js"
+    },
+    "./inbox/envelope-kinds": {
+      "types": "./dist/inbox/envelope-kinds.d.ts",
+      "import": "./dist/inbox/envelope-kinds.js"
+    },
+    "./inbox/inbox-index": {
+      "types": "./dist/inbox/inbox-index.d.ts",
+      "import": "./dist/inbox/inbox-index.js"
+    }
   },
   "scripts": {
     "prebuild": "pnpm --filter @narada-core/task-governance build",
     "test": "node --import tsx --test src/site-common-tools.test.ts src/task-lifecycle-mcp-resolution.test.ts src/operator-surface/carrier-restart-supervisor.test.ts src/site-init/site-live-carrier-state.test.ts src/site-init/site-init-lifecycle.test.ts src/site-init/site-init.test.ts src/site-lift/site-lift-lifecycle.test.ts src/site-lift/site-lift.test.ts",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.build-compat.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "pretest": "pnpm build"
   },

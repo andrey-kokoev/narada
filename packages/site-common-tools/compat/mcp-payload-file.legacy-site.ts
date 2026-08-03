@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, relative, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { supportedGenericCommandSchemas } from '../src/generic-command-registry.js';
+import { supportedGenericCommandSchemas } from '@narada-core/site-common-tools/generic-command-registry';
 
 const DEFAULT_MAX_BYTES: any = 256 * 1024;
 const DEFAULT_OUTPUT_MAX_BYTES: any = 10 * 1024 * 1024;
