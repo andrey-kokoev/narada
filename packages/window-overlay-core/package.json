@@ -25,6 +25,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "test": "node --import tsx --test src/window-overlay-core.test.ts",
+    "test:live": "node --import tsx --test src/window-overlay-live.e2e.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "description": "Reusable Windows overlay-window mechanics for Narada operator surfaces",

@@ -13,6 +13,7 @@ import {
   normalizeOverlayEnvironment,
   overlayPaths,
   overlayStatus,
+  requestOverlayFocus,
 } from './index.js';
 
 test('creates a versioned generic document with controlled actions', () => {
@@ -82,6 +83,7 @@ test('state root is user-local and overrideable', () => {
   const paths = overlayPaths('example', { stateRoot: 'C:\\State' });
   assert.match(paths.document, /example[\\/]document\.json$/);
   assert.match(paths.actionState, /example[\\/]action-state\.json$/);
+  assert.match(paths.focus, /example[\\/]focus\.signal$/);
 });
 
 test('normalizes the Windows WPF environment without mutating the caller', () => {
@@ -125,6 +127,11 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /\$titlePanel\.Cursor = \[Windows\.Input\.Cursors\]::SizeAll/);
   assert.match(source, /\$headerActions\.HorizontalAlignment = 'Right'/);
   assert.match(source, /GetForegroundWindow/);
+  assert.match(source, /ShowWindow/);
+  assert.match(source, /SetForegroundWindow/);
+  assert.match(source, /AttachThreadInput/);
+  assert.match(source, /ForceForegroundWindow/);
+  assert.match(source, /function Focus-Overlay/);
   assert.match(source, /GetWindowThreadProcessId/);
   assert.match(source, /Test-WindowsTerminalActive/);
   assert.match(source, /\[bool\]\$window\.IsActive/);
@@ -201,6 +208,26 @@ test('PowerShell lifecycle scripts do not shadow the automatic PID variable', as
   assert.doesNotMatch(start, /\$pid\s*=/);
   assert.doesNotMatch(stop, /\$pid\s*=/);
   assert.match(stop, /\$overlayPid/);
+  assert.doesNotMatch(start, /\$focusPath/);
+  assert.doesNotMatch(start, /Set-Content -Path \$focusPath/);
+  assert.match(stop, /Remove-Item \$focusPath/);
+});
+
+test('focus requests refuse stopped overlays without leaving a signal', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-overlay-focus-'));
+  try {
+    const paths = overlayPaths('stopped-overlay', { stateRoot });
+    await assert.rejects(
+      requestOverlayFocus('stopped-overlay', { stateRoot }),
+      /overlay_not_running/,
+    );
+    await assert.rejects(
+      readFile(paths.focus, 'utf8'),
+      (error: any) => error?.code === 'ENOENT',
+    );
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+  }
 });
 
 test('overlay host owns durable error logging without keeping its launcher attached', async () => {

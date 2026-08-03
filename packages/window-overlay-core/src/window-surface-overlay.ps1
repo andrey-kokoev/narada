@@ -15,6 +15,7 @@ $pidPath = Get-OverlayPath 'overlay.pid'
 $documentPath = Get-OverlayPath 'document.json'
 $preferencesPath = Get-OverlayPath 'preferences.json'
 $refreshPath = Get-OverlayPath 'refresh.signal'
+$focusPath = Get-OverlayPath 'focus.signal'
 $restartCommandPath = Get-OverlayPath 'restart.command.json'
 $actionStatePath = Get-OverlayPath 'action-state.json'
 $actionRunnerPath = Join-Path $PSScriptRoot 'Invoke-WindowSurfaceOverlayAction.ps1'
@@ -265,7 +266,43 @@ public static class NaradaWindowSurfaceOverlayNative {
     public static extern IntPtr GetForegroundWindow();
 
     [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int command);
+
+    [DllImport("user32.dll")]
+    public static extern bool BringWindowToTop(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern bool AttachThreadInput(uint idAttach, uint idAttachTo, bool attach);
+
+    [DllImport("kernel32.dll")]
+    public static extern uint GetCurrentThreadId();
+
+    [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    public static bool ForceForegroundWindow(IntPtr hWnd) {
+        if (hWnd == IntPtr.Zero) return false;
+        uint ignoredProcessId;
+        var foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out ignoredProcessId);
+        var targetThread = GetWindowThreadProcessId(hWnd, out ignoredProcessId);
+        var currentThread = GetCurrentThreadId();
+        var attachedForeground = foregroundThread != 0 && foregroundThread != currentThread
+            && AttachThreadInput(foregroundThread, currentThread, true);
+        var attachedTarget = targetThread != 0 && targetThread != currentThread
+            && AttachThreadInput(targetThread, currentThread, true);
+        try {
+            ShowWindow(hWnd, 9);
+            BringWindowToTop(hWnd);
+            SetForegroundWindow(hWnd);
+            return GetForegroundWindow() == hWnd;
+        } finally {
+            if (attachedTarget) AttachThreadInput(targetThread, currentThread, false);
+            if (attachedForeground) AttachThreadInput(foregroundThread, currentThread, false);
+        }
+    }
 
     [DllImport("user32.dll")]
     public static extern IntPtr MonitorFromWindow(IntPtr hWnd, uint flags);
@@ -319,6 +356,18 @@ public static class NaradaWindowSurfaceOverlayNative {
 function Get-OverlayWindowHandle {
     if ($null -eq $window) { return [IntPtr]::Zero }
     try { return [System.Windows.Interop.WindowInteropHelper]::new($window).Handle } catch { return [IntPtr]::Zero }
+}
+
+function Focus-Overlay {
+    if ($null -eq $window) { return }
+    $windowHandle = Get-OverlayWindowHandle
+    if ($windowHandle -eq [IntPtr]::Zero) { return }
+    $window.Visibility = [Windows.Visibility]::Visible
+    [void][NaradaWindowSurfaceOverlayNative]::ShowWindow($windowHandle, 9)
+    [void][NaradaWindowSurfaceOverlayNative]::BringWindowToTop($windowHandle)
+    [void]$window.Activate()
+    [void][NaradaWindowSurfaceOverlayNative]::ForceForegroundWindow($windowHandle)
+    Set-OverlayVisibility
 }
 
 function Get-OverlayWindowDimensions([object]$currentWindow) {
@@ -609,11 +658,19 @@ $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds([Math]::Max(1, $RefreshSeconds))
 $lastDocumentStamp = 0L
 $lastRefreshStamp = 0L
+$focusItem = Get-Item $focusPath -ErrorAction SilentlyContinue
+$lastFocusStamp = if ($focusItem) { $focusItem.LastWriteTimeUtc.Ticks } else { 0L }
 $timer.Add_Tick({
     $documentItem = Get-Item $documentPath -ErrorAction SilentlyContinue
     $refreshItem = Get-Item $refreshPath -ErrorAction SilentlyContinue
+    $focusItem = Get-Item $focusPath -ErrorAction SilentlyContinue
     $documentStamp = if ($documentItem) { $documentItem.LastWriteTimeUtc.Ticks } else { 0L }
     $refreshStamp = if ($refreshItem) { $refreshItem.LastWriteTimeUtc.Ticks } else { 0L }
+    $focusStamp = if ($focusItem) { $focusItem.LastWriteTimeUtc.Ticks } else { 0L }
+    if ($focusStamp -ne $lastFocusStamp) {
+        $lastFocusStamp = $focusStamp
+        Focus-Overlay
+    }
     if ($documentStamp -ne $lastDocumentStamp -or $refreshStamp -ne $lastRefreshStamp) {
         $lastDocumentStamp = $documentStamp
         $lastRefreshStamp = $refreshStamp

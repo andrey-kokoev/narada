@@ -20,6 +20,7 @@ export interface OverlayPaths {
   pid: string;
   preferences: string;
   refresh: string;
+  focus: string;
   restartCommand: string;
   actionState: string;
 }
@@ -49,6 +50,7 @@ export function defaultOverlayStateRoot(env?: NodeJS.ProcessEnv): string;
 export function overlayStateDirectory(id: string, options?: { stateRoot?: string; env?: NodeJS.ProcessEnv }): string;
 export function overlayPaths(id: string, options?: { stateRoot?: string; env?: NodeJS.ProcessEnv }): OverlayPaths;
 export function overlayStatus(id: string, options?: { stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayStatus>;
+export function requestOverlayFocus(id: string, options?: { stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<Record<string, unknown>>;
 export function requestOverlayRefresh(id: string, options?: { stateRoot?: string; env?: NodeJS.ProcessEnv }): Promise<Record<string, unknown>>;
 export function overlayHostScriptPath(): string;
 export function startOverlay(options: { id?: string; document: Partial<OverlayDocument>; stateRoot?: string; visibilityPolicy?: OverlayVisibilityPolicy; refreshSeconds?: number; restartCommand?: readonly string[]; restartWorkingDirectory?: string; restartSuccessProbeUrl?: string; env?: NodeJS.ProcessEnv }): Promise<OverlayStatus>;

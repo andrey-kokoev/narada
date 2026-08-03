@@ -14,5 +14,6 @@ The generic package owns the Windows process, WPF window, persisted position/opa
 Use the CLI from a Narada checkout:
 
     pnpm exec narada-operator-console-overlay start
+    pnpm exec narada-operator-console-overlay focus
 
-The Narada CLI command will be wired as narada console overlay.
+The Narada CLI commands are `narada console overlay` for start/refresh and `narada console overlay-focus` for explicit focus.

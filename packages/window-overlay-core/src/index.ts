@@ -44,6 +44,7 @@ export interface OverlayPaths {
   pid: string;
   preferences: string;
   refresh: string;
+  focus: string;
   restartCommand: string;
   actionState: string;
 }
@@ -169,6 +170,23 @@ function normalizeRestartCommand(command: readonly string[] | undefined, working
   };
 }
 
+export async function requestOverlayFocus(id: string, options: OverlayPathOptions = {}): Promise<Record<string, unknown>> {
+  const normalizedId = requireId(id);
+  const paths = await ensureStateDirectory(normalizedId, options);
+  const status = await overlayStatus(normalizedId, options);
+  if (status.state !== 'running' || !status.pid) {
+    try { await unlink(paths.focus); } catch (error: unknown) { if (errorCode(error) !== 'ENOENT') throw error; }
+    throw new Error('overlay_not_running');
+  }
+  await writeFile(paths.focus, new Date().toISOString() + '\n', 'utf8');
+  return {
+    schema: OVERLAY_RESULT_SCHEMA,
+    id: normalizedId,
+    state: 'focus_requested',
+    state_directory: paths.stateDirectory,
+  };
+}
+
 function requireId(value: unknown): string {
   const id = String(value ?? '');
   if (!VALID_ID.test(id)) throw new Error('overlay_id_invalid');
@@ -280,6 +298,7 @@ export function overlayPaths(id: string, options: OverlayPathOptions = {}): Over
     pid: join(stateDirectory, 'overlay.pid'),
     preferences: join(stateDirectory, 'preferences.json'),
     refresh: join(stateDirectory, 'refresh.signal'),
+    focus: join(stateDirectory, 'focus.signal'),
     restartCommand: join(stateDirectory, 'restart.command.json'),
     actionState: join(stateDirectory, 'action-state.json'),
   };

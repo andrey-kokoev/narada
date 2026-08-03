@@ -4,7 +4,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $pidPath = Join-Path $StateRoot 'overlay.pid'
+$focusPath = Join-Path $StateRoot 'focus.signal'
 if (-not (Test-Path $pidPath)) {
+    Remove-Item $focusPath -Force -ErrorAction SilentlyContinue
     [pscustomobject]@{ schema = 'narada.window_surface_overlay.result.v1'; id = $Id; state = 'stopped'; pid = $null } | ConvertTo-Json -Compress
     exit 0
 }
@@ -12,6 +14,7 @@ $raw = (Get-Content -Raw -Path $pidPath).Trim()
 $overlayPid = 0
 if (-not [int]::TryParse($raw, [ref]$overlayPid) -or $overlayPid -le 0) {
     Remove-Item $pidPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $focusPath -Force -ErrorAction SilentlyContinue
     [pscustomobject]@{ schema = 'narada.window_surface_overlay.result.v1'; id = $Id; state = 'stopped'; pid = $null } | ConvertTo-Json -Compress
     exit 0
 }
@@ -26,4 +29,5 @@ if ($process) {
     Stop-Process -Id $overlayPid -Force -ErrorAction SilentlyContinue
 }
 Remove-Item $pidPath -Force -ErrorAction SilentlyContinue
+Remove-Item $focusPath -Force -ErrorAction SilentlyContinue
 [pscustomobject]@{ schema = 'narada.window_surface_overlay.result.v1'; id = $Id; state = 'stopped'; pid = $overlayPid } | ConvertTo-Json -Compress

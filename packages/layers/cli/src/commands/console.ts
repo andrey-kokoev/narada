@@ -16,7 +16,7 @@ import {
   createControlClientFactory,
 } from '../lib/console-core.js';
 import { stopOperatorConsoleProjection } from './console-projection-lifecycle.js';
-import { startOperatorConsoleOverlay } from '@narada-core/operator-console-overlay';
+import { focusOperatorConsoleOverlay, startOperatorConsoleOverlay } from '@narada-core/operator-console-overlay';
 import { createOperatorConsoleRemoteGateway, type OperatorConsoleRemoteGateway } from '@narada-core/operator-console-remote-gateway';
 
 export interface ConsoleOptions {
@@ -36,6 +36,10 @@ export interface ConsoleOverlayOptions extends ConsoleOptions {
   state_root?: string;
   visibility_policy?: 'always' | 'windows-terminal';
   refresh_seconds?: number;
+}
+
+export interface ConsoleOverlayFocusOptions extends ConsoleOptions {
+  state_root?: string;
 }
 
 export interface ConsoleGatewayOptions extends ConsoleOptions {
@@ -102,6 +106,16 @@ export async function consoleOverlayCommand(
   });
   const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
   if (fmt.getFormat() === 'human') fmt.message('Operator Console overlay started.', 'success');
+  return { exitCode: ExitCode.SUCCESS, result: status };
+}
+
+export async function consoleOverlayFocusCommand(
+  options: ConsoleOverlayFocusOptions,
+  _context: CommandContext,
+): Promise<{ exitCode: ExitCode; result: unknown }> {
+  const status = await focusOperatorConsoleOverlay({ stateRoot: options.state_root });
+  const fmt = createFormatter({ format: options.format as 'json' | 'human' | 'auto', verbose: options.verbose });
+  if (fmt.getFormat() === 'human') fmt.message('Operator Console overlay focused.', 'success');
   return { exitCode: ExitCode.SUCCESS, result: status };
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 type AnyRecord = Record<string, any>;
-import { refreshOperatorConsoleOverlay, startOperatorConsoleOverlay, stopOperatorConsoleOverlay, inspectOperatorConsoleOverlay } from './index.js';
+import { focusOperatorConsoleOverlay, refreshOperatorConsoleOverlay, startOperatorConsoleOverlay, stopOperatorConsoleOverlay, inspectOperatorConsoleOverlay } from './index.js';
 
 const args = process.argv.slice(2);
 const command = args.shift() || 'inspect';
@@ -22,5 +22,7 @@ const result = command === 'start'
     ? await stopOperatorConsoleOverlay(options)
     : command === 'refresh'
       ? await refreshOperatorConsoleOverlay(options)
+      : command === 'focus'
+        ? await focusOperatorConsoleOverlay(options)
       : await inspectOperatorConsoleOverlay(options);
 process.stdout.write(JSON.stringify(result, null, 2) + '\n');

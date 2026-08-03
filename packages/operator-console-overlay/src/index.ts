@@ -6,6 +6,7 @@ import { OPERATOR_CONSOLE_PATH } from '@narada-core/operator-console-contract';
 import { ensureOperatorConsoleRuntime } from '@narada-core/operator-console-runtime';
 import {
   createOverlayDocument,
+  requestOverlayFocus,
   requestOverlayRefresh,
   startOverlay,
   stopOverlay,
@@ -137,4 +138,7 @@ export function inspectOperatorConsoleOverlay({ stateRoot, env = process.env }: 
 }
 export function refreshOperatorConsoleOverlay({ stateRoot, env = process.env }: AnyRecord = {}): any {
   return requestOverlayRefresh(OPERATOR_CONSOLE_OVERLAY_ID, { stateRoot, env });
+}
+export function focusOperatorConsoleOverlay({ stateRoot, env = process.env }: AnyRecord = {}): any {
+  return requestOverlayFocus(OPERATOR_CONSOLE_OVERLAY_ID, { stateRoot, env });
 }

@@ -5,6 +5,7 @@ import {
   consoleControlCommand,
   consoleStopCommand,
   consoleOverlayCommand,
+  consoleOverlayFocusCommand,
   consoleGatewayCommand,
 } from './console.js';
 import { DEFAULT_OPERATOR_ROUTER_PORT } from '@narada-core/operator-router';
@@ -59,6 +60,21 @@ export function registerConsoleCommands(program: Command): void {
         state_root: opts.stateRoot as string | undefined,
         visibility_policy: visibility as 'always' | 'windows-terminal',
         refresh_seconds: Number.parseInt(String(opts.refreshSeconds ?? '2'), 10),
+        format: String(opts.format ?? 'auto'),
+        verbose: opts.verbose as boolean | undefined,
+      }, silentCommandContext({ verbose: !!opts.verbose }));
+      emitFormatterBackedCommandResult(result, { format: opts.format });
+    });
+
+  consoleCmd
+    .command('overlay-focus')
+    .description('Focus the already-running native Operator Console overlay')
+    .option('--state-root <path>', 'Override the user-local overlay state root')
+    .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
+    .option('-v, --verbose', 'Enable verbose output', false)
+    .action(async (opts: CommanderOptionValues) => {
+      const result = await consoleOverlayFocusCommand({
+        state_root: opts.stateRoot as string | undefined,
         format: String(opts.format ?? 'auto'),
         verbose: opts.verbose as boolean | undefined,
       }, silentCommandContext({ verbose: !!opts.verbose }));

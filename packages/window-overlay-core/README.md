@@ -11,6 +11,7 @@ This package owns the mechanics extracted from the quota-meter overlay:
 - pinned overlays are visible only while Windows Terminal is the foreground window by default, except while the overlay itself is active so interaction and drag-to-move remain possible; callers can explicitly select the `always` visibility policy;
 - refreshable JSON document rendering with semantic tones, ochre accent titles/actions, and validated clickable HTTP(S) row values;
 - controlled actions: open an HTTP(S) URL, request refresh, close, or invoke an explicitly supplied local restart command. Actions may provide a presentation-only `icon` and `tooltip`; execution semantics remain defined by `kind`.
+- startup, idempotent start, and refresh preserve the current foreground input surface; focus is an explicit operation through `requestOverlayFocus()` or the `focus` CLI command and refuses when the overlay is stopped;
 
 It does not own provider/quota logic, operator-console authority, site discovery, or arbitrary command execution. A specialization supplies a versioned document and may explicitly supply one fixed restart command for a typed `restart` action; the overlay never accepts a command from the document itself.
 
