@@ -6,6 +6,7 @@ import {
   probeCodexSubscriptionService as probeCodexSubscriptionReadiness,
 } from '@narada-core/carrier-provider-support/codex-subscription-readiness';
 import {
+  canonicalJson,
   latestCatalogRecords,
   resolveInvocationPrincipalAdmission,
   resolveRouteCapabilities,
@@ -708,6 +709,20 @@ export async function createLocalIntelligenceRuntime({
       }),
     });
     let closed: any = false;
+    const resolveSelectionIntent = async (intent: any, decisionClock: any) => {
+      const context: any = await contextForClock(decisionClock);
+      const materializedInputs: any = await materializationFor(intent, context);
+      return await resolveInvocation(intent, context, { store, materializedInputs });
+    };
+    const comparableSelectionIntent = (intent: any) => ({
+      schema: intent.schema,
+      id: intent.id,
+      principal: intent.principal ?? null,
+      purpose: intent.purpose,
+      requested_inference_provider: intent.requested_inference_provider ?? null,
+      requested_model: intent.requested_model ?? null,
+      requested_options: intent.requested_options ?? {},
+    });
     return Object.freeze({
       gateway,
       kernel,
@@ -716,6 +731,57 @@ export async function createLocalIntelligenceRuntime({
       selectionChoices,
       kernelHealth: () => kernel.health?.() ?? null,
       store,
+      async materializeSelectionPlan({
+        intentId,
+        purpose,
+        requestedInferenceProvider = null,
+        requestedModel = null,
+        requestedOptions = {},
+      }: any) {
+        const normalizedIntentId: any = nonEmpty(intentId);
+        const normalizedPurpose: any = nonEmpty(purpose);
+        if (!normalizedIntentId || !normalizedIntentId.startsWith('intent:')) {
+          throw new Error('intelligence_selection_intent_id_required');
+        }
+        if (!normalizedPurpose) throw new Error('intelligence_selection_purpose_required');
+        const decisionClock: any = clock();
+        const proposedIntent: any = {
+          schema: 'narada.invokable-intelligence.invocation-intent.v1',
+          id: normalizedIntentId,
+          created_at: decisionClock.instant,
+          principal,
+          purpose: normalizedPurpose,
+          ...(requestedInferenceProvider ? { requested_inference_provider: requestedInferenceProvider } : {}),
+          ...(requestedModel ? { requested_model: requestedModel } : {}),
+          ...(Object.keys(requestedOptions).length ? { requested_options: requestedOptions } : {}),
+        };
+        const existingIntent: any = await store.getIntent(normalizedIntentId);
+        if (
+          existingIntent
+          && canonicalJson(comparableSelectionIntent(existingIntent))
+            !== canonicalJson(comparableSelectionIntent(proposedIntent))
+        ) {
+          throw new Error(`intelligence_selection_intent_conflict:${normalizedIntentId}`);
+        }
+        const intent: any = existingIntent ?? proposedIntent;
+        if (!existingIntent) await store.putIntent(intent);
+
+        const existingPlan: any = await store.getPlanByIntent(intent.id);
+        if (existingPlan) {
+          // Recover a crash between immutable plan and snapshot persistence.
+          await store.recordPlanSnapshot(existingPlan.snapshot);
+          return existingPlan;
+        }
+
+        const result: any = await resolveSelectionIntent(intent, decisionClock);
+        if (result.schema === 'narada.invokable-intelligence.invocation-refusal.v1') {
+          await store.recordRefusal(result);
+          throw new Error(`intelligence_selection_refused:${result.reason_code}:${result.explanation}`);
+        }
+        await store.recordPlan(result);
+        await store.recordPlanSnapshot(result.snapshot);
+        return result;
+      },
       async preflightSelection({ requestedInferenceProvider = null, requestedModel = null, requestedOptions = {} }: any = {}) {
         const decisionClock: any = clock();
         const intent: any = {
@@ -735,9 +801,7 @@ export async function createLocalIntelligenceRuntime({
           ...(requestedModel ? { requested_model: requestedModel } : {}),
           ...(Object.keys(requestedOptions).length ? { requested_options: requestedOptions } : {}),
         };
-        const context: any = await contextForClock(decisionClock);
-        const materializedInputs: any = await materializationFor(intent, context);
-        const result: any = await resolveInvocation(intent, context, { store, materializedInputs });
+        const result: any = await resolveSelectionIntent(intent, decisionClock);
         if (result.schema === 'narada.invokable-intelligence.invocation-refusal.v1') {
           throw new Error(`intelligence_selection_refused:${result.reason_code}:${result.explanation}`);
         }

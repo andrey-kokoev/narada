@@ -238,6 +238,41 @@ test('canonical reconfiguration preflight rejects an unadmitted model without ex
   }
 });
 
+test('runtime durably materializes one immutable purpose-specific selection plan', async () => {
+  const store: any = await SqliteRegistryStore.open(':memory:');
+  await store.loadCatalogSeed(buildCanonicalLocalTestSeed());
+  const materialization: any = await SqliteMaterializationStore.open(':memory:');
+  const runtime: any = await createLocalIntelligenceRuntime({
+    runtimeContext: runtimeContext(),
+    store,
+    materialization,
+    clock: () => canonicalTestClock(AT),
+    adapter: { async invoke() { throw new Error('provider_must_not_run_during_plan_materialization'); } },
+  });
+  try {
+    const request = {
+      intentId: 'intent:purpose-specific-canonical-test',
+      purpose: 'operator-chat',
+      requestedOptions: { thinking: 'high' },
+    };
+    const first: any = await runtime.materializeSelectionPlan(request);
+    const replay: any = await runtime.materializeSelectionPlan(request);
+    assert.equal(first.id, replay.id);
+    assert.equal(first.intent_id, request.intentId);
+    assert.equal((await store.getIntent(request.intentId))?.purpose, 'operator-chat');
+    assert.deepEqual(await store.getPlan(first.id), first);
+    assert.deepEqual(await store.getPlanSnapshot(first.id), first.snapshot);
+    await assert.rejects(
+      runtime.materializeSelectionPlan({ ...request, purpose: 'carrier-turn' }),
+      /intelligence_selection_intent_conflict/,
+    );
+  } finally {
+    await runtime.close();
+    await materialization.close();
+    await store.close();
+  }
+});
+
 test('runtime rejects injected topology observations without a matching admission envelope', async () => {
   const store: any = await SqliteRegistryStore.open(':memory:');
   await store.loadCatalogSeed(buildCanonicalLocalTestSeed());

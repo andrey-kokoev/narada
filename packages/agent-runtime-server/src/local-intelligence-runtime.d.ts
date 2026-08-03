@@ -18,7 +18,8 @@ import type { ResolverContext } from '@narada-core/invokable-intelligence-resolv
 
 export interface NarsIntelligenceKernelLike {
   start(context: Record<string, unknown>): Promise<Record<string, unknown>>;
-  runTurn(...args: unknown[]): Promise<Record<string, unknown>>;
+  invokeAdmitted(input: Record<string, unknown>): Promise<unknown>;
+  runTurn?(...args: unknown[]): Promise<Record<string, unknown>>;
   steer?(input: Record<string, unknown>): Promise<Record<string, unknown>>;
   cancel?(request?: Record<string, unknown>): Promise<Record<string, unknown>>;
   reconfigure?(request?: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -82,8 +83,8 @@ export interface LocalIntelligenceRuntimeOptions {
   materialization?: IntelligenceMaterializationStore;
   clock?: () => AuthoritativeDecisionClock;
   adapter?: InvocationAdapter;
-  kernel?: NarsIntelligenceKernelLike & { invoke?: (input: Record<string, unknown>) => Promise<unknown> };
-  kernelFactory?: (options: Record<string, unknown>) => NarsIntelligenceKernelLike & { invoke?: (input: Record<string, unknown>) => Promise<unknown> };
+  kernel?: NarsIntelligenceKernelLike;
+  kernelFactory?: (options: Record<string, unknown>) => NarsIntelligenceKernelLike;
   piSdk?: unknown;
   piSessionFactory?: (...args: never[]) => unknown;
   piRpc?: Record<string, unknown>;
@@ -98,7 +99,7 @@ export interface LocalIntelligenceRuntimeOptions {
 export interface LocalIntelligenceRuntime {
   gateway: LocalInvocationGateway;
   store: IntelligenceRegistryStore;
-  kernel: NarsIntelligenceKernelLike & { invoke(input: Record<string, unknown>): Promise<unknown>; health?: () => Record<string, unknown> };
+  kernel: NarsIntelligenceKernelLike & { health?: () => Record<string, unknown> };
   kernel_kind: string;
   kernel_start_evidence: Record<string, unknown>;
   selectionChoices: {
@@ -107,6 +108,13 @@ export interface LocalIntelligenceRuntime {
     selection_choices: IntelligenceSelectionChoices;
   };
   kernelHealth: () => Record<string, unknown> | null;
+  materializeSelectionPlan(input: {
+    intentId: string;
+    purpose: string;
+    requestedInferenceProvider?: ResourceRef | null;
+    requestedModel?: ResourceRef | null;
+    requestedOptions?: Record<string, unknown>;
+  }): Promise<InvocationPlan>;
   preflightSelection(input?: {
     requestedInferenceProvider?: ResourceRef | null;
     requestedModel?: ResourceRef | null;

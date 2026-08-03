@@ -280,6 +280,7 @@ export interface CanonicalLocalTestSeedOptions {
   credentialStore?: "env" | "site-secret" | "none";
   credentialReference?: string;
   invocationModelKey?: string;
+  purposes?: string[];
   now?: string;
   validUntil?: string;
 }
@@ -287,6 +288,10 @@ export interface CanonicalLocalTestSeedOptions {
 export function buildCanonicalLocalTestSeed(options: CanonicalLocalTestSeedOptions = {}): CanonicalCatalogSeed {
   const now = options.now ?? NOW;
   const validUntil = options.validUntil ?? VALID_UNTIL;
+  const purposes = options.purposes ?? ["operator-chat", "carrier-turn"];
+  if (purposes.length === 0 || purposes.some((purpose) => !purpose.trim())) {
+    throw new Error("canonical_local_test_seed_purposes_invalid");
+  }
   const ids = CANONICAL_LOCAL_TEST_IDS;
   const modelRef = { kind: "model" as const, id: ids.model };
   const offeringRef = { kind: "model-offering" as const, id: ids.offering };
@@ -427,11 +432,11 @@ export function buildCanonicalLocalTestSeed(options: CanonicalLocalTestSeedOptio
     },
     { schema: "narada.invokable-intelligence.service-account.v1", id: ids.account, tenant_id: "tenant:local-api", inference_provider: inferenceProviderRef, owner: accessAuthority("account-owner", ids.userSite), region: "global", status: "active" },
     { schema: "narada.invokable-intelligence.credential-binding.v1", id: "credential-binding:local-api", account_id: ids.account, credential_locator: credentialRef, transport: { kind: "credential-handle", ref: "credential-handle:local-api", holder_site_id: ids.hostSite }, presence: "present", usability: "usable", observed_at: now, valid_until: validUntil, owner: accessAuthority("execution-site", ids.hostSite), evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
-    { schema: "narada.invokable-intelligence.access-grant.v1", id: ids.grant, principal_id: ids.principal, account_id: ids.account, actions: ["invoke", "batch"], scope: { offering_ids: [ids.offering], route_ids: [ids.route], purposes: ["operator-chat", "carrier-turn"], target_site_ids: [ids.targetSite], topology_ids: [LOCAL_EXECUTION_TOPOLOGY.id] }, validity: { valid_from: VALID_FROM, valid_until: validUntil }, status: "active", granted_by: accessAuthority("account-owner", ids.userSite), principal_consent_ref: "authority-statement:andrey-local-consent", evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
+    { schema: "narada.invokable-intelligence.access-grant.v1", id: ids.grant, principal_id: ids.principal, account_id: ids.account, actions: ["invoke", "batch"], scope: { offering_ids: [ids.offering], route_ids: [ids.route], purposes: [...purposes], target_site_ids: [ids.targetSite], topology_ids: [LOCAL_EXECUTION_TOPOLOGY.id] }, validity: { valid_from: VALID_FROM, valid_until: validUntil }, status: "active", granted_by: accessAuthority("account-owner", ids.userSite), principal_consent_ref: "authority-statement:andrey-local-consent", evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
     { schema: "narada.invokable-intelligence.service-entitlement.v1", id: "entitlement:local-api", account_id: ids.account, offering_id: ids.offering, service_class: "local-api", features: ["invoke", "batch"], validity: { valid_from: VALID_FROM, valid_until: validUntil }, status: "active", owner: accessAuthority("service-provider", "inference-provider:remote-api"), evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
     { schema: "narada.invokable-intelligence.quota-observation.v1", id: "quota:local-api", account_id: ids.account, offering_id: ids.offering, unit: "requests", limit: 1000, consumed: 1, reserved: 0, period_start: VALID_FROM, period_end: validUntil, observed_at: now, fresh_until: validUntil, owner: accessAuthority("service-provider", "inference-provider:remote-api"), evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
     { schema: "narada.invokable-intelligence.budget-authorization.v1", id: "budget:narada-local-api", principal_id: ids.principal, account_id: ids.account, target_site_id: ids.targetSite, currency: "USD", limit: 100, committed: 1, reserved: 0, validity: { valid_from: VALID_FROM, valid_until: validUntil }, status: "authorized", owner: accessAuthority("target-site", ids.targetSite), evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
-    { schema: "narada.invokable-intelligence.data-governance-requirement.v1", id: "governance:narada-local-api", target_site_id: ids.targetSite, purposes: ["operator-chat", "carrier-turn"], data_classifications: ["internal"], allowed_regions: ["global"], maximum_retention_days: 30, provider_training: "prohibited", validity: { valid_from: VALID_FROM, valid_until: validUntil }, status: "active", owner: accessAuthority("target-site", ids.targetSite), evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
+    { schema: "narada.invokable-intelligence.data-governance-requirement.v1", id: "governance:narada-local-api", target_site_id: ids.targetSite, purposes: [...purposes], data_classifications: ["internal"], allowed_regions: ["global"], maximum_retention_days: 30, provider_training: "prohibited", validity: { valid_from: VALID_FROM, valid_until: validUntil }, status: "active", owner: accessAuthority("target-site", ids.targetSite), evidence: [{ kind: "test", ref: "canonical-local-fixture" }] },
   ];
   const statements: IntelligenceAuthorityStatement[] = [
     { schema: "narada.invokable-intelligence.authority-statement.v1", id: "authority-statement:narada-hard", kind: "target-governance-constraint", origin: { locus: "target-site", site_id: ids.targetSite, authority_ref: "authority:site:narada" }, effect: "eligibility-constraint", revision: 1, issued_at: now, payload_ref: "policy:narada-hard" },
