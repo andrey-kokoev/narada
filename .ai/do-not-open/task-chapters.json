@@ -1,6 +1,6 @@
 {
   "schema": "narada.task.chapters.v1",
-  "updated_at": "2026-07-19T18:14:47.515Z",
+  "updated_at": "2026-07-31T22:11:13.603Z",
   "chapters": {
     "invokable-intelligence-ontology-remediation": {
       "chapter_id": "invokable-intelligence-ontology-remediation",
@@ -137,6 +137,40 @@
           "note": "8. Aggregate cutover and end-to-end acceptance.",
           "added_by": "operator",
           "added_at": "2026-07-19T18:02:34.393Z"
+        }
+      ]
+    },
+    "narada-marketing-site": {
+      "chapter_id": "narada-marketing-site",
+      "updated_at": "2026-07-31T22:11:13.602Z",
+      "memberships": [
+        {
+          "task_number": 2230,
+          "order_index": 1,
+          "note": "Chapter kickoff: positioning and messaging gates downstream marketing-site work.",
+          "added_by": "andrey-user.resident",
+          "added_at": "2026-07-31T22:10:05.463Z"
+        },
+        {
+          "task_number": 2232,
+          "order_index": 2,
+          "note": null,
+          "added_by": "andrey-user.resident",
+          "added_at": "2026-07-31T22:10:53.041Z"
+        },
+        {
+          "task_number": 2231,
+          "order_index": 3,
+          "note": null,
+          "added_by": "andrey-user.resident",
+          "added_at": "2026-07-31T22:11:03.151Z"
+        },
+        {
+          "task_number": 2233,
+          "order_index": 4,
+          "note": null,
+          "added_by": "andrey-user.resident",
+          "added_at": "2026-07-31T22:11:13.602Z"
         }
       ]
     }
