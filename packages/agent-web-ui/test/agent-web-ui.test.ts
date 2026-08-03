@@ -39,8 +39,8 @@ import {
   startHealthProjection,
 } from '@narada-core/agent-runtime-server/test-fixtures';
 import { createSessionCoreRuntimeService } from '@narada-core/agent-runtime-server/session-core-runtime-service';
-import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
-import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada-core/cloudflare-nars-projection/node';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-operator-projection/worker';
+import { registerProjectionRemotely, startLocalProjectionBridgeOnce, deliverRemoteProjectionInputsOnce } from '@narada-core/cloudflare-operator-projection/node';
 import { appendEvent } from '../src/render.ts';
 import {
   AGENT_WEB_UI_PREFERENCE_KEYS,

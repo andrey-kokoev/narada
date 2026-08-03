@@ -44,8 +44,8 @@ Run from `D:\code\narada`:
 pnpm --filter @narada-core/operator-console-contract test
 pnpm --filter @narada-core/operator-console-ui test
 node --test --test-name-pattern "Sites and Agents" packages/layers/cli/test/integration/operator-console-ui-e2e.test.ts
-pnpm --filter @narada-core/cloudflare-nars-projection test
-pnpm --filter @narada-core/cloudflare-nars-projection typecheck
+pnpm --filter @narada-core/cloudflare-operator-projection test
+pnpm --filter @narada-core/cloudflare-operator-projection typecheck
 pnpm --filter @narada-core/cli exec vitest run --silent=true test/commands/console-server.test.ts
 pnpm --filter @narada-core/cli build
 ```

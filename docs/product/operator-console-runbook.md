@@ -139,8 +139,8 @@ Run the focused checks from `D:\code\narada`:
 
 ```powershell
 pnpm --filter @narada-core/operator-console-ui test
-pnpm --filter @narada-core/cloudflare-nars-projection test
-pnpm --filter @narada-core/cloudflare-nars-projection typecheck
+pnpm --filter @narada-core/cloudflare-operator-projection test
+pnpm --filter @narada-core/cloudflare-operator-projection typecheck
 pnpm --filter @narada-core/cli exec vitest run --silent=true test/commands/console-server.test.ts
 pnpm --filter @narada-core/cli exec node --import tsx --test test/commands/console-projection-lifecycle.test.ts
 pnpm --filter @narada-core/cli build

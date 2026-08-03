@@ -108,7 +108,7 @@ Each row names the main invariant, the owning files, the best current proof, the
 
 - State: open; local and Cloudflare projection semantics still need one agreed coherence story.
 - Owning files: `docs/operations/cloudflare-local-nars-projection-symmetry-matrix.md`, `docs/architecture/cloudflare-carrier/target.md`, `packages/agent-runtime-server/src/server-wrapper.ts`, `packages/nars-capability-gateway/src/mcp-runtime.ts`, `D:/code/mcp-surfaces/packages/site-coherence-mcp/src/main.ts`.
-- Current evidence: the new symmetry matrix maps local/runtime and Cloudflare/runtime quadrants to the existing agent-web-ui and cloudflare-nars-projection tests, and the architecture doc plus site-coherence surface already describe the intended local-versus-Cloudflare comparison model.
+- Current evidence: the new symmetry matrix maps local/runtime and Cloudflare/runtime quadrants to the existing agent-web-ui and cloudflare-operator-projection tests, and the architecture doc plus site-coherence surface already describe the intended local-versus-Cloudflare comparison model.
 - Remaining gap: keep the matrix synchronized with future projection tests and document any additional asymmetry rather than blurring it into symmetry.
 - Next verification: the site coherence check for the relevant Site id plus the Cloudflare carrier projection smoke.
 

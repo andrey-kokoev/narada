@@ -3,10 +3,10 @@ import { validateRemoteCloudflareApiBaseUrl } from '../scripts/lib/live-boundary
 
 describe('Cloudflare live-smoke deployment boundary', () => {
   test('accepts a public HTTPS Worker origin', () => {
-    expect(validateRemoteCloudflareApiBaseUrl('https://narada-nars-projection.andrei-kokoev.workers.dev/')).toEqual({
+    expect(validateRemoteCloudflareApiBaseUrl('https://narada-operator-projection.andrei-kokoev.workers.dev/')).toEqual({
       ok: true,
-      origin: 'https://narada-nars-projection.andrei-kokoev.workers.dev',
-      hostname: 'narada-nars-projection.andrei-kokoev.workers.dev',
+      origin: 'https://narada-operator-projection.andrei-kokoev.workers.dev',
+      hostname: 'narada-operator-projection.andrei-kokoev.workers.dev',
       deployment_boundary: 'remote_https_worker',
     });
   });

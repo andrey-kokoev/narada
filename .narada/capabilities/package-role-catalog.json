@@ -219,8 +219,8 @@
       "posture": "cloudflare_carrier_runtime"
     },
     {
-      "package": "@narada-core/cloudflare-nars-projection",
-      "path": "packages/cloudflare-nars-projection",
+      "package": "@narada-core/cloudflare-operator-projection",
+      "path": "packages/cloudflare-operator-projection",
       "roles": [
         "runtime_authority",
         "descriptor_contract"

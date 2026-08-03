@@ -32,10 +32,10 @@ if (args.help) {
     'Cloudflare NARS provider-capable live smoke',
     '',
     'Planning mode:',
-    '  pnpm --filter @narada-core/cloudflare-nars-projection smoke:provider-capable-live',
+    '  pnpm --filter @narada-core/cloudflare-operator-projection smoke:provider-capable-live',
     '',
     'Live mode:',
-    '  pnpm --filter @narada-core/cloudflare-nars-projection smoke:provider-capable-live -- --live --cloudflare-api-base-url <url> --principal-id <principal> --browser-token <fingerprint>',
+    '  pnpm --filter @narada-core/cloudflare-operator-projection smoke:provider-capable-live -- --live --cloudflare-api-base-url <url> --principal-id <principal> --browser-token <fingerprint>',
     '',
     'Optional identity/model selectors:',
     '  --site-id site:narada-cloudflare --user-site-id site:andrey-user --host-site-id site:narada-cloudflare',
@@ -110,7 +110,7 @@ const result = await run();
 if (args.format === 'json') {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } else {
-  process.stdout.write(`[cloudflare-nars-projection:provider] ${result.status}: ${result.code ?? 'checks_complete'}\n`);
+  process.stdout.write(`[cloudflare-operator-projection:provider] ${result.status}: ${result.code ?? 'checks_complete'}\n`);
   if (result.evidence_path) process.stdout.write(`evidence: ${result.evidence_path}\n`);
 }
 process.exitCode = result.status === 'passed' || result.status === 'planned' ? 0 : 1;
@@ -370,7 +370,7 @@ function persist(result: AnyRecord): AnyRecord {
 }
 
 function phase(message: string): void {
-  if (!args.quiet && args.format !== 'json') process.stderr.write(`[cloudflare-nars-projection:provider] ${message}\n`);
+  if (!args.quiet && args.format !== 'json') process.stderr.write(`[cloudflare-operator-projection:provider] ${message}\n`);
 }
 
 function parseArgs(values: string[]): SmokeArgs {

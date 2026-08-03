@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { agentIdentityDisplay } from '@narada-core/agent-identity';
-import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-operator-projection/worker';
 import { spawnTestChild } from '@narada-core/process-launch-posture';
 import { startAgentWebUiServer } from '../src/server.ts';
 import { seedLiveIntelligenceRegistry } from './live-intelligence-registry-fixture.js';

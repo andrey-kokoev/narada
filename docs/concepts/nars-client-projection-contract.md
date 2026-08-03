@@ -26,7 +26,7 @@ Client packages own only medium-specific rendering:
 
 - `@narada-core/agent-web-ui` owns DOM/Vue layout, markdown rendering, artifact iframe rendering, input controls, and browser state.
 - `@narada-core/carrier-terminal-projection` owns terminal formatting, colors, wrapping, and prompt behavior.
-- `@narada-core/cloudflare-nars-projection` owns Cloudflare registration, bridge publication, redaction, bounded caches, credentials, and transport policy enforcement.
+- `@narada-core/cloudflare-operator-projection` owns Cloudflare registration, bridge publication, redaction, bounded caches, credentials, and transport policy enforcement.
 
 Cloudflare may filter and redact, but it must filter by the shared projection class rather than by its own regex event classifier.
 
@@ -477,7 +477,7 @@ Cloudflare owns redaction and credential policy. It does not own the meaning of 
 
 1. Expand `@narada-core/nars-client-projection-contract` to classify nested provider events and expose a stable projection/classification API.
 2. Add contract tests for provider agent messages, provider tool events, lifecycle assistant messages, envelope unwrapping, and view eligibility.
-3. Make `@narada-core/cloudflare-nars-projection` consume the shared classifier instead of local regex classification.
+3. Make `@narada-core/cloudflare-operator-projection` consume the shared classifier instead of local regex classification.
 4. Remove `agent-web-ui` promotion of provider `agent_message` events into `assistant_message` conversation rows.
 5. Reduce `agent-web-ui` lifecycle/provider string suppression to defensive duplicate guards only.
 6. Update tests that currently encode provider assistant rows as conversation rows.

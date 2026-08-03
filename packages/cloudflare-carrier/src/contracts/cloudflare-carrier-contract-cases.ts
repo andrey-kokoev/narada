@@ -9565,7 +9565,7 @@ test('cloudflare-carrier stays a separate carrier: no NARS session-semantics own
   const narsSessionSemanticsPackages = [
     '@narada-core/nars-session-core',
     '@narada-core/nars-runtime-contract',
-    '@narada-core/cloudflare-nars-projection',
+    '@narada-core/cloudflare-operator-projection',
     '@narada-core/agent-runtime-server',
     '@narada-core/agent-web-ui',
   ];

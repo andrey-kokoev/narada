@@ -77,8 +77,8 @@
       "text": "sessionMcpProcess = spawn(process.execPath, [narsSessionServerPath], {"
     },
     {
-      "id": "packages/cloudflare-nars-projection/test/worker-provider-binding.test.ts:child_process.execFileSync:32fa36f2a7637d80",
-      "file": "packages/cloudflare-nars-projection/test/worker-provider-binding.test.ts",
+      "id": "packages/cloudflare-operator-projection/test/worker-provider-binding.test.ts:child_process.execFileSync:32fa36f2a7637d80",
+      "file": "packages/cloudflare-operator-projection/test/worker-provider-binding.test.ts",
       "line": 76,
       "api": "child_process.execFileSync",
       "posture": "test_child",

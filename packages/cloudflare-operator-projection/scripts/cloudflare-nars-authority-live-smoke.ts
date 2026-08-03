@@ -12,10 +12,10 @@ if (args.help) {
     'Cloudflare NARS projection intelligence-boundary live smoke',
     '',
     'Planning mode:',
-    '  pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live',
+    '  pnpm --filter @narada-core/cloudflare-operator-projection smoke:cloudflare-origin-live',
     '',
     'Live mode:',
-    '  pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url <url> --browser-token <fingerprint>',
+    '  pnpm --filter @narada-core/cloudflare-operator-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url <url> --browser-token <fingerprint>',
     '',
   ].join('\n'));
   process.exit(0);
@@ -25,7 +25,7 @@ const result = await run();
 if (args.format === 'json') {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 } else {
-  process.stdout.write(`[cloudflare-nars-projection:boundary] ${result.status}: ${result.code ?? 'checks_complete'}\n`);
+  process.stdout.write(`[cloudflare-operator-projection:boundary] ${result.status}: ${result.code ?? 'checks_complete'}\n`);
   if (result.evidence_path) process.stdout.write(`evidence: ${result.evidence_path}\n`);
 }
 process.exitCode = result.status === 'passed' || result.status === 'planned' ? 0 : 1;
@@ -189,7 +189,7 @@ async function fetchJson(url: string, { method = 'GET', body }: AnyRecord = {}):
 }
 
 function persist(result: AnyRecord): AnyRecord {
-  const evidencePath = resolve(args.evidencePath ?? '../../.narada/evidence/cloudflare-nars-projection-boundary-live.json');
+  const evidencePath = resolve(args.evidencePath ?? '../../.narada/evidence/cloudflare-operator-projection-boundary-live.json');
   const evidence = { ...result, observed_at: new Date().toISOString(), evidence_path: evidencePath };
   mkdirSync(dirname(evidencePath), { recursive: true });
   writeFileSync(evidencePath, `${JSON.stringify(evidence, null, 2)}\n`);
@@ -197,7 +197,7 @@ function persist(result: AnyRecord): AnyRecord {
 }
 
 function phase(message: string): void {
-  if (!args.quiet && args.format !== 'json') process.stderr.write(`[cloudflare-nars-projection:boundary] ${message}\n`);
+  if (!args.quiet && args.format !== 'json') process.stderr.write(`[cloudflare-operator-projection:boundary] ${message}\n`);
 }
 
 function parseArgs(values: string[]): SmokeArgs {

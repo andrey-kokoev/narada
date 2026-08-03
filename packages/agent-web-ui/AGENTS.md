@@ -62,4 +62,4 @@ Escalation:
 
 Test ownership map: `agent-web-ui-projection.test.ts` (event/session projection), `agent-web-ui-protocol.test.ts` (protocol framing and attachment boundaries), `agent-web-ui.test.ts` (preferences, feature seams, package wiring, bounded UI contracts).
 
-Build produces the launch artifact in `dist/` (`index.html` + `assets/**`); `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.ts`. `prebuild`/`pretest` build `@narada-core/ui` and `@narada-core/cloudflare-nars-projection` first — a bare `vite build` or test run without them is not the canonical path.
+Build produces the launch artifact in `dist/` (`index.html` + `assets/**`); `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.ts`. `prebuild`/`pretest` build `@narada-core/ui` and `@narada-core/cloudflare-operator-projection` first — a bare `vite build` or test run without them is not the canonical path.

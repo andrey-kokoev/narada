@@ -3,8 +3,8 @@ import { readFile } from 'node:fs/promises';
 import * as nodeModule from 'node:module';
 import { extname, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada-core/cloudflare-nars-projection';
-import { readProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '@narada-core/cloudflare-nars-projection/node';
+import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada-core/cloudflare-operator-projection';
+import { readProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeOnce, startLocalProjectionBridgeRunProcess } from '@narada-core/cloudflare-operator-projection/node';
 import { AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST, AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada-core/nars-client-projection-contract';
 import { isRecord, type UnknownRecord } from './types.ts';
 

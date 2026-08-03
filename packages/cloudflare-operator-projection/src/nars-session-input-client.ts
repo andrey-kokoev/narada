@@ -89,7 +89,7 @@ export function buildProjectionInputForNars(args: ProjectionInputBuildArgs) {
       input_source: 'cloudflare_projection',
       directive_provenance: {
         kind: 'explicit_operator_directive_surface',
-        surface_id: 'cloudflare-nars-projection',
+        surface_id: 'cloudflare-operator-projection',
       },
       nars_session_input: {
         delivery_constructor: delivery,

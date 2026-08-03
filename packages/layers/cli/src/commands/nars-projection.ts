@@ -1,5 +1,5 @@
-import { buildProjectionRegistrationPlan, type ArtifactKind, type ArtifactProjectionContentMode, type ProjectionCachePolicy, type ProjectionEventPolicyMode } from '@narada-core/cloudflare-nars-projection';
-import { preflightCloudflareProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, writeProjectionRegistrationPlan } from '@narada-core/cloudflare-nars-projection/node';
+import { buildProjectionRegistrationPlan, type ArtifactKind, type ArtifactProjectionContentMode, type ProjectionCachePolicy, type ProjectionEventPolicyMode } from '@narada-core/cloudflare-operator-projection';
+import { preflightCloudflareProjectionRegistration, registerProjectionRemotely, startLocalProjectionBridgeLoop, startLocalProjectionBridgeOnce, writeProjectionRegistrationPlan } from '@narada-core/cloudflare-operator-projection/node';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
 import { ExitCode } from '../lib/exit-codes.js';
 

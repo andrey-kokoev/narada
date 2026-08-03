@@ -5,15 +5,15 @@ import {
   createCloudflareNarsAuthorityService,
   createCloudflareNarsTestRuntimeExecutor,
   createCloudflareNarsWorkspaceDirectoryService,
-} from '@narada-core/cloudflare-nars-projection';
-import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
+} from '@narada-core/cloudflare-operator-projection';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-operator-projection/worker';
 import { startAgentWebUiServer } from '../src/server.ts';
 import {
   findHeadlessBrowser,
   openCdpPage,
   waitForPageText,
   waitForPageTextWithAction,
-} from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
+} from '../../cloudflare-operator-projection/scripts/lib/browser-smoke.js';
 
 /**
  * Evidence posture: fixture-boundary. These tests run the Worker and its

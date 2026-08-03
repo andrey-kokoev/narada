@@ -25,7 +25,7 @@ const assetTree = await hashAssetTree(publicRoot);
 const sourceHash = hashJson(sourceArtifacts);
 const manifest = {
   schema: 'narada.cloudflare_assets_manifest.v1',
-  target: 'narada-nars-projection',
+  target: 'narada-operator-projection',
   built_at: new Date().toISOString(),
   git_commit: process.env.GITHUB_SHA ?? process.env.SOURCE_VERSION ?? process.env.COMMIT_SHA ?? null,
   source_hash: sourceHash,

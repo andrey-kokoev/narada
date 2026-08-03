@@ -501,9 +501,9 @@ importers:
       '@narada-core/agent-identity':
         specifier: workspace:*
         version: link:../agent-identity
-      '@narada-core/cloudflare-nars-projection':
+      '@narada-core/cloudflare-operator-projection':
         specifier: workspace:*
-        version: link:../cloudflare-nars-projection
+        version: link:../cloudflare-operator-projection
       '@narada-core/nars-client-projection-contract':
         specifier: workspace:*
         version: link:../nars-client-projection-contract
@@ -679,7 +679,7 @@ importers:
         specifier: ^5.3.0
         version: 5.9.3
 
-  packages/cloudflare-nars-projection:
+  packages/cloudflare-operator-projection:
     dependencies:
       '@narada-core/carrier-protocol':
         specifier: workspace:*
@@ -979,9 +979,9 @@ importers:
       '@narada-core/charters':
         specifier: workspace:*
         version: link:../../domains/charters
-      '@narada-core/cloudflare-nars-projection':
+      '@narada-core/cloudflare-operator-projection':
         specifier: workspace:*
-        version: link:../../cloudflare-nars-projection
+        version: link:../../cloudflare-operator-projection
       '@narada-core/cloudflare-site':
         specifier: workspace:*
         version: link:../../sites/cloudflare

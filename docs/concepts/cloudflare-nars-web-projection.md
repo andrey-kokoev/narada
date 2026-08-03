@@ -8,7 +8,7 @@ Local NARS remains the canonical runtime authority for the session, event log, a
 
 The public browser-facing input contract is the narrow session-core contract:
 `session.submit`, `session.health`, `session.recovery`, `session.cancel`, and
-`session.close`. The implementation in `packages/cloudflare-nars-projection`
+`session.close`. The implementation in `packages/cloudflare-operator-projection`
 may retain older `conversation.*` and status verbs internally, but those are
 adapter vocabulary only. `agent-web-ui` translates narrow frames at the
 Cloudflare boundary; local session-core clients never send the older verbs.
@@ -118,9 +118,9 @@ There are three live smoke lineages and they prove different authority shapes:
 
 | Script | Authority runtime | Cloudflare role | What it proves |
 | --- | --- | --- | --- |
-| `pnpm --filter @narada-core/cloudflare-nars-projection smoke:local-origin-live` | Local NARS session. | Remote projection store, hosted browser shell, event/artifact cache, and input relay. | A local authoritative NARS session can be projected to Cloudflare and consumed remotely without moving session authority. |
-| `pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live` | Cloudflare synthetic NARS authority runtime. | Session authority for a synthetic no-provider/no-tools runtime. | Cloudflare can own session identity, event replay, WebSocket live delivery, input admission, health, and revocation for a synthetic NARS authority slice. |
-| `pnpm --filter @narada-core/cloudflare-nars-projection smoke:provider-capable-live` | Cloudflare-origin provider-capable NARS authority runtime. | D1 catalog/plan resolution, Cloudflare-reachable provider execution, Durable Object session/event authority, and Cloudflare-native MCP fabric. | A Cloudflare NARS authority can resolve an admitted plan, execute a provider-backed turn, persist provider/assistant/terminal evidence, graduate capability evidence, and revoke the session. |
+| `pnpm --filter @narada-core/cloudflare-operator-projection smoke:local-origin-live` | Local NARS session. | Remote projection store, hosted browser shell, event/artifact cache, and input relay. | A local authoritative NARS session can be projected to Cloudflare and consumed remotely without moving session authority. |
+| `pnpm --filter @narada-core/cloudflare-operator-projection smoke:cloudflare-origin-live` | Cloudflare synthetic NARS authority runtime. | Session authority for a synthetic no-provider/no-tools runtime. | Cloudflare can own session identity, event replay, WebSocket live delivery, input admission, health, and revocation for a synthetic NARS authority slice. |
+| `pnpm --filter @narada-core/cloudflare-operator-projection smoke:provider-capable-live` | Cloudflare-origin provider-capable NARS authority runtime. | D1 catalog/plan resolution, Cloudflare-reachable provider execution, Durable Object session/event authority, and Cloudflare-native MCP fabric. | A Cloudflare NARS authority can resolve an admitted plan, execute a provider-backed turn, persist provider/assistant/terminal evidence, graduate capability evidence, and revoke the session. |
 
 The command names expose the authority-origin axis. Compatibility aliases currently remain: `smoke:live` maps to `smoke:local-origin-live`, and `smoke:authority-live` maps to `smoke:cloudflare-origin-live`. Passing one does not imply the others have passed.
 
@@ -235,7 +235,7 @@ The normalized fabric summary is part of session and health diagnostics. It incl
 The deployed Cloudflare-origin authority path has an explicit live smoke command:
 
 ```bash
-pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://<synthetic-nars-worker> --browser-token fingerprint:<operator-browser>
+pnpm --filter @narada-core/cloudflare-operator-projection smoke:cloudflare-origin-live -- --live --cloudflare-api-base-url https://<synthetic-nars-worker> --browser-token fingerprint:<operator-browser>
 ```
 
 This command is for the dedicated synthetic deployment only. Deploy that
@@ -280,12 +280,12 @@ If the smoke fails after creating a synthetic session, it performs a best-effort
 The provider-capable Cloudflare-origin authority runtime has its own live smoke lineage:
 
 ```bash
-pnpm --filter @narada-core/cloudflare-nars-projection smoke:provider-capable-live -- --live --cloudflare-api-base-url https://<nars-worker> --principal-id principal:<operator> --browser-token fingerprint:<operator-browser>
+pnpm --filter @narada-core/cloudflare-operator-projection smoke:provider-capable-live -- --live --cloudflare-api-base-url https://<nars-worker> --principal-id principal:<operator> --browser-token fingerprint:<operator-browser>
 ```
 
 Running without `--live` is a safe planning mode: no mutation, prints the required arguments.
 
-**Current intelligence authority.** Both the Cloudflare NARS authority runtime and the Cloudflare carrier use the shared `@narada-core/invokable-intelligence-runtime` Cloudflare gateway. The `@narada-core/cloudflare-nars-projection` Worker receives an `INTELLIGENCE_REGISTRY_DB` D1 binding and an optional `AI` inference-runtime binding. Offering, route, endpoint, model, capability, access, temporal, and credential-locator decisions are canonical D1 resources resolved per invocation. Environment variables and Worker vars provide infrastructure and named secret values only; they do not select intelligence.
+**Current intelligence authority.** Both the Cloudflare NARS authority runtime and the Cloudflare carrier use the shared `@narada-core/invokable-intelligence-runtime` Cloudflare gateway. The `@narada-core/cloudflare-operator-projection` Worker receives an `INTELLIGENCE_REGISTRY_DB` D1 binding and an optional `AI` inference-runtime binding. Offering, route, endpoint, model, capability, access, temporal, and credential-locator decisions are canonical D1 resources resolved per invocation. Environment variables and Worker vars provide infrastructure and named secret values only; they do not select intelligence.
 
 An empty or unauthorized catalog refuses before inference. A selected route is revalidated before dispatch, and readback links intent, plan, snapshot, revalidation, attempt, result, outcome, observation, evidence, telemetry, and materialization provenance.
 
@@ -605,10 +605,10 @@ Automated tests should use local/fake projection services and must not require l
 
    ```text
    pnpm --filter @narada-core/agent-web-ui build
-   pnpm --filter @narada-core/cloudflare-nars-projection build
+   pnpm --filter @narada-core/cloudflare-operator-projection build
    ```
 
-2. Deploy or preview the Cloudflare projection Worker from `packages/cloudflare-nars-projection`. Its `wrangler.toml` serves `../agent-web-ui/dist` through the Worker assets binding and keeps projection APIs under `/api/nars/projections/...`.
+2. Deploy or preview the Cloudflare projection Worker from `packages/cloudflare-operator-projection`. Its `wrangler.toml` serves `../agent-web-ui/dist` through the Worker assets binding and keeps projection APIs under `/api/nars/projections/...`.
 3. Start or identify a concrete local NARS session for the target Site and agent.
 4. Register a projection intent and remote access record:
 
@@ -636,9 +636,9 @@ Automated tests should use local/fake projection services and must not require l
    The bounded opt-in script is:
 
    ```text
-   pnpm --filter @narada-core/cloudflare-nars-projection build:assets
-   pnpm --filter @narada-core/cloudflare-nars-projection smoke:local-origin-live -- --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id>
-   pnpm --filter @narada-core/cloudflare-nars-projection smoke:local-origin-live -- --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --expected-assets-manifest packages/cloudflare-nars-projection/public/narada-cloudflare-assets.json --evidence-path <path>
+   pnpm --filter @narada-core/cloudflare-operator-projection build:assets
+   pnpm --filter @narada-core/cloudflare-operator-projection smoke:local-origin-live -- --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id>
+   pnpm --filter @narada-core/cloudflare-operator-projection smoke:local-origin-live -- --live --cloudflare-api-base-url https://<projection-host> --site-root <site-root> --site-id <site-id> --session <nars-session-id> --expected-assets-manifest packages/cloudflare-operator-projection/public/narada-cloudflare-assets.json --evidence-path <path>
    ```
 
    Without `--live`, the smoke prints the required live arguments and performs no mutation. With `--live`, it also compares the deployed `narada.cloudflare_assets_manifest.v1` against the local build manifest, then writes a concise evidence JSON covering registration, bridge replay, deployed hosted browser attachment, Cloudflare WebSocket projection, artifact metadata/content read when available, one operator input relay, local NARS admission, bridge replication back to Cloudflare, revocation, and post-revocation refusal.

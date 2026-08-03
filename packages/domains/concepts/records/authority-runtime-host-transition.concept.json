@@ -29,11 +29,11 @@
   "tasks": ["nars-authority-runtime-host-transition", "first-class-system-objects"],
   "code_refs": [
     "packages/nars-session-core/src/authority-transition-state.ts",
-    "packages/cloudflare-nars-projection/src/index.ts"
+    "packages/cloudflare-operator-projection/src/index.ts"
   ],
   "tests": [
     "packages/nars-session-core/src/authority-transition-state.test.ts",
-    "packages/cloudflare-nars-projection/test/authority-host-transition.test.ts"
+    "packages/cloudflare-operator-projection/test/authority-host-transition.test.ts"
   ],
   "examples": ["local -> cloudflare-host authority rehome with fenced source writes"],
   "counterexamples": ["opening a second browser surface"],

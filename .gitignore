@@ -65,9 +65,9 @@ packages/*/.narada/
 packages/*/.ai/runtime/
 packages/*/.tmp-*.db
 # Cloudflare deployment assets are assembled by the package build.
-packages/cloudflare-nars-projection/public/
-packages/cloudflare-nars-projection/scripts-dist/
-packages/cloudflare-nars-projection/worker-configuration.d.ts
+packages/cloudflare-operator-projection/public/
+packages/cloudflare-operator-projection/scripts-dist/
+packages/cloudflare-operator-projection/worker-configuration.d.ts
 packages/layers/cli/tsx-*/
 packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-reconciliation/
 packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-command-results/

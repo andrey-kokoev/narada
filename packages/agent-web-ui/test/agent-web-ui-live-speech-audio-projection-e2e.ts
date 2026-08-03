@@ -11,7 +11,7 @@ import {
   openCdpPage,
   waitForPageText,
   waitForPageTextWithAction,
-} from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
+} from '../../cloudflare-operator-projection/scripts/lib/browser-smoke.js';
 
 const now = '2026-07-05T12:00:00.000Z';
 const speechMcpMain = fileURLToPath(new URL('../../../../mcp-surfaces/packages/speech-mcp/dist/src/main.js', import.meta.url));

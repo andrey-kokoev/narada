@@ -5,6 +5,21 @@
 This document defines the implementation target for a complete Cloudflare-hosted
 projection of the host-local Narada Operator Console.
 
+## Canonical Edge Name
+
+The shared Cloudflare edge is the **Cloudflare Operator Projection Worker**:
+
+- package: `@narada-core/cloudflare-operator-projection`;
+- deployment: `narada-operator-projection`;
+- source directory: `packages/cloudflare-operator-projection`.
+
+This name identifies the projection edge, not an authority. NARS remains the
+authority for Cloudflare-hosted NARS sessions, the local Operator Console
+remains the authority for host-local console state, and Host Fleet remains the
+authority for host membership observations. The Worker only routes, admits,
+and projects those separately owned contracts. “Cloudflare NARS projection” is
+reserved for the NARS-specific projection lineage, not the shared Worker.
+
 The local crossing gateway, Cloudflare Worker proxy, Access JWT admission,
   route-parity inventory, leased workspace proxying, session WebSocket bridging,
   and governed local tunnel lifecycle are implemented. The protected Worker is
@@ -87,7 +102,7 @@ mutation.
 ```text
 remote browser
   -> Cloudflare Access
-  -> Cloudflare NARS Workspace Worker
+  -> Cloudflare Operator Projection Worker
        static Operator Console assets
        workspace route directory
        browser request admission
@@ -265,7 +280,7 @@ lifecycle is started.
 After deployment, the authenticated remote gate can be run with a Cloudflare
 Access service token or an exported CF_Authorization cookie:
 
-    pnpm --filter @narada-core/cloudflare-nars-projection smoke:operator-console-mirror-live -- --live --url https://<worker-host> --access-client-id <client-id> --access-client-secret-file <secret-file>
+    pnpm --filter @narada-core/cloudflare-operator-projection smoke:operator-console-mirror-live -- --live --url https://<worker-host> --access-client-id <client-id> --access-client-secret-file <secret-file>
 
 The gate proves Access admission, route-directory parity, mirror health, and
 browser rendering of the principal Console pages. It refuses without an

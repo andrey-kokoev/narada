@@ -1,4 +1,4 @@
-name = "narada-nars-projection"
+name = "narada-operator-projection"
 main = "dist/worker.js"
 compatibility_date = "2026-06-30"
 compatibility_flags = ["nodejs_compat"]

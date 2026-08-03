@@ -5,18 +5,18 @@ import { dirname, join } from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { spawnTestChild } from '@narada-core/process-launch-posture';
-import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-operator-projection/worker';
 import {
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
-} from '@narada-core/cloudflare-nars-projection/node';
+} from '@narada-core/cloudflare-operator-projection/node';
 import { startAgentWebUiServer } from '../src/server.ts';
 import {
   findHeadlessBrowser,
   openCdpPage,
   waitForPageText,
   waitForPageTextWithAction,
-} from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
+} from '../../cloudflare-operator-projection/scripts/lib/browser-smoke.js';
 import { startSessionCoreRuntime, waitFor } from './e2e/nars-runtime-fixture.js';
 
 /**

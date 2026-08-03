@@ -57,13 +57,13 @@
       "proof_posture": "boundary_with_explicit_live_smoke_path",
       "claimed_surfaces": ["agent-web-ui", "operator-console"],
       "live_commands": [
-        "pnpm --filter @narada-core/cloudflare-nars-projection smoke:local-origin-live",
-        "pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live"
+        "pnpm --filter @narada-core/cloudflare-operator-projection smoke:local-origin-live",
+        "pnpm --filter @narada-core/cloudflare-operator-projection smoke:cloudflare-origin-live"
       ],
       "evidence_refs": [
         "docs/concepts/cloudflare-nars-web-projection.md",
-        "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts",
-        "packages/cloudflare-nars-projection/test/authority-host-transition.test.ts"
+        "packages/cloudflare-operator-projection/test/cloudflare-operator-projection.test.ts",
+        "packages/cloudflare-operator-projection/test/authority-host-transition.test.ts"
       ],
       "authority_boundary": "Cloudflare projection may relay and project remote session evidence, but it must not be treated as local NARS authority unless the explicit synthetic Cloudflare authority contract is selected."
     }
@@ -97,7 +97,7 @@
       "proof_refs": [
         "packages/agent-web-ui/test/full-live-router-nars-provider-e2e.ts",
         "packages/agent-web-ui/test/agent-web-ui-cloudflare-authority-local-surface-artifact-e2e.test.ts",
-        "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts"
+        "packages/cloudflare-operator-projection/test/cloudflare-operator-projection.test.ts"
       ]
     },
     {
@@ -132,7 +132,7 @@
           "surface_ids": ["agent-web-ui", "operator-console"],
           "proof_level": "boundary",
           "result": "passed_at_boundary",
-          "evidence_refs": ["docs/concepts/cloudflare-nars-web-projection.md", "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts"],
+          "evidence_refs": ["docs/concepts/cloudflare-nars-web-projection.md", "packages/cloudflare-operator-projection/test/cloudflare-operator-projection.test.ts"],
           "live_gap": "The remote projection smoke proves live transport/replay for its supported slice; disruption-specific cross-surface live coverage remains a follow-up."
         }
       ]
@@ -155,7 +155,7 @@
           "surface_ids": ["agent-web-ui", "operator-console"],
           "proof_level": "boundary",
           "result": "passed_at_boundary",
-          "evidence_refs": ["packages/cloudflare-nars-projection/test/workspace-directory.test.ts", "docs/architecture/cloudflare-carrier/target.md"],
+          "evidence_refs": ["packages/cloudflare-operator-projection/test/workspace-directory.test.ts", "docs/architecture/cloudflare-carrier/target.md"],
           "live_gap": "No claim is made here that every remote dependency degradation has been exercised through every hosted surface."
         }
       ]
@@ -202,7 +202,7 @@
           "surface_ids": ["agent-web-ui", "operator-console"],
           "proof_level": "boundary",
           "result": "passed_at_boundary",
-          "evidence_refs": ["packages/cloudflare-nars-projection/test/worker-intelligence-boundary.test.ts", "docs/architecture/cloudflare-carrier/target.md"]
+          "evidence_refs": ["packages/cloudflare-operator-projection/test/worker-intelligence-boundary.test.ts", "docs/architecture/cloudflare-carrier/target.md"]
         }
       ]
     },
@@ -224,7 +224,7 @@
           "surface_ids": ["agent-web-ui", "operator-console"],
           "proof_level": "boundary",
           "result": "passed_at_boundary",
-          "evidence_refs": ["packages/cloudflare-nars-projection/test/worker-intelligence-boundary.test.ts", "docs/concepts/cloudflare-nars-web-projection.md"]
+          "evidence_refs": ["packages/cloudflare-operator-projection/test/worker-intelligence-boundary.test.ts", "docs/concepts/cloudflare-nars-web-projection.md"]
         }
       ]
     },
@@ -246,7 +246,7 @@
           "surface_ids": ["agent-web-ui", "operator-console"],
           "proof_level": "boundary",
           "result": "passed_at_boundary",
-          "evidence_refs": ["packages/cloudflare-nars-projection/test/authority-host-transition.test.ts", "docs/concepts/nars-authority-runtime-host-transition.md"]
+          "evidence_refs": ["packages/cloudflare-operator-projection/test/authority-host-transition.test.ts", "docs/concepts/nars-authority-runtime-host-transition.md"]
         }
       ]
     },
@@ -268,8 +268,8 @@
           "surface_ids": ["agent-web-ui", "operator-console"],
           "proof_level": "boundary",
           "result": "passed_at_boundary",
-          "evidence_refs": ["docs/concepts/cloudflare-nars-web-projection.md", "packages/cloudflare-nars-projection/test/cloudflare-nars-projection.test.ts"],
-          "verification_commands": ["pnpm --filter @narada-core/cloudflare-nars-projection smoke:local-origin-live", "pnpm --filter @narada-core/cloudflare-nars-projection smoke:cloudflare-origin-live"],
+          "evidence_refs": ["docs/concepts/cloudflare-nars-web-projection.md", "packages/cloudflare-operator-projection/test/cloudflare-operator-projection.test.ts"],
+          "verification_commands": ["pnpm --filter @narada-core/cloudflare-operator-projection smoke:local-origin-live", "pnpm --filter @narada-core/cloudflare-operator-projection smoke:cloudflare-origin-live"],
           "live_gap": "The no-argument smoke invocation returned status planned because --live and explicit site/session/assets inputs are required; no external mutation was attempted in this run."
         }
       ]
@@ -292,7 +292,7 @@
           "surface_ids": ["agent-web-ui", "operator-console"],
           "proof_level": "boundary",
           "result": "passed_at_boundary",
-          "evidence_refs": ["packages/cloudflare-nars-projection/test/authority-host-transition.test.ts", "docs/concepts/nars-authority-runtime-host-transition.md", "docs/concepts/cloudflare-nars-web-projection.md"]
+          "evidence_refs": ["packages/cloudflare-operator-projection/test/authority-host-transition.test.ts", "docs/concepts/nars-authority-runtime-host-transition.md", "docs/concepts/cloudflare-nars-web-projection.md"]
         }
       ]
     }

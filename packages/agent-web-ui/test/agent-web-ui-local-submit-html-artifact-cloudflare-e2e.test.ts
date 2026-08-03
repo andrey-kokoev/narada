@@ -3,12 +3,12 @@ import { writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { join } from 'node:path';
 import test from 'node:test';
-import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-nars-projection/worker';
+import { createCloudflareNarsProjectionWorker } from '@narada-core/cloudflare-operator-projection/worker';
 import {
   deliverRemoteProjectionInputsOnce,
   registerProjectionRemotely,
   startLocalProjectionBridgeOnce,
-} from '@narada-core/cloudflare-nars-projection/node';
+} from '@narada-core/cloudflare-operator-projection/node';
 import { startAgentWebUiServer } from '../src/server.ts';
 import { startSessionCoreRuntime, waitFor } from './e2e/nars-runtime-fixture.js';
 import {
@@ -16,7 +16,7 @@ import {
   openCdpPage,
   waitForPageText,
   waitForPageTextWithAction,
-} from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
+} from '../../cloudflare-operator-projection/scripts/lib/browser-smoke.js';
 
 /**
  * Evidence posture: fixture-boundary. This compares local NARS session-core

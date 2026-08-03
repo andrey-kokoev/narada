@@ -2,13 +2,13 @@
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
-import { buildProjectionRegistrationPlan } from '@narada-core/cloudflare-nars-projection';
-import { validateRemoteCloudflareApiBaseUrl } from '../../cloudflare-nars-projection/scripts/lib/live-boundary.js';
+import { buildProjectionRegistrationPlan } from '@narada-core/cloudflare-operator-projection';
+import { validateRemoteCloudflareApiBaseUrl } from '../../cloudflare-operator-projection/scripts/lib/live-boundary.js';
 import {
   findHeadlessBrowser,
   openCdpPage,
   waitForPageText,
-} from '../../cloudflare-nars-projection/scripts/lib/browser-smoke.js';
+} from '../../cloudflare-operator-projection/scripts/lib/browser-smoke.js';
 
 type AnyRecord = Record<string, any>;
 type LiveSocket = {

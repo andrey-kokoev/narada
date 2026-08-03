@@ -1,4 +1,4 @@
-import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada-core/cloudflare-nars-projection';
+import { buildAgentWebUiCloudflareAuthorityConfig, buildAgentWebUiCloudflareProjectionConfig } from '@narada-core/cloudflare-operator-projection';
 import { buildNarsCapabilityProfile, deriveNarsRuntimeQuadrant } from '@narada-core/nars-runtime-contract/runtime-surface-contract';
 import { isRecord, stringValue, type UnknownRecord } from './types.ts';
 

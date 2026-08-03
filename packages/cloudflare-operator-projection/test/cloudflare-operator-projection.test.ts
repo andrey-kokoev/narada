@@ -1012,7 +1012,7 @@ describe('Cloudflare Worker routes', () => {
     const requested: string[] = [];
     const manifest = {
       schema: 'narada.cloudflare_assets_manifest.v1',
-      target: 'narada-nars-projection',
+      target: 'narada-operator-projection',
       source_hash: 'source-hash-1',
       asset_tree_hash: 'asset-tree-hash-1',
     };

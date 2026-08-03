@@ -1,5 +1,5 @@
 {
-  "name": "@narada-core/cloudflare-nars-projection",
+  "name": "@narada-core/cloudflare-operator-projection",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -61,6 +61,6 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/narada-core/narada.git",
-    "directory": "packages/cloudflare-nars-projection"
+    "directory": "packages/cloudflare-operator-projection"
   }
 }
