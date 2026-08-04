@@ -25,6 +25,7 @@ export type ProcessLaunchPosture =
   | 'governed_command_execution'
   | 'operator_projection_host'
   | 'agent_runtime_server'
+  | 'runtime_observer'
   | 'test_child'
   | 'elevated_or_operator_prompt';
 
@@ -242,6 +243,7 @@ const HIDDEN_POSTURES = new Set<HiddenPosture>([
   'governed_command_execution',
   'operator_projection_host',
   'agent_runtime_server',
+  'runtime_observer',
   'test_child',
 ]);
 

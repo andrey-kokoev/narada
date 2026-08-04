@@ -32,6 +32,9 @@ export type PcSiteSurfaceServiceCommandOptions = {
   watchdog_interval_minutes?: number;
   node_path?: string;
   task_name?: string;
+  incident_id?: string;
+  target?: string;
+  max_bytes?: number;
 };
 
 const DEFAULT_PORT = 61_741;
@@ -103,6 +106,26 @@ export async function replacePcSiteSurfaceGeneration(options: PcSiteSurfaceServi
     request_id: requiredOption(options.request_id, 'request-id'),
     reason: requiredOption(options.reason, 'reason'),
     ...(options.drain_timeout_ms !== undefined ? { drain_timeout_ms: options.drain_timeout_ms } : {}),
+  });
+}
+
+export async function writePcSiteSurfaceHeapSnapshot(options: PcSiteSurfaceServiceCommandOptions): Promise<JsonRecord> {
+  const servicePaths = paths(options);
+  const [state, token] = await Promise.all([
+    readJsonFile(servicePaths.statePath, 'pc_site_surface_service_state_unavailable'),
+    readFile(servicePaths.tokenPath, 'utf8').then((value) => value.trim()),
+  ]);
+  const client = new PcSiteSurfaceServiceClient({ url: requiredOption(state.url, 'state.url'), token });
+  const target = requiredOption(options.target, 'target');
+  return client.writeHeapSnapshot({
+    incident_id: requiredOption(options.incident_id, 'incident-id'),
+    reason: requiredOption(options.reason, 'reason'),
+    target,
+    ...(target === 'surface_generation' ? {
+      instance_id: requiredOption(options.instance_id, 'instance-id'),
+      expected_generation_id: requiredOption(options.expected_generation_id, 'expected-generation-id'),
+    } : {}),
+    ...(options.max_bytes !== undefined ? { max_bytes: options.max_bytes } : {}),
   });
 }
 
@@ -424,6 +447,9 @@ function parseArgs(argv: string[]): { command: string; options: PcSiteSurfaceSer
       ...(values.has('watchdog-interval-minutes') ? { watchdog_interval_minutes: Number(values.get('watchdog-interval-minutes')) } : {}),
       ...(values.has('node-path') ? { node_path: values.get('node-path') } : {}),
       ...(values.has('task-name') ? { task_name: values.get('task-name') } : {}),
+      ...(values.has('incident-id') ? { incident_id: values.get('incident-id') } : {}),
+      ...(values.has('target') ? { target: values.get('target') } : {}),
+      ...(values.has('max-bytes') ? { max_bytes: Number(values.get('max-bytes')) } : {}),
     },
   };
 }
@@ -439,6 +465,8 @@ async function main(): Promise<void> {
         ? await probePcSiteSurfaceService(options)
         : command === 'replace-generation'
           ? await replacePcSiteSurfaceGeneration(options)
+          : command === 'heap-snapshot'
+            ? await writePcSiteSurfaceHeapSnapshot(options)
           : command === 'watchdog-install'
             ? await installPcSiteSurfaceServiceWatchdog(options)
             : command === 'watchdog-status'

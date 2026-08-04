@@ -1,0 +1,23 @@
+[package]
+name = "narada-pc-site-runtime-observer"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "narada-pc-site-runtime-observer"
+path = "src/main.rs"
+
+[dependencies]
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde_json = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Security",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_ProcessStatus",
+  "Win32_System_Memory",
+  "Win32_System_Threading"
+] }

@@ -316,6 +316,19 @@ test('spawnHiddenPostureProcess admits hidden agent runtime server posture', () 
   assert.equal(observed.options.windowsHide, true);
 });
 
+test('spawnHiddenPostureProcess admits hidden runtime observer posture', () => {
+  let observed: any = null;
+  const child = spawnHiddenPostureProcess('observer.exe', ['serve'], {
+    posture: 'runtime_observer',
+    spawnImpl: (command: any, args: any, options: any) => {
+      observed = { command, args, options };
+      return { once() {}, unref() {} };
+    },
+  });
+  assert.ok(child);
+  assert.equal(observed.options.windowsHide, true);
+});
+
 test('startOperatorTerminal makes visibility explicit', () => {
   let observed: any = null;
   const output = startOperatorTerminal('wt', ['new-tab'], {

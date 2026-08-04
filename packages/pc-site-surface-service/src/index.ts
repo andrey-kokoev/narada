@@ -1,6 +1,6 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { timingSafeEqual } from 'node:crypto';
-import { appendFile, mkdir, readFile } from 'node:fs/promises';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { appendFile, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import {
   McpSurfaceRuntimeEngine,
@@ -13,6 +13,7 @@ import {
   type SurfaceInvocationContext,
   type ToolContractV2,
 } from '@narada-core/mcp-fabric-contracts';
+import { createRuntimeObservationSink } from '@narada-core/mcp-runtime-observation';
 
 type JsonRecord = Record<string, unknown>;
 const MAX_REQUEST_BYTES = 1024 * 1024;
@@ -209,7 +210,45 @@ export async function createPcSiteSurfaceService(
   const handleIdleMs = normalizeHandleIdleMs(options.handle_idle_ms);
   const eventLogPath = resolve(options.event_log_path ?? join(siteRoot, '.narada', 'runtime', 'mcp-surface-service', 'events.jsonl'));
   await mkdir(dirname(eventLogPath), { recursive: true });
-  const engine = new McpSurfaceRuntimeEngine();
+  const observationSink = createRuntimeObservationSink({
+    site_root: siteRoot,
+    source_id: 'pc-site-surface-service',
+  });
+  const engine = new McpSurfaceRuntimeEngine({
+    observation_sink: observationSink,
+    observation_parent_owner_id: 'pc-site-surface-service',
+  });
+  void observationSink.emit({
+    schema: 'narada.mcp_runtime.resource_owner.v1',
+    owner_id: 'pc-site-surface-service',
+    site_id: siteId,
+    authority_ref: authorityRef,
+    owner_kind: 'pc_site_service',
+    pid: process.pid,
+    process_started_at: null,
+    parent_owner_id: null,
+    surface_id: null,
+    instance_id: null,
+    generation_id: null,
+    carrier_session_id: null,
+    executable_name: process.execPath,
+    observed_at: new Date().toISOString(),
+  });
+  void observationSink.emit({
+    schema: 'narada.mcp_runtime.lifecycle_event.v1',
+    event_id: `event-${randomUUID()}`,
+    occurred_at: new Date().toISOString(),
+    site_id: siteId,
+    authority_ref: authorityRef,
+    owner_id: 'pc-site-surface-service',
+    event_type: 'process_started',
+    surface_id: null,
+    instance_id: null,
+    generation_id: null,
+    request_id: null,
+    status: 'ok',
+    inflight: 0,
+  });
   const handles = new Map<string, SurfaceHandleLease>();
   const pendingHandles = new Map<string, Promise<SurfaceHandleLease>>();
   const replacementEvents: JsonRecord[] = [];
@@ -225,6 +264,21 @@ export async function createPcSiteSurfaceService(
     closePromise = (async () => {
       await closeServer(server);
       await engine.close();
+      await observationSink.emit({
+        schema: 'narada.mcp_runtime.lifecycle_event.v1',
+        event_id: `event-${randomUUID()}`,
+        occurred_at: new Date().toISOString(),
+        site_id: siteId,
+        authority_ref: authorityRef,
+        owner_id: 'pc-site-surface-service',
+        event_type: 'process_exited',
+        surface_id: null,
+        instance_id: null,
+        generation_id: null,
+        request_id: null,
+        status: 'ok',
+        inflight: 0,
+      });
     })();
     return closePromise;
   };
@@ -249,6 +303,14 @@ export async function createPcSiteSurfaceService(
           runtime: engine.status(),
           replacement_events: replacementEvents.slice(-20),
           event_log_path: eventLogPath,
+        });
+      }
+      if (request.method === 'GET' && request.url === '/v1/runtime-resources') {
+        return sendJson(response, 200, {
+          schema: 'narada.pc_site_surface_service.runtime_resources.v1',
+          site_id: siteId,
+          authority_ref: authorityRef,
+          resources: await engine.resourceSnapshot(),
         });
       }
       if (request.method === 'POST' && request.url === '/v1/shutdown') {
@@ -301,6 +363,52 @@ export async function createPcSiteSurfaceService(
           replacementEvents,
         });
         return sendJson(response, 200, result);
+      }
+      if (request.method === 'POST' && request.url === '/v1/heap-snapshots') {
+        const body = asRecord(await readJsonBody(request));
+        const incidentId = safeIdentifier(body.incident_id, 'incident_id');
+        const reason = requiredString(body.reason, 'reason');
+        const target = requiredString(body.target, 'target');
+        if (target !== 'service_parent' && target !== 'surface_generation') {
+          throw new PcSiteSurfaceServiceError('pc_site_surface_service_heap_snapshot_target_invalid');
+        }
+        const maxBytes = body.max_bytes === undefined ? 512 * 1024 * 1024 : Number(body.max_bytes);
+        const artifactRoot = join(siteRoot, '.narada', 'runtime', 'mcp-runtime-observer', 'artifacts', incidentId);
+        await mkdir(artifactRoot, { recursive: true });
+        const stamp = new Date().toISOString().replace(/[-:.TZ]/g, '');
+        const artifactPath = join(artifactRoot, `${stamp}-${target}.heapsnapshot`);
+        const instanceId = target === 'surface_generation' ? requiredString(body.instance_id, 'instance_id') : null;
+        const protectedLeases = instanceId
+          ? [...handles.values()].filter((lease) => lease.handle.instance_id === instanceId)
+          : [];
+        for (const lease of protectedLeases) { lease.inflight += 1; lease.last_used_at = Date.now(); }
+        let snapshot: Awaited<ReturnType<McpSurfaceRuntimeEngine['writeHeapSnapshot']>>;
+        try {
+          snapshot = await engine.writeHeapSnapshot({
+            target,
+            path: artifactPath,
+            max_bytes: maxBytes,
+            ...(target === 'surface_generation' ? {
+              instance_id: instanceId ?? undefined,
+              expected_generation_id: requiredString(body.expected_generation_id, 'expected_generation_id'),
+            } : {}),
+          });
+        } finally {
+          for (const lease of protectedLeases) { lease.inflight -= 1; lease.last_used_at = Date.now(); }
+        }
+        const evidence = {
+          schema: 'narada.pc_site_surface_service.heap_snapshot.v1',
+          incident_id: incidentId,
+          reason,
+          requested_at: new Date().toISOString(),
+          target,
+          ...snapshot,
+        };
+        const metadataPath = `${artifactPath}.json`;
+        const temporary = `${metadataPath}.${process.pid}.tmp`;
+        await writeFile(temporary, `${JSON.stringify(evidence, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+        await rename(temporary, metadataPath);
+        return sendJson(response, 200, evidence);
       }
       sendJson(response, 404, { code: 'pc_site_surface_service_route_not_found' });
     } catch (error) {
@@ -507,6 +615,30 @@ export class PcSiteSurfaceServiceClient {
     return body;
   }
 
+  async runtimeResources(signal?: AbortSignal): Promise<JsonRecord> {
+    const fetchFn = this.options.fetch_fn ?? fetch;
+    const response = await fetchFn(this.options.url.replace(/\/$/, '') + '/v1/runtime-resources', {
+      headers: { authorization: 'Bearer ' + this.options.token },
+      signal,
+    });
+    const body = await response.json() as JsonRecord;
+    if (!response.ok) {
+      throw new PcSiteSurfaceServiceError(String(body.code ?? 'pc_site_surface_service_request_failed'), asRecord(body.details));
+    }
+    return body;
+  }
+
+  async writeHeapSnapshot(input: JsonRecord, signal?: AbortSignal): Promise<JsonRecord> {
+    const fetchFn = this.options.fetch_fn ?? fetch;
+    const response = await fetchFn(this.options.url.replace(/\/$/, '') + '/v1/heap-snapshots', {
+      method: 'POST', headers: { authorization: 'Bearer ' + this.options.token, 'content-type': 'application/json' },
+      body: JSON.stringify(input), signal,
+    });
+    const body = await response.json() as JsonRecord;
+    if (!response.ok) throw new PcSiteSurfaceServiceError(String(body.code ?? 'pc_site_surface_service_request_failed'), asRecord(body.details));
+    return body;
+  }
+
   async releaseSession(carrierSessionId: string): Promise<JsonRecord> {
     const fetchFn = this.options.fetch_fn ?? fetch;
     const response = await fetchFn(this.options.url.replace(/\/$/, '') + '/v1/session/release', {
@@ -635,6 +767,12 @@ function normalizeHandleIdleMs(value: number | undefined): number {
 function requiredString(value: unknown, field: string): string {
   const text = typeof value === 'string' ? value.trim() : '';
   if (!text) throw new PcSiteSurfaceServiceError('pc_site_surface_service_field_required', { field });
+  return text;
+}
+
+function safeIdentifier(value: unknown, field: string): string {
+  const text = requiredString(value, field);
+  if (!/^[a-z0-9][a-z0-9._-]{0,127}$/i.test(text)) throw new PcSiteSurfaceServiceError('pc_site_surface_service_identifier_invalid', { field });
   return text;
 }
 

@@ -21,6 +21,7 @@ packages:
   - '../mcp-surfaces/packages/shared/mcp-runtime-proxy'
   - '../mcp-surfaces/packages/shared/mcp-runtime-client'
   - '../mcp-surfaces/packages/shared/mcp-surface-runtime'
+  - '../mcp-surfaces/packages/shared/mcp-runtime-observation'
   - '../mcp-surfaces/packages/shared/execution-contract'
   - '../mcp-surfaces/packages/task-governance-core'
   - '../agent-cli'

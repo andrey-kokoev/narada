@@ -8,6 +8,7 @@ export type ProcessLaunchPosture =
   | 'governed_command_execution'
   | 'operator_projection_host'
   | 'agent_runtime_server'
+  | 'runtime_observer'
   | 'test_child'
   | 'elevated_or_operator_prompt';
 
@@ -210,4 +211,3 @@ export function execGovernedSync(command: string, options?: ExecSyncOptions): st
 export function spawnTestChild(command: string, args?: string[], options?: HiddenPostureOptions): ChildProcess;
 
 export function startElevatedOrOperatorPrompt(command: string, args?: string[], options?: OperatorTerminalOptions & { reason: string }): OperatorTerminalResult;
-

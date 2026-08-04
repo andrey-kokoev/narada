@@ -122,6 +122,21 @@ test('PC Site surface service authenticates calls and shares factory state only 
     assert.deepEqual((await invoke('two')).result, { count: 2, version: 1 });
     const status = await fetch(`${service.url}/v1/status`, { headers: { authorization: `Bearer ${token}` } }).then((response) => response.json()) as any;
     assert.equal(status.runtime.instances.length, 1);
+    const resources = await client.runtimeResources() as any;
+    assert.equal(resources.resources.schema, 'narada.mcp_surface_runtime.resources.v1');
+    assert.equal(resources.resources.instances[0].resource_status, 'complete');
+    assert.equal(resources.resources.instances[0].resources.inflight, 0);
+    const snapshot = await client.writeHeapSnapshot({
+      incident_id: 'incident-explicit-test',
+      reason: 'controlled explicit heap snapshot test',
+      target: 'surface_generation',
+      instance_id: status.runtime.instances[0].instance_id,
+      expected_generation_id: status.runtime.instances[0].generation_id,
+      max_bytes: 64 * 1024 * 1024,
+    }) as any;
+    assert.equal(snapshot.incident_id, 'incident-explicit-test');
+    assert.equal(snapshot.generation_id, status.runtime.instances[0].generation_id);
+    assert.equal(snapshot.bytes > 0, true);
 
     await assert.rejects(client.invoke({
       ...(await invocationTemplate()),
