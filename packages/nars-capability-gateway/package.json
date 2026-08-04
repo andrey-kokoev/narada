@@ -48,6 +48,7 @@
   "dependencies": {
     "@narada-core/launch-process-ownership": "workspace:*",
     "@narada-core/mcp-fabric": "workspace:*",
+    "@narada-core/pc-site-surface-service": "workspace:*",
     "@narada-core/process-launch-posture": "workspace:*"
   },
   "license": "MIT",

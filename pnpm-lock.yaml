@@ -169,6 +169,8 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
+  ../mcp-surfaces/packages/shared/mcp-runtime-client: {}
+
   ../mcp-surfaces/packages/shared/mcp-runtime-proxy:
     dependencies:
       '@narada-core/mcp-fabric-contracts':
@@ -181,6 +183,18 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../mcp-e2e-harness
+
+  ../mcp-surfaces/packages/shared/mcp-surface-runtime:
+    dependencies:
+      '@narada-core/mcp-fabric-contracts':
+        specifier: workspace:*
+        version: link:../mcp-fabric-contracts
+      '@narada-core/mcp-runtime-client':
+        specifier: workspace:*
+        version: link:../mcp-runtime-client
+      ajv:
+        specifier: ^8.20.0
+        version: 8.20.0
 
   ../mcp-surfaces/packages/shared/mcp-telemetry: {}
 
@@ -1372,6 +1386,9 @@ importers:
       '@narada-core/mcp-fabric':
         specifier: workspace:*
         version: link:../mcp-fabric
+      '@narada-core/pc-site-surface-service':
+        specifier: workspace:*
+        version: link:../pc-site-surface-service
       '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
@@ -1617,6 +1634,28 @@ importers:
       vitest:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@20.19.39)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@20.19.39)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0))
+
+  packages/pc-site-surface-service:
+    dependencies:
+      '@narada-core/mcp-fabric-contracts':
+        specifier: workspace:*
+        version: link:../../../mcp-surfaces/packages/shared/mcp-fabric-contracts
+      '@narada-core/mcp-surface-runtime':
+        specifier: workspace:*
+        version: link:../../../mcp-surfaces/packages/shared/mcp-surface-runtime
+      '@narada-core/process-launch-posture':
+        specifier: workspace:*
+        version: link:../process-launch-posture
+    devDependencies:
+      '@types/node':
+        specifier: ^22.0.0
+        version: 22.19.19
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.0
+        version: 5.9.3
 
   packages/process-launch-posture: {}
 

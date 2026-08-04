@@ -331,6 +331,30 @@ async function discoverAndStartMcpServers(siteRoot: string, ownershipContext: An
 }
 
 async function createRuntimeMcpServer({ siteRoot, serverName, serverConfig, ownershipContext = {} }: AnyRecord): Promise<AnyRecord> {
+  if (serverConfig.surface_projection?.execution?.adapter === 'surface_factory') {
+    const declaredTools = serverConfig.surface_projection?.surface_descriptor?.tools ?? [];
+    return {
+      process: null,
+      send: async () => { throw new Error('mcp_surface_factory_requires_site_service_dispatch'); },
+      tools: normalizeRuntimeMcpTools(declaredTools.map((tool: AnyRecord) => ({
+        ...tool,
+        inputSchema: tool.inputSchema ?? tool.input_schema ?? { type: 'object', properties: {} },
+        ...(tool.outputSchema || tool.output_schema ? { outputSchema: tool.outputSchema ?? tool.output_schema } : {}),
+      }))),
+      config: serverConfig,
+      surface_projection: serverConfig.surface_projection,
+      execution_adapter: 'surface_factory',
+      registry_tools: serverConfig.registry_tools ?? {},
+      registry_source: serverConfig.registry_source ?? null,
+      registry_metadata_authoritative: serverConfig.registry_metadata_authoritative === true,
+      restart_count: 0,
+      ownership_context: ownershipContext,
+      last_disconnect_error: null,
+      last_restart_error: null,
+      restarting: null,
+      process_ownership: buildMcpChildOwnershipEvidence({ siteRoot, serverName, ownershipContext }),
+    };
+  }
   const runtime = {
     process: null,
     send: null,
@@ -1013,4 +1037,5 @@ export {
   findToolServer,
   findToolBinding,
   sendMcpRequest,
+  createRuntimeMcpServer,
 };

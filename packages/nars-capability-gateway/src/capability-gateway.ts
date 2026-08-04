@@ -1,6 +1,14 @@
 type AnyRecord = Record<string, any>;
 type AnyFunction = (...args: any[]) => any;
 
+import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+import {
+  PcSiteSurfaceServiceClient,
+  pcSiteSurfaceAuthorityRef,
+} from '@narada-core/pc-site-surface-service';
+
 import {
   applyWorkerMcpProjection,
   aggregateToolBindings,
@@ -62,6 +70,59 @@ export function createNarsCapabilityGateway(options: AnyRecord = {}): AnyRecord 
   if (typeof siteRoot !== 'string' || !siteRoot.trim()) {
     throw new Error('nars_capability_gateway_site_root_required');
   }
+  const gatewaySessionId = String(
+    options.carrierSessionId
+    ?? ownershipContext.carrier_session_id
+    ?? process.env.NARADA_CARRIER_SESSION_ID
+    ?? process.env.NARADA_NARS_SESSION_ID
+    ?? `nars-${randomUUID()}`
+  );
+  let surfaceServiceConnection: Promise<AnyRecord> | null = null;
+
+  const defaultDispatchAdmittedTool = async ({ binding, arguments: args, requestId, abortSignal, admission, execution }: AnyRecord) => {
+    if (binding.server.execution_adapter !== 'surface_factory') {
+      return (dependencies.sendMcpRequest ?? sendMcpRequest)(binding.server, {
+        jsonrpc: '2.0',
+        id: requestId,
+        method: 'tools/call',
+        params: {
+          name: binding.tool.runtime_tool_name ?? binding.tool.name,
+          arguments: args,
+        },
+      }, abortSignal);
+    }
+
+    surfaceServiceConnection ??= connectPcSiteSurfaceService({ siteRoot, options, dependencies, binding });
+    const connection = await surfaceServiceConnection;
+    const projection = binding.server.surface_projection;
+    const surfaceId = requiredText(projection?.surface_id, 'nars_surface_factory_surface_id_required');
+    const toolName = requiredText(binding.tool.runtime_tool_name ?? binding.tool.name, 'nars_surface_factory_tool_name_required');
+    const authorityRef = pcSiteSurfaceAuthorityRef(connection.site_id);
+    const outcome = await connection.client.invoke({
+      site_id: connection.site_id,
+      authority_ref: authorityRef,
+      carrier_session_id: gatewaySessionId,
+      carrier_id: String(options.carrierId ?? process.env.NARADA_CARRIER_ID ?? 'nars'),
+      agent_id: String(options.agentId ?? process.env.NARADA_AGENT_ID ?? 'nars-agent'),
+      surface_id: surfaceId,
+      projection_id: requiredText(projection?.projection_id, 'nars_surface_factory_projection_id_required'),
+      tool_name: toolName,
+      arguments: args ?? {},
+      request_id: String(requestId),
+      admission: {
+        decision: 'admitted',
+        decision_ref: String(admission?.decision_ref ?? execution?.execution_id ?? `nars-request-${requestId}`),
+        authority_ref: authorityRef,
+        surface_id: surfaceId,
+        tool_name: toolName,
+        reason: String(admission?.reason ?? 'nars_capability_gateway_admitted'),
+      },
+    }, abortSignal);
+    if (outcome.status !== 'ok') {
+      throw new Error(`${String(outcome.error?.code ?? 'mcp_surface_factory_call_failed')}:${String(outcome.error?.message ?? outcome.status)}`);
+    }
+    return outcome.result;
+  };
 
   const runtime = {
     discoverAndStartMcpServers: dependencies.discoverAndStartMcpServers ?? discoverAndStartMcpServers,
@@ -69,6 +130,7 @@ export function createNarsCapabilityGateway(options: AnyRecord = {}): AnyRecord 
     aggregateToolBindings: dependencies.aggregateToolBindings ?? aggregateToolBindings,
     findToolBinding: dependencies.findToolBinding ?? findToolBinding,
     sendMcpRequest: dependencies.sendMcpRequest ?? sendMcpRequest,
+    dispatchAdmittedTool: dependencies.dispatchAdmittedTool ?? defaultDispatchAdmittedTool,
     closeMcpServers: dependencies.closeMcpServers ?? defaultCloseMcpServers,
   };
   let mcpServers: AnyRecord | null = null;
@@ -210,15 +272,15 @@ export function createNarsCapabilityGateway(options: AnyRecord = {}): AnyRecord 
 
     let result;
     try {
-      result = await runtime.sendMcpRequest(binding.server, {
-        jsonrpc: '2.0',
-        id: requestId,
-        method: 'tools/call',
-        params: {
-          name: binding.tool.runtime_tool_name ?? binding.tool.name,
-          arguments: args,
-        },
-      }, abortSignal);
+      result = await runtime.dispatchAdmittedTool({
+        siteRoot,
+        binding,
+        arguments: args,
+        requestId,
+        abortSignal,
+        admission,
+        execution: { ...attempt },
+      });
     } catch (error) {
       const interrupted = Boolean(abortSignal?.aborted) || /abort|cancel|interrupt/i.test(errorMessage(error));
       const terminalState = interrupted ? 'interrupted' : 'failed';
@@ -271,6 +333,20 @@ export function createNarsCapabilityGateway(options: AnyRecord = {}): AnyRecord 
       });
       try {
         await runtime.closeMcpServers(serversToClose);
+        if (surfaceServiceConnection) {
+          try {
+            const connection = await surfaceServiceConnection;
+            if (typeof connection.client.releaseSession === 'function') {
+              await connection.client.releaseSession(gatewaySessionId);
+            }
+          } catch (error) {
+            await recordEvidenceFn({
+              kind: 'surface_service_session_release_failed',
+              carrier_session_id: gatewaySessionId,
+              error: errorMessage(error),
+            });
+          }
+        }
         await transitionGateway('closed', { reason: 'close_completed' });
       } catch (error) {
         try {
@@ -378,6 +454,58 @@ export function createNarsCapabilityGateway(options: AnyRecord = {}): AnyRecord 
     execution,
     executions: () => [...executions.values()].map((value) => ({ ...value })),
   });
+}
+
+export function resolvePcSiteSurfaceServiceRoot({ siteRoot, options = {}, binding, environment = process.env }: AnyRecord): string {
+  const server = binding?.server ?? {};
+  const config = server.config ?? {};
+  const authorityLocus = config.narada_scope?.authority_locus
+    ?? config.authority_locus
+    ?? server.narada_scope?.authority_locus
+    ?? server.authority_locus;
+  const authoritySiteRoot = authorityLocus?.kind === 'user_site' ? authorityLocus.site_root : null;
+  return resolve(String(options.pcSiteRoot ?? environment.NARADA_PC_SITE_ROOT ?? authoritySiteRoot ?? siteRoot));
+}
+
+async function connectPcSiteSurfaceService({ siteRoot, options, dependencies, binding }: AnyRecord): Promise<AnyRecord> {
+  if (dependencies.surfaceServiceClient) {
+    return {
+      client: dependencies.surfaceServiceClient,
+      site_id: requiredText(dependencies.surfaceServiceSiteId ?? options.siteId, 'nars_surface_service_site_id_required'),
+    };
+  }
+  const pcSiteRoot = resolvePcSiteSurfaceServiceRoot({ siteRoot, options, binding });
+  const stateRoot = resolve(String(
+    options.surfaceServiceStateRoot
+    ?? process.env.NARADA_PC_SITE_SURFACE_SERVICE_STATE_ROOT
+    ?? join(pcSiteRoot, '.narada', 'runtime', 'mcp-surface-service')
+  ));
+  const [state, registry, token] = await Promise.all([
+    readJson(join(stateRoot, 'state.json'), 'nars_surface_service_state_unavailable'),
+    readJson(join(pcSiteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), 'nars_surface_service_registry_unavailable'),
+    readFile(join(stateRoot, 'token'), 'utf8').then((value) => value.trim()),
+  ]);
+  const siteId = requiredText(registry.site_id, 'nars_surface_service_site_id_required');
+  if (state.site_id !== siteId) throw new Error('nars_surface_service_state_site_mismatch');
+  const url = requiredText(options.surfaceServiceUrl ?? process.env.NARADA_PC_SITE_SURFACE_SERVICE_URL ?? state.url, 'nars_surface_service_url_required');
+  if (!token) throw new Error('nars_surface_service_token_empty');
+  const createClient = dependencies.createSurfaceServiceClient
+    ?? ((input: { url: string; token: string }) => new PcSiteSurfaceServiceClient(input));
+  return { client: createClient({ url, token }), site_id: siteId };
+}
+
+async function readJson(path: string, code: string): Promise<AnyRecord> {
+  try {
+    return JSON.parse(await readFile(path, 'utf8')) as AnyRecord;
+  } catch (error) {
+    throw new Error(`${code}:${path}:${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function requiredText(value: unknown, code: string): string {
+  const text = typeof value === 'string' ? value.trim() : '';
+  if (!text) throw new Error(code);
+  return text;
 }
 
 function errorMessage(error: unknown): string {

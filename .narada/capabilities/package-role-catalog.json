@@ -571,6 +571,15 @@
       "posture": "fixture_and_ops_model"
     },
     {
+      "package": "@narada-core/pc-site-surface-service",
+      "path": "packages/pc-site-surface-service",
+      "roles": [
+        "runtime_authority",
+        "mcp_boundary"
+      ],
+      "posture": "authenticated_authority_partitioned_pc_site_surface_runtime"
+    },
+    {
       "package": "@narada-core/process-launch-posture",
       "path": "packages/process-launch-posture",
       "roles": [

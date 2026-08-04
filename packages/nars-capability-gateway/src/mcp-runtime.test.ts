@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   aggregateToolBindings,
   applyWorkerMcpProjection,
+  createRuntimeMcpServer,
   findToolBinding,
   normalizeMcpOutputReader,
   normalizeRuntimeMcpTools,
@@ -12,6 +13,31 @@ import {
 } from './mcp-runtime.js';
 
 type AnyRecord = Record<string, any>;
+
+test('runtime represents a surface factory without spawning a per-session child', async () => {
+  const server = await createRuntimeMcpServer({
+    siteRoot: 'C:/site',
+    serverName: 'launcher',
+    serverConfig: {
+      surface_projection: {
+        surface_id: 'launcher',
+        projection_id: 'factory',
+        execution: { adapter: 'surface_factory', tenancy: 'authority_shared', replacement: 'generation_swap' },
+        surface_descriptor: {
+          tools: [{ name: 'launcher_doctor', description: 'Doctor', input_schema: { type: 'object', properties: {} } }],
+        },
+      },
+    },
+  });
+
+  assert.equal(server.process, null);
+  assert.equal(server.execution_adapter, 'surface_factory');
+  assert.deepEqual(server.tools.map((tool: AnyRecord) => ({ name: tool.name, inputSchema: tool.inputSchema })), [{
+    name: 'launcher_doctor',
+    inputSchema: { type: 'object', properties: {} },
+  }]);
+  await assert.rejects(server.send({}), /mcp_surface_factory_requires_site_service_dispatch/);
+});
 
 test('runtime canonicalizes the agent-context output reader alias', () => {
   const tools = normalizeRuntimeMcpTools([

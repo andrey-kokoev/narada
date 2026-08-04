@@ -1,0 +1,53 @@
+{
+  "name": "@narada-core/pc-site-surface-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Authenticated loopback PC Site service for authority-partitioned MCP surface factories.",
+  "narada": {
+    "package_role": "pc_site_surface_service",
+    "owns": [
+      "pc_site_surface_runtime_lifecycle",
+      "authority_partitioned_surface_instances",
+      "authenticated_surface_invocation_transport",
+      "explicit_surface_generation_replacement",
+      "pc_site_surface_watchdog_lifecycle"
+    ],
+    "does_not_own": [
+      "tool_action_admission",
+      "surface_registration",
+      "carrier_session_authority",
+      "surface_domain_policy"
+    ]
+  },
+  "bin": {
+    "narada-pc-site-surface-service": "./dist/main.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "pnpm run build && node --import tsx --test test/*.test.ts",
+    "test:live:e2e": "pnpm run build && node --import tsx --test test/*.live.e2e.ts"
+  },
+  "dependencies": {
+    "@narada-core/mcp-fabric-contracts": "workspace:*",
+    "@narada-core/mcp-surface-runtime": "workspace:*",
+    "@narada-core/process-launch-posture": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "files": ["dist/", "README.md"]
+}

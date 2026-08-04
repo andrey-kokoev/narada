@@ -116,6 +116,7 @@ Cross-cutting runtime, contract, MCP, carrier, NARS, agent, operator, and UI pac
 | `@narada-core/agent-context-memory` | `packages/agent-context-memory` | Agent checkpoint memory contracts |
 | `@narada-core/narada-proper-mcp` | `packages/narada-proper-mcp` | Target-local Narada MCP facade |
 | `@narada-core/mcp-fabric` / `@narada-core/typed-mcp-surface` | `packages/mcp-fabric`, `packages/typed-mcp-surface` | MCP surface plumbing |
+| `@narada-core/pc-site-surface-service` | `packages/pc-site-surface-service` | Authenticated loopback lifecycle and authority-partitioned execution for explicitly factory-backed MCP projections; action admission remains in NARS |
 | `@narada-core/windows-site` / `@narada-core/macos-site` / `@narada-core/linux-site` / `@narada-core/cloudflare-site` | `packages/sites/*` | Per-substrate Site materialization |
 | `@narada-core/cloudflare-carrier` | `packages/cloudflare-carrier` | Cloudflare carrier runtime |
 | `@narada-core/cloudflare-site-registry` | `packages/cloudflare-site-registry` | Carrier-embedded Cloudflare D1 site registry runtime |

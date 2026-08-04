@@ -2,7 +2,7 @@ type AnyRecord = Record<string, any>;
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createNarsCapabilityGateway } from './capability-gateway.js';
+import { createNarsCapabilityGateway, resolvePcSiteSurfaceServiceRoot } from './capability-gateway.js';
 
 function createServers() {
   return { filesystem: { tools: [{ name: 'fs_read_file', inputSchema: { type: 'object' } }] } };
@@ -17,6 +17,9 @@ function createGateway(options: AnyRecord = {}) {
     aggregateToolBindings,
     findToolBinding,
     sendMcpRequest,
+    dispatchAdmittedTool,
+    surfaceServiceClient,
+    surfaceServiceSiteId,
     closeMcpServers = async () => {},
     now,
   } = options;
@@ -41,6 +44,8 @@ function createGateway(options: AnyRecord = {}) {
         providerToolName: 'fs_read_file',
       }] : []),
       findToolBinding: findToolBinding ?? (() => defaultBinding()),
+      ...(dispatchAdmittedTool ? { dispatchAdmittedTool } : {}),
+      ...(surfaceServiceClient ? { surfaceServiceClient, surfaceServiceSiteId } : {}),
       sendMcpRequest: sendMcpRequest ?? (async (_server: AnyRecord, request: AnyRecord) => {
         requests.push(request);
         return { content: [{ type: 'text', text: 'ok' }] };
@@ -97,6 +102,28 @@ test('capability gateway serializes startup and closes only after startup', asyn
   assert.equal(gateway.state().active_execution_count, 0);
   await gateway.close();
   await assert.rejects(() => gateway.start(), /nars_capability_gateway_not_startable:closed/);
+});
+
+test('factory dispatch resolves the PC Site from the binding authority locus', () => {
+  assert.equal(resolvePcSiteSurfaceServiceRoot({
+    siteRoot: 'C:/local-site',
+    options: {},
+    environment: {},
+    binding: {
+      server: {
+        config: {
+          narada_scope: {
+            authority_locus: { kind: 'user_site', site_root: 'C:/pc-site' },
+          },
+        },
+      },
+    },
+  }), resolvePcSiteSurfaceServiceRoot({
+    siteRoot: 'C:/pc-site',
+    options: {},
+    environment: {},
+    binding: {},
+  }));
 });
 
 test('capability gateway applies worker MCP projection before cataloging tools', async () => {
@@ -156,7 +183,7 @@ test('capability gateway marks startup failure and permits explicit retry', asyn
 });
 
 test('capability gateway exposes degraded startup without hiding available servers', async () => {
-  const servers = createServers();
+  const servers = createServers() as AnyRecord;
   Object.defineProperty(servers, '__mcp_startup_failures', {
     value: [{ server_name: 'optional', code: 'startup_timeout' }],
     configurable: true,
@@ -240,6 +267,87 @@ test('capability gateway refuses tools before dispatch when admission rejects', 
   assert.equal(requests.length, 0);
   assert.deepEqual(executionStates(evidence), ['requested', 'refused']);
   assert.equal(evidence.find((event: AnyRecord) => event.kind === 'tool_execution_refused')!.reason, 'approval_required');
+});
+
+test('capability gateway exposes an admitted-only dispatch seam for a Site surface service', async () => {
+  const dispatched: AnyRecord[] = [];
+  const { gateway, requests } = createGateway({
+    admit: async () => ({ admitted: true, reason: 'carrier_action_admitted', authority_ref: 'site:test' }),
+    dispatchAdmittedTool: async (request: AnyRecord) => {
+      dispatched.push(request);
+      return { content: [{ type: 'text', text: 'site-service-ok' }] };
+    },
+  });
+
+  const result = await gateway.invoke({
+    toolName: 'fs_read_file',
+    arguments: { path: 'README.md' },
+    turnId: 'turn-site-service',
+  });
+
+  assert.equal(result.status, 'completed');
+  assert.equal(dispatched.length, 1);
+  assert.equal(dispatched[0].siteRoot, 'C:/site');
+  assert.equal(dispatched[0].binding.tool.name, 'fs_read_file');
+  assert.equal(dispatched[0].admission.reason, 'carrier_action_admitted');
+  assert.equal(dispatched[0].execution.execution_state, 'executing');
+  assert.equal(requests.length, 0);
+});
+
+test('capability gateway dispatches an admitted factory binding through the authenticated Site service client', async () => {
+  const invocations: AnyRecord[] = [];
+  const releases: string[] = [];
+  const servers: AnyRecord = createServers();
+  servers.filesystem.execution_adapter = 'surface_factory';
+  servers.filesystem.surface_projection = {
+    surface_id: 'launcher',
+    projection_id: 'factory',
+  };
+  const { gateway, requests } = createGateway({
+    servers,
+    admit: async () => ({ admitted: true, reason: 'read_admitted' }),
+    surfaceServiceSiteId: 'test-site',
+    surfaceServiceClient: {
+      async invoke(input: AnyRecord) {
+        invocations.push(input);
+        return { status: 'ok', result: { content: [{ type: 'text', text: 'factory-ok' }] } };
+      },
+      async releaseSession(carrierSessionId: string) {
+        releases.push(carrierSessionId);
+        return { status: 'released' };
+      },
+    },
+  });
+
+  const result = await gateway.invoke({ toolName: 'fs_read_file', arguments: { path: 'README.md' } });
+
+  assert.equal(result.status, 'completed');
+  assert.deepEqual(result.result, { content: [{ type: 'text', text: 'factory-ok' }] });
+  assert.equal(requests.length, 0);
+  assert.equal(invocations.length, 1);
+  assert.equal(invocations[0].site_id, 'test-site');
+  assert.equal(invocations[0].authority_ref, 'site:test-site:mcp-surfaces');
+  assert.equal(invocations[0].surface_id, 'launcher');
+  assert.equal(invocations[0].projection_id, 'factory');
+  assert.equal(invocations[0].admission.decision, 'admitted');
+  await gateway.close();
+  assert.deepEqual(releases, [invocations[0].carrier_session_id]);
+});
+
+test('capability gateway never calls the Site surface dispatch seam for a refused action', async () => {
+  let dispatchCalls = 0;
+  const { gateway } = createGateway({
+    admit: async () => ({ admitted: false, reason: 'carrier_action_refused' }),
+    dispatchAdmittedTool: async () => {
+      dispatchCalls += 1;
+      return {};
+    },
+  });
+
+  const result = await gateway.invoke({ toolName: 'fs_read_file' });
+
+  assert.equal(result.status, 'refused');
+  assert.equal(dispatchCalls, 0);
 });
 
 test('capability gateway refuses an unknown tool without dispatch', async () => {
