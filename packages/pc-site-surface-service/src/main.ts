@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { randomBytes } from 'node:crypto';
 import { execFile } from 'node:child_process';
-import { closeSync, openSync } from 'node:fs';
+import { closeSync, existsSync, openSync } from 'node:fs';
 import { chmod, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -51,6 +51,29 @@ export type PcSiteSurfaceServiceWatchdogPlan = {
   multiple_instances: 'IgnoreNew';
 };
 
+export function resolveWatchdogNodePath(input: {
+  node_path?: string;
+  exec_path?: string;
+  node_version?: string;
+  environment?: NodeJS.ProcessEnv;
+  exists?: (path: string) => boolean;
+} = {}): string {
+  if (input.node_path) return resolve(input.node_path);
+  const execPath = resolve(input.exec_path ?? process.execPath);
+  const environment = input.environment ?? process.env;
+  const nodeVersion = input.node_version ?? process.version;
+  const fnmRoot = environment.FNM_DIR
+    ?? (environment.APPDATA ? join(environment.APPDATA, 'fnm') : undefined);
+  const stableFnmPath = fnmRoot
+    ? resolve(fnmRoot, 'node-versions', nodeVersion, 'installation', 'node.exe')
+    : undefined;
+  if (stableFnmPath && (input.exists ?? existsSync)(stableFnmPath)) return stableFnmPath;
+  if (/[\\/]fnm_multishells[\\/]/i.test(execPath)) {
+    throw new Error(`pc_site_surface_service_stable_node_path_required:${stableFnmPath ?? execPath}`);
+  }
+  return execPath;
+}
+
 function paths(options: PcSiteSurfaceServiceCommandOptions) {
   const stateRoot = resolve(options.state_root ?? join(resolve(options.site_root), '.narada', 'runtime', 'mcp-surface-service'));
   return {
@@ -89,7 +112,7 @@ export function pcSiteSurfaceServiceWatchdogPlan(
 ): PcSiteSurfaceServiceWatchdogPlan {
   const siteRoot = resolve(options.site_root);
   const mcpSurfacesRoot = resolve(requiredOption(options.mcp_surfaces_root, 'mcp-surfaces-root'));
-  const executable = resolve(options.node_path ?? process.execPath);
+  const executable = resolveWatchdogNodePath({ node_path: options.node_path });
   const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
   const entrypoint = join(packageRoot, 'dist', 'main.js');
   const intervalMinutes = options.watchdog_interval_minutes ?? 1;

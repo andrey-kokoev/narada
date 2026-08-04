@@ -8,7 +8,7 @@ import {
   createPcSiteSurfaceService,
   pcSiteSurfaceAuthorityRef,
 } from '../src/index.js';
-import { pcSiteSurfaceServiceWatchdogPlan } from '../src/main.js';
+import { pcSiteSurfaceServiceWatchdogPlan, resolveWatchdogNodePath } from '../src/main.js';
 
 test('watchdog plan is a hidden bounded direct-Node ensure action', () => {
   const plan = pcSiteSurfaceServiceWatchdogPlan({
@@ -25,6 +25,27 @@ test('watchdog plan is a hidden bounded direct-Node ensure action', () => {
   assert.equal(plan.interval_minutes, 2);
   assert.equal(plan.hidden, true);
   assert.equal(plan.multiple_instances, 'IgnoreNew');
+});
+
+test('watchdog node resolution replaces an ephemeral fnm multishell path with its stable installation', () => {
+  const fnmRoot = resolveForTest('C:/Users/test/AppData/Roaming/fnm');
+  const stablePath = resolveForTest(`${fnmRoot}/node-versions/v22.22.3/installation/node.exe`);
+  const resolved = resolveWatchdogNodePath({
+    exec_path: resolveForTest('C:/Users/test/AppData/Local/fnm_multishells/session/node.exe'),
+    node_version: 'v22.22.3',
+    environment: { FNM_DIR: fnmRoot },
+    exists: (path) => path === stablePath,
+  });
+  assert.equal(resolved, stablePath);
+  assert.throws(
+    () => resolveWatchdogNodePath({
+      exec_path: resolveForTest('C:/Users/test/AppData/Local/fnm_multishells/session/node.exe'),
+      node_version: 'v22.22.3',
+      environment: {},
+      exists: () => false,
+    }),
+    /pc_site_surface_service_stable_node_path_required/,
+  );
 });
 
 test('PC Site surface service authenticates calls and shares factory state only within authority', async () => {

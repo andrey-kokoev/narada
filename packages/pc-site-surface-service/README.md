@@ -46,6 +46,11 @@ starts it immediately, and is safe to repeat. `watchdog-status` compares the
 installed action, arguments, hidden posture, and multiple-instance policy with
 the canonical plan instead of treating task existence as sufficient.
 
+When `--node-path` is omitted, an FNM multishell executable is resolved to the
+matching stable `FNM_DIR/node-versions/<version>/installation/node.exe` path.
+If no stable installation can be proven, watchdog planning refuses the
+ephemeral path instead of registering a task that may disappear.
+
 `replace-generation` is an authenticated control-plane actuator, not a carrier
 tool and not an admission shortcut. The caller selects an existing instance
 and names its expected active generation. The service rereads the authoritative

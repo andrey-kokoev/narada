@@ -19,8 +19,12 @@ test('live PC Site runtime shares sessions, swaps generation without carrier res
   const { createNarsCapabilityGateway } = await import(new URL('../../nars-capability-gateway/src/capability-gateway.ts', import.meta.url).href);
   const siteRoot = resolve(process.env.NARADA_PC_SITE_ROOT ?? 'C:/Users/Andrey/Narada');
   const mcpSurfacesRoot = resolve(process.env.NARADA_MCP_SURFACES_WORKSPACE_ROOT ?? 'D:/code/mcp-surfaces');
-  const nodePath = resolve(process.env.NARADA_PC_SITE_SURFACE_SERVICE_NODE_PATH ?? process.execPath);
-  const commandOptions = { site_root: siteRoot, mcp_surfaces_root: mcpSurfacesRoot, node_path: nodePath };
+  const configuredNodePath = process.env.NARADA_PC_SITE_SURFACE_SERVICE_NODE_PATH;
+  const commandOptions = {
+    site_root: siteRoot,
+    mcp_surfaces_root: mcpSurfacesRoot,
+    ...(configuredNodePath ? { node_path: resolve(configuredNodePath) } : {}),
+  };
   await installPcSiteSurfaceServiceWatchdog(commandOptions);
   const initialWatchdog = await waitForWatchdogReady(commandOptions, 20_000);
   assert.equal(initialWatchdog.coherent, true);
