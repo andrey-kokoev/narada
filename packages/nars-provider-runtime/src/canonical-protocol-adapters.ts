@@ -171,11 +171,12 @@ function parseCodexMcpResponse(response: any): any {
 function parseNaradaToolCall(content: any): any {
   const text = stripAnsi(String(content ?? '')).trim();
   if (!text) return null;
+  const unfenced = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
   const candidates = [
     text,
-    text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim(),
-    extractJsonObject(text),
-  ].filter(Boolean);
+    unfenced,
+    extractLeadingJsonObject(unfenced),
+  ].filter((candidate, index, values): candidate is string => Boolean(candidate) && values.indexOf(candidate) === index);
   for (const candidate of candidates) {
     try {
       const parsed = JSON.parse(candidate);
@@ -205,10 +206,32 @@ function isPotentialNaradaToolCallText(content: any): any {
     || compactPrefix.startsWith('{"narada_tool_call"');
 }
 
-function extractJsonObject(text: any): any {
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
-  return start >= 0 && end > start ? text.slice(start, end + 1) : null;
+function extractLeadingJsonObject(text: any): string | null {
+  const value = String(text ?? '').trimStart();
+  if (!value.startsWith('{')) return null;
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (char === '\\') escaped = true;
+      else if (char === '"') inString = false;
+      continue;
+    }
+    if (char === '"') {
+      inString = true;
+      continue;
+    }
+    if (char === '{') depth += 1;
+    else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return value.slice(0, index + 1);
+      if (depth < 0) return null;
+    }
+  }
+  return null;
 }
 
 function buildOpenAiChatRequest(messages: any, tools: any, options: AnyRecord = {}): any {

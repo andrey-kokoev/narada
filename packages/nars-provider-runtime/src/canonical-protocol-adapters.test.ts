@@ -10,6 +10,7 @@ import {
   buildCodexMcpRequest,
   buildCodexSubprocessEnv,
   buildOpenAiChatRequest,
+  parseNaradaToolCall,
 } from './canonical-protocol-adapters.js';
 
 test('canonical protocol shapers refuse missing planned coordinates', () => {
@@ -27,6 +28,24 @@ test('canonical protocol shapers refuse missing planned coordinates', () => {
     () => buildCodexMcpRequest([{ role: 'user', content: 'hello' }], [], { model: 'gpt-5.5' }),
     /canonical_invocation_site_root_required/,
   );
+});
+
+test('Codex carrier protocol admits the first leading tool envelope even when the model appends prose', () => {
+  assert.deepEqual(parseNaradaToolCall([
+    '{"narada_tool_call":{"name":"mailbox_fact_show","arguments":{"fact_id":"fact-1"}}}',
+    '',
+    '{"narada_tool_call":{"name":"mailbox_fact_show","arguments":{"scope_id":"mailbox","fact_id":"fact-1"}}}',
+    'I will inspect another source next.',
+  ].join('\n')), {
+    name: 'mailbox_fact_show',
+    arguments: { fact_id: 'fact-1' },
+  });
+});
+
+test('Codex carrier protocol does not execute a tool envelope buried after prose', () => {
+  assert.equal(parseNaradaToolCall(
+    'Narrative first.\n{"narada_tool_call":{"name":"mailbox_fact_show","arguments":{}}}',
+  ), null);
 });
 
 test('OpenAI-compatible shaping uses only explicit provider, endpoint, model, and credential', () => {
