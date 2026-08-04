@@ -47,10 +47,13 @@ export class FileViewStore {
   }
 
   private async linkMessage(linkPath: string, messageId: string): Promise<void> {
-    const target = relative(join(linkPath, ".."), this.messageDir(messageId));
+    const messagePath = this.messageDir(messageId);
+    const target = process.platform === "win32"
+      ? messagePath
+      : relative(join(linkPath, ".."), messagePath);
 
     await this.unlinkMessage(linkPath);
-    await symlink(target, linkPath, "dir");
+    await symlink(target, linkPath, process.platform === "win32" ? "junction" : "dir");
   }
 
   private async unlinkMessage(linkPath: string): Promise<void> {

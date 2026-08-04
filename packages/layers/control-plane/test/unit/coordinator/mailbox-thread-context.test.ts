@@ -1,9 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mkdtempSync, writeFileSync, mkdirSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { rm } from "node:fs/promises";
 import { ThreadContextHydrator } from "../../../src/coordinator/mailbox-thread-context.js";
+
+function createDirectoryLink(targetPath: string, linkPath: string): void {
+  if (process.platform === "win32") {
+    symlinkSync(targetPath, linkPath, "junction");
+    return;
+  }
+
+  symlinkSync(relative(dirname(linkPath), targetPath), linkPath, "dir");
+}
 
 describe("ThreadContextHydrator", () => {
   let tmpDir: string;
@@ -70,11 +79,14 @@ describe("ThreadContextHydrator", () => {
     writeFileSync(join(messagesDir, encodeURIComponent(messageId1), "record.json"), JSON.stringify(record1));
     writeFileSync(join(messagesDir, encodeURIComponent(messageId2), "record.json"), JSON.stringify(record2));
 
-    // Create relative symlinks as the compiler does
-    const rel1 = join("..", "..", "..", "messages", encodeURIComponent(messageId1));
-    const rel2 = join("..", "..", "..", "messages", encodeURIComponent(messageId2));
-    symlinkSync(rel1, join(viewsDir, encodeURIComponent(messageId1)), "dir");
-    symlinkSync(rel2, join(viewsDir, encodeURIComponent(messageId2)), "dir");
+    createDirectoryLink(
+      join(messagesDir, encodeURIComponent(messageId1)),
+      join(viewsDir, encodeURIComponent(messageId1)),
+    );
+    createDirectoryLink(
+      join(messagesDir, encodeURIComponent(messageId2)),
+      join(viewsDir, encodeURIComponent(messageId2)),
+    );
 
     const ctx = await hydrator.hydrate(conversationId, "mailbox-1", 3);
 
@@ -110,17 +122,15 @@ describe("ThreadContextHydrator", () => {
 
     mkdirSync(join(messagesDir, encodeURIComponent(messageId)), { recursive: true });
     writeFileSync(join(messagesDir, encodeURIComponent(messageId), "record.json"), JSON.stringify(record));
-    symlinkSync(
-      join("..", "..", "..", "messages", encodeURIComponent(messageId)),
+    createDirectoryLink(
+      join(messagesDir, encodeURIComponent(messageId)),
       join(viewsDir, encodeURIComponent(messageId)),
-      "dir",
     );
 
-    // Also add a symlink to a missing message
-    symlinkSync(
-      join("..", "..", "..", "messages", "missing-msg"),
+    // Also add a directory link to a missing message
+    createDirectoryLink(
+      join(messagesDir, "missing-msg"),
       join(viewsDir, "missing-msg"),
-      "dir",
     );
 
     const ctx = await hydrator.hydrate(conversationId, "mailbox-1", 1);

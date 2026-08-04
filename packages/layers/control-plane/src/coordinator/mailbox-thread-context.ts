@@ -8,7 +8,7 @@
  */
 
 import { readFile, readdir, readlink } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { basename, join, resolve } from "node:path";
 import type { NormalizedMessage } from "../types/normalized.js";
 
 /** Mail-vertical thread context hydrated from the compiler's filesystem views. */
@@ -45,7 +45,7 @@ export class ThreadContextHydrator {
   /**
    * Hydrate thread context from the compiler's filesystem views.
    *
-   * Reads `views/by-thread/{conversation_id}/members/` symlinks,
+   * Reads `views/by-thread/{conversation_id}/members/` directory links,
    * resolves each to its `messages/{message_id}/record.json`,
    * and returns the parsed messages sorted by `received_at` ascending.
    */
@@ -79,13 +79,11 @@ export class ThreadContextHydrator {
       let messageId: string;
       try {
         const linkTarget = await readlink(linkPath);
-        // linkTarget is relative: ../../messages/{message_id}
+        // POSIX symlinks are relative; Windows junction targets are absolute.
         const resolved = resolve(threadDir, linkTarget);
-        // Derive message_id from the basename of the resolved messages path
-        const parts = resolved.split("/");
-        messageId = decodeURIComponent(parts[parts.length - 1]!);
+        messageId = decodeURIComponent(basename(resolved));
       } catch {
-        // If readlink fails, the entry may not be a symlink (or was cleaned up).
+        // If readlink fails, the entry may not be a directory link (or was cleaned up).
         // Try to treat the entry name as the message id.
         messageId = decodeURIComponent(entry);
       }
