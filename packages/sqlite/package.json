@@ -1,14 +1,16 @@
 {
   "name": "@narada-core/sqlite",
   "version": "0.1.0",
-  "description": "Node.js built-in SQLite binding wrapper with a better-sqlite3-compatible API",
+  "description": "Runtime-neutral SQLite adapter for Node.js and Bun with a better-sqlite3-compatible API",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "type": "module",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
+      "bun": "./dist/index-bun.js",
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "default": "./dist/index.js"
     }
   },
   "files": [
@@ -17,7 +19,8 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "repository": {
     "type": "git",
@@ -27,7 +30,8 @@
   "keywords": [
     "narada",
     "sqlite",
-    "node:sqlite"
+    "node:sqlite",
+    "bun:sqlite"
   ],
   "author": "Narada <team@narada.dev>",
   "license": "MIT",
@@ -36,7 +40,11 @@
   },
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "pnpm run test:node",
+    "test:node": "pnpm build && node --experimental-strip-types --test test/node.test.ts",
+    "test:bun": "pnpm build && bun test test/bun.test.ts",
+    "test:conformance": "pnpm run test:node && pnpm run test:bun"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

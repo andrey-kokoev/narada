@@ -1,15 +1,14 @@
 # @narada-core/sqlite
 
-A thin wrapper around Node.js's built-in `node:sqlite` module that exposes a
-`better-sqlite3`-compatible API surface.
+A thin adapter over Node.js's built-in `node:sqlite` and Bun's built-in
+`bun:sqlite` modules that exposes one `better-sqlite3`-compatible API surface.
 
-This lets the rest of the monorepo use a single SQLite driver without relying
-on a native add-on.
+The runtime selects its backend through package export conditions. Consumers
+use one import and contain no runtime checks.
 
 ## Requirements
 
-- Node.js >= 22.0.0 (`node:sqlite` is available experimentally in Node 22 and
-  later).
+- Node.js >= 22.0.0, or Bun >= 1.3.0.
 
 ## API
 
