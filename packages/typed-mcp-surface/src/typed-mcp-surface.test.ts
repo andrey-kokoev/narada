@@ -9,6 +9,15 @@ import { fileURLToPath } from 'node:url';
 import { assertCanonicalSiteLocus } from '@narada-core/site-common-tools/site-locus-shim';
 
 const root = dirname(fileURLToPath(import.meta.url));
+const generatorPath = join(root, 'generate-carrier-mcp-config.ts');
+const generatorCommand = process.execPath;
+// Node needs tsx to load the TypeScript generator; Bun executes it directly.
+const generatorPrefix = process.versions.bun ? [] : ['--import', 'tsx'];
+
+function runGenerator(args: string[]) {
+  return spawnSync(generatorCommand, [...generatorPrefix, generatorPath, ...args], { encoding: 'utf8' });
+}
+
 const scripts = [
   'adr-mcp-server.ts',
   'ee-mcp-server.ts',
@@ -64,8 +73,7 @@ test('carrier projections derive only from registry authority', () => {
       mcpServers: { 'stale-fixture': { command: 'node', args: ['C:/removed/legacy-server.js'] } },
     }, null, 2)}\n`, 'utf8');
 
-    const generator = join(root, 'generate-carrier-mcp-config.js');
-    const writeResult = spawnSync(process.execPath, ['--import', 'tsx', generator, '--site-root', siteRoot, '--carrier', 'all', '--write'], { encoding: 'utf8' });
+    const writeResult = runGenerator(['--site-root', siteRoot, '--carrier', 'all', '--write']);
     assert.equal(writeResult.status, 0, writeResult.stderr);
     for (const carrier of ['kimi', 'codex']) {
       const projection = JSON.parse(readFileSync(join(siteRoot, '.ai', 'mcp', 'carriers', `narada-andrey-user-${carrier}.mcp.json`), 'utf8'));
@@ -84,21 +92,19 @@ test('carrier projections derive only from registry authority', () => {
         assert.equal(projection.carrier_policy.kimi_permission_projection.manual_tool_count, 1);
       }
     }
-    const checkResult = spawnSync(process.execPath, ['--import', 'tsx', generator, '--site-root', siteRoot, '--carrier', 'all', '--check'], { encoding: 'utf8' });
+    const checkResult = runGenerator(['--site-root', siteRoot, '--carrier', 'all', '--check']);
     assert.equal(checkResult.status, 0, checkResult.stderr);
 
     const kimiConfigPath = join(siteRoot, 'kimi-config.toml');
     writeFileSync(kimiConfigPath, 'default_permission_mode = "manual"\r\n', 'utf8');
     const materializeArgs = [
-      '--import', 'tsx',
-      generator,
       '--site-root', siteRoot,
       '--carrier', 'kimi',
       '--kimi-config-path', kimiConfigPath,
       '--materialize-kimi-permissions',
       '--write',
     ];
-    const materializeResult = spawnSync(process.execPath, materializeArgs, { encoding: 'utf8' });
+    const materializeResult = runGenerator(materializeArgs);
     assert.equal(materializeResult.status, 0, materializeResult.stderr);
     const materialized = readFileSync(kimiConfigPath, 'utf8');
     assert.match(materialized, /default_permission_mode = "manual"/);
@@ -107,20 +113,18 @@ test('carrier projections derive only from registry authority', () => {
     assert.equal(materialized.includes('\r\n'), true);
     assert.doesNotMatch(materialized.replace(/\r\n/g, ''), /\n/);
 
-    const repeatMaterializeResult = spawnSync(process.execPath, materializeArgs, { encoding: 'utf8' });
+    const repeatMaterializeResult = runGenerator(materializeArgs);
     assert.equal(repeatMaterializeResult.status, 0, repeatMaterializeResult.stderr);
     const repeatedMaterialized = readFileSync(kimiConfigPath, 'utf8');
     assert.equal((repeatedMaterialized.match(/BEGIN NARADA GENERATED KIMI MCP PERMISSIONS/g) ?? []).length, 1);
 
-    const materializeCheck = spawnSync(process.execPath, [
-      '--import', 'tsx',
-      generator,
+    const materializeCheck = runGenerator([
       '--site-root', siteRoot,
       '--carrier', 'kimi',
       '--kimi-config-path', kimiConfigPath,
       '--materialize-kimi-permissions',
       '--check',
-    ], { encoding: 'utf8' });
+    ]);
     assert.equal(materializeCheck.status, 0, materializeCheck.stderr);
   } finally {
     rmSync(siteRoot, { recursive: true, force: true });
