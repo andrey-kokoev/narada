@@ -14,9 +14,12 @@
     "@narada-core/agent-identity": "workspace:*"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test src/agent-start-renderer.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
+    "test": "bun test src/agent-start-renderer.test.ts",
+    "test:node": "node --import tsx --test src/agent-start-renderer.test.ts",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "description": "Shared renderer for Narada agent-start pre-carrier launch output",
   "license": "MIT",
@@ -26,6 +29,7 @@
     "directory": "packages/agent-start-renderer"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
