@@ -31,9 +31,12 @@
     "@narada-core/nars-client-projection-contract": "workspace:*"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test src/*.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
+    "test": "bun test src",
+    "test:node": "node --import tsx --test src/*.test.ts",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "description": "Runtime-neutral terminal projection without session execution",
   "license": "MIT",
@@ -43,6 +46,7 @@
     "directory": "packages/carrier-terminal-projection"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
