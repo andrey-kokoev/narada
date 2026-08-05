@@ -1,5 +1,13 @@
 # @narada-core/charters
 
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The package-local Vitest
+config inlines `zod` for Bun because Vitest's Node worker otherwise exposes
+the CommonJS shape incorrectly. The `build:node`, `typecheck:node`, and
+`test:node` scripts retain Node compatibility; publication admission remains
+an explicit Node-only `prepublishOnly` step.
+
 Charter contracts, policy profiles, and runtime bindings for Narada.
 
 ## Role
