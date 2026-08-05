@@ -43,7 +43,7 @@ export default defineConfig({
     hookTimeout: 30000,
     server: {
       deps: {
-        inline: isBun ? ['@narada-core/sqlite'] : [],
+        inline: isBun ? ['@narada-core/sqlite', 'zod'] : [],
       },
     },
   },

@@ -22,6 +22,8 @@ npm install @narada-core/control-plane
 pnpm add @narada-core/control-plane
 ```
 
+Local build, typecheck, and test scripts default to Bun. Node remains an explicit compatibility path via `build:node`, `typecheck:node`, `test:node`, `test:unit:node`, `test:integration:node`, `generate:config-schema:node`, and `test:reactor-sqlite:node`.
+
 ## Usage (Mailbox Vertical)
 
 ```typescript
