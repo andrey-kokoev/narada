@@ -55,21 +55,27 @@
   },
   "scripts": {
     "prebuild": "pnpm --filter @narada-core/agent-context-mcp --filter @narada-core/agent-start-renderer build",
-    "build": "tsc -p tsconfig.build.json",
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "prebuild:node": "pnpm --filter @narada-core/agent-context-mcp --filter @narada-core/agent-start-renderer build",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
     "build:test-dependencies": "pnpm --filter @narada-core/operator-surface-runtime-contract --filter @narada-core/invokable-intelligence-management build",
     "syntaxcheck": "node --import tsx --check src/narada-agent-start.ts && node --import tsx --check bin/verify-registered-site-launchers.ts",
-    "generate:result-schema": "node --import tsx scripts/generate-result-schema.ts",
-    "check:result-contract": "node --import tsx scripts/generate-result-schema.ts --check",
+    "generate:result-schema": "bun scripts/generate-result-schema.ts",
+    "generate:result-schema:node": "node --import tsx scripts/generate-result-schema.ts",
+    "check:result-contract": "bun scripts/generate-result-schema.ts --check",
+    "check:result-contract:node": "node --import tsx scripts/generate-result-schema.ts --check",
     "pretest": "pnpm run build:test-dependencies && pnpm run build",
     "test": "bun test/run-agent-start-tests.ts",
-    "pretest:node": "pnpm run build:test-dependencies && pnpm run build",
+    "pretest:node": "pnpm run build:test-dependencies && pnpm run build:node",
     "test:node": "node --import tsx test/run-agent-start-tests.ts",
     "test:launcher-contract": "bun test/run-launcher-registry-contract-shards.ts",
     "test:launcher-contract:node": "node --import tsx test/run-launcher-registry-contract-shards.ts",
     "verify": "bun bin/verify-registered-site-launchers.ts",
     "verify:node": "node --import tsx bin/verify-registered-site-launchers.ts",
     "test:option-contract": "bun test/run-option-contract-shards.ts",
-    "test:option-contract:node": "node --import tsx test/run-option-contract-shards.ts"
+    "test:option-contract:node": "node --import tsx test/run-option-contract-shards.ts",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "tsx": "^4.21.0",
@@ -84,6 +90,7 @@
     "directory": "packages/agent-start"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
