@@ -74,3 +74,7 @@ tool authority or replace the carrier action-admission boundary.
 pnpm --filter @narada-core/mcp-fabric test
 pnpm --filter @narada-core/mcp-fabric typecheck
 ```
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain explicit Node compatibility
+paths; MCP fabric authority and lifecycle behavior are unchanged.
