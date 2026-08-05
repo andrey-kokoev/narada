@@ -451,6 +451,7 @@ async function startBunEventStreamProjection({ childStdin, eventHub, host, port,
   const subscribeRequests: any = [];
   const readRequests: any = [];
   const replayBatches: any = [];
+  const sockets: any = new Set();
   let stopPromise: any = null;
   let listening: any = true;
   let forceCloseConnections: any = false;
@@ -481,6 +482,7 @@ async function startBunEventStreamProjection({ childStdin, eventHub, host, port,
     },
     websocket: {
       open(socket: any) {
+        sockets.add(socket);
         const send: any = (payload: any) => socket.send(JSON.stringify(payload));
         socket.data.connection = createEventStreamConnection({
           childStdin,
@@ -498,6 +500,7 @@ async function startBunEventStreamProjection({ childStdin, eventHub, host, port,
         socket.data.connection?.receive(text);
       },
       close(socket: any) {
+        sockets.delete(socket);
         socket.data.connection?.close();
       },
     },
@@ -519,10 +522,20 @@ async function startBunEventStreamProjection({ childStdin, eventHub, host, port,
     },
     close(callback?: any) {
       if (!stopPromise) {
-        stopPromise = Promise.resolve(bunServer.stop(forceCloseConnections)).then(() => {
-          if (!listening) return;
-          listening = false;
-          for (const listener of closeListeners) listener();
+        stopPromise = new Promise((resolve, reject) => {
+          setTimeout(() => {
+            try {
+              const stopped = bunServer.stop(forceCloseConnections);
+              // Bun's Node-compatibility worker may leave Server.stop() pending after socket close;
+              // the stop operation is initiated synchronously, so adapter closure must not await it.
+              if (stopped && typeof stopped.then === 'function') void stopped.catch(() => undefined);
+              listening = false;
+              for (const listener of closeListeners) listener();
+              resolve(undefined);
+            } catch (error) {
+              reject(error);
+            }
+          }, 0);
         });
       }
       const stopped: any = stopPromise;
@@ -538,6 +551,7 @@ async function startBunEventStreamProjection({ childStdin, eventHub, host, port,
     replayBatches,
     closeConnections() {
       forceCloseConnections = true;
+      for (const socket of sockets) socket.close();
     },
   };
 }
