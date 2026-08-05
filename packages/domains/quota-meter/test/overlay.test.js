@@ -33,6 +33,37 @@ test('quota projection maps provider windows into the generic overlay document',
   assert.equal(document.actions[0].id, 'refresh');
 });
 
+test('quota projection preserves the one-reset glide scenario as a second row', () => {
+  const document = createQuotaMeterOverlayDocument({
+    providers: [{
+      displayName: 'Codex',
+      status: 'ok',
+      windows: [{
+        label: '7d',
+        usedPercent: 63,
+        remainingPercent: 37,
+        glidePath: {
+          glidePathFactor: 1.53,
+          status: 'over',
+          withOneReset: {
+            capacityMultiplier: 2,
+            glidePathFactor: 0.76,
+            status: 'under',
+          },
+        },
+      }],
+    }],
+  });
+
+  assert.deepEqual(document.rows.map((row) => row.label), ['Codex 7d', 'Codex 7d@1 reset']);
+  assert.match(document.rows[1].value, /31\.5% used/);
+  assert.match(document.rows[1].value, /68\.5% left/);
+  assert.match(document.rows[1].value, /left · 0\.76$/);
+  assert.doesNotMatch(document.rows[1].value, /glide|\((?:over|under)\)/);
+  assert.match(document.rows[1].tooltip, /glide factor/);
+  assert.equal(document.rows[1].tone, 'success');
+});
+
 test('quota projection publishes through window-overlay-core state paths', async () => {
   const stateRoot = await mkdtemp(path.join(os.tmpdir(), 'quota-meter-overlay-'));
   try {

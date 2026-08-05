@@ -20,7 +20,7 @@ test('creates a versioned generic document with controlled actions', () => {
   const document = createOverlayDocument({
     id: 'example',
     title: 'Example',
-    rows: [{ label: 'State', value: 'ready', tone: 'success' }],
+    rows: [{ label: 'State', value: 'ready', tone: 'success', tooltip: 'State details' }],
     actions: [
       { id: 'open', label: 'Open', kind: 'open_url', target: 'http://127.0.0.1:61729/' },
       { id: 'restart', label: 'Restart', icon: '↻', tooltip: 'Restart overlay', kind: 'restart' },
@@ -28,6 +28,7 @@ test('creates a versioned generic document with controlled actions', () => {
   });
   assert.equal(document.schema, OVERLAY_DOCUMENT_SCHEMA);
   assert.equal(document.rows[0].tone, 'success');
+  assert.equal(document.rows[0].tooltip, 'State details');
   assert.equal(document.actions[0].kind, 'open_url');
   assert.equal(document.actions[1].kind, 'restart');
   assert.equal(document.actions[1].icon, '↻');
@@ -123,17 +124,31 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /New-OpacityButton/);
   assert.match(source, /\$header\.ColumnDefinitions/);
   assert.match(source, /\$header\.Height = 36/);
+  assert.match(source, /\$line\.ColumnDefinitions\[0\]\.Width = New-Object Windows\.GridLength\(1, \[Windows\.GridUnitType\]::Auto\)/);
+  assert.match(source, /\$line\.ColumnDefinitions\[1\]\.Width = New-Object Windows\.GridLength\(1, \[Windows\.GridUnitType\]::Star\)/);
+  assert.match(source, /\$value\.TextWrapping = 'Wrap'/);
+  assert.match(source, /\$value\.TextTrimming = 'None'/);
+  assert.match(source, /\$value\.HorizontalAlignment = 'Stretch'/);
+  assert.match(source, /\$row\.tooltip/);
   assert.match(source, /\$header\.Cursor = \[Windows\.Input\.Cursors\]::SizeAll/);
   assert.match(source, /\$titlePanel\.Cursor = \[Windows\.Input\.Cursors\]::SizeAll/);
   assert.match(source, /\$headerActions\.HorizontalAlignment = 'Right'/);
   assert.match(source, /GetForegroundWindow/);
+  assert.match(source, /GetWindowText/);
   assert.match(source, /ShowWindow/);
   assert.match(source, /SetForegroundWindow/);
   assert.match(source, /AttachThreadInput/);
   assert.match(source, /ForceForegroundWindow/);
   assert.match(source, /function Focus-Overlay/);
+  assert.match(source, /\$script:lastFocusStamp/);
+  assert.match(source, /\$script:lastDocumentStamp/);
+  assert.match(source, /\$script:lastRefreshStamp/);
+  assert.match(source, /Remove-Item -LiteralPath \$focusPath/);
   assert.match(source, /GetWindowThreadProcessId/);
   assert.match(source, /Test-WindowsTerminalActive/);
+  assert.match(source, /OverlayWindowTitlePrefix/);
+  assert.match(source, /function Test-NaradaOverlayActive/);
+  assert.match(source, /\(Test-NaradaOverlayActive\)/);
   assert.match(source, /\[bool\]\$window\.IsActive/);
   assert.match(source, /function Set-OverlayVisibility/);
   assert.match(source, /visibilityTimer/);
@@ -211,6 +226,15 @@ test('PowerShell lifecycle scripts do not shadow the automatic PID variable', as
   assert.doesNotMatch(start, /\$focusPath/);
   assert.doesNotMatch(start, /Set-Content -Path \$focusPath/);
   assert.match(stop, /Remove-Item \$focusPath/);
+});
+
+test('existing overlay hosts are replaced when the requested visibility policy changes', async () => {
+  const start = await readFile(new URL('./Start-WindowSurfaceOverlay.ps1', import.meta.url), 'utf8');
+  assert.match(start, /visibilityPolicyPath/);
+  assert.match(start, /storedPolicy/);
+  assert.match(start, /Stop-HostForPolicyChange \$existing/);
+  assert.match(start, /window_surface_overlay_policy_change_timeout/);
+  assert.match(start, /-VisibilityPolicy/);
 });
 
 test('focus requests refuse stopped overlays without leaving a signal', async () => {

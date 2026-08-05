@@ -13,6 +13,7 @@ export interface OverlayRow {
   label: string;
   value: string;
   tone?: OverlayTone;
+  tooltip?: string;
   kind?: 'open_url';
   target?: string;
 }
@@ -220,6 +221,7 @@ function normalizeRows(rows: unknown): OverlayRow[] {
     if (!label) throw new Error('overlay_row_label_required');
     const tone = rowRecord.tone === undefined ? 'default' : String(rowRecord.tone);
     if (!VALID_TONES.has(tone)) throw new Error('overlay_row_tone_invalid');
+    const tooltip = optionalText(rowRecord.tooltip);
     const kind = optionalText(rowRecord.kind);
     const target = optionalText(rowRecord.target);
     if (kind && kind !== 'open_url') throw new Error('overlay_row_kind_invalid');
@@ -237,6 +239,7 @@ function normalizeRows(rows: unknown): OverlayRow[] {
       label,
       value: optionalText(rowRecord.value) ?? '',
       tone: tone as OverlayTone,
+      ...(tooltip ? { tooltip } : {}),
       ...(kind ? { kind: 'open_url' as const, target: target ?? undefined } : {}),
     };
   });

@@ -14,6 +14,7 @@ import {
 } from '@narada-core/window-overlay-core';
 
 export const QUOTA_METER_OVERLAY_ID = 'quota-meter';
+const GLIDE_FACTOR_TOOLTIP = 'The final number is the glide factor: projected usage pace relative to sustainable pace.';
 
 const sourceDirectory = path.dirname(fileURLToPath(import.meta.url));
 const workerScriptPath = path.join(sourceDirectory, 'overlay-worker.js');
@@ -62,6 +63,19 @@ function toneForStatus(status) {
   return 'warning';
 }
 
+function oneResetGlideView(window, glide, reset) {
+  const multiplier = reset.capacityMultiplier || 2;
+  const usedPercent = window.usedPercent === null || window.usedPercent === undefined
+    ? null
+    : window.usedPercent / multiplier;
+  const remainingPercent = usedPercent === null ? null : 100 - usedPercent;
+  return {
+    ...glide,
+    usedPercent,
+    remainingPercent,
+  };
+}
+
 function providerRows(result) {
   const rows = [];
   const name = result.displayName || result.name || result.id || 'Provider';
@@ -78,9 +92,22 @@ function providerRows(result) {
     rows.push({
       label: name + ' ' + window.label,
       value: percent(window.usedPercent) + ' used · ' + percent(window.remainingPercent)
-        + ' left · glide ' + factor + ' (' + (glide.status || 'unknown') + ')',
+        + ' left · ' + factor,
       tone: toneForStatus(glide.status),
+      tooltip: GLIDE_FACTOR_TOOLTIP,
     });
+
+    const reset = glide.withOneReset;
+    if (reset && reset.glidePathFactor !== null && reset.glidePathFactor !== undefined) {
+      const resetGlide = oneResetGlideView(window, glide, reset);
+      rows.push({
+        label: name + ' ' + window.label + '@1 reset',
+        value: percent(resetGlide.usedPercent) + ' used · ' + percent(resetGlide.remainingPercent)
+          + ' left · ' + Number(reset.glidePathFactor).toFixed(2),
+        tone: toneForStatus(reset.status),
+        tooltip: GLIDE_FACTOR_TOOLTIP,
+      });
+    }
   }
   if (rows.length === 0) rows.push({ label: name, value: 'No quota windows reported', tone: 'muted' });
   return rows;

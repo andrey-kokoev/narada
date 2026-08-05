@@ -6,6 +6,7 @@ export interface OverlayRow {
   label: string;
   value: string;
   tone?: OverlayTone;
+  tooltip?: string;
   kind?: 'open_url';
   target?: string;
 }

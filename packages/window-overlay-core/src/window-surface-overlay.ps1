@@ -20,6 +20,7 @@ $restartCommandPath = Get-OverlayPath 'restart.command.json'
 $actionStatePath = Get-OverlayPath 'action-state.json'
 $actionRunnerPath = Join-Path $PSScriptRoot 'Invoke-WindowSurfaceOverlayAction.ps1'
 $hostStderrPath = Get-OverlayPath 'host.stderr.log'
+$script:OverlayWindowTitlePrefix = 'Narada Overlay: '
 trap {
     ($_ | Out-String) | Set-Content -Path $hostStderrPath -Encoding UTF8
     exit 1
@@ -227,6 +228,7 @@ function Apply-ActionState {
 Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase
 Add-Type @'
 using System;
+using System.Text;
 using System.Runtime.InteropServices;
 
 public static class NaradaWindowSurfaceOverlayNative {
@@ -264,6 +266,9 @@ public static class NaradaWindowSurfaceOverlayNative {
 
     [DllImport("user32.dll")]
     public static extern IntPtr GetForegroundWindow();
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
 
     [DllImport("user32.dll")]
     public static extern bool ShowWindow(IntPtr hWnd, int command);
@@ -427,12 +432,21 @@ function Test-WindowsTerminalActive {
     }
 }
 
+function Test-NaradaOverlayActive {
+    $foregroundWindow = [NaradaWindowSurfaceOverlayNative]::GetForegroundWindow()
+    if ($foregroundWindow -eq [IntPtr]::Zero) { return $false }
+
+    $windowTitle = [System.Text.StringBuilder]::new(256)
+    [void][NaradaWindowSurfaceOverlayNative]::GetWindowText($foregroundWindow, $windowTitle, $windowTitle.Capacity)
+    return $windowTitle.ToString().StartsWith($script:OverlayWindowTitlePrefix, [StringComparison]::Ordinal)
+}
+
 function Set-OverlayVisibility {
     if ($null -eq $window) { return }
-    # Keep the overlay visible while it owns focus. Without this clause, clicking or
-    # dragging a pinned overlay makes the overlay itself the foreground window,
-    # which fails the Windows Terminal-only policy and hides the window mid-action.
-    $visible = $VisibilityPolicy -eq 'always' -or [bool]$window.IsActive -or -not [bool]$window.Topmost -or (Test-WindowsTerminalActive)
+    # All Narada overlays share one desktop surface. Keep the group visible while
+    # any member owns focus; otherwise the previous member disappears as soon as
+    # the operator moves focus from one overlay to another.
+    $visible = $VisibilityPolicy -eq 'always' -or [bool]$window.IsActive -or -not [bool]$window.Topmost -or (Test-WindowsTerminalActive) -or (Test-NaradaOverlayActive)
     $desired = if ($visible) { [Windows.Visibility]::Visible } else { [Windows.Visibility]::Hidden }
     if ($window.Visibility -ne $desired) { $window.Visibility = $desired }
 }
@@ -441,7 +455,7 @@ $preferences = Get-Preferences
 $script:PositionPreference = $preferences.position
 $script:PositionHydrated = $false
 $window = New-Object Windows.Window
-$window.Title = [string]$Id
+$window.Title = $script:OverlayWindowTitlePrefix + [string]$Id
 $window.Width = 360
 $window.MinWidth = 280
 $window.SizeToContent = 'Height'
@@ -555,22 +569,27 @@ function Render-Document([object]$document) {
         $line = New-Object Windows.Controls.Grid
         $line.Margin = New-Object Windows.Thickness(0, 2, 0, 2)
         $line.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition)) | Out-Null
-        $line.ColumnDefinitions[0].Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Star)
+        $line.ColumnDefinitions[0].Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Auto)
         $line.ColumnDefinitions.Add((New-Object Windows.Controls.ColumnDefinition)) | Out-Null
-        $line.ColumnDefinitions[1].Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Auto)
+        $line.ColumnDefinitions[1].Width = New-Object Windows.GridLength(1, [Windows.GridUnitType]::Star)
         $label = New-Text ([string]$row.label) 11 (New-Brush 255 165 168 180)
         $label.Margin = New-Object Windows.Thickness(0, 2, 12, 2)
+        $label.HorizontalAlignment = 'Left'
         $value = New-Text ([string]$row.value) 13 (Get-ToneBrush ([string]$row.tone))
         $value.TextWrapping = 'Wrap'
+        $value.TextTrimming = 'None'
+        $value.HorizontalAlignment = 'Stretch'
         $value.TextAlignment = 'Right'
         $value.FontWeight = 'SemiBold'
         $value.Margin = New-Object Windows.Thickness(0, 2, 0, 2)
+        $rowTooltip = if ($row.tooltip) { [string]$row.tooltip } else { $null }
+        if ($rowTooltip) { $value.ToolTip = $rowTooltip }
         $rowKind = [string]($row.kind ?? '')
         $rowTarget = [string]($row.target ?? '')
         if ($rowKind -eq 'open_url' -and $rowTarget -match '^https?://') {
             $value.Foreground = Get-ToneBrush ([string]($row.tone ?? 'default'))
             $value.Cursor = [Windows.Input.Cursors]::Hand
-            $value.ToolTip = 'Open ' + $rowTarget
+            $value.ToolTip = if ($rowTooltip) { $rowTooltip } else { 'Open ' + $rowTarget }
             $value.Add_MouseLeftButtonDown({
                 param($sender, $eventArgs)
                 $eventArgs.Handled = $true
@@ -656,10 +675,10 @@ $window.Add_ContentRendered({
 })
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds([Math]::Max(1, $RefreshSeconds))
-$lastDocumentStamp = 0L
-$lastRefreshStamp = 0L
+$script:lastDocumentStamp = 0L
+$script:lastRefreshStamp = 0L
 $focusItem = Get-Item $focusPath -ErrorAction SilentlyContinue
-$lastFocusStamp = if ($focusItem) { $focusItem.LastWriteTimeUtc.Ticks } else { 0L }
+$script:lastFocusStamp = if ($focusItem) { $focusItem.LastWriteTimeUtc.Ticks } else { 0L }
 $timer.Add_Tick({
     $documentItem = Get-Item $documentPath -ErrorAction SilentlyContinue
     $refreshItem = Get-Item $refreshPath -ErrorAction SilentlyContinue
@@ -667,13 +686,18 @@ $timer.Add_Tick({
     $documentStamp = if ($documentItem) { $documentItem.LastWriteTimeUtc.Ticks } else { 0L }
     $refreshStamp = if ($refreshItem) { $refreshItem.LastWriteTimeUtc.Ticks } else { 0L }
     $focusStamp = if ($focusItem) { $focusItem.LastWriteTimeUtc.Ticks } else { 0L }
-    if ($focusStamp -ne $lastFocusStamp) {
-        $lastFocusStamp = $focusStamp
-        Focus-Overlay
+    if ($focusItem -and $focusStamp -ne $script:lastFocusStamp) {
+        try {
+            Remove-Item -LiteralPath $focusPath -Force -ErrorAction Stop
+            $script:lastFocusStamp = 0L
+            Focus-Overlay
+        } catch {
+            $script:lastFocusStamp = $focusStamp
+        }
     }
-    if ($documentStamp -ne $lastDocumentStamp -or $refreshStamp -ne $lastRefreshStamp) {
-        $lastDocumentStamp = $documentStamp
-        $lastRefreshStamp = $refreshStamp
+    if ($documentStamp -ne $script:lastDocumentStamp -or $refreshStamp -ne $script:lastRefreshStamp) {
+        $script:lastDocumentStamp = $documentStamp
+        $script:lastRefreshStamp = $refreshStamp
         Render-Document (Get-Document)
         $window.UpdateLayout()
         if ($script:PositionHydrated) { Restore-OverlayPosition }
