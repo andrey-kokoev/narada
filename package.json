@@ -6,7 +6,8 @@
   "homepage": "https://narada.systems",
   "scripts": {
     "narada:install-shim": "bash scripts/install-narada-shim.sh",
-    "narada:guard-task-db": "bash scripts/guard-task-lifecycle-db.sh",
+    "narada:guard-task-db": "node --import tsx scripts/guard-task-lifecycle-db.ts",
+    "narada:guard-task-db:test": "node --import tsx --test scripts/guard-task-lifecycle-db.test.ts",
     "narada:guard-cli-output": "node --import tsx scripts/cli-output-admission-guard.ts",
     "narada:guard-cli-output:report": "node --import tsx scripts/cli-output-admission-guard.ts --report",
     "narada:guard-process-launch-posture": "node --import tsx scripts/process-launch-posture-guard.ts",

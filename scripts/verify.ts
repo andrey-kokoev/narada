@@ -31,6 +31,7 @@ const steps: Step[] = [
   { name: "Operator surface carrier matrix tests", command: "pnpm operator-surface-carrier-matrix:test" },
   { name: "Typecheck", command: "pnpm typecheck" },
   { name: "Build", command: "pnpm build" },
+  { name: "Task lifecycle snapshot guard tests", command: "pnpm narada:guard-task-db:test" },
   { name: "Task lifecycle snapshot guard", command: "pnpm narada:guard-task-db" },
   { name: "Task-governance smoke tests", command: "pnpm --filter @narada-core/task-governance test:smoke" },
   { name: "Charters tests", command: "pnpm --filter @narada-core/charters test" },
