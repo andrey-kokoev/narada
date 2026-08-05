@@ -4,6 +4,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
+import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import { resolveTaskLifecycleMcpServer } from './task-lifecycle-mcp-resolution.js';
 
 async function withSite(fn: any) : Promise<any>{
@@ -65,4 +66,22 @@ test('task lifecycle MCP resolution has no developer-machine fallback path', asy
   const sourcePath: any = fileURLToPath(new URL('./task-lifecycle-mcp-resolution.ts', import.meta.url));
   const text: any = await readFile(sourcePath, 'utf8');
   assert.equal(text.includes('D:/code/mcp-surfaces'), false);
+});
+
+test('task lifecycle MCP resolution launches a TypeScript server with the active runtime', async () => {
+  await withSite(async (siteRoot: any) => {
+    const localServer: any = join(siteRoot, 'tools', 'task-lifecycle', 'task-mcp-server.ts');
+    await mkdir(join(siteRoot, 'tools', 'task-lifecycle'), { recursive: true });
+    await writeFile(localServer, `const runtimeKind: string = process.versions.bun ? 'bun' : 'node';\nprocess.stdout.write(runtimeKind);\n`);
+
+    const server: any = resolveTaskLifecycleMcpServer(siteRoot, {});
+    const result: any = runHiddenPostureCommandSync(server.command, server.args, {
+      cwd: siteRoot,
+      encoding: 'utf8',
+      posture: 'test_child',
+    });
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, (process.versions as { bun?: string }).bun ? 'bun' : 'node');
+  });
 });

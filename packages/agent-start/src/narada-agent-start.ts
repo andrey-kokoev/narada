@@ -549,6 +549,7 @@ if (preflightOnly) {
 let startResult: any;
 let sessionAuthority: any = null;
 let sessionAuthorityAdmission: any = null;
+let agentIdentityRef: any = null;
 const sessionAuthorityEnforced: any = runtime === 'narada-agent-runtime-server' && execFlag === true && dryRun !== true;
 try {
   // Validate roster/role admission without creating a session event before the
@@ -566,9 +567,24 @@ try {
     })
     : null;
   if (sessionAuthorityEnforced) {
+    const resolvedIdentity: any = resolveAgentIdentityRef(identity, {
+      role: validatedStartResult?.role ?? null,
+      site_id: targetSiteId,
+    });
+    agentIdentityRef = resolvedIdentity.status === 'resolved'
+      ? resolvedIdentity.value
+      : buildAgentIdentityRefV2({
+        identity_scope: { kind: 'unscoped' },
+        local_agent_id: identity,
+        role: validatedStartResult?.role ?? identity,
+        legacy_agent_id: identity,
+      });
+    const authoritySiteId: any = agentIdentityRef.identity_scope?.kind === 'narada_site'
+      ? agentIdentityRef.identity_scope.site_id
+      : targetSiteId;
     const principal: any = normalizeSessionPrincipal({
-      siteId: targetSiteId,
-      localAgentId: identity,
+      siteId: authoritySiteId,
+      localAgentId: agentIdentityRef.local_agent_id,
       identityRef: { legacy_agent_id: identity, role: validatedStartResult?.role ?? null },
     });
     const authorityDbPath: any = defaultSessionAuthorityDbPath(sessionSiteRoot);
@@ -720,9 +736,9 @@ function piCliScriptPath() : any{
 
 function agentRuntimeServerScriptPath() : any{
   const packageRoot: any = naradaPackageRoot('@narada-core/agent-runtime-server');
-  // The runtime host is launched by plain Node. Prefer the package's stable
-  // executable wrapper when present so a source-only .ts bin cannot bypass the
-  // required TypeScript loader handoff.
+  // The runtime host is launched by the active JavaScript runtime. Prefer the
+  // package's stable executable wrapper when present so source loading details
+  // do not leak into the launcher contract.
   const plainNodeWrapper: any = join(packageRoot, 'bin', 'narada-agent-runtime-server.mjs');
   return existsSync(plainNodeWrapper)
     ? plainNodeWrapper
@@ -1405,18 +1421,20 @@ const runtimeEnvironment: any = carrierSpecificEnvironment(carrier, {
   defaultClaudeCodeModel: DEFAULT_CLAUDE_CODE_MODEL,
 });
 const siteConfig: any = siteConfigProjection();
-const resolvedAgentIdentityRef: any = resolveAgentIdentityRef(identity, {
-  role: startResult.role,
-  site_id: targetSiteId,
-});
-const agentIdentityRef: any = resolvedAgentIdentityRef.status === 'resolved'
-  ? resolvedAgentIdentityRef.value
-  : buildAgentIdentityRefV2({
-    identity_scope: { kind: 'unscoped' },
-    local_agent_id: identity,
-    role: startResult.role ?? identity,
-    legacy_agent_id: identity,
+if (!agentIdentityRef) {
+  const resolvedAgentIdentityRef: any = resolveAgentIdentityRef(identity, {
+    role: startResult.role,
+    site_id: targetSiteId,
   });
+  agentIdentityRef = resolvedAgentIdentityRef.status === 'resolved'
+    ? resolvedAgentIdentityRef.value
+    : buildAgentIdentityRefV2({
+      identity_scope: { kind: 'unscoped' },
+      local_agent_id: identity,
+      role: startResult.role ?? identity,
+      legacy_agent_id: identity,
+    });
+}
 const { requiredEnvironment, wouldSetEnvironment }: any = buildCarrierEnvironmentProjection({
   carrierName: carrier,
   startResult,

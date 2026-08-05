@@ -11,6 +11,7 @@
   "dependencies": {
     "@narada-core/agent-context-mcp": "workspace:*",
     "@narada-core/agent-identity": "workspace:*",
+    "@narada-core/agent-start-renderer": "workspace:*",
     "@narada-core/agent-runtime-server": "workspace:*",
     "@narada-core/invokable-intelligence-contract": "workspace:*",
     "@narada-core/invokable-intelligence-management": "workspace:*",
@@ -53,15 +54,22 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "prebuild": "pnpm --filter @narada-core/agent-context-mcp build",
+    "prebuild": "pnpm --filter @narada-core/agent-context-mcp --filter @narada-core/agent-start-renderer build",
     "build": "tsc -p tsconfig.build.json",
+    "build:test-dependencies": "pnpm --filter @narada-core/operator-surface-runtime-contract --filter @narada-core/invokable-intelligence-management build",
     "syntaxcheck": "node --import tsx --check src/narada-agent-start.ts && node --import tsx --check bin/verify-registered-site-launchers.ts",
     "generate:result-schema": "node --import tsx scripts/generate-result-schema.ts",
     "check:result-contract": "node --import tsx scripts/generate-result-schema.ts --check",
-    "test": "node --import tsx test/run-agent-start-tests.ts",
-    "test:launcher-contract": "node --import tsx test/run-launcher-registry-contract-shards.ts",
-    "verify": "node --import tsx bin/verify-registered-site-launchers.ts",
-    "test:option-contract": "node --import tsx test/run-option-contract-shards.ts"
+    "pretest": "pnpm run build:test-dependencies && pnpm run build",
+    "test": "bun test/run-agent-start-tests.ts",
+    "pretest:node": "pnpm run build:test-dependencies && pnpm run build",
+    "test:node": "node --import tsx test/run-agent-start-tests.ts",
+    "test:launcher-contract": "bun test/run-launcher-registry-contract-shards.ts",
+    "test:launcher-contract:node": "node --import tsx test/run-launcher-registry-contract-shards.ts",
+    "verify": "bun bin/verify-registered-site-launchers.ts",
+    "verify:node": "node --import tsx bin/verify-registered-site-launchers.ts",
+    "test:option-contract": "bun test/run-option-contract-shards.ts",
+    "test:option-contract:node": "node --import tsx test/run-option-contract-shards.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

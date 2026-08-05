@@ -73,9 +73,13 @@ export function sendHttp({ url, body, headers }: AnyRecord, settings: AnyRecord)
       });
     });
     request.on('error', (error: any) => rejectRequest(transportError(error instanceof Error ? error.message : String(error))));
-    settings.abortSignal?.addEventListener?.('abort', () => request.destroy(transportError('provider_request_aborted', {
-      code: 'provider-request-aborted',
-    })), { once: true });
+    settings.abortSignal?.addEventListener?.('abort', () => {
+      const error: any = transportError('provider_request_aborted', {
+        code: 'provider-request-aborted',
+      });
+      request.destroy(error);
+      rejectRequest(error);
+    }, { once: true });
     request.end(payload);
   });
 }

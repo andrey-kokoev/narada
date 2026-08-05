@@ -41,7 +41,8 @@ function fixturePathFor(name: string): string {
 }
 
 function tsxFixtureArgs(path: string, ...args: string[]): string[] {
-  return ['--import', 'tsx', path, ...args];
+  if (typeof (globalThis as any).Bun === 'object') return [path, ...args];
+  return ['--import', import.meta.resolve('tsx'), path, ...args];
 }
 
 function removeTempTree(path: string): void {
@@ -390,6 +391,7 @@ async function seedIntelligenceRegistry(siteRoot: any, {
     NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
     NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
     NARADA_INTELLIGENCE_PRINCIPAL_ID: CANONICAL_LOCAL_TEST_IDS.principal,
+    NARADA_INTELLIGENCE_ADAPTER_ID: CANONICAL_LOCAL_TEST_IDS.adapter,
     NARADA_INTELLIGENCE_PRINCIPAL_BINDING: JSON.stringify({
       schema: 'narada.intelligence.principal_binding.v1',
       actor: { principal_id: CANONICAL_LOCAL_TEST_IDS.principal, auth_type: 'user-site-session' },
@@ -653,11 +655,30 @@ test('spawned event projection rejects plain HTTP and malformed WebSocket upgrad
       path: '/events',
     });
 
-    const wrongPathResponse: any = await readRawUpgradeResponse(started.event_endpoint, '/not-events');
-    assert.match(wrongPathResponse, /^HTTP\/1\.1 404 Not Found\r\n/m);
+    if (typeof (globalThis as any).Bun === 'object') {
+      // Bun owns malformed upgrade parsing before Narada's fetch handler. A
+      // standards-valid upgrade still proves that the wrong path is rejected.
+      await new Promise((resolve: any, reject: any) => {
+        const client: any = new WebSocket(new URL('/not-events', started.event_endpoint));
+        let settled: any = false;
+        const finish: any = (callback: any, value?: any) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          callback(value);
+        };
+        const timer: any = setTimeout(() => finish(reject, new Error('websocket_rejection_timeout')), 3000);
+        client.addEventListener('open', () => finish(reject, new Error('wrong event-stream path was upgraded')));
+        client.addEventListener('error', () => finish(resolve));
+        client.addEventListener('close', () => finish(resolve));
+      });
+    } else {
+      const wrongPathResponse: any = await readRawUpgradeResponse(started.event_endpoint, '/not-events');
+      assert.match(wrongPathResponse, /^HTTP\/1\.1 404 Not Found\r\n/m);
 
-    const missingKeyResponse: any = await readRawUpgradeResponse(started.event_endpoint, '/events');
-    assert.match(missingKeyResponse, /^HTTP\/1\.1 400 Bad Request\r\n/m);
+      const missingKeyResponse: any = await readRawUpgradeResponse(started.event_endpoint, '/events');
+      assert.match(missingKeyResponse, /^HTTP\/1\.1 400 Bad Request\r\n/m);
+    }
 
     child.stdin.end(`${JSON.stringify({ id: 'event-admission-close', method: 'session.close', params: {} })}\n`);
     const exitCode: any = await new Promise((resolve: any) => child.on('exit', resolve));
@@ -1021,8 +1042,7 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
   };
   try {
     const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.ts', import.meta.url));
-    child = spawnTestChild(process.execPath, [
-      '--import', 'tsx',
+    child = spawnTestChild(process.execPath, tsxFixtureArgs(
       binPath,
       '--raw-jsonl',
       '--health-host', '127.0.0.1',
@@ -1032,7 +1052,7 @@ test('spawned runtime projects a health timeout as HTTP 503 and cleans up after 
       '--event-port', '0',
       '--identity', 'narada.test',
       '--session', sessionId,
-    ], {
+    ), {
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
@@ -1144,15 +1164,14 @@ test('spawned runtime reconfigures canonical invocation constraints and binds th
   let child: any = null;
   try {
     const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.ts', import.meta.url));
-    child = spawnTestChild(process.execPath, [
-      '--import', 'tsx',
+    child = spawnTestChild(process.execPath, tsxFixtureArgs(
       binPath,
       '--raw-jsonl',
       '--no-health',
       '--no-events',
       '--identity', 'narada.test',
       '--session', 'provider-switch-e2e',
-    ], {
+    ), {
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
@@ -1264,15 +1283,14 @@ test('spawned runtime refuses canonical intelligence reconfiguration across a bu
   };
   try {
     const binPath: any = fileURLToPath(new URL('../bin/narada-agent-runtime-server.ts', import.meta.url));
-    child = spawnTestChild(process.execPath, [
-      '--import', 'tsx',
+    child = spawnTestChild(process.execPath, tsxFixtureArgs(
       binPath,
       '--raw-jsonl',
       '--no-health',
       '--no-events',
       '--identity', 'narada.test',
       '--session', 'provider-busy-e2e',
-    ], {
+    ), {
       env: {
         ...process.env,
         NARADA_SITE_ROOT: siteRoot,
@@ -1996,6 +2014,10 @@ test('spawned runtime handles SIGINT and SIGTERM by closing active provider and 
       child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk: any) => { stderr += chunk; });
       child.stdin.write(`${JSON.stringify({ id: 'turn-signal', method: 'session.submit', params: { content: 'use tool then wait' } })}\n`);
       await secondRequest;
+      await waitForCapturedOutput(child, () => stdout, (text: any) => hasCapturedJsonEvent(
+        text,
+        (event: any) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo',
+      ));
       const exited: any = once(child, 'exit');
       if (signalRelay) child.send({ signal });
       else assert.equal(child.kill(signal), true);
@@ -2027,7 +2049,11 @@ test('spawned runtime handles Codex subprocess success, malformed JSONL, and non
       child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
       assert.equal(await new Promise((resolve: any) => child.on('exit', resolve)), 0, mode);
       const events: any = stdout.trim().split(/\r?\n/).filter(Boolean).map((line: any) => JSON.parse(line));
-      if (mode === 'success') assert.ok(events.some((event: any) => event.event === 'carrier_turn_completed'));
+      if (mode === 'success') {
+        const failure: any = events.find((event: any) => event.event === 'kernel_provider_telemetry'
+          && event.source_event?.invocation_state === 'failed');
+        assert.ok(events.some((event: any) => event.event === 'carrier_turn_completed'), failure?.source_event?.error?.message);
+      }
       else assert.ok(events.some((event: any) => event.event === 'session_control_rejected' && event.request_id === 'turn-1'));
     } finally {
       removeTempTree(siteRoot);
@@ -2389,7 +2415,10 @@ test('spawned runtime cancels an in-flight provider request through JSONL contro
     const events: any = stdout.trim().split(/\r?\n/).filter(Boolean).map((line: any) => JSON.parse(line));
     assert.ok(events.some((event: any) => event.event === 'session_cancel' && event.cancelled === true));
     assert.ok(events.some((event: any) => event.event === 'carrier_turn_interrupted' && /abort/i.test(event.error)));
-    const invocationEvents: any = events.filter((event: any) => event.event === 'provider_invocation_state_transition');
+    const invocationEvents: any = events
+      .filter((event: any) => event.event === 'kernel_provider_telemetry'
+        && event.source_event?.kind === 'provider_invocation_state_transition')
+      .map((event: any) => event.source_event);
     assert.equal(invocationEvents.at(-1)?.invocation_state, 'interrupted');
     assert.ok(invocationEvents.every((event: any) => event.turn_id && event.turn_id === event.input_event_id));
   } finally {
@@ -2479,12 +2508,12 @@ test('spawned runtime refuses to redispatch an admission-unknown turn after forc
     removeTempTree(siteRoot);
   }
 });
-test('spawned runtime records required MCP startup failure without calling the provider', async () => {
+test('spawned runtime fails before provider dispatch when required MCP startup fails', async () => {
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-runtime-mcp-failure-'));
   await seedIntelligenceRegistry(siteRoot, { providerId: 'codex-subscription', disableTopologyRequirements: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   const fixturePath: any = fixturePathFor('mcp-exit-server');
-  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { broken: { command: process.execPath, args: tsxFixtureArgs(fixturePath), surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
+  writeFileSync(join(siteRoot, '.ai', 'mcp', 'fixture.json'), JSON.stringify({ mcpServers: { 'narada-broken': { command: process.execPath, args: tsxFixtureArgs(fixturePath), surface_id: 'broken.surface', startup_timeout_sec: 1 } } }), 'utf8');
   try {
     const binPath: any = runtimeBinPath;
     const child: any = spawnTestChild(process.execPath, [binPath, '--raw-jsonl', '--identity', 'narada.test', '--session', 'mcp-failure'], {
@@ -2493,12 +2522,9 @@ test('spawned runtime records required MCP startup failure without calling the p
     let stdout: any = ''; child.stdout.setEncoding('utf8'); child.stdout.on('data', (chunk: any) => { stdout += chunk; });
     let stderr: any = ''; child.stderr.setEncoding('utf8'); child.stderr.on('data', (chunk: any) => { stderr += chunk; });
     child.stdin.end(`${JSON.stringify({ id: 'turn-1', method: 'session.submit', params: { content: 'hello' } })}\n${JSON.stringify({ id: 'close-1', method: 'session.close' })}\n`);
-    assert.equal(await new Promise((resolve: any) => child.on('exit', resolve)), 0);
-    const events: any = stdout.trim().split(/\r?\n/).filter(Boolean).map((line: any) => JSON.parse(line));
-    assert.ok(events.some((event: any) => event.event === 'session_control_rejected' && event.request_id === 'turn-1' && /MCP|mcp/i.test(event.error)));
-    assert.equal(events.filter((event: any) => event.event === 'carrier_turn_started').length, 1);
-    assert.equal(events.filter((event: any) => ['carrier_turn_failed', 'carrier_turn_interrupted', 'carrier_turn_completed'].includes(event.event)).length, 1);
-    assert.equal(events.some((event: any) => event.event === 'carrier_turn_completed'), false);
+    assert.equal(await new Promise((resolve: any) => child.on('exit', resolve)), 1, stderr);
+    assert.match(stderr, /One or more required MCP servers failed startup/);
+    assert.equal(stdout.trim(), '');
   } finally {
     removeTempTree(siteRoot);
   }
@@ -2603,7 +2629,9 @@ test('spawned runtime executes a provider-requested tool through the site MCP ga
       for (let index = 0; index < started.replay_count; index += 1) replay.push((await client.nextJson()).payload);
       assert.ok(replay.some((event: any) => event.event === 'tool_execution_completed' && event.tool_name === 'fixture_echo'));
     } finally {
-      client.close(); projection.server.close();
+      client.close();
+      projection.closeConnections();
+      await new Promise((resolve: any, reject: any) => projection.server.close((error: any) => error ? reject(error) : resolve(null)));
     }
   } finally {
     await new Promise((resolve: any) => provider.close(resolve));
@@ -2651,7 +2679,10 @@ test('spawned runtime submits a turn through the configured local provider endpo
     const events: any = stdout.trim().split(/\r?\n/).filter(Boolean).map((line: any) => JSON.parse(line));
     assert.ok(events.some((event: any) => event.event === 'carrier_turn_completed'));
     assert.ok(events.some((event: any) => event.event === 'session_control_response' && event.request_id === 'turn-1'));
-    const invocationEvents: any = events.filter((event: any) => event.event === 'provider_invocation_state_transition');
+    const invocationEvents: any = events
+      .filter((event: any) => event.event === 'kernel_provider_telemetry'
+        && event.source_event?.kind === 'provider_invocation_state_transition')
+      .map((event: any) => event.source_event);
     assert.deepEqual(invocationEvents.map((event: any) => event.invocation_state), ['requested', 'validated', 'shaped', 'dispatched', 'admitting', 'admitted', 'receiving', 'completed'], stdout);
     assert.equal(new Set(invocationEvents.map((event: any) => event.invocation_id)).size, 1);
     assert.ok(invocationEvents.every((event: any) => event.turn_id && event.turn_id === event.input_event_id));

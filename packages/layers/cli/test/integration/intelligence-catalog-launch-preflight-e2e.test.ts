@@ -68,6 +68,8 @@ test('clean-install migration does not fabricate principal admission; launcher p
     assert.equal(preflight.parsed_result?.reason_code, 'intelligence_local_readiness_blocked');
     assert.equal(preflight.parsed_result?.readiness?.checks.find(({ id }) => id === 'principal-admission')?.code, 'principal-not-admitted');
     assert.ok(preflight.parsed_result.catalog_record_count > 0);
+    assert.equal(preflight.command[0], process.execPath);
+    assert.equal(preflight.command.includes('--import'), !(process.versions as { bun?: string }).bun);
 
     const repeatBootstrap = await management.ensureIntelligenceCatalog({
       siteRoot: root,

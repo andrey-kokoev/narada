@@ -113,7 +113,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "pretest": "pnpm run build",
-    "test": "node --import tsx --test --test-concurrency=1 --test-timeout=360000 test/*.test.ts src/*.test.ts",
+    "test": "bun test --timeout 360000 --path-ignore-patterns=dist/** src test",
+    "pretest:node": "pnpm run build",
+    "test:node": "node --import tsx --test --test-concurrency=1 --test-timeout=360000 test/*.test.ts src/*.test.ts",
     "pretest:one-by-one": "pnpm run build",
     "test:one-by-one": "node --import tsx test/run-one-by-one.ts",
     "test:e2e:pty": "node --import tsx test/pty-e2e.ts",

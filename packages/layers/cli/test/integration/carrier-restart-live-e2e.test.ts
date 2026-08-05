@@ -28,6 +28,7 @@ const agentStartBin = resolve(naradaRoot, 'packages', 'agent-start', 'src', 'nar
 const mcpFixture = resolve(naradaRoot, 'packages', 'agent-runtime-server', 'test', 'fixtures', 'mcp-echo-server.ts');
 const tsxEntrypoint = require.resolve('tsx');
 const tsxLoader = pathToFileURL(tsxEntrypoint).href;
+const isBunTestRuntime = Boolean((process.versions as { bun?: string }).bun);
 const liveEnabled = process.argv.includes('--enable-live-e2e')
   || process.env.NARADA_CARRIER_RESTART_LIVE_E2E === '1';
 
@@ -40,6 +41,12 @@ const SITE_ID = 'narada';
 const AGENT_ID = `${SITE_ID}.resident`;
 const REQUESTED_BY = 'principal-andrey';
 const TIMEOUT_MS = 90_000;
+
+function testRuntimeScriptArgs(script: string, args: string[] = []): string[] {
+  return isBunTestRuntime
+    ? [script, ...args]
+    : ['--import', tsxLoader, script, ...args];
+}
 
 test('[partial-production-launch] carrier restart drains a real NARS source and activates a real successor', {
   skip: !liveEnabled,
@@ -217,7 +224,7 @@ async function prepareFixture(siteRoot: string) {
       'narada-carrier-restart-live-fixture': {
         transport: 'stdio',
         command: process.execPath,
-        args: ['--import', tsxLoader, mcpFixture],
+        args: testRuntimeScriptArgs(mcpFixture),
         tools: ['fixture_echo'],
         target_site_root: '{site_root}',
         injection_scope: 'local_site',
@@ -255,21 +262,22 @@ async function prepareFixture(siteRoot: string) {
 }
 
 async function writeAgentStartShim(shimRoot: string): Promise<string> {
+  const runtimePrefix = isBunTestRuntime
+    ? `"${process.execPath}" "${agentStartBin}"`
+    : `"${process.execPath}" --import "${tsxLoader}" "${agentStartBin}"`;
   if (process.platform === 'win32') {
     const shimPath = join(shimRoot, 'narada-agent-start.cmd');
-    await writeFile(shimPath, `@echo off\r\n"${process.execPath}" --import "${tsxLoader}" "${agentStartBin}" %*\r\n`, 'utf8');
+    await writeFile(shimPath, `@echo off\r\n${runtimePrefix} %*\r\n`, 'utf8');
     return shimPath;
   }
   const shimPath = join(shimRoot, 'narada-agent-start');
-  await writeFile(shimPath, `#!/bin/sh\nexec "${process.execPath}" --import "${tsxLoader}" "${agentStartBin}" "$@"\n`, 'utf8');
+  await writeFile(shimPath, `#!/bin/sh\nexec ${runtimePrefix} "$@"\n`, 'utf8');
   await chmod(shimPath, 0o755);
   return shimPath;
 }
 
 function startRuntime({ siteRoot, sessionId, environment }: { siteRoot: string; sessionId: string; environment: NodeJS.ProcessEnv }): RuntimeChild {
-  const child = spawnTestChild(process.execPath, [
-    '--import', tsxLoader,
-    runtimeBin,
+  const child = spawnTestChild(process.execPath, testRuntimeScriptArgs(runtimeBin, [
     '--identity', AGENT_ID,
     '--session', sessionId,
     '--site-root', siteRoot,
@@ -278,7 +286,7 @@ function startRuntime({ siteRoot, sessionId, environment }: { siteRoot: string; 
     '--health-port', '0',
     '--event-host', '127.0.0.1',
     '--event-port', '0',
-  ], {
+  ]), {
     cwd: naradaRoot,
     env: { ...environment, NARADA_MCP_SCOPE: 'none' },
     stdio: ['ignore', 'pipe', 'pipe'],

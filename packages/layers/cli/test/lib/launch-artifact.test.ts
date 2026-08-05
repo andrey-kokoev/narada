@@ -24,6 +24,7 @@ async function fixtureRoot() {
   await writeFile(join(packageRoot, 'package.json'), JSON.stringify({
     name: '@fixture/ui',
     type: 'module',
+    engines: { node: '>=22', bun: '>=1.3' },
     narada: {
       launch_artifact: {
         target: 'fixture-ui',
@@ -53,6 +54,10 @@ test('launch artifact manifest detects source and published output drift', async
   const current = checkLaunchArtifact(fixture.root, 'fixture-ui');
   assert.equal(current.status, 'current');
   assert.equal(current.source_closure.inputs.includes('packages/fixture/src/main.js'), true);
+  assert.deepEqual(current.toolchain, {
+    package_manager: 'pnpm@10.0.0',
+    engines: { node: '>=22', bun: '>=1.3' },
+  });
 
   const publishedPackageRoot = join(fixture.root, 'node_modules', '@fixture', 'ui');
   await cp(fixture.packageRoot, publishedPackageRoot, { recursive: true });

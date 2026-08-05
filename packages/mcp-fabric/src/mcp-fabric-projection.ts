@@ -1,3 +1,5 @@
+import { normalizedMcpNodeCommand } from './mcp-server-command.js';
+
 type AnyRecord = Record<string, any>;
 
 export function codexMcpEnvVarNames(): string[] {
@@ -14,11 +16,7 @@ export function codexMcpEnvVarNames(): string[] {
 }
 
 function projectCarrierCommand(command: any): any {
-  const value = String(command ?? '').trim();
-  if (/^(?:node|node\.exe|node\.cmd)$/i.test(value) || /[\\/]node\.exe$/i.test(value)) {
-    return process.execPath;
-  }
-  return command;
+  return normalizedMcpNodeCommand(command) ?? command;
 }
 function projectServerTimeouts(server: AnyRecord): AnyRecord {
   return {

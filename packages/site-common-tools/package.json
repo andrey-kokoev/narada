@@ -78,7 +78,8 @@
   },
   "scripts": {
     "prebuild": "pnpm --filter @narada-core/task-governance build",
-    "test": "node --import tsx --test src/site-common-tools.test.ts src/task-lifecycle-mcp-resolution.test.ts src/operator-surface/carrier-restart-supervisor.test.ts src/site-init/site-live-carrier-state.test.ts src/site-init/site-init-lifecycle.test.ts src/site-init/site-init.test.ts src/site-lift/site-lift-lifecycle.test.ts src/site-lift/site-lift.test.ts",
+    "test": "bun test src/site-common-tools.test.ts src/task-lifecycle-mcp-resolution.test.ts src/operator-surface/carrier-restart-supervisor.test.ts src/site-init/site-live-carrier-state.test.ts src/site-init/site-init-lifecycle.test.ts src/site-init/site-init.test.ts src/site-lift/site-lift-lifecycle.test.ts src/site-lift/site-lift.test.ts",
+    "test:node": "pnpm build && node --import tsx --test src/site-common-tools.test.ts src/task-lifecycle-mcp-resolution.test.ts src/operator-surface/carrier-restart-supervisor.test.ts src/site-init/site-live-carrier-state.test.ts src/site-init/site-init-lifecycle.test.ts src/site-init/site-init.test.ts src/site-lift/site-lift-lifecycle.test.ts src/site-lift/site-lift.test.ts",
     "build": "tsc -p tsconfig.build.json && tsc -p tsconfig.build-compat.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "pretest": "pnpm build"

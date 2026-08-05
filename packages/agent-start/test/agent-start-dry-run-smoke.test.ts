@@ -1,15 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
+import { agentStartScriptArgs } from './helpers/agent-start-test-runtime.js';
 
-const require: any = createRequire(import.meta.url);
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 const packageRoot: any = resolve(__dirname, '..');
 const naradaProperRoot: any = resolve(packageRoot, '..', '..');
-const tsxLoaderPath: any = pathToFileURL(require.resolve('tsx')).href;
 
 function parseJsonOutput(output: any) : any{
   const text: any = String(output ?? '').trim();
@@ -20,9 +18,7 @@ function parseJsonOutput(output: any) : any{
 }
 
 test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
-  const result: any = runHiddenPostureCommandSync(process.execPath, [
-    '--import',
-    tsxLoaderPath,
+  const result: any = runHiddenPostureCommandSync(process.execPath, agentStartScriptArgs(
     resolve(packageRoot, 'src', 'narada-agent-start.ts'),
     'narada.architect',
     '--site-root',
@@ -35,7 +31,7 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
     'narada-agent-runtime-server',
     '--dry-run',
     '--json',
-  ], {
+  ), {
     cwd: packageRoot,
     encoding: 'utf8',
     env: {

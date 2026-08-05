@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { loadMcpSurfaceRegistry, registryServerNames, registrySurfaces, siteControlRoot } from '@narada-core/carrier-action-admission/tool-metadata';
 import { McpFabricError } from './mcp-fabric-errors.js';
 import { mcpFabricRepairPlan } from './mcp-fabric-repair-plans.js';
+import { normalizedMcpNodeCommand } from './mcp-server-command.js';
 import { createMcpFabricLifecycle, transitionMcpFabricLifecycle } from './mcp-fabric-state.js';
 
 type AnyRecord = Record<string, any>;
@@ -578,8 +579,7 @@ function isRetiredEmptyMcpSidecar(packet: AnyRecord): boolean {
 }
 
 function normalizeCommand(command: any): string {
-  if (String(command ?? '').toLowerCase() === 'node') return process.execPath;
-  return String(command ?? '');
+  return normalizedMcpNodeCommand(command) ?? String(command ?? '');
 }
 
 function normalizePortablePathText(value: any): string {

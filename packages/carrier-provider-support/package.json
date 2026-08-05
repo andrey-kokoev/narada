@@ -48,7 +48,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test src/*.test.ts",
+    "test": "bun test src",
+    "test:node": "node --import tsx --test src/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

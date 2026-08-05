@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runProcessTests } from './helpers/process-test-runner.js';
+import { agentStartTestArgs } from './helpers/agent-start-test-runtime.js';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 const packageRoot: any = resolve(__dirname, '..');
@@ -30,14 +31,7 @@ const commands: any = shard(testNames, shardCount)
   .filter((names: any) => names.length > 0)
   .map((names: any, index: any) => ({
     label: `option-contract:${index + 1}`,
-    args: [
-      '--import',
-      'tsx',
-      '--test',
-      '--test-name-pattern',
-      `^(?:${names.map(escapeRegExp).join('|')})$`,
-      testFile,
-    ],
+    args: agentStartTestArgs(testFile, `^(?:${names.map(escapeRegExp).join('|')})$`),
     cwd: packageRoot,
     // Each shard pays the full tsx/launcher module-load cost concurrently;
     // the cold first shard can exceed 15s on a loaded Windows host. Keep the

@@ -2,10 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
+import { agentStartScriptArgs } from './helpers/agent-start-test-runtime.js';
 import {
   ADMITTED_LAUNCH_SELECTION_KINDS,
   operatorSurfaceLaunchMatrixRow,
@@ -13,13 +13,11 @@ import {
   NARADA_AGENT_RUNTIME_SERVER_KIND,
 } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 
-const require: any = createRequire(import.meta.url);
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 const packageRoot: any = resolve(__dirname, '..');
 const naradaProperRoot: any = resolve(packageRoot, '..', '..');
 const fixtureRegistryPath: any = join(__dirname, 'fixtures', 'launch-registry.psd1');
 const packagedLauncherPath: any = join(naradaProperRoot, 'packages', 'agent-start', 'src', 'narada-agent-start.ts');
-const tsxLoaderPath: any = pathToFileURL(require.resolve('tsx')).href;
 const admittedCarrierMatrix: any = Object.freeze([...ADMITTED_LAUNCH_SELECTION_KINDS]);
 const requiredFields: any = Object.freeze(['Agent', 'NaradaRoot', 'WorkspaceRoot', 'SiteRoot', 'Launcher', 'Carrier', 'Runtime']);
 const pwshAvailable: any = spawnHiddenSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], { encoding: 'utf8' }).status === 0;
@@ -176,9 +174,7 @@ function assertCarrierMatrixDryRuns(records: any, sourceLabel: any) : any{
       assert.ok(matrixRow, `${sourceLabel}:${record.Agent}:${carrier}: carrier matrix row is required`);
       const runtime: any = defaultRuntimeForOperatorSurface(carrier);
       assert.equal(runtime, matrixRow.runtime_substrate_kind);
-      const result: any = spawnHiddenSync(process.execPath, [
-        '--import',
-        tsxLoaderPath,
+      const result: any = spawnHiddenSync(process.execPath, agentStartScriptArgs(
         packagedLauncherPath,
         record.Agent,
         '--site-root',
@@ -191,7 +187,7 @@ function assertCarrierMatrixDryRuns(records: any, sourceLabel: any) : any{
         runtime,
         '--dry-run',
         '--json',
-      ], {
+      ), {
         cwd: record.NaradaRoot,
         encoding: 'utf8',
         env: { ...process.env, ...dryRunEnv(carrier) },
@@ -229,9 +225,16 @@ test('package fixture encodes the launcher registry boundary', () => {
   const records: any = recordsFrom(fixtureRegistryPath);
   assertRegistryContract(records, 'fixture');
   assertGeneratedSiteLaunchContracts(records, 'fixture');
-  assertLauncherFileShape(records, 'fixture');
-  const deterministicCarrierRecords: any = records.filter((record: any) => normalizePath(record.NaradaRoot) === normalizePath(naradaProperRoot));
+  const deterministicCarrierRecords: any = records
+    .filter((record: any) => siteId(record) === 'narada')
+    .map((record: any) => ({
+      ...record,
+      NaradaRoot: naradaProperRoot,
+      WorkspaceRoot: naradaProperRoot,
+      SiteRoot: naradaProperRoot,
+    }));
   assert.equal(deterministicCarrierRecords.length > 0, true, 'fixture: deterministic Narada proper record is required for the carrier matrix');
+  assertLauncherFileShape(deterministicCarrierRecords, 'fixture');
   assertCarrierMatrixDryRuns([deterministicCarrierRecords[0]], 'fixture');
   assert.equal(existsSync(packagedLauncherPath), true, 'packaged TS launcher must exist in Narada proper');
 });

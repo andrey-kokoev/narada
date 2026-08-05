@@ -41,6 +41,7 @@ export interface LaunchArtifactCheckOptions {
 interface PackageJson {
   name?: string;
   packageManager?: string;
+  engines?: Record<string, string>;
   narada?: {
     launch_artifact?: {
       target?: string;
@@ -243,7 +244,7 @@ export function checkLaunchArtifact(
   }
 
   const sourceClosure = published ? null : computeLaunchArtifactSourceClosure(root, descriptor);
-  const toolchain = published ? null : computeToolchainFingerprint(root);
+  const toolchain = published ? null : computeToolchainFingerprint(root, descriptor.package_root);
   const recipe = published ? null : computeBuildRecipe(descriptor);
   const outputSnapshot = snapshotOutputs(descriptor);
   const checks: Array<[boolean, string]> = [
@@ -291,7 +292,7 @@ export function writeLaunchArtifactManifest({
   const root = resolve(siteRoot ?? resolve(import.meta.dirname, '..', '..', '..', '..', '..'));
   const descriptor = resolveLaunchArtifactDescriptor(root, target, packageRoot ? { packageRoot } : {});
   const sourceClosure = computeLaunchArtifactSourceClosure(root, descriptor);
-  const toolchain = computeToolchainFingerprint(root);
+  const toolchain = computeToolchainFingerprint(root, descriptor.package_root);
   const recipe = computeBuildRecipe(descriptor);
   const outputs = snapshotOutputs(descriptor);
   if (outputs.required_missing.length > 0) {
@@ -322,11 +323,15 @@ export function writeLaunchArtifactManifest({
   return { ...manifest, artifact_manifest_path: manifestPath, artifact_root: descriptor.output_root };
 }
 
-export function computeToolchainFingerprint(siteRoot: string): { node: string; package_manager: string | null } {
+export function computeToolchainFingerprint(
+  siteRoot: string,
+  packageRoot?: string,
+): { package_manager: string | null; engines: Record<string, string> } {
   const rootPackage = readPackageJson(resolve(siteRoot));
+  const targetPackage = packageRoot ? readPackageJson(resolve(packageRoot)) : null;
   return {
-    node: process.version,
     package_manager: rootPackage?.packageManager ?? null,
+    engines: { ...(rootPackage?.engines ?? {}), ...(targetPackage?.engines ?? {}) },
   };
 }
 

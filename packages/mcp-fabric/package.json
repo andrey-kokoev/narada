@@ -19,7 +19,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "pnpm run build && node --import tsx --test src/*.test.ts"
+    "test": "pnpm run build && bun test src",
+    "test:node": "pnpm run build && node --import tsx --test src/*.test.ts"
   },
   "dependencies": {
     "@narada-core/carrier-action-admission": "workspace:*",

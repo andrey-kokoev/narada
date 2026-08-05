@@ -1,6 +1,6 @@
 # Invokable intelligence materialization
 
-Portable node:sqlite and Cloudflare D1 embodiments of Narada's governed
+Portable local SQLite and Cloudflare D1 embodiments of Narada's governed
 cross-locus materialization contract. Origin authority is preserved in every
 projection and audit event; destination storage only records an explicit
 admission. Resolver acquisition excludes revoked, superseded, expired, and

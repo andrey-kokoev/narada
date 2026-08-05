@@ -1,14 +1,5 @@
 import { existsSync } from 'node:fs';
-
-const originalEmitWarning: any = process.emitWarning;
-process.emitWarning = (warning: any, ...args: any[]) => {
-  if (args[0] === 'ExperimentalWarning' && String(warning).includes('SQLite')) return;
-  return originalEmitWarning.call(process, warning, ...args);
-};
-
-const { DatabaseSync }: any = await import('node:sqlite');
-
-process.emitWarning = originalEmitWarning;
+import RuntimeDatabase from '@narada-core/sqlite';
 
 export const DEFAULT_BUSY_TIMEOUT_MS: any = 5000;
 
@@ -19,8 +10,8 @@ export default class Database {
     if (options.fileMustExist && !existsSync(path)) {
       throw new Error(`sqlite_database_not_found: ${path}`);
     }
-    this.#db = new DatabaseSync(path, {
-      readOnly: options.readonly === true || options.readOnly === true,
+    this.#db = new RuntimeDatabase(path, {
+      readonly: options.readonly === true || options.readOnly === true,
     });
     const busyTimeoutMs: any = Number(options.busyTimeoutMs ?? options.busy_timeout_ms ?? DEFAULT_BUSY_TIMEOUT_MS);
     if (Number.isFinite(busyTimeoutMs) && busyTimeoutMs >= 0) {

@@ -9,7 +9,7 @@ process.stdin.on('end', () => {
     process.stdout.write('{not-json}\n');
     return;
   }
-  if (mode === 'hang') {
+  if (mode === 'hang' && !process.argv.includes('--ephemeral')) {
     setInterval(() => {}, 1000);
     return;
   }

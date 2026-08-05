@@ -266,7 +266,7 @@ test('carrier turn adapter completes provider-requested tools through the inject
   assert.deepEqual(events.find((event) => event.kind === 'carrier_tool_completed')?.result, {
     status: 'completed',
     toolName: 'fs_read_file',
-    args: {},
+    args: { path: 'x' },
   });
 });
 

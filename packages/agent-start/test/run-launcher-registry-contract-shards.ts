@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runProcessTests } from './helpers/process-test-runner.js';
+import { agentStartTestArgs } from './helpers/agent-start-test-runtime.js';
 
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 const packageRoot: any = resolve(__dirname, '..');
@@ -20,14 +21,7 @@ function escapeRegExp(value: any) : any{
 
 const commands: any = testNames.map((name: any, index: any) => ({
   label: `launcher-registry:${index + 1}`,
-  args: [
-    '--import',
-    'tsx',
-    '--test',
-    '--test-name-pattern',
-    `^${escapeRegExp(name)}$`,
-    testFile,
-  ],
+  args: agentStartTestArgs(testFile, `^${escapeRegExp(name)}$`),
   cwd: packageRoot,
   // Shards run concurrently and each re-pays full module load; the cold first
   // shard starves past 15s on a loaded machine. 45s keeps this an infra ceiling,

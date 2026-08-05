@@ -34,7 +34,8 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node --import tsx --test src/**/*.test.ts src/*.test.ts",
+    "test": "bun test --timeout 30000 src",
+    "test:node": "node --import tsx --test src/**/*.test.ts src/*.test.ts",
     "test:live": "node --import tsx --test src/live/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

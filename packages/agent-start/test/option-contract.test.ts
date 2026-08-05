@@ -1,10 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve, sep } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import { resolveNaradaSitePaths } from '@narada-core/site-paths';
 import { runHiddenPostureCommandSync } from '@narada-core/process-launch-posture';
 import {
@@ -16,19 +15,16 @@ import {
   stripInheritedIntelligenceLaunchContextEnvironment,
 } from '../src/carrier-launch-adapter.js';
 import { loadIntelligenceLaunchContext } from '../src/intelligence-launch-context.js';
+import { agentStartScriptArgs } from './helpers/agent-start-test-runtime.js';
 
-const require: any = createRequire(import.meta.url);
 const __dirname: any = dirname(fileURLToPath(import.meta.url));
 const packageRoot: any = resolve(__dirname, '..');
 const naradaProperRoot: any = resolve(packageRoot, '..', '..');
 const launcherPath: any = join(packageRoot, 'src', 'narada-agent-start.ts');
-const tsxLoaderPath: any = pathToFileURL(require.resolve('tsx')).href;
 const identity: any = 'narada.architect';
 const sharedRuntimeContract: any = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'operator-surface-runtime-contract', 'contracts', 'runtime-substrate-kinds.json'), 'utf8'));
 const sharedCarrierLaunchMatrix: any = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'operator-surface-runtime-contract', 'contracts', 'operator-surface-launch-matrix.json'), 'utf8'));
-const baseArgs: any = [
-  '--import',
-  tsxLoaderPath,
+const baseArgs: any = agentStartScriptArgs(
   launcherPath,
   identity,
   '--site-root',
@@ -37,10 +33,17 @@ const baseArgs: any = [
   naradaProperRoot,
   '--dry-run',
   '--json',
-];
+);
 const baseTestEnv: any = {
   KIMI_CODE_API_KEY: 'test-key',
+  NARADA_INTELLIGENCE_HOST_SITE: 'site:test-host',
+  NARADA_INTELLIGENCE_PRINCIPAL_ID: 'principal:test-operator',
 };
+
+function writeTaskLifecycleFixture(siteRoot: any) : any{
+  mkdirSync(join(siteRoot, '.ai'), { recursive: true });
+  writeFileSync(join(siteRoot, '.ai', 'task-lifecycle.db'), '');
+}
 
 function run(extraArgs: any = [], extraEnv: any = {}) : any{
   return runHiddenPostureCommandSync(process.execPath, [...baseArgs, ...withDefaultMcpScopeNone(extraArgs)], {
@@ -54,7 +57,7 @@ function run(extraArgs: any = [], extraEnv: any = {}) : any{
 function writeAllowedRootMcpServerFile(siteRoot: any, fileName: any, serverName: any, allowedRoots: any, injectionScope: any = 'local_site') : any{
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', fileName), JSON.stringify({
     mcpServers: {
       [serverName]: {
@@ -73,7 +76,7 @@ function writeAllowedRootMcpServerFile(siteRoot: any, fileName: any, serverName:
 function writeCanonicalMcpServerFile(siteRoot: any, fileName: any, serverName: any, surfaceId: any, injectionScope: any) : any{
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', fileName), JSON.stringify({
     mcpServers: {
       [serverName]: {
@@ -98,7 +101,7 @@ function writeCanonicalMcpServerFile(siteRoot: any, fileName: any, serverName: a
 function writeMinimalMcpFabric(siteRoot: any, serverName: any, injectionScope: any = 'local_site') : any{
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', `${serverName}.json`), JSON.stringify({
     mcpServers: {
       [serverName]: {
@@ -117,7 +120,7 @@ function writeMinimalMcpFabric(siteRoot: any, serverName: any, injectionScope: a
 function writeMinimalMcpServerFile(siteRoot: any, fileName: any, serverName: any, commandArg: any, injectionScope: any = 'local_site') : any{
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', fileName), JSON.stringify({
     mcpServers: {
       [serverName]: {
@@ -154,9 +157,7 @@ function runOk(extraArgs: any = [], extraEnv: any = {}) : any{
 }
 
 function runWithIdentityOk(identityValue: any, extraArgs: any = [], extraEnv: any = {}) : any{
-  const result: any = runHiddenPostureCommandSync(process.execPath, [
-    '--import',
-    tsxLoaderPath,
+  const result: any = runHiddenPostureCommandSync(process.execPath, agentStartScriptArgs(
     launcherPath,
     identityValue,
     '--site-root',
@@ -166,7 +167,7 @@ function runWithIdentityOk(identityValue: any, extraArgs: any = [], extraEnv: an
     '--dry-run',
     '--json',
     ...withDefaultMcpScopeNone(extraArgs),
-  ], {
+  ), {
     cwd: naradaProperRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, ...extraEnv },
@@ -492,7 +493,7 @@ test('selection scrub preserves credentials as transport only', () => {
   assert.equal(env.OPENAI_API_KEY, 'credential');
 });
 
-test('agent-cli exec launches package bin through node, not PowerShell', () => {
+test('agent-cli exec launches the package bin through the active JavaScript runtime, not PowerShell', () => {
   const output: any = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec']);
   const sessionId: any = output.carrier_session.carrier_session_id;
   assert.equal(output.exec_command.startsWith(process.execPath), true);
@@ -555,7 +556,7 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
     effective: 'write',
     source: 'default',
   });
-  assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.ts'), true);
+  assert.match(output.runtime_args[0], /narada-agent-runtime-server\.(?:js|mjs|ts)$/);
   assert.deepEqual(output.runtime_args.slice(1), [
     '--identity',
     identity,
@@ -607,7 +608,7 @@ test('agent-web-ui exec launches NARS runtime server as first-class operator sur
     effective: 'write',
     source: 'default',
   });
-  assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.ts'), true);
+  assert.match(output.runtime_args[0], /narada-agent-runtime-server\.(?:js|mjs|ts)$/);
   assert.deepEqual(output.runtime_args.slice(1), [
     '--identity',
     identity,
@@ -798,7 +799,7 @@ test('target site MCP fabric remains isolated from user site fabric', () => {
   }), 'utf8');
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'target-only.json'), JSON.stringify({
     mcpServers: {
       'narada-target-only': {
@@ -841,7 +842,7 @@ test('NARS runtime selects explicit runtime-affined Site MCP projection', () => 
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-agent-start-nars-projection-'));
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'runtime-projections.json'), JSON.stringify({
     mcpServers: {
       'narada-neutral': {
@@ -897,7 +898,7 @@ test('non-canonical target MCP server names are refused before carrier handoff',
   const siteRoot: any = mkdtempSync(join(tmpdir(), 'narada-agent-start-mcp-prefix-gate-'));
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'target-noncanonical.json'), JSON.stringify({
     mcpServers: {
       'sonar-sop': {
@@ -920,7 +921,7 @@ test('MCP registry mismatch fails closed before launch', () => {
   mkdirSync(join(siteRoot, '.ai'), { recursive: true });
   mkdirSync(join(siteRoot, '.ai', 'mcp'), { recursive: true });
   mkdirSync(join(siteRoot, '.narada', 'capabilities'), { recursive: true });
-  copyFileSync(join(naradaProperRoot, '.ai', 'task-lifecycle.db'), join(siteRoot, '.ai', 'task-lifecycle.db'));
+  writeTaskLifecycleFixture(siteRoot);
   writeFileSync(join(siteRoot, '.ai', 'mcp', 'actual-mcp.json'), JSON.stringify({
     mcpServers: {
       'narada-actual': {
@@ -1214,9 +1215,7 @@ test('direct codex carrier exec records AiProcessInvocation launch and exit evid
   const fakeCodexScript: any = join(siteRoot, 'fake-codex.js');
   writeFileSync(fakeCodexScript, 'process.exit(0);\n', 'utf8');
 
-  const result: any = runHiddenPostureCommandSync(process.execPath, [
-    '--import',
-    tsxLoaderPath,
+  const result: any = runHiddenPostureCommandSync(process.execPath, agentStartScriptArgs(
     launcherPath,
     identity,
     '--site-root',
@@ -1229,7 +1228,7 @@ test('direct codex carrier exec records AiProcessInvocation launch and exit evid
     'local-site',
     '--exec',
     '--json',
-  ], {
+  ), {
     cwd: siteRoot,
     encoding: 'utf8',
     env: { ...process.env, ...baseTestEnv, NARADA_CODEX_CLI_SCRIPT: fakeCodexScript },

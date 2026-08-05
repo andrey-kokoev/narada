@@ -10,11 +10,14 @@ import {
   loadSiteMcpFabric,
   mcpServerNames,
   projectFabricForAgentTui,
+  projectFabricForClaudeCode,
   projectFabricForCodex,
   projectServerEnvironment,
   renderMcpFabricDoctorTable,
   runMcpFabricDoctor,
 } from './mcp-fabric.js';
+
+const expectedNodeCommand = (process.versions as { bun?: string }).bun ? 'node' : process.execPath;
 
 const carrierClientFixture = JSON.parse(readFileSync(new URL('../fixtures/agent-tui-carrier-client-config.json', import.meta.url), 'utf8'));
 assert.equal(carrierClientFixture.schema, 'narada.mcp.carrier_client_config.v0');
@@ -29,17 +32,24 @@ const projectedCarrierFabric = {
   servers: {
     portableNode: { command: 'node', args: ['portable.js'], tools: ['probe'] },
     staleFnmNode: { command: 'C:\\Users\\Andrey\\AppData\\Local\\fnm_multishells\\old\\node.exe', args: ['stale.js'], tools: ['probe'] },
+    explicitBun: { command: 'bun', args: ['bun-server.ts'], tools: ['probe'] },
     powershell: { command: 'pwsh', args: ['-File', 'server.ps1'], tools: ['probe'] },
   },
 };
 const projectedCodexServers = projectFabricForCodex(projectedCarrierFabric);
-assert.equal(projectedCodexServers.find((server) => server.name === 'portableNode')!.command, process.execPath);
-assert.equal(projectedCodexServers.find((server) => server.name === 'staleFnmNode')!.command, process.execPath);
+assert.equal(projectedCodexServers.find((server) => server.name === 'portableNode')!.command, expectedNodeCommand);
+assert.equal(projectedCodexServers.find((server) => server.name === 'staleFnmNode')!.command, expectedNodeCommand);
+assert.equal(projectedCodexServers.find((server) => server.name === 'explicitBun')!.command, 'bun');
 assert.equal(projectedCodexServers.find((server) => server.name === 'powershell')!.command, 'pwsh');
 const projectedAgentTuiServers = projectFabricForAgentTui(projectedCarrierFabric, {}).mcpServers;
-assert.equal(projectedAgentTuiServers.portableNode.command, process.execPath);
-assert.equal(projectedAgentTuiServers.staleFnmNode.command, process.execPath);
+assert.equal(projectedAgentTuiServers.portableNode.command, expectedNodeCommand);
+assert.equal(projectedAgentTuiServers.staleFnmNode.command, expectedNodeCommand);
+assert.equal(projectedAgentTuiServers.explicitBun.command, 'bun');
 assert.equal(projectedAgentTuiServers.powershell.command, 'pwsh');
+const projectedClaudeCodeServers = projectFabricForClaudeCode(projectedCarrierFabric, {}).mcpServers;
+assert.equal(projectedClaudeCodeServers.portableNode.command, expectedNodeCommand);
+assert.equal(projectedClaudeCodeServers.staleFnmNode.command, expectedNodeCommand);
+assert.equal(projectedClaudeCodeServers.explicitBun.command, 'bun');
 
 const missingSite = mkdtempSync(join(tmpdir(), 'narada-mcp-fabric-missing-'));
 try {
@@ -436,7 +446,7 @@ writeFileSync(join(siteRoot, '.narada', 'capabilities', 'mcp-surfaces.json'), `$
 const fabric = loadSiteMcpFabric(siteRoot, { required: true });
 assert.deepEqual(mcpServerNames(fabric), ['narada-empty-authority', 'narada-fixture']);
 assert.equal(fabric.registry_validation.status, 'ok');
-assert.equal(fabric.servers['narada-fixture'].command, process.execPath);
+assert.equal(fabric.servers['narada-fixture'].command, expectedNodeCommand);
 assert.equal(fabric.servers['narada-fixture'].args[0].includes(siteRoot.replaceAll('\\', '/')), true);
 assert.equal(fabric.servers['narada-fixture'].request_timeout_ms, 123);
 assert.equal(fabric.servers['narada-fixture'].target_site_root, siteRoot.replaceAll('\\', '/'));
@@ -778,7 +788,7 @@ rl.on('line', (line) => {
 writeFileSync(join(doctorSite, '.ai', 'mcp', 'doctor-mcp.json'), `${JSON.stringify({
   mcpServers: {
     'narada-doctor': {
-      command: 'node',
+      command: process.execPath,
       args: [doctorServerPath],
     },
   },

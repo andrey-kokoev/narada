@@ -43,6 +43,16 @@ function tsxImportPath(): string {
   return pathToFileURL(requireFromLauncherRuntime.resolve('tsx')).href;
 }
 
+function isBunRuntime(): boolean {
+  return Boolean((process.versions as { bun?: string }).bun);
+}
+
+function agentStartRuntimeArgs(agentStart: string): string[] {
+  return isBunRuntime()
+    ? [agentStart]
+    : ['--import', tsxImportPath(), agentStart];
+}
+
 
 export function shouldDetachAgentStartProcess(options: Pick<AgentStartOptions, 'exec' | 'wait' | 'carrier' | 'runtime'>): boolean {
   if (options.exec !== true || options.wait === true) return false;
@@ -147,9 +157,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   const resultPath = join(resultDir, 'result.json');
   const inheritedInteractiveExec = options.exec === true && options.dryRun !== true;
   const args = [
-    '--import',
-    tsxImportPath(),
-    agentStart,
+    ...agentStartRuntimeArgs(agentStart),
     options.agent,
     '--target-site-root',
     siteRoot,
@@ -215,8 +223,11 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
   }
 
   if (options.dryRun !== true && shouldDetachAgentStartProcess(options)) {
+    // Bun executes agent-start directly. This preflight remains an explicit
+    // Node/tsx syntax probe because Bun has no equivalent non-executing check.
+    const syntaxCheckCommand = isBunRuntime() ? 'node' : process.execPath;
     const syntaxCheckArgs = ['--import', tsxImportPath(), '--check', agentStart];
-    const syntaxCheck = runProcess(process.execPath, syntaxCheckArgs, dependencyWorkspaceRoot);
+    const syntaxCheck = runProcess(syntaxCheckCommand, syntaxCheckArgs, dependencyWorkspaceRoot);
     if (syntaxCheck.status !== 'success') {
       const detail = truncateText(
         syntaxCheck.stderr || syntaxCheck.stdout || syntaxCheck.error || 'agent-start syntax check failed',
@@ -233,7 +244,7 @@ export function runAgentStartCommand(options: AgentStartOptions): AgentStartComm
         reasonCode: 'agent_start_syntax_preflight_failed',
         reason: `agent-start syntax preflight failed: ${detail}`,
         diagnostics: {
-          command: [process.execPath, ...syntaxCheckArgs],
+          command: [syntaxCheckCommand, ...syntaxCheckArgs],
           status: syntaxCheck.status,
           exit_code: syntaxCheck.exit_code,
           stdout: syntaxCheck.stdout,

@@ -54,7 +54,11 @@ test('agent context startup tools expose canonical agent identity ref', async ()
 function callAgentContextMcp({ siteRoot, env, calls }: any) {
   return new Promise((resolvePromise: any, rejectPromise: any) => {
     const tsxLoader: any = pathToFileURL(resolve(root, '../../../node_modules/tsx/dist/loader.mjs')).href;
-    const child: any = spawnTestChild(process.execPath, ['--import', tsxLoader, join(root, 'agent-context-mcp-server.ts'), '--site-root', siteRoot], {
+    const serverPath: any = join(root, 'agent-context-mcp-server.ts');
+    const runtimeArgs: any[] = (process.versions as any).bun
+      ? [serverPath, '--site-root', siteRoot]
+      : ['--import', tsxLoader, serverPath, '--site-root', siteRoot];
+    const child: any = spawnTestChild(process.execPath, runtimeArgs, {
       cwd: siteRoot,
       env: { ...process.env, ...env },
       stdio: ['pipe', 'pipe', 'pipe'],

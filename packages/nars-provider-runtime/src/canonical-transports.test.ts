@@ -103,6 +103,30 @@ test('HTTP transport marks a pre-dispatch abort as not acknowledged', async () =
   );
 });
 
+test('HTTP transport settles a request aborted after dispatch', async () => {
+  let markRequestReceived: any;
+  const requestReceived: any = new Promise((resolve: any) => { markRequestReceived = resolve; });
+  await withServer((request: any) => {
+    request.resume();
+    request.on('end', markRequestReceived);
+  }, async (baseUrl: any) => {
+    const controller: any = new AbortController();
+    const request: any = buildOpenAiChatRequest([{ role: 'user', content: 'hello' }], [], {
+      provider: 'openai-api',
+      apiKey: 'test-key',
+      baseUrl,
+      model: 'test-model',
+    });
+    const result: any = sendHttp(request, { abortSignal: controller.signal });
+    await requestReceived;
+    controller.abort();
+    await assert.rejects(
+      result,
+      (error: any) => error.code === 'provider-request-aborted' && error.transportSubmitted === true,
+    );
+  });
+});
+
 test('Codex transport carries canonical runtime scope and returns parsed output', async () => {
   const siteRoot = mkdtempSync(join(tmpdir(), 'narada-canonical-codex-'));
   const sessionDir = join(siteRoot, '.ai', 'runtime', 'ai-process-invocation');

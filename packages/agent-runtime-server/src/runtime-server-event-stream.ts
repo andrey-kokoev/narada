@@ -261,7 +261,106 @@ function readEventStreamPage({ eventsPath, message }: any) {
   };
 }
 
-export function startEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }: any) {
+function createEventStreamConnection({
+  childStdin,
+  eventHub,
+  eventsPath,
+  connectionId,
+  send,
+  subscribeRequests,
+  readRequests,
+  replayBatches,
+}: any) {
+  const subscriptions: any = new Map();
+  let nextSubscriptionId: any = 0;
+  send({
+    schema: 'narada.nars.websocket.v1',
+    event: 'websocket_connected',
+    transport: 'websocket',
+    cursor: eventsPath
+      ? { namespace: 'durable', last_sequence: null, next_sequence: 1 }
+      : { namespace: 'live', ...eventHub.cursor() },
+  });
+  return {
+    receive(text: any) {
+      let message: any;
+      try {
+        message = JSON.parse(text);
+      } catch (error) {
+        send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', code: 'invalid_json', message: error instanceof Error ? error.message : String(error) });
+        return;
+      }
+      if (!message || typeof message !== 'object' || Array.isArray(message)) {
+        websocketError(send, { code: 'invalid_websocket_request', message: 'WebSocket request must be a JSON object.' });
+        return;
+      }
+      if (message.method === 'session.events.subscribe') {
+        subscribeRequests.push(message);
+        const result: any = subscribeToEventStream({
+          eventHub,
+          subscriptions,
+          send,
+          message,
+          eventsPath,
+          connectionId,
+          nextSubscriptionId: () => ++nextSubscriptionId,
+        });
+        if (result.ok) replayBatches.push({ request: message, events: result.replayEvents ?? [] });
+        if (!result.ok) websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
+        return;
+      }
+      if (message.method === 'session.events.read') {
+        readRequests.push(message);
+        const result: any = readEventStreamPage({ eventsPath, message });
+        if (!result.ok) {
+          websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
+          return;
+        }
+        send({
+          ...result.page,
+          event: 'session_events_read',
+          request_id: message.id ?? null,
+          transport: 'websocket',
+          cursor: result.page.cursor ? { namespace: 'durable', ...result.page.cursor } : result.page.cursor,
+        });
+        return;
+      }
+      const translated: any = translateCarrierInputDelivery(message);
+      if (!translated.ok) {
+        send({
+          schema: 'narada.nars.websocket.error.v1',
+          event: 'websocket_error',
+          request_id: message.id ?? null,
+          code: translated.code,
+          message: translated.message,
+        });
+        return;
+      }
+      const request: any = translated.request;
+      if (!isNarsSessionCoreMethod(request.method) && !isNarsRuntimeServerMethod(request.method)) {
+        send({
+          schema: 'narada.nars.websocket.error.v1',
+          event: 'websocket_error',
+          request_id: message.id ?? null,
+          code: 'unsupported_session_control',
+          method: request.method ?? null,
+        });
+        return;
+      }
+      const stdin: any = typeof childStdin === 'function' ? childStdin() : childStdin;
+      if (!stdin?.writable) {
+        send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', request_id: message.id ?? null, code: 'child_stdin_unavailable' });
+        return;
+      }
+      stdin.write(`${JSON.stringify(request)}\n`);
+    },
+    close() {
+      unsubscribeAll(subscriptions);
+    },
+  };
+}
+
+function startNodeEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }: any) {
   const server: any = createServer((request: any, response: any) => {
     response.writeHead(426, { 'content-type': 'application/json' });
     response.end(`${JSON.stringify({ error: 'upgrade_required', transport: 'websocket', path: '/events' })}\n`);
@@ -291,17 +390,17 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       '',
     ].join('\r\n'));
     const send: any = (payload: any) => socket.write(encodeWebSocketTextFrame(JSON.stringify(payload)));
-    const subscriptions: any = new Map();
-    let nextSubscriptionId: any = 0;
-    let pending: any = Buffer.alloc(0);
-    send({
-      schema: 'narada.nars.websocket.v1',
-      event: 'websocket_connected',
-      transport: 'websocket',
-      cursor: eventsPath
-        ? { namespace: 'durable', last_sequence: null, next_sequence: 1 }
-        : { namespace: 'live', ...eventHub.cursor() },
+    const connection: any = createEventStreamConnection({
+      childStdin,
+      eventHub,
+      eventsPath,
+      connectionId,
+      send,
+      subscribeRequests,
+      readRequests,
+      replayBatches,
     });
+    let pending: any = Buffer.alloc(0);
     socket.on('data', (chunk: any) => {
       pending = Buffer.concat([pending, chunk]);
       const decoded: any = decodeWebSocketFrames(pending);
@@ -316,85 +415,16 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
           return;
         }
         if (frame.opcode !== 0x1) continue;
-        let message: any;
-        try {
-          message = JSON.parse(frame.text);
-        } catch (error) {
-          send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', code: 'invalid_json', message: error instanceof Error ? error.message : String(error) });
-          continue;
-        }
-        if (!message || typeof message !== 'object' || Array.isArray(message)) {
-          websocketError(send, { code: 'invalid_websocket_request', message: 'WebSocket request must be a JSON object.' });
-          continue;
-        }
-        if (message.method === 'session.events.subscribe') {
-          subscribeRequests.push(message);
-          const result: any = subscribeToEventStream({
-            eventHub,
-            subscriptions,
-            send,
-            message,
-            eventsPath,
-            connectionId,
-            nextSubscriptionId: () => ++nextSubscriptionId,
-          });
-          if (result.ok) replayBatches.push({ request: message, events: result.replayEvents ?? [] });
-          if (!result.ok) websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
-          continue;
-        }
-        if (message.method === 'session.events.read') {
-          readRequests.push(message);
-          const result: any = readEventStreamPage({ eventsPath, message });
-          if (!result.ok) {
-            websocketError(send, { requestId: message.id ?? null, code: result.code, view: result.view });
-            continue;
-          }
-          send({
-            ...result.page,
-            event: 'session_events_read',
-            request_id: message.id ?? null,
-            transport: 'websocket',
-            cursor: result.page.cursor ? { namespace: 'durable', ...result.page.cursor } : result.page.cursor,
-          });
-          continue;
-        }
-        const translated: any = translateCarrierInputDelivery(message);
-        if (!translated.ok) {
-          send({
-            schema: 'narada.nars.websocket.error.v1',
-            event: 'websocket_error',
-            request_id: message.id ?? null,
-            code: translated.code,
-            message: translated.message,
-          });
-          continue;
-        }
-        const request: any = translated.request;
-        if (!isNarsSessionCoreMethod(request.method) && !isNarsRuntimeServerMethod(request.method)) {
-          send({
-            schema: 'narada.nars.websocket.error.v1',
-            event: 'websocket_error',
-            request_id: message.id ?? null,
-            code: 'unsupported_session_control',
-            method: request.method ?? null,
-          });
-          continue;
-        }
-        const stdin: any = typeof childStdin === 'function' ? childStdin() : childStdin;
-        if (!stdin?.writable) {
-          send({ schema: 'narada.nars.websocket.error.v1', event: 'websocket_error', request_id: message.id ?? null, code: 'child_stdin_unavailable' });
-          continue;
-        }
-        stdin.write(`${JSON.stringify(request)}\n`);
+        connection.receive(frame.text);
       }
     });
     socket.on('close', () => {
       sockets.delete(socket);
-      unsubscribeAll(subscriptions);
+      connection.close();
     });
     socket.on('error', () => {
       sockets.delete(socket);
-      unsubscribeAll(subscriptions);
+      connection.close();
     });
   });
   return new Promise((resolve: any, reject: any) => {
@@ -415,6 +445,107 @@ export function startEventStreamProjection({ childStdin, eventHub, host, port, e
       });
     });
   });
+}
+
+async function startBunEventStreamProjection({ childStdin, eventHub, host, port, eventsPath = null }: any, bunRuntime: any) {
+  const subscribeRequests: any = [];
+  const readRequests: any = [];
+  const replayBatches: any = [];
+  let stopPromise: any = null;
+  let listening: any = true;
+  let forceCloseConnections: any = false;
+  const closeListeners: any = new Set();
+  const bunServer: any = bunRuntime.serve({
+    hostname: host,
+    port,
+    fetch(request: any, server: any) {
+      const path: any = new URL(request.url).pathname;
+      const isUpgrade: any = request.headers.get('upgrade')?.toLowerCase() === 'websocket';
+      if (path !== '/events') {
+        return isUpgrade
+          ? new Response(null, { status: 404 })
+          : new Response(`${JSON.stringify({ error: 'upgrade_required', transport: 'websocket', path: '/events' })}\n`, {
+            status: 426,
+            headers: { 'content-type': 'application/json' },
+          });
+      }
+      if (!isUpgrade) {
+        return new Response(`${JSON.stringify({ error: 'upgrade_required', transport: 'websocket', path: '/events' })}\n`, {
+          status: 426,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      const data: any = { connectionId: `ws_${++eventStreamConnectionSequence}`, connection: null };
+      if (server.upgrade(request, { data })) return undefined;
+      return new Response(null, { status: 400 });
+    },
+    websocket: {
+      open(socket: any) {
+        const send: any = (payload: any) => socket.send(JSON.stringify(payload));
+        socket.data.connection = createEventStreamConnection({
+          childStdin,
+          eventHub,
+          eventsPath,
+          connectionId: socket.data.connectionId,
+          send,
+          subscribeRequests,
+          readRequests,
+          replayBatches,
+        });
+      },
+      message(socket: any, message: any) {
+        const text: any = typeof message === 'string' ? message : Buffer.from(message).toString('utf8');
+        socket.data.connection?.receive(text);
+      },
+      close(socket: any) {
+        socket.data.connection?.close();
+      },
+    },
+  });
+  const server: any = {
+    get listening() {
+      return listening;
+    },
+    address() {
+      return { address: host, family: host.includes(':') ? 'IPv6' : 'IPv4', port: bunServer.port };
+    },
+    on(event: any, listener: any) {
+      if (event === 'close') closeListeners.add(listener);
+      return server;
+    },
+    off(event: any, listener: any) {
+      if (event === 'close') closeListeners.delete(listener);
+      return server;
+    },
+    close(callback?: any) {
+      if (!stopPromise) {
+        stopPromise = Promise.resolve(bunServer.stop(forceCloseConnections)).then(() => {
+          if (!listening) return;
+          listening = false;
+          for (const listener of closeListeners) listener();
+        });
+      }
+      const stopped: any = stopPromise;
+      if (callback) Promise.resolve(stopped).then(() => callback(), (error: any) => callback(error));
+      return stopped;
+    },
+  };
+  return {
+    server,
+    url: `ws://${host}:${bunServer.port}/events`,
+    subscribeRequests,
+    readRequests,
+    replayBatches,
+    closeConnections() {
+      forceCloseConnections = true;
+    },
+  };
+}
+
+export function startEventStreamProjection(options: any) {
+  const bunRuntime: any = (globalThis as any).Bun;
+  if (typeof bunRuntime?.serve === 'function') return startBunEventStreamProjection(options, bunRuntime);
+  return startNodeEventStreamProjection(options);
 }
 
 export function parseEventStreamOptions(args: any, env: any = process.env): any {

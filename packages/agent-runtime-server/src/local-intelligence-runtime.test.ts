@@ -36,8 +36,9 @@ function runtimeContext() {
   return {
     identity: 'narada.test',
     session: 'canonical-local-test',
-    siteRoot: 'D:/code/narada',
+    siteRoot: tmpdir(),
     intelligence: {
+      registryDbPath: ':memory:',
       principal: IDS.principal,
       principalBinding: {
         schema: 'narada.intelligence.principal_binding.v1',

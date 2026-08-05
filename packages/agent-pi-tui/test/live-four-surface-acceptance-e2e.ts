@@ -5,9 +5,10 @@ import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
+import { homedir, tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { NarsAttachClient } from '../dist/nars-client/attach-client.js';
 import {
   buildCanonicalLocalTestSeed,
@@ -36,24 +37,45 @@ const ptyModule: any = await import('node-pty');
 const pty: any = ptyModule.default ?? ptyModule;
 
 const REPO_ROOT: any = fileURLToPath(new URL('../../..', import.meta.url));
+const require: any = createRequire(import.meta.url);
+const tsxLoader: any = pathToFileURL(require.resolve('tsx')).href;
+// On Windows, node-pty input is driven by Node. --bun-runtime still runs every
+// JavaScript production and fixture child under Bun.
+const isBunHarnessRuntime: any = Boolean((process.versions as { bun?: string }).bun);
+const useBunSurfaceRuntime: any = isBunHarnessRuntime || process.argv.includes('--bun-runtime');
+const surfaceRuntimeCommand: any = useBunSurfaceRuntime
+  ? (isBunHarnessRuntime
+    ? process.execPath
+    : process.env.NARADA_BUN_BIN
+      ?? (process.platform === 'win32' ? join(homedir(), '.bun', 'bin', 'bun.exe') : 'bun'))
+  : process.execPath;
 const CLI_ENTRYPOINT: any = join(REPO_ROOT, 'packages', 'layers', 'cli', 'dist', 'main.js');
-const PI_ENTRYPOINT: any = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'bin', 'narada-agent-pi-tui.js');
+const PI_ENTRYPOINT: any = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'bin', 'narada-agent-pi-tui.ts');
 const AGENT_CLI_ENTRYPOINT: any = process.env.NARADA_AGENT_CLI_BIN
   ? resolve(process.env.NARADA_AGENT_CLI_BIN)
-  : resolve(REPO_ROOT, '..', 'agent-cli', 'bin', 'narada-agent-cli.js');
+  : resolve(REPO_ROOT, '..', 'agent-cli', 'dist', 'bin', 'narada-agent-cli.js');
 const AGENT_TUI_ENTRYPOINT: any = process.env.NARADA_AGENT_TUI_BIN
   ? resolve(process.env.NARADA_AGENT_TUI_BIN)
   : resolve(REPO_ROOT, '..', 'agent-tui', 'target', 'debug', process.platform === 'win32' ? 'narada-agent-tui.exe' : 'narada-agent-tui');
-const MCP_FIXTURE: any = join(REPO_ROOT, 'packages', 'agent-runtime-server', 'test', 'fixtures', 'mcp-echo-server.js');
-const PI_RPC_FIXTURE: any = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'test', 'fixtures', 'pi-rpc-four-surface.js');
+const MCP_FIXTURE: any = join(REPO_ROOT, 'packages', 'agent-runtime-server', 'test', 'fixtures', 'mcp-echo-server.ts');
+const PI_RPC_FIXTURE: any = join(REPO_ROOT, 'packages', 'agent-pi-tui', 'test', 'fixtures', 'pi-rpc-four-surface.ts');
 const TIMEOUT_MS: any = Number(process.env.NARADA_AGENT_PI_TUI_LIVE_E2E_TIMEOUT_MS ?? 120_000);
 const LIVE_TEMP_DIR: any = process.env.NARADA_LIVE_E2E_TEMP_DIR
   ?? (process.platform === 'win32' ? join(REPO_ROOT, '.ai', 'tmp', 'live-e2e-temp') : tmpdir());
 const piRpcMode: any = process.argv.includes('--pi-rpc');
 const kernelKind: any = piRpcMode ? 'pi-rpc' : 'pi-sdk';
 
+function testRuntimeScriptArgs(script: any, args: any = []) : any{
+  return useBunSurfaceRuntime
+    ? [script, ...args]
+    : ['--import', tsxLoader, script, ...args];
+}
+
 for (const requiredPath of [CLI_ENTRYPOINT, PI_ENTRYPOINT, AGENT_CLI_ENTRYPOINT, AGENT_TUI_ENTRYPOINT, MCP_FIXTURE, ...(piRpcMode ? [PI_RPC_FIXTURE] : [])]) {
   if (!existsSync(requiredPath)) throw new Error(`live_e2e_required_path_missing:${requiredPath}`);
+}
+if (useBunSurfaceRuntime && process.platform === 'win32' && !existsSync(surfaceRuntimeCommand)) {
+  throw new Error(`live_e2e_bun_runtime_missing:${surfaceRuntimeCommand}`);
 }
 
 const browserPath: any = findHeadlessBrowser();
@@ -62,7 +84,9 @@ if (!browserPath) throw new Error('live_e2e_headless_chromium_required: set NARA
 let siteRoot: any = null;
 let provider: any = null;
 let runtimeProcess: any = null;
+let runtimeOutput: any = null;
 let webUiProcess: any = null;
+let webUiOutput: any = null;
 let webPage: any = null;
 let controlClient: any = null;
 let scenarioExitCode: any = 1;
@@ -90,8 +114,8 @@ try {
     JSON.stringify({
       mcpServers: {
         "narada-live-fixture": {
-          command: process.execPath,
-          args: [MCP_FIXTURE, '', '1000'],
+          command: surfaceRuntimeCommand,
+          args: testRuntimeScriptArgs(MCP_FIXTURE, ['', '1000']),
           surface_id: 'live-e2e.fixture',
         },
       },
@@ -158,15 +182,15 @@ try {
     TEMP: LIVE_TEMP_DIR,
     TMP: LIVE_TEMP_DIR,
     ...(piRpcMode ? {
-      NARADA_PI_RPC_COMMAND: process.execPath,
-      NARADA_PI_RPC_ARGS: JSON.stringify([PI_RPC_FIXTURE, generatedArtifactPath, piRpcRequestLogPath, piRpcHoldReleasePath]),
+      NARADA_PI_RPC_COMMAND: surfaceRuntimeCommand,
+      NARADA_PI_RPC_ARGS: JSON.stringify(testRuntimeScriptArgs(PI_RPC_FIXTURE, [generatedArtifactPath, piRpcRequestLogPath, piRpcHoldReleasePath])),
       NARADA_PI_VERSION: 'pi-four-surface-1.0.0',
     } : {}),
   };
 
   const launchBindingPath: any = join(sessionWorkspace, 'runtime', 'agent-pi-tui-live-launch-binding.json');
   console.log(`live-e2e: starting real NARS runtime for ${agentId}`);
-  runtimeProcess = spawnTestChild(process.execPath, [
+  runtimeProcess = spawnTestChild(surfaceRuntimeCommand, [
     CLI_ENTRYPOINT,
     'operator-surface',
     'runtime',
@@ -186,13 +210,13 @@ try {
     env: processEnv(providerEnv),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  const runtimeOutput: any = captureProcessOutput(runtimeProcess);
+  runtimeOutput = captureProcessOutput(runtimeProcess);
 
   // Start the browser projection before the binding becomes ready. The
   // production web launcher uses the observed waiting -> ready transition to
   // reject stale binding files; starting it here proves that discovery path
   // instead of silently falling back to an explicit session id.
-  webUiProcess = spawnTestChild(process.execPath, [
+  webUiProcess = spawnTestChild(surfaceRuntimeCommand, [
     CLI_ENTRYPOINT,
     'agent-web-ui',
     'attach',
@@ -206,7 +230,7 @@ try {
     '--onboarding',
     '--format', 'human',
   ], { cwd: REPO_ROOT, env: processEnv(providerEnv), stdio: ['ignore', 'pipe', 'pipe'] });
-  const webUiOutput: any = captureProcessOutput(webUiProcess);
+  webUiOutput = captureProcessOutput(webUiProcess);
 
   const record: any = await waitForSessionRecord({ siteRoot, agentId, runtimeProcess, runtimeOutput });
   assert.equal(record.agent_id, agentId);
@@ -245,12 +269,12 @@ try {
   assert.equal(launchBinding.nars_session_id ?? launchBinding.runtime_session_id, record.session_id);
   assert.equal(launchBinding.event_endpoint, undefined, 'binding must resolve endpoints through the session record, not embed an arbitrary endpoint');
 
-  const pi: any = spawnPtySurface('agent-pi-tui', process.execPath, [PI_ENTRYPOINT, '--launch-binding', launchBindingPath], {
+  const pi: any = spawnPtySurface('agent-pi-tui', surfaceRuntimeCommand, testRuntimeScriptArgs(PI_ENTRYPOINT, ['--launch-binding', launchBindingPath]), {
     cwd: clientRoot,
     env: processEnv({ ...providerEnv, NARADA_AGENT_PI_TUI_CURSOR_PATH: cursorPath }),
   });
   ptySurfaces.push(pi);
-  const agentCli: any = spawnPtySurface('agent-cli', process.execPath, [AGENT_CLI_ENTRYPOINT, '--launch-binding', launchBindingPath], {
+  const agentCli: any = spawnPtySurface('agent-cli', surfaceRuntimeCommand, [AGENT_CLI_ENTRYPOINT, '--launch-binding', launchBindingPath], {
     cwd: clientRoot,
     env: processEnv(providerEnv),
   });
@@ -332,8 +356,6 @@ try {
   // The default Pi SDK path does not expose that extension field, so its
   // artifact coverage remains the real MCP fixture_artifact file assertion
   // above; the Pi-RPC matrix carries the durable registration assertion.
-  await setProjectionView(webPage, 'conversation');
-  await submitPty(pi, '/view conversation');
   if (piRpcMode) {
     const agentTuiArtifactDiagnosticBaseline: any = countOccurrences(agentTui.text(), 'carrier diagnostic');
     const artifactRegistration: any = await waitForEvent(
@@ -347,18 +369,18 @@ try {
     assert.equal(artifactContentResponse.status, 200);
     assert.match(await artifactContentResponse.text(), /PI live generated artifact/);
     assert.equal(artifactRegistration.artifact?.kind, 'html');
-    // Artifact identity is rendered by each surface's own presentation grammar:
-    // Pi and the browser expose the title, agent-cli exposes the admitted
-    // registration notice, and agent-tui exposes the raw registration payload.
     // The durable artifact id/content assertions above are the authority-level
-    // equivalence check; these surface-specific markers only prove delivery.
+    // equivalence check. Pi proves delivery through its persisted durable cursor;
+    // the other surfaces expose their own presentation-specific marker.
     await Promise.all([
-      waitForPtySurface(pi, ['PI_LIVE_ARTIFACT'], 'artifact_projection:agent-pi-tui'),
+      waitFor(() => readCursor(cursorPath, record.session_id) >= eventSequence(artifactRegistration), 'artifact_delivery:agent-pi-tui'),
       waitForPtySurface(agentCli, ['Artifact registered'], 'artifact_projection:agent-cli'),
       waitFor(() => countOccurrences(agentTui.text(), 'carrier diagnostic') > agentTuiArtifactDiagnosticBaseline, 'artifact_projection:agent-tui'),
       webPage.waitForText('PI_LIVE_ARTIFACT', TIMEOUT_MS, 'artifact_projection:agent-web-ui'),
     ]);
   }
+  await setProjectionView(webPage, 'conversation');
+  await submitPty(pi, '/view conversation');
 
   // Ordinary submission is driven through the actual Pi binary, not a test
   // event hub or a synthetic client.
@@ -489,7 +511,7 @@ try {
     () => countOccurrences(agentTui.text(), 'completed') > agentTuiRecoveryCompletionBaseline,
     'agent_tui_recovery_projection',
   );
-  const piReattached: any = spawnPtySurface('agent-pi-tui-reattached', process.execPath, [PI_ENTRYPOINT, '--launch-binding', launchBindingPath], {
+  const piReattached: any = spawnPtySurface('agent-pi-tui-reattached', surfaceRuntimeCommand, testRuntimeScriptArgs(PI_ENTRYPOINT, ['--launch-binding', launchBindingPath]), {
     cwd: clientRoot,
     env: processEnv({ ...providerEnv, NARADA_AGENT_PI_TUI_CURSOR_PATH: cursorPath }),
   });
@@ -602,12 +624,16 @@ try {
     },
     sessionIds: [record.session_id],
     status: 'passed',
+    harness_runtime: isBunHarnessRuntime ? 'bun' : 'node',
+    surface_runtime: useBunSurfaceRuntime ? 'bun' : 'node',
     posture: 'partial-production-launch',
   });
 
   console.log(JSON.stringify({
     schema: 'narada.agent_pi_tui.baseline_live_acceptance_e2e.v1',
     status: 'passed',
+    harness_runtime: isBunHarnessRuntime ? 'bun' : 'node',
+    surface_runtime: useBunSurfaceRuntime ? 'bun' : 'node',
     session_id: record.session_id,
     site_id: record.site_id ?? siteId,
     events_path: record.events_path,
@@ -619,14 +645,23 @@ try {
   }, null, 2));
   scenarioExitCode = 0;
 } catch (error) {
-  console.error(`agent-pi-tui four-surface live e2e failed: ${error instanceof Error ? error.stack : String(error)}`);
+  const failureSections: any = [
+    `agent-pi-tui four-surface live e2e failed: ${error instanceof Error ? error.stack : String(error)}`,
+  ];
+  if (runtimeOutput) failureSections.push(`live-e2e runtime launcher output:\n${runtimeOutput.all().slice(-8000)}`);
+  if (webUiOutput) failureSections.push(`live-e2e agent-web-ui launcher output:\n${webUiOutput.all().slice(-8000)}`);
   for (const surface of ptySurfaces) {
-    console.error(`live-e2e ${surface.name} output:\n${surface.text().slice(-4000)}`);
+    failureSections.push(`live-e2e ${surface.name} output:\n${surface.text().slice(-4000)}`);
   }
   if (webPage) {
-    console.error(`live-e2e agent-web-ui body:\n${(await webPage.bodyText().catch(() => '')).slice(-8000)}`);
+    failureSections.push(`live-e2e agent-web-ui body:\n${(await webPage.bodyText().catch(() => '')).slice(-8000)}`);
   }
-  if (siteRoot) console.error(`live-e2e site root: ${siteRoot}`);
+  if (siteRoot) failureSections.push(`live-e2e site root: ${siteRoot}`);
+  const failureText: any = failureSections.join('\n\n');
+  console.error(failureText);
+  if (siteRoot && process.env.NARADA_KEEP_LIVE_E2E_ARTIFACTS === '1') {
+    writeFileSync(join(siteRoot, '.ai', 'runtime', 'four-surface-failure.log'), `${failureText}\n`, 'utf8');
+  }
   process.exitCode = 1;
 } finally {
   await cleanupStep('fixture_provider', () => provider?.close?.());
@@ -832,8 +867,7 @@ async function waitForPtySurface(surface: any, needles: any, label: any) {
 }
 
 async function submitPty(surface: any, content: any) {
-  surface.write(content);
-  surface.write('\r');
+  surface.write(`${content}\r`);
   await sleep(100);
 }
 
