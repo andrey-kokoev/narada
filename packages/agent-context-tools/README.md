@@ -29,3 +29,8 @@ Pre-canonical states may transition to `rejected`; `canonical` may transition to
 `rejected` and `superseded` are terminal. A `corrected` event may only repeat
 the current non-terminal state. Invalid jumps are rejected before the SQLite
 transaction is written.
+
+## Runtime posture
+
+The default typecheck and test paths use Bun; `typecheck:node` and `test:node`
+retain explicit Node compatibility paths.
