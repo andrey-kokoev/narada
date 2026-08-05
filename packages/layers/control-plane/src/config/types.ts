@@ -156,6 +156,8 @@ export interface OperationIntakeConfig {
 /** Source configuration for a scope (e.g. Graph API, timer, webhook) */
 export interface SourceConfig {
   type: 'graph' | 'timer' | 'webhook' | 'inbox_drop' | 'mock';
+  auth_mode?: 'delegated_token_store' | 'control_plane_default';
+  mailbox_id?: string;
   tenant_id?: string;
   client_id?: string;
   client_secret?: string;
@@ -245,6 +247,8 @@ export interface ScopeConfig {
    * @deprecated Legacy Graph API field. Prefer sources[] instead.
    */
   graph?: {
+    auth_mode?: 'delegated_token_store' | 'control_plane_default';
+    mailbox_id?: string;
     tenant_id?: string;
     client_id?: string;
     client_secret?: string;
@@ -373,6 +377,8 @@ export interface ExchangeFsSyncConfig {
   scope_id?: string;
   mailbox_id?: string;
   graph?: {
+    auth_mode?: 'delegated_token_store' | 'control_plane_default';
+    mailbox_id?: string;
     tenant_id?: string;
     client_id?: string;
     client_secret?: string;

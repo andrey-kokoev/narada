@@ -10,6 +10,10 @@ export interface GraphHttpClientOptions {
   retryConfig?: Partial<RetryConfig>;
 }
 
+function graphMailboxPath(userId: string): string {
+  return userId === "me" ? "/me" : `/users/${encodeURIComponent(userId)}`;
+}
+
 export class GraphHttpClient {
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
@@ -67,10 +71,16 @@ export class GraphHttpClient {
         if (response.status === 401 || response.status === 403) {
           this.tokenProvider.invalidateAccessToken?.();
         }
-        handleGraphError(response.status, text, {
-          phase: "fetch",
-          operation: "requestJson",
-        });
+        try {
+          handleGraphError(response.status, text, {
+            phase: "fetch",
+            operation: "requestJson",
+          });
+        } catch (error) {
+          const graphPath = new URL(url, this.baseUrl).pathname;
+          const message = error instanceof Error ? error.message : String(error);
+          throw new Error(`${message} [graph_path:${graphPath}]`);
+        }
       }
 
       const text = await response.text().catch(() => "");
@@ -84,9 +94,7 @@ export class GraphHttpClient {
   }
 
   buildFolderMessagesDeltaUrl(userId: string, folderId: string): string {
-    return `${this.baseUrl}/users/${encodeURIComponent(
-      userId,
-    )}/mailFolders/${encodeURIComponent(folderId)}/messages/delta`;
+    return `${this.baseUrl}${graphMailboxPath(userId)}/mailFolders/${encodeURIComponent(folderId)}/messages/delta`;
   }
 
   async getDeltaPage(url: string): Promise<GraphDeltaPage<GraphDeltaMessage>> {
@@ -94,7 +102,7 @@ export class GraphHttpClient {
   }
 
   async getMessageAttachments(userId: string, messageId: string): Promise<GraphAttachment[]> {
-    const path = `/users/${encodeURIComponent(userId)}/messages/${encodeURIComponent(messageId)}/attachments`;
+    const path = `${graphMailboxPath(userId)}/messages/${encodeURIComponent(messageId)}/attachments`;
     const attachments: GraphAttachment[] = [];
     let url: string | undefined = path;
 

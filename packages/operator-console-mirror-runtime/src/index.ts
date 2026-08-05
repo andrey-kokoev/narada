@@ -9,6 +9,8 @@ import {
   createOperatorConsoleRemoteGateway,
   type OperatorConsoleRemoteGateway,
 } from '@narada-core/operator-console-remote-gateway';
+import { resolveCredentialLocator } from '@narada-core/nars-provider-runtime';
+import { OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME } from '@narada-core/operator-console-contract';
 import { runGovernedCommandSync, spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 
 export const OPERATOR_CONSOLE_MIRROR_STATE_SCHEMA = 'narada.operator_console_mirror.state.v1' as const;
@@ -44,6 +46,7 @@ export interface OperatorConsoleMirrorOptions {
   narada_root?: string;
   log_path?: string;
   bridge_token_file?: string;
+  bridge_token_secret_name?: string;
   timeout_ms?: number;
   lock_timeout_ms?: number;
   fetch_fn?: typeof fetch;
@@ -84,6 +87,7 @@ export interface OperatorConsoleMirrorState {
   tunnel_log_path: string;
   state_path: string;
   bridge_token_file?: string;
+  bridge_token_secret_name?: string;
   started_at: string;
   updated_at: string;
   ready_at?: string;
@@ -142,6 +146,7 @@ interface NormalizedOptions {
   metricsPort: number;
   publicOrigin: string | null;
   bridgeTokenFile: string;
+  bridgeTokenSecretName: string;
   stateRoot: string;
   cliEntrypoint: string;
   naradaRoot: string;
@@ -475,6 +480,7 @@ export async function runOperatorConsoleMirror(options: OperatorConsoleMirrorOpt
     tunnel_log_path: tunnelLogPath,
     state_path: statePath,
     bridge_token_file: normalized.bridgeTokenFile,
+    bridge_token_secret_name: normalized.bridgeTokenSecretName,
     started_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -640,6 +646,9 @@ function normalizeOptions(options: OperatorConsoleMirrorOptions): NormalizedOpti
   const publicOrigin = options.public_origin?.trim() || env.OPERATOR_CONSOLE_GATEWAY_URL?.trim() || null;
   const stateRoot = resolve(options.state_root?.trim() || env.NARADA_OPERATOR_CONSOLE_MIRROR_STATE_ROOT?.trim() || defaultOperatorConsoleMirrorStateRoot(env));
   const bridgeTokenFile = resolve(options.bridge_token_file?.trim() || env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN_FILE?.trim() || join(stateRoot, 'bridge-token'));
+  const bridgeTokenSecretName = options.bridge_token_secret_name?.trim()
+    || env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME?.trim()
+    || OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME;
   const cliEntrypoint = resolve(options.cli_entrypoint?.trim() || env.NARADA_CLI_ENTRYPOINT?.trim() || defaultOperatorConsoleCliEntrypoint());
   const naradaRoot = resolve(options.narada_root?.trim() || env.NARADA_ROOT?.trim() || fileURLToPath(new URL('../../..', import.meta.url)));
   const timeoutMs = normalizeTimeout(options.timeout_ms ?? Number.parseInt(env.NARADA_OPERATOR_CONSOLE_MIRROR_TIMEOUT_MS || '30000', 10));
@@ -668,6 +677,7 @@ function normalizeOptions(options: OperatorConsoleMirrorOptions): NormalizedOpti
     metricsPort,
     publicOrigin,
     bridgeTokenFile,
+    bridgeTokenSecretName,
     stateRoot,
     cliEntrypoint,
     naradaRoot,
@@ -683,7 +693,9 @@ async function resolveNormalizedOptions(options: OperatorConsoleMirrorOptions): 
   const normalized = normalizeOptions(options);
   const previous = await readOperatorConsoleMirrorState(normalized.stateRoot);
   const bridgeTokenFile = previous?.bridge_token_file ? resolve(previous.bridge_token_file) : normalized.bridgeTokenFile;
-  const bridgeToken = normalized.bridgeToken ?? await readSecretFile(bridgeTokenFile);
+  const bridgeToken = normalized.bridgeToken
+    ?? await resolveSecretStoreValue(normalized.bridgeTokenSecretName)
+    ?? await readSecretFile(bridgeTokenFile);
   return {
     ...normalized,
     bridgeToken,
@@ -692,6 +704,18 @@ async function resolveNormalizedOptions(options: OperatorConsoleMirrorOptions): 
     publicOrigin: normalized.publicOrigin ?? previous?.public_origin ?? null,
     bridgeTokenFile,
   };
+}
+
+async function resolveSecretStoreValue(reference: string): Promise<string | undefined> {
+  try {
+    return await resolveCredentialLocator({
+      id: `operator-console-secret:${reference}`,
+      store: 'site-secret',
+      reference,
+    });
+  } catch {
+    return undefined;
+  }
 }
 
 async function readSecretFile(path: string): Promise<string | undefined> {

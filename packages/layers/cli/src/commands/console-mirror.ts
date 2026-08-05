@@ -35,6 +35,7 @@ export function consoleMirrorRuntimeOptions(options: ConsoleMirrorCommandOptions
     cli_entrypoint: options.cli_entrypoint,
     narada_root: options.narada_root,
     log_path: options.log_path,
+    bridge_token_secret_name: options.bridge_token_secret_name,
     timeout_ms: options.timeout_ms,
     operation: options.operation,
   };

@@ -36,6 +36,17 @@
                     "mock"
                   ]
                 },
+                "auth_mode": {
+                  "type": "string",
+                  "enum": [
+                    "delegated_token_store",
+                    "control_plane_default"
+                  ]
+                },
+                "mailbox_id": {
+                  "type": "string",
+                  "minLength": 1
+                },
                 "tenant_id": {
                   "type": "string",
                   "minLength": 1
@@ -612,6 +623,17 @@
           "graph": {
             "type": "object",
             "properties": {
+              "auth_mode": {
+                "type": "string",
+                "enum": [
+                  "delegated_token_store",
+                  "control_plane_default"
+                ]
+              },
+              "mailbox_id": {
+                "type": "string",
+                "minLength": 1
+              },
               "tenant_id": {
                 "type": "string",
                 "minLength": 1
@@ -1261,6 +1283,17 @@
     "graph": {
       "type": "object",
       "properties": {
+        "auth_mode": {
+          "type": "string",
+          "enum": [
+            "delegated_token_store",
+            "control_plane_default"
+          ]
+        },
+        "mailbox_id": {
+          "type": "string",
+          "minLength": 1
+        },
         "tenant_id": {
           "type": "string",
           "minLength": 1

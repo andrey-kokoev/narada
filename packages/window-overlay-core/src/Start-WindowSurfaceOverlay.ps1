@@ -10,6 +10,7 @@ if (-not (Test-Path $hostScript)) { throw 'window_surface_overlay_host_script_mi
 New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
 $pidPath = Join-Path $StateRoot 'overlay.pid'
 $refreshPath = Join-Path $StateRoot 'refresh.signal'
+$visibilityPolicyPath = Join-Path $StateRoot 'visibility.policy'
 $hostStdoutPath = Join-Path $StateRoot 'host.stdout.log'
 $hostStderrPath = Join-Path $StateRoot 'host.stderr.log'
 function Get-HostProcess {
@@ -20,19 +21,41 @@ function Get-HostProcess {
     $process = Get-Process -Id $overlayPid -ErrorAction SilentlyContinue
     if (-not $process) { return $null }
     try {
-        $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$overlayPid" -ErrorAction Stop).CommandLine
-        if ($commandLine -notlike '*window-surface-overlay.ps1*') { return $null }
+        $commandLine = [string](Get-CimInstance Win32_Process -Filter "ProcessId=$overlayPid" -ErrorAction Stop).CommandLine
+        if ($commandLine) {
+            if ($commandLine -notlike '*window-surface-overlay.ps1*') { return $null }
+        } elseif ($process.ProcessName -notin @('pwsh', 'powershell')) {
+            return $null
+        }
     } catch {
         if ($process.ProcessName -notin @('pwsh', 'powershell')) { return $null }
     }
     return $process
 }
+function Stop-HostForPolicyChange {
+    param([Parameter(Mandatory = $true)][System.Diagnostics.Process]$Process)
+    Stop-Process -Id $Process.Id -Force -ErrorAction SilentlyContinue
+    $deadline = [DateTime]::UtcNow.AddSeconds(5)
+    $stillRunning = Get-Process -Id $Process.Id -ErrorAction SilentlyContinue
+    while ($stillRunning -and [DateTime]::UtcNow -lt $deadline) {
+        Start-Sleep -Milliseconds 100
+        $stillRunning = Get-Process -Id $Process.Id -ErrorAction SilentlyContinue
+    }
+    if ($stillRunning) { throw 'window_surface_overlay_policy_change_timeout' }
+    Remove-Item $pidPath -Force -ErrorAction SilentlyContinue
+}
+$requestedPolicy = $VisibilityPolicy.ToLowerInvariant()
+$storedPolicy = if (Test-Path $visibilityPolicyPath) { (Get-Content -Raw -Path $visibilityPolicyPath).Trim().ToLowerInvariant() } else { $null }
 $existing = Get-HostProcess
 if ($existing) {
-    Set-Content -Path $refreshPath -Value ([DateTime]::UtcNow.ToString('o'))
-    [pscustomobject]@{ schema = 'narada.window_surface_overlay.result.v1'; id = $Id; state = 'already_running'; pid = $existing.Id; state_directory = $StateRoot } | ConvertTo-Json -Compress
-    exit 0
+    if ($storedPolicy -eq $requestedPolicy) {
+        Set-Content -Path $refreshPath -Value ([DateTime]::UtcNow.ToString('o'))
+        [pscustomobject]@{ schema = 'narada.window_surface_overlay.result.v1'; id = $Id; state = 'already_running'; pid = $existing.Id; state_directory = $StateRoot } | ConvertTo-Json -Compress
+        exit 0
+    }
+    Stop-HostForPolicyChange $existing
 }
+Set-Content -Path $visibilityPolicyPath -Value $requestedPolicy
 if (Test-Path $pidPath) { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue }
 $shell = Get-Command pwsh, powershell -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $shell) { throw 'powershell_runtime_not_found' }

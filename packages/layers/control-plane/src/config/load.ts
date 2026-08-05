@@ -369,6 +369,10 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
     const graphObj = scope.graph as Record<string, unknown>;
     sourcesRaw.push({
       type: "graph",
+      ...(graphObj.auth_mode === "delegated_token_store" || graphObj.auth_mode === "control_plane_default"
+        ? { auth_mode: graphObj.auth_mode }
+        : {}),
+      ...(isNonEmptyString(graphObj.mailbox_id) ? { mailbox_id: graphObj.mailbox_id.trim() } : {}),
       ...(isNonEmptyString(graphObj.tenant_id) ? { tenant_id: graphObj.tenant_id.trim() } : {}),
       ...(isNonEmptyString(graphObj.client_id) ? { client_id: graphObj.client_id.trim() } : {}),
       ...(isNonEmptyString(graphObj.client_secret) ? { client_secret: graphObj.client_secret.trim() } : {}),
@@ -598,6 +602,13 @@ function loadScopeConfig(rawScope: unknown, pathPrefix: string): ScopeConfig {
   // Legacy graph field for backward compat
   const graph = hasLegacyGraph
     ? {
+        ...(((scope.graph as Record<string, unknown>).auth_mode === "delegated_token_store"
+          || (scope.graph as Record<string, unknown>).auth_mode === "control_plane_default")
+          ? { auth_mode: (scope.graph as Record<string, unknown>).auth_mode as "delegated_token_store" | "control_plane_default" }
+          : {}),
+        ...(isNonEmptyString((scope.graph as Record<string, unknown>).mailbox_id)
+          ? { mailbox_id: ((scope.graph as Record<string, unknown>).mailbox_id as string).trim() }
+          : {}),
         ...(isNonEmptyString((scope.graph as Record<string, unknown>).tenant_id)
           ? { tenant_id: ((scope.graph as Record<string, unknown>).tenant_id as string).trim() }
           : {}),
@@ -984,6 +995,8 @@ export async function loadConfig(
           ...(firstScope.sources[0]
             ? {
                 graph: {
+                  ...(firstScope.sources[0].auth_mode !== undefined ? { auth_mode: firstScope.sources[0].auth_mode } : {}),
+                  ...(firstScope.sources[0].mailbox_id !== undefined ? { mailbox_id: firstScope.sources[0].mailbox_id } : {}),
                   user_id: firstScope.sources[0].user_id ?? "",
                   prefer_immutable_ids: firstScope.sources[0].prefer_immutable_ids ?? false,
                   ...(firstScope.sources[0].tenant_id !== undefined ? { tenant_id: firstScope.sources[0].tenant_id } : {}),

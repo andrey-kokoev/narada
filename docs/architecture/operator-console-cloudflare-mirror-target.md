@@ -32,7 +32,16 @@ The local crossing gateway, Cloudflare Worker proxy, Access JWT admission,
   recovery after the local mirror was restarted. This document does not treat a
   successful page render or a single dry-run as proof of those properties.
 
-The current live verification covers:
+Current deployment status: the Worker was placed in governed lockdown after an
+anonymous probe found the previous deployment public by omission. The deployed
+Worker now returns `401` for anonymous root, Console, route, and health requests.
+The Access application has not yet been reconfigured because the current
+Wrangler identity has no Access-app authority and the Access client-ID
+SecretStore entry is absent. The full authenticated target is therefore not
+currently complete.
+
+The following is historical live verification evidence from the prior protected
+deployment and must be rerun after Access configuration is restored:
 
 - Access admission: unauthenticated requests are redirected to the configured
   Access application;
@@ -192,6 +201,32 @@ projected to the browser, or written to the mirror state document. The Worker
 `OPERATOR_CONSOLE_GATEWAY_TOKEN` secret must contain the same value.
 `--bridge-token-file` is the equivalent explicit CLI option.
 
+### User Site SecretStore mapping
+
+Credential values are resolved on the authority host and are never placed in
+Worker variables, browser configuration, route directories, state documents,
+logs, or E2E evidence.
+
+| Concern | Canonical SecretStore reference | Consumer | Precedence |
+| --- | --- | --- | --- |
+| local gateway bridge | `narada/operator-console/bridge-token` | mirror runtime and Worker deployment preflight | explicit option/env, SecretStore, legacy bridge file |
+| Access service-token client ID | `narada/operator-console/access-client-id` | live E2E harness | explicit option/env, SecretStore |
+| Access service-token client secret | `narada-operator-console-secret` | live E2E harness | explicit option/file/env, SecretStore |
+
+The bridge reference is the canonical current entry. The bridge file remains a
+bounded migration fallback for an existing local installation; it is not a
+second Worker credential. The Access client references authenticate the test
+harness to the deployed Access application and are never sent to the Worker as
+configuration. The Worker only needs the nonsecret Access issuer and audience
+variables and the separate bridge secret.
+
+The Worker protects the Console by default when
+`OPERATOR_CONSOLE_ACCESS_REQUIRED` is absent. `false` is permitted only for
+local unit fixtures and synthetic tests that explicitly exercise the
+unauthenticated internal routing path. A deployment preflight refuses missing
+issuer, audience, gateway origin/pin, bridge token, or protected-mode
+configuration.
+
 It reads the local Operator Router registration token from the Router state
 directory unless `NARADA_OPERATOR_ROUTER_TOKEN` is explicitly supplied.
 `TUNNEL_TOKEN_FILE` or a named tunnel (`NARADA_CLOUDFLARE_TUNNEL_NAME`) are
@@ -216,6 +251,13 @@ file. Startup reports success only after the persisted owner state is ready.
 verified. A deployment that exposes the Worker without the Access application,
 origin pin, or gateway heartbeat is not a mirror; it must remain unavailable
 rather than falling back to an apparently working public Console.
+
+If a pre-gate deployment is discovered to be public, the deployment script has
+an explicit lockdown mode. Lockdown sets only
+`OPERATOR_CONSOLE_ACCESS_REQUIRED=true` and refreshes the Worker bridge secret;
+it deliberately does not invent Access issuer, audience, or application data.
+After lockdown, the Worker returns a typed unavailable response until a real
+Access application is configured.
 
 ## External Provisioning Prerequisites
 

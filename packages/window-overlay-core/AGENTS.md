@@ -60,6 +60,8 @@ The state files are:
 
 - `document.json`: the latest validated versioned document;
 - `overlay.pid`: the host process id used for lifecycle inspection;
+- `visibility.policy`: the validated visibility policy applied to the host; an older host without
+  this file is migrated by the next start request;
 - `preferences.json`: persisted position, opacity, pin, and related window preferences;
 - `refresh.signal`: an asynchronous request for the running host to re-read its document;
 - `focus.signal`: an asynchronous request for the running host to activate its window;
@@ -69,15 +71,17 @@ The state files are:
 Lifecycle semantics:
 
 1. `startOverlay()` validates and writes the document, then starts the host or updates an
-   already-running overlay. Starting and idempotent starting must not request foreground activation.
+   already-running overlay. If the requested visibility policy differs from the owned host,
+   it replaces that host so the new policy takes effect. Starting and idempotent starting must
+   not request foreground activation.
 2. `requestOverlayRefresh()` writes `refresh.signal`. It is a request, not proof that rendering
    has completed, and must not request foreground activation.
 3. `requestOverlayFocus()` first requires a live overlay, removes a stale signal when refusing,
    then writes `focus.signal`. It returns `focus_requested`; it does not synchronously prove
    that Windows made the overlay foreground.
 4. `stopOverlay()` stops the owned host and removes its PID marker and focus signal. It should
-   preserve the durable document, refresh marker, and user preference state unless the caller
-   explicitly removes state.
+   preserve the durable document, visibility policy, refresh marker, and user preference state
+   unless the caller explicitly removes state.
 5. `inspectOverlay()` reports the durable document, lifecycle state, and action state. It may
    reconcile an abandoned running action to `interrupted`, so it is observational with bounded
    repair rather than a strictly read-only operation.

@@ -14,6 +14,8 @@ const ItemKindSchema = z.string().min(1);
 
 // Graph configuration schema
 const GraphConfigSchema = z.object({
+  auth_mode: z.enum(['delegated_token_store', 'control_plane_default']).optional(),
+  mailbox_id: z.string().min(1).optional(),
   tenant_id: z.string().min(1).optional(),
   client_id: z.string().min(1).optional(),
   client_secret: z.string().min(1).optional(),
@@ -218,6 +220,8 @@ const OperationIntakeSchema = z.object({
 // Source configuration schema
 const SourceConfigSchema = z.object({
   type: z.enum(['graph', 'timer', 'webhook', 'inbox_drop', 'mock']),
+  auth_mode: z.enum(['delegated_token_store', 'control_plane_default']).optional(),
+  mailbox_id: z.string().min(1).optional(),
   tenant_id: z.string().min(1).optional(),
   client_id: z.string().min(1).optional(),
   client_secret: z.string().min(1).optional(),

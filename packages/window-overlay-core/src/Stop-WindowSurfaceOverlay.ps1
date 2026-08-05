@@ -21,8 +21,12 @@ if (-not [int]::TryParse($raw, [ref]$overlayPid) -or $overlayPid -le 0) {
 $process = Get-Process -Id $overlayPid -ErrorAction SilentlyContinue
 if ($process) {
     try {
-        $commandLine = (Get-CimInstance Win32_Process -Filter "ProcessId=$overlayPid" -ErrorAction Stop).CommandLine
-        if ($commandLine -notlike '*window-surface-overlay.ps1*') { throw 'overlay_pid_not_owned' }
+        $commandLine = [string](Get-CimInstance Win32_Process -Filter "ProcessId=$overlayPid" -ErrorAction Stop).CommandLine
+        if ($commandLine) {
+            if ($commandLine -notlike '*window-surface-overlay.ps1*') { throw 'overlay_pid_not_owned' }
+        } elseif ($process.ProcessName -notin @('pwsh', 'powershell')) {
+            throw 'overlay_pid_not_owned'
+        }
     } catch {
         if ($_.Exception.Message -eq 'overlay_pid_not_owned') { throw }
     }

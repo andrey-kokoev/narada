@@ -3,6 +3,7 @@ import {
   buildOperatorConsoleMirrorDeployPlan,
   operatorConsoleMirrorDeployInputFromEnv,
   operatorConsoleMirrorChildOptions,
+  resolveOperatorConsoleMirrorDeployInput,
   OperatorConsoleMirrorDeployError,
 } from '../scripts/operator-console-mirror-deploy.js';
 
@@ -74,6 +75,17 @@ describe('operator console mirror deployment preflight', () => {
     }
   });
 
+  it('supports an explicit lockdown deployment without inventing Access metadata', () => {
+    const plan = buildOperatorConsoleMirrorDeployPlan({
+      bridge_token: 'shared-bridge-token',
+    }, { mode: 'lockdown' });
+    expect(plan).toEqual({
+      mode: 'lockdown',
+      variables: { OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true' },
+      secret_names: ['OPERATOR_CONSOLE_GATEWAY_TOKEN'],
+    });
+  });
+
   it('reads the deployment contract from environment names without exposing values', () => {
     const input = operatorConsoleMirrorDeployInputFromEnv({
       OPERATOR_CONSOLE_GATEWAY_URL: 'https://origin.example.test',
@@ -88,6 +100,25 @@ describe('operator console mirror deployment preflight', () => {
     expect(input.gateway_url).toBe('https://origin.example.test');
     expect(input.gateway_transport).toBe('vpc-service');
     expect(input.gateway_token).toBe('token');
+  });
+
+  it('maps the canonical SecretStore bridge reference to both Worker and gateway credentials', async () => {
+    let reference: string | undefined;
+    const input = await resolveOperatorConsoleMirrorDeployInput({
+      bridge_token_secret_name: 'narada/operator-console/bridge-token',
+      gateway_url: 'https://origin.example.test',
+      gateway_origin_pin: 'https://origin.example.test',
+      access_team_domain: 'https://team.cloudflareaccess.com',
+      access_audience: 'audience',
+    }, {
+      resolve_secret: async (receivedReference) => {
+        reference = receivedReference;
+        return 'shared-bridge-token';
+      },
+    });
+    expect(reference).toBe('narada/operator-console/bridge-token');
+    expect(input.bridge_token).toBe('shared-bridge-token');
+    expect(input.gateway_token).toBe('shared-bridge-token');
   });
 
   it('uses shell mediation only for Windows command shims', () => {

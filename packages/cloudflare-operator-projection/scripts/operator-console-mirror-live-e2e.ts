@@ -4,6 +4,11 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { resolveCredentialLocator } from '@narada-core/nars-provider-runtime';
+import {
+  OPERATOR_CONSOLE_ACCESS_CLIENT_ID_SECRET_NAME,
+  OPERATOR_CONSOLE_ACCESS_CLIENT_SECRET_NAME,
+} from '@narada-core/operator-console-contract';
 import {
   findHeadlessBrowser,
   openCdpPage,
@@ -25,6 +30,8 @@ type LiveArgs = {
   accessClientSecret: string | null;
   accessClientSecretFile: string | null;
   accessCookieFile: string | null;
+  accessClientIdSecretName: string;
+  accessClientSecretSecretName: string;
   artifactId: string | null;
   mutationMode: 'none' | 'disposable';
   failureMode: 'none' | 'tunnel-loss' | 'route-revocation' | 'stale-lease';
@@ -42,6 +49,7 @@ if (args.help) {
     '',
     'Live mode with a Cloudflare Access service token:',
     '  pnpm --filter @narada-core/cloudflare-operator-projection smoke:operator-console-mirror-live -- --live --url <worker-url> --access-client-id <id> --access-client-secret-file <path>',
+    '  Without explicit service-token flags, the gate resolves the User Site SecretStore client-id and client-secret entries.',
     '',
     'Live mode with an exported CF_Authorization cookie:',
     '  ... --live --url <worker-url> --access-cookie-file <path>',
@@ -96,7 +104,7 @@ async function run(): Promise<AnyRecord> {
   let headers: Record<string, string>;
   try {
     baseUrl = requireWorkerOrigin(args.url);
-    headers = readAccessHeaders(args);
+    headers = await readAccessHeaders(args);
   } catch (error) {
     return persistRefusal(error instanceof Error ? error.message : String(error), evidencePath);
   }
@@ -1007,17 +1015,7 @@ function comparableRouteDirectory(body: AnyRecord): AnyRecord {
   };
 }
 
-function readAccessHeaders(input: LiveArgs): Record<string, string> {
-  if (input.accessClientId) {
-    const secret = input.accessClientSecretFile
-      ? readFileSync(input.accessClientSecretFile, 'utf8').trim()
-      : input.accessClientSecret?.trim();
-    if (!secret) throw new Error('access_client_secret_required');
-    return {
-      'CF-Access-Client-Id': input.accessClientId,
-      'CF-Access-Client-Secret': secret,
-    };
-  }
+async function readAccessHeaders(input: LiveArgs): Promise<Record<string, string>> {
   if (input.accessCookieFile) {
     const raw = readFileSync(input.accessCookieFile, 'utf8').trim();
     if (!raw) throw new Error('access_cookie_empty');
@@ -1035,7 +1033,40 @@ function readAccessHeaders(input: LiveArgs): Record<string, string> {
     if (!value) throw new Error('cf_authorization_cookie_not_found');
     return { Cookie: String(value).startsWith('CF_Authorization=') ? String(value) : 'CF_Authorization=' + String(value) };
   }
+
+  const clientId = input.accessClientId?.trim() || await resolveSecretStoreValue(
+    input.accessClientIdSecretName,
+    'access_client_id_secret_unavailable',
+  );
+  if (clientId) {
+    const secret = input.accessClientSecretFile
+      ? readFileSync(input.accessClientSecretFile, 'utf8').trim()
+      : input.accessClientSecret?.trim() || await resolveSecretStoreValue(
+        input.accessClientSecretSecretName,
+        'access_client_secret_unavailable',
+      );
+    if (!secret) throw new Error('access_client_secret_required');
+    return {
+      'CF-Access-Client-Id': clientId,
+      'CF-Access-Client-Secret': secret,
+    };
+  }
   throw new Error('access_service_token_or_cookie_required');
+}
+
+async function resolveSecretStoreValue(reference: string, refusalCode: string): Promise<string | undefined> {
+  try {
+    return await resolveCredentialLocator({
+      id: `operator-console-secret:${reference}`,
+      store: 'site-secret',
+      reference,
+    });
+  } catch {
+    if (refusalCode === 'access_client_id_secret_unavailable' || refusalCode === 'access_client_secret_unavailable') {
+      throw new Error(refusalCode);
+    }
+    return undefined;
+  }
 }
 
 function compact(value: AnyRecord): string {
@@ -1072,6 +1103,8 @@ function parseArgs(values: string[]): LiveArgs {
     accessClientSecret: process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET ?? null,
     accessClientSecretFile: process.env.CLOUDFLARE_ACCESS_CLIENT_SECRET_FILE ?? null,
     accessCookieFile: process.env.CLOUDFLARE_ACCESS_COOKIE_FILE ?? null,
+    accessClientIdSecretName: process.env.NARADA_OPERATOR_CONSOLE_ACCESS_CLIENT_ID_SECRET_NAME ?? OPERATOR_CONSOLE_ACCESS_CLIENT_ID_SECRET_NAME,
+    accessClientSecretSecretName: process.env.NARADA_OPERATOR_CONSOLE_ACCESS_CLIENT_SECRET_NAME ?? OPERATOR_CONSOLE_ACCESS_CLIENT_SECRET_NAME,
     artifactId: process.env.OPERATOR_CONSOLE_MIRROR_ARTIFACT_ID ?? null,
     mutationMode: (process.env.OPERATOR_CONSOLE_MIRROR_MUTATION_MODE ?? 'none') as LiveArgs['mutationMode'],
     failureMode: 'none',
@@ -1089,6 +1122,8 @@ function parseArgs(values: string[]): LiveArgs {
     else if (value === '--access-client-secret') parsed.accessClientSecret = values[++index] ?? null;
     else if (value === '--access-client-secret-file') parsed.accessClientSecretFile = values[++index] ?? null;
     else if (value === '--access-cookie-file') parsed.accessCookieFile = values[++index] ?? null;
+    else if (value === '--access-client-id-secret-name') parsed.accessClientIdSecretName = values[++index] ?? OPERATOR_CONSOLE_ACCESS_CLIENT_ID_SECRET_NAME;
+    else if (value === '--access-client-secret-secret-name') parsed.accessClientSecretSecretName = values[++index] ?? OPERATOR_CONSOLE_ACCESS_CLIENT_SECRET_NAME;
     else if (value === '--artifact-id') parsed.artifactId = values[++index] ?? null;
     else if (value === '--mutation-mode') parsed.mutationMode = (values[++index] ?? 'none') as LiveArgs['mutationMode'];
     else if (value === '--failure-mode') parsed.failureMode = (values[++index] ?? 'none') as LiveArgs['failureMode'];

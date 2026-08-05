@@ -13,7 +13,7 @@ const options: AnyRecord = {
   url: valueOf('--url'),
   title: valueOf('--title'),
   stateRoot: valueOf('--state-root'),
-  visibilityPolicy: valueOf('--visibility', 'windows-terminal'),
+  visibilityPolicy: valueOf('--visibility', 'always'),
   refreshSeconds: Number(valueOf('--refresh-seconds', '2')),
 };
 const result = command === 'start'

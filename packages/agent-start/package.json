@@ -53,6 +53,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
+    "prebuild": "pnpm --filter @narada-core/agent-context-mcp build",
     "build": "tsc -p tsconfig.build.json",
     "syntaxcheck": "node --import tsx --check src/narada-agent-start.ts && node --import tsx --check bin/verify-registered-site-launchers.ts",
     "generate:result-schema": "node --import tsx scripts/generate-result-schema.ts",

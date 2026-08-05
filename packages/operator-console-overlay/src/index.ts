@@ -98,9 +98,10 @@ export function createOperatorConsoleOverlayDocument({
 }
 
 export async function startOperatorConsoleOverlay({
-  url, title, subtitle, rows, stateRoot, visibilityPolicy = 'windows-terminal', refreshSeconds = 2, env = process.env,
+  url, title, subtitle, rows, stateRoot, visibilityPolicy = 'always', refreshSeconds = 2, env = process.env,
   ensure_runtime = ensureOperatorConsoleRuntime,
   start_overlay = startOverlay,
+  focus_overlay = requestOverlayFocus,
 }: AnyRecord = {}): Promise<any> {
   const consoleUrl = resolveConsoleUrl({ url, env });
   const restart = resolveLocalConsoleRestart({ consoleUrl, env });
@@ -127,6 +128,7 @@ export async function startOperatorConsoleOverlay({
     restartWorkingDirectory: restart?.workingDirectory,
     restartSuccessProbeUrl: restart ? new URL('/health', consoleUrl).toString() : undefined,
   } as any);
+  await focus_overlay(OPERATOR_CONSOLE_OVERLAY_ID, { stateRoot, env });
   return { ...overlay, runtime };
 }
 

@@ -15,7 +15,7 @@ NARS_OUTBOUND_PROVIDER_ENABLED = "false"
 # admission and the gateway bridge secret are configured. Access issuer and
 # audience are non-secret deployment variables; the gateway token remains a
 # Wrangler secret and is never projected to the browser.
-# OPERATOR_CONSOLE_ACCESS_REQUIRED = "true"
+OPERATOR_CONSOLE_ACCESS_REQUIRED = "true"
 # OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN = "https://team.cloudflareaccess.com"
 # OPERATOR_CONSOLE_ACCESS_AUDIENCE = "application-audience"
 # OPERATOR_CONSOLE_GATEWAY_URL = "https://console-gateway.example.test"

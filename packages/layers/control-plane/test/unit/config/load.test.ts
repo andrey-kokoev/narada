@@ -35,7 +35,9 @@ describe("loadConfig", () => {
       mailbox_id: "mailbox_primary",
       root_dir: "./data/mail-sync",
       graph: {
-        user_id: "user@example.com",
+        auth_mode: "delegated_token_store",
+        mailbox_id: "user@example.com",
+        user_id: "me",
         prefer_immutable_ids: true,
       },
       scope: {
@@ -51,7 +53,9 @@ describe("loadConfig", () => {
       mailbox_id: "mailbox_primary",
       root_dir: "./data/mail-sync",
       graph: {
-        user_id: "user@example.com",
+        auth_mode: "delegated_token_store",
+        mailbox_id: "user@example.com",
+        user_id: "me",
         prefer_immutable_ids: true,
       },
       scope: {

@@ -51,7 +51,8 @@
     "@narada-core/nars-client-projection-contract": "workspace:*",
     "@narada-core/site-paths": "workspace:*",
     "@narada-core/invokable-intelligence-runtime": "workspace:*",
-    "@narada-core/host-fleet-runtime": "workspace:*"
+    "@narada-core/host-fleet-runtime": "workspace:*",
+    "@narada-core/nars-provider-runtime": "workspace:*"
   },
   "devDependencies": {
     "esbuild": "^0.27.7",

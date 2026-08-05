@@ -8,6 +8,27 @@ import {
 } from "../../../src/adapter/graph/scope.js";
 
 describe("DefaultGraphAdapter", () => {
+  it("uses the delegated /me resource instead of treating me as a user id", () => {
+    const client = new GraphHttpClient({
+      tokenProvider: new StaticBearerTokenProvider({ accessToken: "test-token" }),
+    });
+
+    expect(client.buildFolderMessagesDeltaUrl("me", "inbox"))
+      .toBe("https://graph.microsoft.com/v1.0/me/mailFolders/inbox/messages/delta");
+  });
+
+  it("includes bounded Graph path context on authorization failures", async () => {
+    const client = new GraphHttpClient({
+      tokenProvider: new StaticBearerTokenProvider({ accessToken: "test-token" }),
+      fetchImpl: async () => new Response(JSON.stringify({
+        error: { code: "ErrorAccessDenied", message: "Access is denied." },
+      }), { status: 403, headers: { "content-type": "application/json" } }),
+    });
+
+    await expect(client.getDeltaPage(client.buildFolderMessagesDeltaUrl("me", "inbox")))
+      .rejects.toThrow("[graph_path:/v1.0/me/mailFolders/inbox/messages/delta]");
+  });
+
   it("uses configured folder scope for delta URL and maps live message batch", async () => {
     const responses = [
       {

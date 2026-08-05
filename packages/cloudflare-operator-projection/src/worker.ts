@@ -1203,7 +1203,10 @@ function operatorConsoleAccessRequired(
 ): boolean {
   if (options.require_operator_console_access !== undefined) return options.require_operator_console_access;
   const value = env.OPERATOR_CONSOLE_ACCESS_REQUIRED;
-  return value === true || value === 'true';
+  // A deployed gateway is protected unless a test/fixture explicitly opts
+  // out. Missing Access configuration must fail closed, never publish a
+  // public Console by omission.
+  return value !== false && value !== 'false';
 }
 
 function operatorConsoleGatewayTransport(env: CloudflareNarsProjectionWorkerEnv): 'public-tunnel' | 'vpc-service' | null {
@@ -1271,7 +1274,7 @@ function operatorConsoleGatewayConfiguration(
     if (target.username || target.password || target.search || target.hash || target.pathname !== '/') return null;
     if (pin.username || pin.password || pin.search || pin.hash || pin.pathname !== '/') return null;
     if (target.origin !== pin.origin) return null;
-    if ((env.OPERATOR_CONSOLE_ACCESS_REQUIRED === true || env.OPERATOR_CONSOLE_ACCESS_REQUIRED === 'true') && transport !== 'vpc-service') {
+    if (env.OPERATOR_CONSOLE_ACCESS_REQUIRED !== false && env.OPERATOR_CONSOLE_ACCESS_REQUIRED !== 'false' && transport !== 'vpc-service') {
       if (target.protocol !== 'https:' || pin.protocol !== 'https:') return null;
     }
     return { baseUrl: target.toString().replace(/\/$/, ''), token, transport };

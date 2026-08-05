@@ -23,7 +23,9 @@
     "test": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
+    "@narada-core/nars-provider-runtime": "workspace:*",
     "@narada-core/operator-console-remote-gateway": "workspace:*",
+    "@narada-core/operator-console-contract": "workspace:*",
     "@narada-core/process-launch-posture": "workspace:*"
   },
   "devDependencies": {

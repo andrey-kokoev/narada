@@ -39,9 +39,27 @@ test('starts a local overlay only after runtime readiness succeeds', async () =>
       order.push('overlay');
       return { status: 'started' };
     },
+    focus_overlay: async () => {
+      order.push('focus');
+      return { status: 'focus_requested' };
+    },
   });
-  assert.deepEqual(order, ['runtime', 'overlay']);
+  assert.deepEqual(order, ['runtime', 'overlay', 'focus']);
   assert.equal(result.runtime.status, 'ready');
+});
+
+test('keeps desktop-launched Operator Console overlays visible outside Windows Terminal', async () => {
+  let overlayOptions: any;
+  await startOperatorConsoleOverlay({
+    url: 'http://127.0.0.1:61729',
+    ensure_runtime: async () => ({ status: 'ready', url: 'http://127.0.0.1:61729' }),
+    start_overlay: async (options: any) => {
+      overlayOptions = options;
+      return { status: 'started' };
+    },
+    focus_overlay: async () => ({ status: 'focus_requested' }),
+  });
+  assert.equal(overlayOptions.visibilityPolicy, 'always');
 });
 
 test('specializes only the document and keeps generic action semantics', () => {

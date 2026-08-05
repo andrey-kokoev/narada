@@ -32,6 +32,14 @@ Production sessions require `principal_id` and verify `site_id`,
 
 ## Verification
 
+If an older deployment is public because it predates the fail-closed Access
+gate, lock it down before provisioning Access. This mode sets only
+`OPERATOR_CONSOLE_ACCESS_REQUIRED=true` and refreshes the bridge secret; it
+does not invent an issuer, audience, or Access application:
+
+    pnpm --filter @narada-core/cloudflare-operator-projection build:scripts
+    node packages/cloudflare-operator-projection/scripts-dist/operator-console-mirror-deploy.js --lockdown
+
 Planning mode is safe and does not contact a deployment:
 
     pnpm --filter @narada-core/cloudflare-operator-projection smoke:provider-capable-live

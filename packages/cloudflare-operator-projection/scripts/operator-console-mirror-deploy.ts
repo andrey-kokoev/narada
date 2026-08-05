@@ -3,6 +3,8 @@ import { spawn } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveCredentialLocator } from '@narada-core/nars-provider-runtime';
+import { OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME } from '@narada-core/operator-console-contract';
 
 export interface OperatorConsoleMirrorDeployInput {
   gateway_url?: string;
@@ -10,15 +12,20 @@ export interface OperatorConsoleMirrorDeployInput {
   gateway_token?: string;
   bridge_token?: string;
   gateway_transport?: string;
+  bridge_token_secret_name?: string;
   access_required?: string | boolean;
   access_team_domain?: string;
   access_audience?: string;
 }
 
 export interface OperatorConsoleMirrorDeployPlan {
+  mode: 'configured' | 'lockdown';
   variables: Record<string, string>;
   secret_names: string[];
 }
+
+export type OperatorConsoleMirrorSecretResolver = (reference: string) => Promise<string | undefined>;
+export type OperatorConsoleMirrorDeployMode = 'configured' | 'lockdown';
 
 export class OperatorConsoleMirrorDeployError extends Error {
   readonly code = 'operator_console_mirror_deploy_preflight_failed';
@@ -40,6 +47,7 @@ export function operatorConsoleMirrorDeployInputFromEnv(
     gateway_token: env.OPERATOR_CONSOLE_GATEWAY_TOKEN,
     bridge_token: env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN,
     gateway_transport: env.OPERATOR_CONSOLE_GATEWAY_TRANSPORT ?? 'public-tunnel',
+    bridge_token_secret_name: env.NARADA_OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME ?? OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME,
     access_required: env.OPERATOR_CONSOLE_ACCESS_REQUIRED ?? 'true',
     access_team_domain: env.OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN,
     access_audience: env.OPERATOR_CONSOLE_ACCESS_AUDIENCE,
@@ -48,7 +56,19 @@ export function operatorConsoleMirrorDeployInputFromEnv(
 
 export function buildOperatorConsoleMirrorDeployPlan(
   input: OperatorConsoleMirrorDeployInput,
+  options: { mode?: OperatorConsoleMirrorDeployMode } = {},
 ): OperatorConsoleMirrorDeployPlan {
+  const mode = options.mode ?? 'configured';
+  if (mode === 'lockdown') {
+    if (!input.gateway_token?.trim() && !input.bridge_token?.trim()) {
+      throw new OperatorConsoleMirrorDeployError(['gateway_token_required']);
+    }
+    return {
+      mode,
+      variables: { OPERATOR_CONSOLE_ACCESS_REQUIRED: 'true' },
+      secret_names: ['OPERATOR_CONSOLE_GATEWAY_TOKEN'],
+    };
+  }
   const errors: string[] = [];
   const gatewayTransport = input.gateway_transport?.trim() || 'public-tunnel';
   if (gatewayTransport !== 'public-tunnel' && gatewayTransport !== 'vpc-service') {
@@ -71,6 +91,7 @@ export function buildOperatorConsoleMirrorDeployPlan(
   }
   if (errors.length > 0) throw new OperatorConsoleMirrorDeployError(errors);
   return {
+    mode,
     variables: {
       OPERATOR_CONSOLE_GATEWAY_URL: gatewayOrigin as string,
       OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: pinnedOrigin as string,
@@ -85,14 +106,15 @@ export function buildOperatorConsoleMirrorDeployPlan(
 
 export async function deployOperatorConsoleMirror(
   input: OperatorConsoleMirrorDeployInput = operatorConsoleMirrorDeployInputFromEnv(),
-  options: { cwd?: string; command?: string } = {},
+  options: { cwd?: string; command?: string; mode?: OperatorConsoleMirrorDeployMode } = {},
 ): Promise<OperatorConsoleMirrorDeployPlan> {
-  const plan = buildOperatorConsoleMirrorDeployPlan(input);
+  const resolvedInput = await resolveOperatorConsoleMirrorDeployInput(input);
+  const plan = buildOperatorConsoleMirrorDeployPlan(resolvedInput, { mode: options.mode });
   const cwd = resolve(options.cwd ?? dirname(fileURLToPath(import.meta.url)), '..');
   const temporaryRoot = await mkdtemp(join(tmpdir(), 'narada-operator-console-mirror-'));
   const secretsFile = join(temporaryRoot, 'secrets.json');
   try {
-    await writeFile(secretsFile, `${JSON.stringify({ OPERATOR_CONSOLE_GATEWAY_TOKEN: input.gateway_token })}\n`, { encoding: 'utf8', mode: 0o600 });
+    await writeFile(secretsFile, `${JSON.stringify({ OPERATOR_CONSOLE_GATEWAY_TOKEN: resolvedInput.gateway_token })}\n`, { encoding: 'utf8', mode: 0o600 });
     const command = options.command ?? (process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm');
     const args = ['exec', 'wrangler', 'deploy', '--config', 'wrangler.toml', '--keep-vars'];
     for (const [key, value] of Object.entries(plan.variables)) args.push('--var', `${key}:${value}`);
@@ -102,6 +124,33 @@ export async function deployOperatorConsoleMirror(
     await rm(temporaryRoot, { recursive: true, force: true });
   }
   return plan;
+}
+
+export async function resolveOperatorConsoleMirrorDeployInput(
+  input: OperatorConsoleMirrorDeployInput = operatorConsoleMirrorDeployInputFromEnv(),
+  options: { resolve_secret?: OperatorConsoleMirrorSecretResolver } = {},
+): Promise<OperatorConsoleMirrorDeployInput> {
+  const resolveSecret = options.resolve_secret ?? resolveSecretStoreValue;
+  const bridgeToken = input.bridge_token?.trim() || await resolveSecret(
+    input.bridge_token_secret_name?.trim() || OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME,
+  );
+  return {
+    ...input,
+    bridge_token: bridgeToken,
+    gateway_token: input.gateway_token?.trim() || bridgeToken,
+  };
+}
+
+async function resolveSecretStoreValue(reference: string): Promise<string> {
+  try {
+    return await resolveCredentialLocator({
+      id: `operator-console-secret:${reference}`,
+      store: 'site-secret',
+      reference,
+    });
+  } catch {
+    throw new OperatorConsoleMirrorDeployError([`secret_store_credential_unavailable:${reference}`]);
+  }
 }
 
 function parseOrigin(value: string | undefined, field: string, errors: string[], allowHttp: boolean): string | null {
@@ -155,15 +204,18 @@ function runChild(command: string, args: string[], cwd: string): Promise<void> {
 }
 
 const preflightOnly = process.argv.includes('--preflight');
+const lockdown = process.argv.includes('--lockdown');
 const invokedPath = process.argv[1] ? resolve(process.argv[1]) : null;
 if (invokedPath && invokedPath === fileURLToPath(import.meta.url)) {
   try {
-    const plan = buildOperatorConsoleMirrorDeployPlan(operatorConsoleMirrorDeployInputFromEnv());
+    const resolvedInput = await resolveOperatorConsoleMirrorDeployInput();
+    const mode: OperatorConsoleMirrorDeployMode = lockdown ? 'lockdown' : 'configured';
+    const plan = buildOperatorConsoleMirrorDeployPlan(resolvedInput, { mode });
     if (preflightOnly) {
-      console.log(JSON.stringify({ schema: 'narada.operator_console_mirror.deploy_preflight.v1', status: 'ready', variables: plan.variables, secret_names: plan.secret_names }, null, 2));
+      console.log(JSON.stringify({ schema: 'narada.operator_console_mirror.deploy_preflight.v1', status: 'ready', mode: plan.mode, variables: plan.variables, secret_names: plan.secret_names }, null, 2));
     } else {
-      await deployOperatorConsoleMirror();
-      console.log(JSON.stringify({ schema: 'narada.operator_console_mirror.deploy.v1', status: 'deployed', variables: plan.variables, secret_names: plan.secret_names }, null, 2));
+      await deployOperatorConsoleMirror(resolvedInput, { mode });
+      console.log(JSON.stringify({ schema: 'narada.operator_console_mirror.deploy.v1', status: 'deployed', mode: plan.mode, variables: plan.variables, secret_names: plan.secret_names }, null, 2));
     }
   } catch (error) {
     if (error instanceof OperatorConsoleMirrorDeployError) {

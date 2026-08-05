@@ -148,6 +148,7 @@ describe('Cloudflare Operator Console mirror', () => {
     const gatewayUrl = await listen(gateway);
     let upstreamWebSocket: MockWebSocket | null = null;
     const worker = createCloudflareNarsProjectionWorker({
+      require_operator_console_access: false,
       fetch_fn: async (input, init) => {
         const target = input instanceof Request ? new URL(input.url) : new URL(String(input));
         if (target.origin === gatewayUrl && target.pathname === '/sessions/session-a/events') {
@@ -159,6 +160,7 @@ describe('Cloudflare Operator Console mirror', () => {
     });
     const assetRequests: string[] = [];
     const env = {
+      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'false',
       OPERATOR_CONSOLE_GATEWAY_URL: gatewayUrl,
       OPERATOR_CONSOLE_GATEWAY_ORIGIN_PIN: gatewayUrl,
       OPERATOR_CONSOLE_GATEWAY_TOKEN: bridgeToken,
@@ -280,6 +282,13 @@ describe('Cloudflare Operator Console mirror', () => {
       OPERATOR_CONSOLE_ACCESS_TEAM_DOMAIN: 'team.cloudflareaccess.com',
       OPERATOR_CONSOLE_ACCESS_AUDIENCE: 'audience',
     });
+    expect(response.status).toBe(401);
+    expect(await response.json()).toEqual({ status: 'refused', code: 'operator_console_access_required' });
+  });
+
+  test('protects the Console by default when the Access flag is absent', async () => {
+    const worker = createCloudflareNarsProjectionWorker();
+    const response = await worker.fetch(new Request('https://console.example.test/console/registry'));
     expect(response.status).toBe(401);
     expect(await response.json()).toEqual({ status: 'refused', code: 'operator_console_access_required' });
   });

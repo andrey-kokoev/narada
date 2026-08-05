@@ -235,7 +235,7 @@ async function removeFixtureRoot(fixtureRoot, timeoutMs = 15_000) {
   throw new Error(`launcher_e2e_fixture_cleanup_timeout:${fixtureRoot}:${lastError?.code ?? 'unknown'}`);
 }
 
-test('operator launch journey dry-run maps one agent to agent-cli and agent-web-ui sibling projections', { skip: process.platform !== 'win32' }, () => {
+test('operator launch journey dry-run maps one agent to a hidden agent-cli runtime and agent-web-ui sibling projection', { skip: process.platform !== 'win32' }, () => {
   assert.equal(existsSync(workspaceLauncher), true, `User Site launcher not found: ${workspaceLauncher}`);
   const fixtureRoot = mkdtempSync(resolve(tmpdir(), 'narada-launcher-plan-'));
   try {
@@ -270,6 +270,7 @@ test('operator launch journey dry-run maps one agent to agent-cli and agent-web-
         ...process.env,
         NARADA_PROPER_ROOT: naradaProperRoot,
         NARADA_USER_SITE_ROOT: fixtureRoot,
+        NARADA_CLOUDFLARE_NARS_PROJECTION_URL: 'https://narada-nars-projection.test',
       },
     });
 
@@ -288,15 +289,22 @@ test('operator launch journey dry-run maps one agent to agent-cli and agent-web-
     assert.deepEqual(agent.launch_operator_surfaces, ['agent-cli', 'agent-web-ui']);
     assert.equal(agent.launch_operator_surface, 'agent-cli');
     assert.equal(agent.launch_runtime, 'narada-agent-runtime-server');
-
-    const separatorCount = agent.wt_args.filter((arg) => arg === ';').length;
-    assert.equal(separatorCount, 1, JSON.stringify(agent.wt_args, null, 2));
-    const commandText = agent.wt_args.join(' ');
-    assert.match(commandText, /'operator-surface' 'runtime' 'start' 'agent-cli'/);
-    assert.match(commandText, /'--runtime' 'narada-agent-runtime-server'/);
-    assert.match(commandText, /'agent-web-ui' 'attach'/);
-    assert.match(commandText, /'--agent' 'resident'/);
-    assert.match(commandText, /'--wait-for-session-ms' '60000'/);
+    assert.equal(agent.runtime_start_execution_mode, 'hidden_detached');
+    assert.equal(agent.hidden_runtime_start_command.includes('agent-cli'), true);
+    assert.equal(agent.hidden_runtime_start_command.includes('narada-agent-runtime-server'), true);
+    assert.equal(agent.terminal_tabs.length, 1);
+    assert.equal(agent.terminal_tabs[0].title, 'sonar.resident web ui');
+    assert.equal(agent.terminal_tabs[0].command_argv.includes('agent-web-ui'), true);
+    assert.equal(agent.terminal_tabs[0].command_argv.includes('attach'), true);
+    assert.deepEqual(
+      agent.terminal_tabs[0].command_argv.slice(-5),
+      ['--wait-for-session-ms', '60000', '--open', '--cloudflare-api-base-url', 'https://narada-nars-projection.test'],
+    );
+    assert.equal(agent.wt_args.includes(';'), false);
+    assert.equal(agent.wt_args[0], 'new-tab');
+    assert.equal(agent.wt_args.includes('sonar.resident web ui'), true);
+    const terminalCommand = agent.wt_args[agent.wt_args.indexOf('-Command') + 1];
+    assert.match(terminalCommand, /'agent-web-ui' 'attach'/);
   } finally {
     rmSync(fixtureRoot, { recursive: true, force: true });
   }

@@ -28,6 +28,12 @@ export const OPERATOR_CONSOLE_ASSET_PATH = '/console/assets' as const;
 export const OPERATOR_WORKSPACE_ROUTE_DIRECTORY_TIMEOUT_MS = 10_000;
 export const OPERATOR_CONSOLE_LONG_RUNNING_REQUEST_TIMEOUT_MS = 120_000;
 
+// Secret names are User Site references, not credential values. The legacy
+// Access secret name is retained because it already exists in SecretStore.
+export const OPERATOR_CONSOLE_BRIDGE_TOKEN_SECRET_NAME = 'narada/operator-console/bridge-token' as const;
+export const OPERATOR_CONSOLE_ACCESS_CLIENT_ID_SECRET_NAME = 'narada/operator-console/access-client-id' as const;
+export const OPERATOR_CONSOLE_ACCESS_CLIENT_SECRET_NAME = 'narada-operator-console-secret' as const;
+
 export type OperatorConsoleOnboardingUiState =
   | 'checking'
   | 'ready'

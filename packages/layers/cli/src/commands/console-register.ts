@@ -47,12 +47,12 @@ export function registerConsoleCommands(program: Command): void {
     .option('--url <url>', 'Operator Workspace URL; defaults to the local Operator Router')
     .option('--title <title>', 'Overlay title', 'Narada Operator Console')
     .option('--state-root <path>', 'Override the user-local overlay state root')
-    .option('--visibility <policy>', 'Visibility policy: always or windows-terminal', 'windows-terminal')
+    .option('--visibility <policy>', 'Visibility policy: always or windows-terminal', 'always')
     .option('--refresh-seconds <seconds>', 'Document refresh interval', '2')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (opts: CommanderOptionValues) => {
-      const visibility = String(opts.visibility ?? 'windows-terminal');
+      const visibility = String(opts.visibility ?? 'always');
       if (visibility !== 'always' && visibility !== 'windows-terminal') throw new Error('operator_console_overlay_visibility_invalid');
       const result = await consoleOverlayCommand({
         url: opts.url as string | undefined,
@@ -305,6 +305,7 @@ function addMirrorOptions(command: Command): Command {
     .option('--router-url <url>', 'Stable local Operator Router URL', 'http://127.0.0.1:61729')
     .option('--router-state-root <path>', 'Operator Router state root')
     .option('--bridge-token-file <path>', 'User-local file containing the mirror bridge token')
+    .option('--bridge-token-secret-name <name>', 'SecretStore entry containing the mirror bridge token')
     .option('--cloudflared-binary <path>', 'cloudflared executable', 'cloudflared')
     .option('--wrangler-binary <path>', 'Wrangler executable for managed named tunnels')
     .option('--tunnel-runner <runner>', 'Tunnel runner: cloudflared or wrangler')
@@ -327,6 +328,7 @@ function mirrorOptionsFromCommander(opts: CommanderOptionValues): ConsoleMirrorC
     router_url: opts.routerUrl as string | undefined,
     router_state_root: opts.routerStateRoot as string | undefined,
     bridge_token_file: opts.bridgeTokenFile as string | undefined,
+    bridge_token_secret_name: opts.bridgeTokenSecretName as string | undefined,
     cloudflared_binary: opts.cloudflaredBinary as string | undefined,
     wrangler_binary: opts.wranglerBinary as string | undefined,
     tunnel_runner: opts.tunnelRunner as ConsoleMirrorCommandOptions['tunnel_runner'],

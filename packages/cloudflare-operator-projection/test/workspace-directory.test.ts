@@ -25,7 +25,7 @@ async function jsonOf(response: Response) {
 
 describe('Cloudflare Workspace Route Directory', () => {
   test('publishes a scoped route, exposes descriptors only, and revokes explicitly', async () => {
-    const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now, require_operator_console_access: false });
     const projection = await jsonOf(await worker.fetch(new Request('https://workspace.example.test/api/nars/projections/register', {
       method: 'POST',
       body: JSON.stringify({
@@ -117,7 +117,7 @@ describe('Cloudflare Workspace Route Directory', () => {
   });
 
   test('persists the route directory through its Durable Object binding', async () => {
-    const worker = createCloudflareNarsProjectionWorker({ now: () => now });
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now, require_operator_console_access: false });
     const storage = new Map<string, unknown>();
     const projectionStorage = new Map<string, unknown>();
     const env = {
@@ -196,7 +196,7 @@ describe('Cloudflare Workspace Route Directory', () => {
         },
       },
     }, now);
-    const worker = createCloudflareNarsProjectionWorker({ now: () => now, workspace_directory_service: directory });
+    const worker = createCloudflareNarsProjectionWorker({ now: () => now, require_operator_console_access: false, workspace_directory_service: directory });
     const response = await worker.fetch(new Request('https://workspace.example.test/console/registry'), {
       ASSETS: {
         fetch: () => new Response('<script id="operator-console-config">__NARADA_OPERATOR_CONSOLE_CONFIG__</script>', {
@@ -224,6 +224,7 @@ describe('Cloudflare Workspace Route Directory', () => {
     const requestedPaths: string[] = [];
     const worker = createCloudflareNarsProjectionWorker({ now: () => now });
     const env = {
+      OPERATOR_CONSOLE_ACCESS_REQUIRED: 'false',
       ASSETS: {
         fetch: (request: Request) => {
           const pathname = new URL(request.url).pathname;
