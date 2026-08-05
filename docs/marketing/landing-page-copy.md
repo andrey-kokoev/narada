@@ -243,18 +243,21 @@ whitepaper and left as an exercise for the reader.
 
 ## 9. Get started `#get-started`
 
+**Placement (2026-08-05):** the install block OPENS the page, before the hero,
+as a plain functional section — no marketing copy in it. Everything else
+(hero, problem, boundaries, capabilities, how-it-works, trust, proof, thesis)
+follows. The GitHub/Quickstart CTA row and the footer line below close the
+page in a small trailing section.
+
 **Section head:**
 
-> Put one operation under governance.
+> Install.
 
-**Lead-in:**
+**Lead-in (functional, not marketing):**
 
-One command installs the `narada` CLI: a self-contained release artifact
-with every dependency bundled — nothing to build, no registry resolution on
-your machine. Requires Node.js 22+. The scripts are plain text served from
-this domain — read them before you run them. Prefer to build from source?
-Use the source installers instead (`/install-source.ps1`,
-`/install-source.sh`).
+Requires Node.js 22+. The scripts are plain text served from this domain —
+read them before you run them. Source builds: `/install-source.ps1`,
+`/install-source.sh`.
 
 ```
 # Windows (PowerShell)
