@@ -28,7 +28,7 @@ test('clean-dist consumers have explicit projection build gates', () => {
   expect(projection.types).toMatch(/^\.\/dist\//);
   expect(exportTargets.length).toBeGreaterThan(0);
   expect(exportTargets.every((target) => target.startsWith('./dist/'))).toBe(true);
-  expect(scriptsFor('packages/cloudflare-operator-projection/package.json').build).toBe('tsc');
+  expect(scriptsFor('packages/cloudflare-operator-projection/package.json').build).toBe('bunx --bun tsc -p tsconfig.json');
 
   for (const relativePath of ['packages/agent-web-ui/package.json', 'packages/layers/cli/package.json']) {
     const scripts = scriptsFor(relativePath);

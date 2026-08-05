@@ -85,3 +85,12 @@ explicit temporary deployment roster entry; the runner never changes the
 persistent Host Fleet config or SQLite state. The deployed Worker gateway and
 the local authority gateway/tunnel must be healthy before the run; otherwise
 the runner records the typed refusal and does not claim an end-to-end pass.
+
+## Runtime posture
+
+Local build, script typecheck, and Vitest are Bun-first; `build:node`,
+`typecheck:node`, and `test:node` retain the Node compatibility paths. The
+Vitest config selects the package `bun` export condition so Bun tests reach the
+existing `@narada-core/sqlite` Bun adapter instead of the Node `node:sqlite`
+adapter. Deploy, mirror, and live-smoke commands remain explicit operational
+surfaces and are not implied by the local test runtime.
