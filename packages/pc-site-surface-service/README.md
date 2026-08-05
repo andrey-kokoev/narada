@@ -80,3 +80,11 @@ $env:NARADA_MCP_SURFACES_WORKSPACE_ROOT = '<mcp-surfaces workspace>'
 $env:NARADA_PC_SITE_SURFACE_SERVICE_NODE_PATH = '<stable Node 22 executable>'
 pnpm --filter @narada-core/pc-site-surface-service test:live:e2e
 ```
+
+## Runtime posture
+
+Build, typecheck, and the pure service tests are Bun-first; the `*:node`
+variants retain Node compatibility. The live acceptance path remains explicitly
+Node-based because its watchdog contract requires a stable Node executable and
+an external MCP Surfaces workspace. It is not a reason to abstract the
+authenticated loopback service away from its existing domain boundary.
