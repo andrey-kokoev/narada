@@ -139,7 +139,10 @@ test('governance MCP exposes and executes reference diagnosis and dependency dis
     store.db.close();
   }
 
-  const server: any = spawnTestChild(process.execPath, ['--import', 'tsx', join(root, 'task-mcp-server.ts'), '--site-root', siteRoot], {
+  const serverRuntimeArgs: any = process.versions.bun
+    ? [join(root, 'task-mcp-server.ts'), '--site-root', siteRoot]
+    : ['--import', 'tsx', join(root, 'task-mcp-server.ts'), '--site-root', siteRoot];
+  const server: any = spawnTestChild(process.execPath, serverRuntimeArgs, {
     cwd: root,
     env: { ...process.env, NARADA_AGENT_ID: 'agent.test' },
     stdio: ['pipe', 'pipe', 'pipe'],
