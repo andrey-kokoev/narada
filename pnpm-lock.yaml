@@ -84,6 +84,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/git-mcp:
     dependencies:
@@ -97,6 +103,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/graph-mail-mcp:
     dependencies:
@@ -116,6 +128,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/local-filesystem-mcp:
     dependencies:
@@ -129,6 +147,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/mailbox-mcp:
     dependencies:
@@ -145,6 +169,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/nars-session-mcp:
     dependencies:
@@ -163,10 +193,31 @@ importers:
       '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../../narada/packages/sqlite
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
-  ../mcp-surfaces/packages/shared/execution-contract: {}
+  ../mcp-surfaces/packages/shared/execution-contract:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
-  ../mcp-surfaces/packages/shared/mcp-e2e-harness: {}
+  ../mcp-surfaces/packages/shared/mcp-e2e-harness:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/shared/mcp-fabric-contracts:
     dependencies:
@@ -181,13 +232,27 @@ importers:
         specifier: ^5.8.3
         version: 5.9.3
 
-  ../mcp-surfaces/packages/shared/mcp-runtime-client: {}
+  ../mcp-surfaces/packages/shared/mcp-runtime-client:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/shared/mcp-runtime-observation:
     dependencies:
       '@narada-core/mcp-fabric-contracts':
         specifier: workspace:*
         version: link:../mcp-fabric-contracts
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/shared/mcp-runtime-proxy:
     dependencies:
@@ -204,6 +269,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/shared/mcp-surface-runtime:
     dependencies:
@@ -223,14 +294,34 @@ importers:
       '@narada-core/sqlite':
         specifier: workspace:*
         version: link:../../../../narada/packages/sqlite
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
-  ../mcp-surfaces/packages/shared/mcp-telemetry: {}
+  ../mcp-surfaces/packages/shared/mcp-telemetry:
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/shared/mcp-transport:
     dependencies:
       zod:
         specifier: ^4.4.3
         version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/structured-command-mcp:
     dependencies:
@@ -247,6 +338,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../mcp-surfaces/packages/task-lifecycle-mcp:
     dependencies:
@@ -269,6 +366,12 @@ importers:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
         version: link:../shared/mcp-e2e-harness
+      '@types/node':
+        specifier: ^22.15.3
+        version: 22.19.19
+      typescript:
+        specifier: ^5.8.3
+        version: 5.9.3
 
   ../narada-core/packages/artifact-integrity:
     devDependencies:
