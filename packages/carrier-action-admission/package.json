@@ -20,9 +20,13 @@
   },
   "scripts": {
     "prebuild": "pnpm --filter @narada-core/site-common-tools build",
-    "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test src/carrier-action-admission.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "prebuild:node": "pnpm --filter @narada-core/site-common-tools build",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
+    "test": "bun test src/carrier-action-admission.test.ts",
+    "test:node": "node --import tsx --test src/carrier-action-admission.test.ts",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "peerDependencies": {
     "@narada-core/site-common-tools": "0.1.0"
@@ -38,6 +42,7 @@
     "directory": "packages/carrier-action-admission"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
