@@ -86,3 +86,13 @@ still documents the lone-clone path and is wrong for clean machines.
    checkout must be a sibling **literally named `narada`**. Installers warn
    when `NARADA_SRC` does not end in `narada`. Portability follow-up: make
    agent-tui resolve the narada root the same way mcp-surfaces 3fbc4e4 did.
+4. **Resolution (2026-08-04)**: full clean-machine build passed in canonical
+   layout (five repos side by side, narada named `narada`): `pnpm install`
+   (24.5s), `pnpm build` (all 122 workspace projects incl. cargo), and
+   `node packages/layers/cli/dist/main.js demo` ran the zero-setup demo
+   successfully (5 mock messages, draft-only posture warning, success JSON).
+   The 42-package type fix was upstreamed to `narada-core/mcp-surfaces@main`
+   (commit f5a9de4). The repo's own `install-narada-shim.sh` was not exercised
+   in the test (it would have overwritten the operator's real `~/.local/bin`
+   shim to point at a temp checkout); everything up to the shim step is
+   verified.
