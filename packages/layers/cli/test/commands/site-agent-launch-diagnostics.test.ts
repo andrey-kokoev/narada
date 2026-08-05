@@ -9,6 +9,26 @@ import {
 } from '../../src/commands/site-agent-launch-diagnostics.js';
 
 describe('site-agent launch diagnostics', () => {
+  it('records failures without writing directly to the console by default', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'site-agent-failure-default-'));
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      const diagnostics = createSiteAgentLaunchDiagnostics({ root });
+      const recorded = await diagnostics.recordFailure({
+        requestId: 'request-default',
+        siteId: 'sonar',
+        agentId: 'sonar.resident',
+        phase: 'workspace_launch',
+        code: 'workspace_launch_failed',
+      });
+
+      expect(recorded.artifactPath).toEqual(expect.any(String));
+      expect(consoleError).not.toHaveBeenCalled();
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('persists a redacted structured failure and emits a correlated log line', async () => {
     const root = mkdtempSync(join(tmpdir(), 'site-agent-failure-'));
     const log = vi.fn();

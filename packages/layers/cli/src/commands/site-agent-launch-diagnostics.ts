@@ -115,7 +115,7 @@ export function createSiteAgentLaunchDiagnostics(
   const now = options.now ?? Date.now;
   const maxArtifacts = Math.max(1, options.maxArtifacts ?? SITE_AGENT_LAUNCH_FAILURE_MAX_ARTIFACTS);
   const maxAgeMs = Math.max(0, options.maxAgeMs ?? SITE_AGENT_LAUNCH_FAILURE_MAX_AGE_MS);
-  const log = options.log ?? ((line: string) => console.error(line));
+  const log = options.log ?? (() => undefined);
 
   return {
     async recordFailure(input) {
