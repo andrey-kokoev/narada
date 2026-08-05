@@ -27,3 +27,5 @@ The first slice includes:
 read task-lifecycle context, plan agent-context hydration, read a checkpoint summary if available,
 and prepare an operator-surface launch handoff. It still does not create `.lnk` files, launch
 processes, mutate PC-locus/operator-surface runtime state, or allow native shell fallback.
+
+Local build, typecheck, and tests default to Bun; use the `:node` script variants for explicit Node compatibility.

@@ -9,3 +9,5 @@ It describes layout, runtime path conventions, admission checklist, and health/r
 The `narada.windows_pc_site_template.plan.v0` contract builds a descriptor-only plan for a future Windows PC Site from selected template slices: operator surface, shell MCP, test MCP, OSL, and Komorebi/YASB. It lists planned directories and required local admissions without creating files.
 
 Plans refuse source runtime import, PC-locus state import, and credentials. Windows profile mutation is reported as a warning because it requires a separate admitted local execution.
+
+Local build, typecheck, and tests default to Bun; use the `:node` script variants for explicit Node compatibility.

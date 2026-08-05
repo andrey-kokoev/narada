@@ -7,3 +7,5 @@ This package records the package dependency graph, receiving-Site adoption check
 ## Conformance Report
 
 The `narada.windows_machinery_capability_exchange.conformance_report.v0` contract reports whether the adopted descriptor package set is complete and names any missing package slices. It also preserves shared refusal classes for runtime databases, task/inbox history, checkpoints, rosters, operator-surface runtime state, PC-locus state, secrets, credentials, and live process authority.
+
+Local build, typecheck, and tests default to Bun; use the `:node` script variants for explicit Node compatibility.
