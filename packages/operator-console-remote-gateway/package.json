@@ -16,9 +16,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/*.test.ts"
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "test:node": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
     "@narada-core/operator-console-contract": "workspace:*",
@@ -37,6 +40,7 @@
     "directory": "packages/operator-console-remote-gateway"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }

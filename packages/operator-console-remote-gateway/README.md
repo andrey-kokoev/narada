@@ -21,3 +21,11 @@ disposition, not a second hand-maintained route authority.
 
 Cloudflare Tunnel should terminate at this gateway, not at the raw Operator
 Router. The Cloudflare Worker supplies the bridge token on the server side.
+
+## Runtime posture
+
+Build and typecheck are Bun-first. Conformance remains explicitly Node-based
+because the gateway owns a raw `node:http`/`node:net` WebSocket upgrade and
+duplex-frame relay. Under Bun 1.3.14 the HTTP paths pass, but the loopback
+frame-relay test does not complete; `test:node` is the canonical transport
+conformance command until that boundary has a Bun-native executable proof.
