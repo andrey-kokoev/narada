@@ -77,6 +77,9 @@ importers:
       '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../narada/packages/sqlite
     devDependencies:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
@@ -106,6 +109,9 @@ importers:
       '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../narada/packages/sqlite
     devDependencies:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
@@ -132,6 +138,9 @@ importers:
       '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../narada/packages/sqlite
     devDependencies:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
@@ -151,6 +160,9 @@ importers:
       '@narada-core/site-paths':
         specifier: workspace:*
         version: link:../../../narada/packages/site-paths
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../narada/packages/sqlite
 
   ../mcp-surfaces/packages/shared/execution-contract: {}
 
@@ -207,6 +219,10 @@ importers:
       ajv:
         specifier: ^8.20.0
         version: 8.20.0
+    devDependencies:
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../../narada/packages/sqlite
 
   ../mcp-surfaces/packages/shared/mcp-telemetry: {}
 
@@ -243,6 +259,9 @@ importers:
       '@narada-core/mcp-transport':
         specifier: workspace:*
         version: link:../shared/mcp-transport
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../narada/packages/sqlite
       '@narada-core/task-governance-core':
         specifier: workspace:*
         version: link:../../../narada-core/packages/task-governance-core
