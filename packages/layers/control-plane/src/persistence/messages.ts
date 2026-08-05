@@ -1,4 +1,4 @@
-import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename as fsRename, rm, stat, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { createHash } from "node:crypto";
 import type {
@@ -144,6 +144,22 @@ async function writeText(path: string, value: string): Promise<void> {
   await writeFile(path, value, "utf8");
 }
 
+async function renameDirectoryForReplacement(from: string, to: string): Promise<void> {
+  const attempts = process.platform === "win32" ? 4 : 1;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      await fsRename(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EPERM" || attempt === attempts - 1) {
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10 * (attempt + 1)));
+    }
+  }
+}
+
 function buildAttachmentManifest(
   attachments: NormalizedAttachment[],
 ): Array<Record<string, unknown>> {
@@ -282,10 +298,10 @@ export class FileMessageStore implements MessageStore {
 
       // Atomic replacement: move existing to prior, move staging to destination, remove prior
       if (destinationExists) {
-        await rename(destinationDir, priorDir);
+        await renameDirectoryForReplacement(destinationDir, priorDir);
       }
 
-      await rename(stagingDir, destinationDir);
+      await renameDirectoryForReplacement(stagingDir, destinationDir);
 
       if (destinationExists) {
         await rm(priorDir, { recursive: true, force: true });
@@ -329,7 +345,7 @@ export class FileMessageStore implements MessageStore {
       if (!destinationNowExists && destinationExisted) {
         const priorExists = await exists(priorDir).catch(() => false);
         if (priorExists) {
-          await rename(priorDir, destinationDir).catch(() => undefined);
+          await renameDirectoryForReplacement(priorDir, destinationDir).catch(() => undefined);
         }
       }
 
