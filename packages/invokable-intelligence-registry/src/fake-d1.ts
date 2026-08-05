@@ -1,10 +1,10 @@
 /**
- * A D1-API-compatible wrapper over node:sqlite. Lets the D1 adapter run
+ * A D1-API-compatible wrapper over local SQLite. Lets the D1 adapter run
  * the shared conformance suite locally without miniflare/Wrangler, and is
  * exported for downstream packages' tests (e.g. the Cloudflare carrier).
  */
 
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "@narada-core/sqlite";
 
 import type { D1DatabaseLike, D1PreparedStatementLike } from "./d1-store.js";
 

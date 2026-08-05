@@ -39,7 +39,8 @@
     "test": "node --import tsx --test test/index.test.ts"
   },
   "dependencies": {
-    "@narada-core/invokable-intelligence-contract": "workspace:*"
+    "@narada-core/invokable-intelligence-contract": "workspace:*",
+    "@narada-core/sqlite": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^22.5.0",

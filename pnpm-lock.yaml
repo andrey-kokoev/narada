@@ -1031,6 +1031,9 @@ importers:
       '@narada-core/invokable-intelligence-contract':
         specifier: workspace:*
         version: link:../invokable-intelligence-contract
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@types/node':
         specifier: ^22.5.0

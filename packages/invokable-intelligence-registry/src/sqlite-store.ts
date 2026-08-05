@@ -1,8 +1,8 @@
 /**
- * node:sqlite embodiment of the registry store (local authority loci).
+ * SQLite embodiment of the registry store (local authority loci).
  */
 
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "@narada-core/sqlite";
 
 import { RegistryStoreCore } from "./core.js";
 import type { SqlExecutor, SqlStatement } from "./store.js";

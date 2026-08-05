@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 import { BATCH_OFFPEAK, CLOUDFLARE_KIMI, fixtureBundle } from "@narada-core/invokable-intelligence-contract";
+import { DatabaseSync } from "@narada-core/sqlite";
 
 import { defineRegistryConformanceSuite } from "../src/conformance.js";
 import { D1RegistryStore } from "../src/d1-store.js";
