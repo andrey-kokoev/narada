@@ -28,9 +28,12 @@
     "README.md"
   ],
   "scripts": {
-    "build": "node --import tsx scripts/build.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/*.test.ts"
+    "build": "bun scripts/build.ts",
+    "build:node": "node --import tsx scripts/build.ts",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "test": "bun test test",
+    "test:node": "node --import tsx --test test/*.test.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
@@ -44,6 +47,7 @@
     "directory": "packages/host-fleet"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }

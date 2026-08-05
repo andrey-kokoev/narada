@@ -6,10 +6,15 @@ import { fileURLToPath } from 'node:url';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 rmSync(resolve(root, 'dist'), { recursive: true, force: true });
-const tscArgs = ['exec', 'tsc', '-p', resolve(root, 'tsconfig.build.json')];
+const buildConfig = resolve(root, 'tsconfig.build.json');
+const bunRuntime = Boolean((process.versions as Record<string, string | undefined>).bun);
+const tscCommand = bunRuntime ? process.execPath : (process.platform === 'win32' ? process.env.ComSpec ?? 'cmd.exe' : 'pnpm');
+const tscArgs = bunRuntime
+  ? ['x', 'tsc', '-p', buildConfig]
+  : ['exec', 'tsc', '-p', buildConfig];
 const result = spawnSync(
-  process.platform === 'win32' ? process.env.ComSpec ?? 'cmd.exe' : 'pnpm',
-  process.platform === 'win32' ? ['/d', '/s', '/c', 'pnpm', ...tscArgs] : tscArgs,
+  tscCommand,
+  bunRuntime || process.platform !== 'win32' ? tscArgs : ['/d', '/s', '/c', 'pnpm', ...tscArgs],
   {
     cwd: root,
     stdio: 'inherit',

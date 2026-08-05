@@ -65,7 +65,8 @@ test('Host Fleet has no production package dependencies', () => {
     assert.deepEqual(manifest[field] ?? {}, {}, `${field} must remain empty`);
   }
   const scripts = manifest.scripts as Record<string, unknown>;
-  assert.equal(scripts.build, 'node --import tsx scripts/build.ts');
+  assert.equal(scripts.build, 'bun scripts/build.ts');
+  assert.equal(scripts['build:node'], 'node --import tsx scripts/build.ts');
   const buildScript = readFileSync(resolve(packageRoot, 'scripts', 'build.ts'), 'utf8');
   assert.match(buildScript, /rmSync\(resolve\(root, 'dist'\), \{ recursive: true, force: true \}\)/);
 });
