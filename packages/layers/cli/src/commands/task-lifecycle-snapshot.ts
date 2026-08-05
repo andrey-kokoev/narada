@@ -1,8 +1,15 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
+import Database from '@narada-core/sqlite';
 import { ExitCode } from '../lib/exit-codes.js';
 import { formattedResult, type CliFormat } from '../lib/cli-output.js';
-import { openTaskLifecycleStore, type SqliteTaskLifecycleStore } from '../lib/task-lifecycle-store.js';
+import {
+  openTaskLifecycleStore,
+  resolveTaskLifecycleDatabasePath,
+  type SqliteTaskLifecycleStore,
+} from '../lib/task-lifecycle-store.js';
 
 export interface TaskLifecycleSnapshotOptions {
   cwd?: string;
@@ -30,6 +37,50 @@ interface TaskLifecycleSnapshot {
   snapshot_version: 1;
   exported_at: string;
   tables: SnapshotTable[];
+}
+
+type ImportCompatibilityBlockerCode =
+  | 'destination_table_missing'
+  | 'destination_columns_missing'
+  | 'snapshot_columns_missing_required_destination_columns'
+  | 'snapshot_table_missing_for_populated_destination';
+
+interface ImportCompatibilityBlocker {
+  code: ImportCompatibilityBlockerCode;
+  table: string;
+  row_count: number;
+  columns?: string[];
+}
+
+export interface TaskLifecycleSnapshotImportCompatibility {
+  status: 'compatible' | 'incompatible';
+  snapshot_table_count: number;
+  destination_table_count: number;
+  compatible_tables: string[];
+  ignored_empty_snapshot_tables: string[];
+  ignored_empty_destination_tables: string[];
+  blockers: ImportCompatibilityBlocker[];
+}
+
+interface ImportSchemaColumn {
+  name: string;
+  type: string;
+  notnull: number;
+  dflt_value: unknown;
+  pk: number;
+}
+
+interface ImportSchemaTable {
+  name: string;
+  columns: ImportSchemaColumn[];
+  row_count: number;
+}
+
+interface SchemaDatabase {
+  prepare(sql: string): {
+    all(...params: unknown[]): unknown[];
+  };
+  close(): void;
 }
 
 interface SnapshotFinding {
@@ -75,12 +126,34 @@ export async function taskLifecycleExportCommand(options: TaskLifecycleSnapshotO
 export async function taskLifecycleImportCommand(options: TaskLifecycleSnapshotOptions): Promise<{ exitCode: ExitCode; result: unknown }> {
   const cwd = resolve(options.cwd ?? process.cwd());
   const input = resolve(cwd, options.input ?? join('.ai', 'task-lifecycle-snapshot.json'));
+  let snapshot: TaskLifecycleSnapshot;
+  let compatibility: TaskLifecycleSnapshotImportCompatibility;
+  try {
+    const raw = await readFile(input, 'utf8');
+    snapshot = JSON.parse(raw) as TaskLifecycleSnapshot;
+    validateSnapshot(snapshot);
+    const destinationSchema = await inspectDestinationImportSchema(cwd, options.store);
+    compatibility = inspectImportCompatibility(snapshot, destinationSchema);
+    if (compatibility.status === 'incompatible') {
+      return {
+        exitCode: ExitCode.GENERAL_ERROR,
+        result: {
+          status: 'error',
+          error: 'Task lifecycle snapshot is incompatible with the destination schema',
+          compatibility,
+        },
+      };
+    }
+  } catch (error) {
+    return {
+      exitCode: ExitCode.GENERAL_ERROR,
+      result: { status: 'error', error: error instanceof Error ? error.message : String(error) },
+    };
+  }
+
   await mkdir(join(cwd, '.ai'), { recursive: true });
   const store = options.store ?? openTaskLifecycleStore(cwd);
   try {
-    const raw = await readFile(input, 'utf8');
-    const snapshot = JSON.parse(raw) as TaskLifecycleSnapshot;
-    validateSnapshot(snapshot);
     store.initSchema();
     applySnapshot(store, snapshot);
     return {
@@ -91,11 +164,13 @@ export async function taskLifecycleImportCommand(options: TaskLifecycleSnapshotO
           input,
           table_count: snapshot.tables.length,
           row_count: snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0),
+          compatibility,
         },
         [
           `Task lifecycle snapshot imported: ${input}`,
           `Tables: ${snapshot.tables.length}`,
           `Rows: ${snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0)}`,
+          `Ignored empty snapshot tables: ${compatibility.ignored_empty_snapshot_tables.length}`,
         ],
         options.format ?? 'auto',
       ),
@@ -233,15 +308,140 @@ function applySnapshot(store: SqliteTaskLifecycleStore, snapshot: TaskLifecycleS
 }
 
 function validateSnapshot(snapshot: TaskLifecycleSnapshot): void {
-  if (snapshot.snapshot_kind !== 'task_lifecycle_snapshot' || snapshot.snapshot_version !== 1) {
+  if (!snapshot || snapshot.snapshot_kind !== 'task_lifecycle_snapshot' || snapshot.snapshot_version !== 1) {
     throw new Error('Invalid task lifecycle snapshot header');
   }
+  if (!Array.isArray(snapshot.tables)) throw new Error('Invalid task lifecycle snapshot tables');
+  const tableNames = new Set<string>();
   for (const table of snapshot.tables) {
     if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(table.name)) throw new Error(`Invalid table name: ${table.name}`);
+    if (tableNames.has(table.name)) throw new Error(`Duplicate snapshot table: ${table.name}`);
+    tableNames.add(table.name);
+    if (!Array.isArray(table.columns) || !Array.isArray(table.rows)) throw new Error(`Invalid snapshot table shape: ${table.name}`);
+    const columnNames = new Set<string>();
     for (const column of table.columns) {
       if (!/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(column)) throw new Error(`Invalid column name: ${column}`);
+      if (columnNames.has(column)) throw new Error(`Duplicate snapshot column: ${table.name}.${column}`);
+      columnNames.add(column);
     }
   }
+}
+
+async function inspectDestinationImportSchema(
+  cwd: string,
+  providedStore?: SqliteTaskLifecycleStore,
+): Promise<Map<string, ImportSchemaTable>> {
+  if (providedStore) return describeImportSchema(providedStore.db as unknown as SchemaDatabase);
+
+  const databasePath = resolveTaskLifecycleDatabasePath(cwd);
+  if (existsSync(databasePath)) {
+    const database = new Database(databasePath, { readOnly: true, fileMustExist: true });
+    try {
+      return describeImportSchema(database as unknown as SchemaDatabase);
+    } finally {
+      database.close();
+    }
+  }
+
+  const temporaryRoot = await mkdtemp(join(tmpdir(), 'narada-lifecycle-import-preflight-'));
+  await mkdir(join(temporaryRoot, '.ai'), { recursive: true });
+  const store = openTaskLifecycleStore(temporaryRoot);
+  try {
+    return describeImportSchema(store.db as unknown as SchemaDatabase);
+  } finally {
+    store.db.close();
+    await rm(temporaryRoot, { recursive: true, force: true });
+  }
+}
+
+function describeImportSchema(database: SchemaDatabase): Map<string, ImportSchemaTable> {
+  const rows = database.prepare(`
+    select name from sqlite_master
+    where type = 'table' and name not like 'sqlite_%'
+    order by name
+  `).all() as Array<{ name: string }>;
+  const schema = new Map<string, ImportSchemaTable>();
+  for (const { name } of rows) {
+    if (EXCLUDED_TABLES.has(name)) continue;
+    const columns = database.prepare(`pragma table_info(${quoteIdent(name)})`).all() as ImportSchemaColumn[];
+    const countRow = database.prepare(`select count(*) as row_count from ${quoteIdent(name)}`).all()[0] as { row_count: number | bigint };
+    schema.set(name, { name, columns, row_count: Number(countRow.row_count) });
+  }
+  return schema;
+}
+
+function inspectImportCompatibility(
+  snapshot: TaskLifecycleSnapshot,
+  destinationSchema: Map<string, ImportSchemaTable>,
+): TaskLifecycleSnapshotImportCompatibility {
+  const compatibleTables: string[] = [];
+  const ignoredEmptySnapshotTables: string[] = [];
+  const ignoredEmptyDestinationTables: string[] = [];
+  const blockers: ImportCompatibilityBlocker[] = [];
+  const snapshotNames = new Set(snapshot.tables.map((table) => table.name));
+
+  for (const table of snapshot.tables) {
+    const destination = destinationSchema.get(table.name);
+    if (!destination) {
+      if (table.rows.length === 0) ignoredEmptySnapshotTables.push(table.name);
+      else blockers.push({ code: 'destination_table_missing', table: table.name, row_count: table.rows.length });
+      continue;
+    }
+    if (table.rows.length === 0) {
+      compatibleTables.push(table.name);
+      continue;
+    }
+
+    const snapshotColumns = new Set(table.columns);
+    const destinationColumns = new Set(destination.columns.map((column) => column.name));
+    const missingDestinationColumns = table.columns.filter((column) => !destinationColumns.has(column));
+    if (missingDestinationColumns.length > 0) {
+      blockers.push({
+        code: 'destination_columns_missing',
+        table: table.name,
+        row_count: table.rows.length,
+        columns: missingDestinationColumns,
+      });
+      continue;
+    }
+
+    const missingRequiredColumns = destination.columns
+      .filter((column) => !snapshotColumns.has(column.name))
+      .filter((column) => (column.notnull === 1 || column.pk > 0) && column.dflt_value === null)
+      .map((column) => column.name);
+    if (missingRequiredColumns.length > 0) {
+      blockers.push({
+        code: 'snapshot_columns_missing_required_destination_columns',
+        table: table.name,
+        row_count: table.rows.length,
+        columns: missingRequiredColumns,
+      });
+      continue;
+    }
+    compatibleTables.push(table.name);
+  }
+
+  for (const destination of destinationSchema.values()) {
+    if (snapshotNames.has(destination.name)) continue;
+    if (destination.row_count === 0) ignoredEmptyDestinationTables.push(destination.name);
+    else {
+      blockers.push({
+        code: 'snapshot_table_missing_for_populated_destination',
+        table: destination.name,
+        row_count: destination.row_count,
+      });
+    }
+  }
+
+  return {
+    status: blockers.length === 0 ? 'compatible' : 'incompatible',
+    snapshot_table_count: snapshot.tables.length,
+    destination_table_count: destinationSchema.size,
+    compatible_tables: compatibleTables,
+    ignored_empty_snapshot_tables: ignoredEmptySnapshotTables,
+    ignored_empty_destination_tables: ignoredEmptyDestinationTables,
+    blockers,
+  };
 }
 
 function inspectSnapshotFindings(snapshot: TaskLifecycleSnapshot, input: string): SnapshotFinding[] {

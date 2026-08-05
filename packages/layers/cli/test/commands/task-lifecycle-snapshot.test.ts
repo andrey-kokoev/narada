@@ -4,7 +4,7 @@ vi.unmock('node:fs');
 vi.unmock('node:fs/promises');
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -191,12 +191,25 @@ describe('task lifecycle snapshot commands', () => {
     expect(exportedAgain.exitCode).toBe(ExitCode.SUCCESS);
     expect(readFileSync(secondSnapshotPath, 'utf8')).toBe(readFileSync(snapshotPath, 'utf8'));
 
+    const snapshotWithEmptyLegacyTable = JSON.parse(readFileSync(snapshotPath, 'utf8')) as {
+      tables: Array<{ name: string; columns: string[]; rows: unknown[] }>;
+    };
+    snapshotWithEmptyLegacyTable.tables.push({
+      name: 'retired_empty_projection',
+      columns: ['legacy_id'],
+      rows: [],
+    });
+    writeFileSync(snapshotPath, `${JSON.stringify(snapshotWithEmptyLegacyTable, null, 2)}\n`, 'utf8');
+
     const imported = await taskLifecycleImportCommand({
       cwd: targetDir,
       input: snapshotPath,
       format: 'json',
     });
     expect(imported.exitCode).toBe(ExitCode.SUCCESS);
+    expect((imported.result as {
+      compatibility: { ignored_empty_snapshot_tables: string[] };
+    }).compatibility.ignored_empty_snapshot_tables).toEqual(['retired_empty_projection']);
 
     const target = openTaskLifecycleStore(targetDir);
     expect(target.getLifecycleByNumber(100)?.status).toBe('closed');
@@ -209,6 +222,84 @@ describe('task lifecycle snapshot commands', () => {
     expect(target.getVerificationRun('verify-100')?.status).toBe('passed');
     expect(target.getCommandRun('command-100')?.status).toBe('succeeded');
     target.db.close();
+  });
+
+  it('rejects a non-empty unknown table before creating the destination database', async () => {
+    const snapshotPath = join(sourceDir, '.ai', 'incompatible-snapshot.json');
+    writeFileSync(snapshotPath, `${JSON.stringify({
+      snapshot_kind: 'task_lifecycle_snapshot',
+      snapshot_version: 1,
+      exported_at: '2026-08-05T00:00:00.000Z',
+      tables: [{
+        name: 'legacy_projection',
+        columns: ['legacy_id'],
+        rows: [{ legacy_id: 'legacy-1' }],
+      }],
+    }, null, 2)}\n`, 'utf8');
+
+    const imported = await taskLifecycleImportCommand({
+      cwd: targetDir,
+      input: snapshotPath,
+      format: 'json',
+    });
+
+    expect(imported.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    const compatibility = (imported.result as {
+      compatibility: { status: string; blockers: Array<Record<string, unknown>> };
+    }).compatibility;
+    expect(compatibility.status).toBe('incompatible');
+    expect(compatibility.blockers).toContainEqual(expect.objectContaining({
+      code: 'destination_table_missing',
+      table: 'legacy_projection',
+      row_count: 1,
+    }));
+    expect(existsSync(join(targetDir, '.ai', 'task-lifecycle.db'))).toBe(false);
+  });
+
+  it('rejects an incomplete snapshot without clearing populated destination tables', async () => {
+    mkdirSync(join(targetDir, '.ai'), { recursive: true });
+    const target = openTaskLifecycleStore(targetDir);
+    target.upsertLifecycle({
+      task_id: 'task-preserved',
+      task_number: 999,
+      status: 'opened',
+      governed_by: null,
+      closed_at: null,
+      closed_by: null,
+      closure_mode: null,
+      reopened_at: null,
+      reopened_by: null,
+      continuation_packet_json: null,
+      updated_at: '2026-08-05T00:00:00.000Z',
+    });
+    target.db.close();
+
+    const snapshotPath = join(sourceDir, '.ai', 'incomplete-snapshot.json');
+    writeFileSync(snapshotPath, `${JSON.stringify({
+      snapshot_kind: 'task_lifecycle_snapshot',
+      snapshot_version: 1,
+      exported_at: '2026-08-05T00:00:00.000Z',
+      tables: [],
+    }, null, 2)}\n`, 'utf8');
+
+    const imported = await taskLifecycleImportCommand({
+      cwd: targetDir,
+      input: snapshotPath,
+      format: 'json',
+    });
+
+    expect(imported.exitCode).toBe(ExitCode.GENERAL_ERROR);
+    expect((imported.result as {
+      compatibility: { blockers: Array<Record<string, unknown>> };
+    }).compatibility.blockers).toContainEqual(expect.objectContaining({
+      code: 'snapshot_table_missing_for_populated_destination',
+      table: 'task_lifecycle',
+      row_count: 1,
+    }));
+
+    const preserved = openTaskLifecycleStore(targetDir);
+    expect(preserved.getLifecycleByNumber(999)?.task_id).toBe('task-preserved');
+    preserved.db.close();
   });
 
   it('compactly inspects bulky snapshots for stale roster facts without raw output', async () => {
