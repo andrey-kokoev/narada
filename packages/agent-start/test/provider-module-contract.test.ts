@@ -42,7 +42,7 @@ test('codex subscription support runs live auth preflight for non-dry launch by 
     sessionSiteRoot: siteRoot,
     runtimeSessionId: 'preflight-test-session',
     dryRun: false,
-    spawnSync(command: any, args: any, options) : any{
+    spawnSync(command: any, args: any, options: any) : any{
       calls.push({ command, args, options });
       return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
     },
@@ -157,7 +157,7 @@ test('codex subscription support caches successful live auth preflight in User S
     userSiteRoot,
     dryRun: false,
     now: () => 1000,
-    spawnSync(command: any, args: any, spawnOptions) : any{
+    spawnSync(command: any, args: any, spawnOptions: any) : any{
       calls.push({ command, args, options: spawnOptions });
       return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
     },
@@ -229,7 +229,7 @@ test('codex subscription support invalidates cache when the codex command identi
     userSiteRoot,
     dryRun: false,
     now: () => 1000,
-    spawnSync(command: any, args: any, spawnOptions) : any{
+    spawnSync(command: any, args: any, spawnOptions: any) : any{
       calls.push({ command, args, options: spawnOptions });
       return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
     },
@@ -275,7 +275,7 @@ test('codex subscription support refuses cached readiness when auth home disappe
     userSiteRoot,
     dryRun: false,
     now: () => 1000,
-    spawnSync(command: any, args: any, spawnOptions) : any{
+    spawnSync(command: any, args: any, spawnOptions: any) : any{
       calls.push({ command, args, options: spawnOptions });
       return { status: 0, stdout: '{"event":"ok"}\n', stderr: '', signal: null, error: null };
     },

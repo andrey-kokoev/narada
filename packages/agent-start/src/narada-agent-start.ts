@@ -690,7 +690,7 @@ try {
       if (refusal.recovery?.primary_command) console.error(`Recovery: ${refusal.recovery.primary_command}`);
     }
   } else {
-    console.error(`[FAIL] ${error.message}`);
+    console.error(`[FAIL] ${error instanceof Error ? error.message : String(error)}`);
   }
   process.exit(1);
 }
@@ -1324,7 +1324,7 @@ if (showAdmission) {
     }));
     process.exit(0);
   } catch (error) {
-    console.error(`[FAIL] ${error.message}`);
+    console.error(`[FAIL] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }
@@ -1358,7 +1358,7 @@ const output: any = {
     await printResult(output);
     process.exit(0);
   } catch (error) {
-    console.error(`[FAIL] ${error.message}`);
+    console.error(`[FAIL] ${error instanceof Error ? error.message : String(error)}`);
     process.exit(1);
   }
 }

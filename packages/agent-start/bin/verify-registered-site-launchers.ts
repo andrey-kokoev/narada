@@ -129,7 +129,7 @@ function scanRegistryIdentityShape(record: any) : any{
   try {
     identityRef = expectedAgentIdentityRef(record);
   } catch (error) {
-    failures.push({ reason: 'agent_identity_ref_derivation_failed', error: String(error?.message ?? error) });
+    failures.push({ reason: 'agent_identity_ref_derivation_failed', error: String(error instanceof Error ? error.message : error) });
     return failures;
   }
   if (!identityRefSiteId(identityRef)) failures.push({ reason: 'agent_identity_ref_unscoped', expected_site: record.Site ?? null });
@@ -411,7 +411,7 @@ function dryRunAttemptFailure(task: any, dryRun: any) : any{
   try {
     return { launch: parseJsonOutput(dryRun.stdout) };
   } catch (error) {
-    return { agent: task.record.Agent, carrier: task.carrier, runtime: task.runtime, reason: 'dry_run_json_parse_failed', error: String(error.message ?? error), stdout: dryRun.stdout.trim(), stderr: dryRun.stderr.trim() };
+    return { agent: task.record.Agent, carrier: task.carrier, runtime: task.runtime, reason: 'dry_run_json_parse_failed', error: String(error instanceof Error ? error.message : error), stdout: dryRun.stdout.trim(), stderr: dryRun.stderr.trim() };
   }
 }
 

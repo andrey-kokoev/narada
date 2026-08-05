@@ -58,15 +58,15 @@ test('hidden detached carrier start uses hidden process posture and exits parent
         stderr_path: join(outputDir, 'stderr.log'),
       },
       spawnOptions: {
-        spawnImpl(command: any, args: any, options) : any{
+        spawnImpl(command: any, args: any, options: any) : any{
           calls.push({ command, args, options });
           return child;
         },
       },
-      onSpawn(pid: any, spawnedChild) : any{
+      onSpawn(pid: any, spawnedChild: any) : any{
         spawned.push({ pid, child: spawnedChild });
       },
-      onExit(code) : any{
+      onExit(code: any) : any{
         exits.push(code);
       },
     });
@@ -104,7 +104,7 @@ test('hidden detached carrier start requires output file locations', () => {
         throw new Error('spawn should not be reached');
       },
     },
-    onExit(code) : any{
+    onExit(code: any) : any{
       exits.push(code);
     },
     writeStderr() : any{},
@@ -136,10 +136,10 @@ test('hidden detached carrier start reports asynchronous spawn errors before par
           return child;
         },
       },
-      onExit(code) : any{
+      onExit(code: any) : any{
         exits.push(code);
       },
-      writeStderr(message) : any{
+      writeStderr(message: any) : any{
         errors.push(message);
       },
     });
@@ -171,7 +171,7 @@ test('hidden detached carrier start writes real child output to owned files', as
           stdout_path: stdoutPath,
           stderr_path: stderrPath,
         },
-        onExit(code) : any{
+        onExit(code: any) : any{
           exits.push(code);
           resolve();
         },
@@ -225,7 +225,7 @@ test('wait prompt passes canonical agent identity ref to renderer', async () => 
     stdout,
     writeStdout: async () => {},
     loadAgentStartRenderer: async () => ({
-      formatAgentStartWaitPrompt(agentId: any, runtimeName: any, options) : any{
+      formatAgentStartWaitPrompt(agentId: any, runtimeName: any, options: any) : any{
         calls.push({ agentId, runtimeName, options });
         return 'prompt> ';
       },
