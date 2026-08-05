@@ -88,4 +88,6 @@ The exhaustive governance test is also intentionally separate:
 pnpm --filter @narada-core/task-governance test:governance
 ```
 
+Local verification defaults to Bun; use `build:node`, `typecheck:node`, and `test:node` for the explicit Node compatibility path. The neutral core prebuild remains a downstream package boundary.
+
 Use `test:fast` when changing projection, recommender, evidence admission, close, allocation, or search semantics. Use the assignment-lifecycle test when changing claim, continue, release, roster, or assignment-intent semantics. Use the exhaustive governance test when changing lint, lifecycle, report, review, or dependency semantics.

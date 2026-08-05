@@ -9,6 +9,8 @@ describe('sqlite runtime posture', () => {
     const posture = selectSqliteRuntime({
       preference: 'auto',
       nodeVersion: '22.16.0',
+      bunVersion: null,
+      bunSqliteAvailable: false,
       nodeSqliteAvailable: true,
       betterSqlite3Available: true,
     });
@@ -22,6 +24,8 @@ describe('sqlite runtime posture', () => {
     const posture = selectSqliteRuntime({
       preference: 'auto',
       nodeVersion: '20.20.2',
+      bunVersion: null,
+      bunSqliteAvailable: false,
       nodeSqliteAvailable: false,
       betterSqlite3Available: true,
     });
@@ -31,10 +35,27 @@ describe('sqlite runtime posture', () => {
     expect(posture.reason).toContain('node:sqlite is not available');
   });
 
+  it('defaults to bun:sqlite when Bun is available', () => {
+    const posture = selectSqliteRuntime({
+      preference: 'auto',
+      nodeVersion: '22.16.0',
+      bunVersion: '1.3.0',
+      bunSqliteAvailable: true,
+      nodeSqliteAvailable: true,
+      betterSqlite3Available: true,
+    });
+
+    expect(posture.selected).toBe('bun:sqlite');
+    expect(posture.supported).toBe(true);
+    expect(posture.reason).toContain('auto selects bun:sqlite');
+  });
+
   it('supports explicit node:sqlite on Node 22+', () => {
     const posture = selectSqliteRuntime({
       preference: 'node:sqlite',
       nodeVersion: '22.16.0',
+      bunVersion: null,
+      bunSqliteAvailable: false,
       nodeSqliteAvailable: true,
       betterSqlite3Available: true,
     });

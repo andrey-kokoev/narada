@@ -133,9 +133,13 @@
   },
   "scripts": {
     "prebuild": "pnpm --filter @narada-core/task-governance-core build",
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.runtime.json",
-    "test": "vitest run",
+    "prebuild:node": "pnpm --filter @narada-core/task-governance-core build",
+    "build": "bunx --bun tsc -p tsconfig.json && bunx --bun tsc -p tsconfig.runtime.json",
+    "build:node": "pnpm exec tsc -p tsconfig.json && pnpm exec tsc -p tsconfig.runtime.json",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json && bunx --bun tsc --noEmit -p tsconfig.runtime.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json && pnpm exec tsc --noEmit -p tsconfig.runtime.json",
+    "test": "bunx --bun vitest run",
+    "test:node": "pnpm exec vitest run",
     "test:smoke": "vitest run test/lib/task-lifecycle-store.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",
     "test:fast": "vitest run test/lib/task-lifecycle-store.test.ts test/lib/task-projection.test.ts test/lib/evidence-admission.test.ts test/lib/task-recommender.test.ts test/lib/task-close-service.test.ts test/lib/task-allocate-service.test.ts test/lib/task-search-service.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",
     "test:assignment-lifecycle": "vitest run test/lib/task-assignment-lifecycle-service.test.ts --pool=forks --no-file-parallelism --maxWorkers=1 --minWorkers=1 --testTimeout=120000 --hookTimeout=120000",
@@ -155,7 +159,8 @@
     "vitest": "^4.1.10"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "license": "MIT",
   "repository": {
