@@ -81,7 +81,9 @@ plan-driven protocol adapter without a legacy binding projection.
 ## Scripts
 
 ```sh
-pnpm build       # tsc → dist/
-pnpm typecheck
-pnpm test        # node --import tsx --test
+pnpm build       # Bun-driven tsc → dist/
+pnpm build:node  # explicit Node fallback
+pnpm typecheck   # Bun-driven typecheck
+pnpm test        # Bun test runner
+pnpm test:node   # explicit Node conformance runner
 ```
