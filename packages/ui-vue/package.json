@@ -22,8 +22,10 @@
   ],
   "scripts": {
     "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec vue-tsc --noEmit -p tsconfig.json",
     "pretest": "pnpm --filter @narada-core/ui build",
-    "test": "pnpm run typecheck && pnpm --filter @narada-core/ui build && vite build --config test/vite.config.ts && node --import tsx --test test/ui-vue.test.ts"
+    "test": "pnpm run typecheck && pnpm --filter @narada-core/ui build && bunx --bun vite build --config test/vite.config.ts && bun test test/ui-vue.test.ts",
+    "test:node": "pnpm run typecheck:node && pnpm --filter @narada-core/ui build:node && pnpm exec vite build --config test/vite.config.ts && node --import tsx --test test/ui-vue.test.ts"
   },
   "dependencies": {
     "@narada-core/ui": "workspace:*",
@@ -50,6 +52,7 @@
     "directory": "packages/ui-vue"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }

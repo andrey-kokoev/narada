@@ -29,3 +29,10 @@ import { Command, CommandItem, Dialog, DialogContent } from '@narada-core/ui-vue
 ```
 
 The convenience `@narada-core/ui-vue/styles.css` entry imports both stylesheets for standalone Vue consumers.
+
+## Runtime posture
+
+The Vite fixture build and executable test path are Bun-first; `test:node`
+retains the complete Node compatibility path. `vue-tsc` remains Node-based:
+the Bun invocation currently fails to resolve `.vue` module declarations, while
+the Node invocation passes. `typecheck:node` names that explicit boundary.
