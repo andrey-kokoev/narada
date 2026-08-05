@@ -58,3 +58,12 @@ from the live route inventory, so healthy and degraded session, artifact, and
 Site Operations leases are visible without making the Router a domain owner.
 The Console still owns the directory's surface semantics; the Router only
 provides stable ingress and the low-level route inventory.
+
+## Runtime posture
+
+Build and typecheck are Bun-first. Transport conformance remains explicitly
+Node-based because this package owns raw `node:http`/`node:net` request-body,
+path-canonicalization, WebSocket upgrade, frame-relay, and liveness semantics.
+Under Bun 1.3.14, 18 of 22 tests pass; the four failures are confined to
+those transport behaviors. `test:node` is the canonical conformance command
+until a Bun-native executable proof covers the same boundary.
