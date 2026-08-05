@@ -277,6 +277,7 @@ Root `pnpm test` is disabled to prevent accidental full-suite runs. Use `pnpm ve
 - **[QUICKSTART.md](QUICKSTART.md)** — Gold-path first-run guide
 - **[SEMANTICS.md](SEMANTICS.md)** — Canonical ontology and vocabulary (single source of truth for all terms)
 - **[TERMINOLOGY.md](TERMINOLOGY.md)** — User-facing words for talking about Narada
+- **[docs/marketing/landing-page-copy.md](docs/marketing/landing-page-copy.md)** — Canonical landing page copy for [narada.systems](https://narada.systems), with per-claim grounding
 - **[AGENTS.md](AGENTS.md)** — Navigation hub for contributors and agents
 - **[RELEASE.md](RELEASE.md)** — Local and CI publishing flow for `@narada-core/*` packages
 - **[.ai/do-not-open/tasks/](.ai/do-not-open/tasks/)** — Design tasks and specifications
