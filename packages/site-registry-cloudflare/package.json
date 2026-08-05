@@ -24,10 +24,14 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "smoke:fixture": "vitest run test/smoke-fixture.test.ts",
+    "build": "bunx --bun tsc -p tsconfig.json",
+    "build:node": "pnpm exec tsc -p tsconfig.json",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "test": "bunx --bun vitest run",
+    "test:node": "pnpm exec vitest run",
+    "smoke:fixture": "bunx --bun vitest run test/smoke-fixture.test.ts",
+    "smoke:fixture:node": "pnpm exec vitest run test/smoke-fixture.test.ts",
     "deploy:preflight": "pnpm build && node dist/hosted-telemetry-surface.js preflight --config wrangler.jsonc",
     "deploy:verify": "pnpm build && node dist/hosted-telemetry-surface.js verify",
     "deploy:live": "pnpm build && node dist/hosted-telemetry-surface.js deploy --live --config wrangler.jsonc"
@@ -44,7 +48,8 @@
     "@types/node": "^22.5.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "bun": ">=1.3.0"
   },
   "license": "MIT",
   "repository": {

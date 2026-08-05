@@ -170,3 +170,10 @@ helper still accepts ad hoc endpoint config. The Publication Edge helper path
 accepts a `SiteTelemetryPublicationEdge`, preflights it before transport, and
 resolves capability references only when a live send is requested. Dry-run mode
 does not resolve raw secret values or perform network I/O.
+
+## Runtime posture
+
+Local build, typecheck, Vitest, and fixture smoke tests are Bun-first. The
+`build:node`, `typecheck:node`, `test:node`, and `smoke:fixture:node` scripts
+retain explicit Node compatibility paths. Deploy and live-smoke commands remain
+operational Cloudflare/Node boundaries.
