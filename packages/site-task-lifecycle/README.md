@@ -41,3 +41,9 @@ The first proven Narada proper runtime slice is documented in [`docs/first-slice
 - Importing any source-Site runtime database or task history.
 - PC-locus repair or operator-surface carriers.
 - Richer list/query tools, richer lifecycle transitions, cross-Site mutation, OSM policy, or arbitrary SQL execution.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain explicit Node compatibility
+paths.

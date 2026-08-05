@@ -40,3 +40,9 @@ Remote exchange helpers do not implement HTTP, Cloudflare D1/KV, polling,
 SQLite writes, artifact writes, task promotion, or secret handling. Site adapters
 own those transports and must consume these contracts without importing raw
 remote runtime state as authority.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain explicit Node compatibility
+paths.

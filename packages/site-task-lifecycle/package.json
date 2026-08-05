@@ -12,9 +12,12 @@
     }
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "build": "bunx --bun tsc -p tsconfig.json",
+    "build:node": "pnpm exec tsc -p tsconfig.json",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "test": "bunx --bun vitest run",
+    "test:node": "pnpm exec vitest run"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
@@ -22,7 +25,8 @@
     "vitest": "^4.1.10"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.0.0",
+    "bun": ">=1.3.0"
   },
   "license": "MIT",
   "repository": {
