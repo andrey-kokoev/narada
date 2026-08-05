@@ -38,4 +38,9 @@ pnpm --filter @narada-core/operator-console-ui test
 pnpm --filter @narada-core/operator-console-ui typecheck
 ```
 
-`test` runs `vue-tsc` first, then node:test suites including `test/architecture-boundary.test.ts`, which enforces the presentation-only boundary. Build (`vite build`) produces the `operator-console` launch artifact in `dist/`; `postbuild` writes the launch-artifact record via `../layers/cli/scripts/write-launch-artifact.mjs`.
+`test` runs the existing Node-based `vue-tsc` check first, then the Bun test
+suite including `test/architecture-boundary.test.ts`, which enforces the
+presentation-only boundary. `test:node` retains the complete Node path. Build
+uses Bun Vite and its existing Node `postbuild` artifact writer produces the
+`operator-console` launch artifact in `dist/`; `build:node` retains the full
+Node Vite plus artifact path.
