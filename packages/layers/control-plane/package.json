@@ -62,6 +62,7 @@
   "dependencies": {
     "@narada-core/charters": "workspace:*",
     "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/sqlite": "workspace:*",
     "zod": "^3.22.0"
   },
   "devDependencies": {

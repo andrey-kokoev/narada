@@ -1256,6 +1256,9 @@ importers:
       '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../../process-launch-posture
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../sqlite
       zod:
         specifier: ^3.22.0
         version: 3.25.76
