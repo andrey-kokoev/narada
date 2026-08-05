@@ -122,12 +122,12 @@ describe('operator console mirror deployment preflight', () => {
   });
 
   it('uses shell mediation only for Windows command shims', () => {
-    expect(operatorConsoleMirrorChildOptions('pnpm.cmd', 'D:/code/narada', 'win32')).toMatchObject({
-      cwd: 'D:/code/narada',
+    expect(operatorConsoleMirrorChildOptions('pnpm.cmd', 'C:/workspace/narada', 'win32')).toMatchObject({
+      cwd: 'C:/workspace/narada',
       shell: true,
       windowsHide: true,
     });
-    expect(operatorConsoleMirrorChildOptions('pnpm', 'D:/code/narada', 'win32').shell).toBe(false);
-    expect(operatorConsoleMirrorChildOptions('pnpm.cmd', 'D:/code/narada', 'linux').shell).toBe(false);
+    expect(operatorConsoleMirrorChildOptions('pnpm', 'C:/workspace/narada', 'win32').shell).toBe(false);
+    expect(operatorConsoleMirrorChildOptions('pnpm.cmd', 'C:/workspace/narada', 'linux').shell).toBe(false);
   });
 });
