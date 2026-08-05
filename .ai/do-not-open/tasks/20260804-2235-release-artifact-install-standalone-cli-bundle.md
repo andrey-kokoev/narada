@@ -58,10 +58,15 @@ still documents the lone-clone path and is wrong for clean machines.
 
 ## Acceptance Criteria
 
-- [ ] QUICKSTART source-checkout instructions succeed on a clean machine
+- [x] QUICKSTART source-checkout instructions succeed on a clean machine
+      (five-repo sibling layout now documented; that exact layout passed the
+      2026-08-04 clean-machine build below)
 - [ ] Release workflow attaches a working CLI artifact per supported platform
-- [ ] `irm https://narada.systems/install.ps1 | iex` installs without git/pnpm/build
-- [ ] End-to-end installer verification on a clean machine recorded in Execution Notes
+      (artifacts exist and are verified, but produced by
+      `scripts/pack-artifact.mjs` run manually and attached to the rolling
+      `cli-latest` prerelease — release.yml automation still open)
+- [x] `irm https://narada.systems/install.ps1 | iex` installs without git/pnpm/build
+- [x] End-to-end installer verification on a clean machine recorded in Execution Notes
 
 ## Execution Notes
 
@@ -96,3 +101,52 @@ still documents the lone-clone path and is wrong for clean machines.
    in the test (it would have overwritten the operator's real `~/.local/bin`
    shim to point at a temp checkout); everything up to the shim step is
    verified.
+
+### 2026-08-05 — Release-artifact install shipped (irm|iex is live)
+
+1. **Approach**: `scripts/pack-artifact.mjs` (repo root, `pnpm pack:artifact`).
+   Bundling approach from Required Work item 2 resolved as *neither* esbuild
+   single-file nor `pnpm deploy`: the CLI's runtime graph (mermaid, vue, tsx,
+   workspace dists, JSON contracts read from package roots) makes single-file
+   bundling fragile, and `pnpm deploy --prod --legacy` produced a broken
+   half-tree (missing externals). Instead the script stages the CLI plus the
+   transitive closure of its workspace packages (including workspace
+   devDependencies imported at runtime, promoted to dependencies) into a
+   `vendor/` tree, rewrites `workspace:`/`link:` specs to `file:`, resolves
+   the full external tree with `npm install --omit=dev --install-links
+   --ignore-scripts --os <platform> --cpu <arch>`, materializes symlinks npm
+   leaves into `vendor/`, and `npm pack`s with `bundleDependencies` = every
+   installed package. Installing the tarball needs zero registry resolution.
+2. **v1 failure recorded**: a tarball bundling only workspace packages (67)
+   with externals left for install-time resolution installed HOLLOW external
+   directories under `npm install -g --prefix` (npm 11.17.0): `commander/`
+   existed but was empty, `chalk` had content. Verdict: bundle EVERYTHING.
+3. **Platform-keyed natives**: the external tree carries esbuild, rolldown
+   bindings, `@mariozechner/clipboard-*`, pi-tui prebuilds — one artifact per
+   platform is required. Cross-builds work from one Windows host via npm's
+   `--os`/`--cpu` flags (no package-lock, `--ignore-scripts`; all natives in
+   the tree ship prebuilds).
+4. **Artifacts**: `narada-cli-<win32,linux,darwin>-<x64,arm64>.tgz` (~89 MB
+   each, ~249 packages bundled, 16–17 native binaries) plus
+   `manifest-<platform>-<arch>.json` (sha256, counts) on rolling prerelease
+   `cli-latest`: https://github.com/narada-core/narada/releases/tag/cli-latest
+   All four asset URLs verified 200 unauthenticated.
+5. **Installers**: narada.systems `/install.ps1` `/install.sh` now verify
+   Node >= 22, map platform/arch, download the artifact, `npm install -g`
+   (honoring `NARADA_NPM_PREFIX`). Source flow preserved at
+   `/install-source.ps1` `/install-source.sh`, linked from the landing page.
+   Latent PS 5.1 bug fixed: an em-dash inside a double-quoted string in
+   install-source.ps1 decodes as a smart-quote string delimiter when read
+   without a BOM — all installer content is now ASCII-only (PSParser-clean).
+6. **End-to-end verification (2026-08-05)**: win32-x64 sandbox —
+   `npm install -g --prefix <sandbox> narada-cli-win32-x64.tgz` then sandboxed
+   `narada demo` printed the 5 mock upsert events and success JSON. Full
+   live-path test: `irm https://narada.systems/install.ps1 | iex` with
+   `NARADA_NPM_PREFIX` set to a clean prefix installed in ~4 min and the
+   sandboxed `narada demo` again passed. The operator's real global npm and
+   `~/.local/bin` shim were not touched. linux/darwin artifacts are
+   structurally identical (same pack path, `--os`/`--cpu` native selection)
+   but were NOT run on real Linux/macOS hardware.
+7. **Open**: release.yml workflow automation (acceptance box 2); win32-arm64
+   artifact if demand appears; cross-check of `added 1 package` npm counting
+   quirk (cosmetic — install verified working regardless).
