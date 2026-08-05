@@ -249,9 +249,12 @@ whitepaper and left as an exercise for the reader.
 
 **Lead-in:**
 
-One command installs the `narada` CLI from source: it checks prerequisites,
-builds, and puts the binary on your PATH. The scripts are plain text served
-from this domain — read them before you run them.
+One command installs the `narada` CLI: a self-contained release artifact
+with every dependency bundled — nothing to build, no registry resolution on
+your machine. Requires Node.js 22+. The scripts are plain text served from
+this domain — read them before you run them. Prefer to build from source?
+Use the source installers instead (`/install-source.ps1`,
+`/install-source.sh`).
 
 ```
 # Windows (PowerShell)
@@ -292,7 +295,7 @@ Every outward claim above, with its grounding source in this repo:
 | Posture names and meanings (`observe-only` → `autonomous`) | `TERMINOLOGY.md` (posture); `README.md` (`want-posture`) |
 | `draft-only` default for new mailbox operations | `QUICKSTART.md` (step 3 defaults) |
 | User Site commands (`install windows-user-site`, `onboarding start`) | `QUICKSTART.md`; `README.md` (first-run paths) |
-| Source-bootstrap install commands (`irm`/`curl` installers) | `QUICKSTART.md` (source checkout path); `scripts/install-narada-shim.sh`; CLI `bin` in `packages/layers/cli/package.json`; `pnpm-workspace.yaml` (sibling-repo spans — installers clone all five repos; see task #2235) |
+| Release-artifact install commands (`irm`/`curl` installers) | `scripts/pack-artifact.mjs` (per-platform fully-bundled tarballs); GitHub prerelease `cli-latest` assets (`narada-cli-<platform>-<arch>.tgz`); installers `public/install.ps1` / `public/install.sh` in the narada.systems repo; source path kept at `/install-source.*` (clones all five repos; see task #2235) |
 | `narada demo` zero-setup behavior | `README.md`; `QUICKSTART.md` (path 1) |
 | Two-stage confirmation, draft-first delivery, read-only observation | `AGENTS.md` (critical invariants 16–22) |
 | Invariants lint-checked in CI | `AGENTS.md` (`pnpm control-plane-lint`, CI workflows) |
@@ -300,9 +303,10 @@ Every outward claim above, with its grounding source in this repo:
 
 **npm status (as of 2026-08-05):** neither `@narada2/cli` nor `@narada-core/cli`
 is published on the npm registry. The page therefore does not link npm; it
-routes installation through the source-bootstrap installers served from
-narada.systems (`/install.ps1`, `/install.sh`), which implement the documented
-source-checkout path. Reinstate the npm CTA once `@narada-core/cli` is
+routes installation through the narada.systems installers (`/install.ps1`,
+`/install.sh`), which download the self-contained per-platform CLI artifact
+from the `cli-latest` GitHub prerelease and `npm install -g` it — no registry
+resolution at install time. Reinstate the npm CTA once `@narada-core/cli` is
 actually published.
 
 **No speed promises:** install and first-run time claims are deliberately

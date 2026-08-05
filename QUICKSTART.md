@@ -10,10 +10,12 @@ For the full bootstrap contract (artifact expectations, validation gates, and pa
 
 Prerequisite: Node.js 22 or newer.
 
-Install the published CLI, provision the User Site, then run the bounded bootstrap check:
+Install the CLI from the self-contained release artifact (every dependency
+bundled; no build, no registry resolution), provision the User Site, then run
+the bounded bootstrap check:
 
 ```powershell
-npm install --global @narada-core/cli
+irm https://narada.systems/install.ps1 | iex
 narada install windows-user-site
 narada doctor --bootstrap
 ```
@@ -67,7 +69,7 @@ narada install windows-user-site --repair
 Prerequisite: Node.js 22 or newer. PowerShell and WSL are not prerequisites:
 
 ```bash
-npm install --global @narada-core/cli
+curl -fsSL https://narada.systems/install.sh | bash
 narada doctor --bootstrap
 ```
 
@@ -77,13 +79,23 @@ for Linux Site roots, supervision, provider readiness, and recovery.
 
 ### Advanced: source checkout (contributors)
 
-The source checkout path is for Narada development, not required for ordinary User Site use:
+The source checkout path is for Narada development, not required for ordinary User Site use.
+A lone clone of `narada` **cannot install**: the pnpm workspace spans five
+repositories, so they must sit side by side in one parent directory (the
+`narada` checkout must literally be named `narada` — `agent-tui`'s build
+resolves contracts via a sibling path). The
+[install-source scripts](https://narada.systems/install-source.sh) automate
+exactly this layout:
 
 ```bash
+mkdir narada-workspace && cd narada-workspace
 git clone https://github.com/narada-core/narada.git
-cd narada
-pnpm install
-pnpm build
+git clone https://github.com/narada-core/narada-core.git
+git clone https://github.com/narada-core/mcp-surfaces.git
+git clone https://github.com/narada-core/agent-cli.git
+git clone https://github.com/narada-core/agent-tui.git
+pnpm --dir narada install
+pnpm --dir narada build
 ```
 
 Source checkouts also get a development launcher, `Start-NaradaWorkspace.Dev.ps1`, installed next to
