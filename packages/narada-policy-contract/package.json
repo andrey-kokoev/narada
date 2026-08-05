@@ -31,9 +31,12 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test src/*.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
+    "test": "bun test src",
+    "test:node": "node --import tsx --test src/*.test.ts",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
     "tsx": "^4.7.0",
@@ -47,6 +50,7 @@
     "directory": "packages/narada-policy-contract"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
