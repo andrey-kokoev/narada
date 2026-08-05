@@ -9,7 +9,7 @@ import { spawnHiddenPostureProcess } from '@narada-core/process-launch-posture';
 
 const execFileAsync = promisify(execFile);
 type JsonRecord = Record<string, unknown>;
-type Options = { site_root: string; service_url?: string; token_path?: string; interval_ms?: number; task_name?: string; node_path?: string; incident_id?: string; status?: string; note?: string };
+type Options = { site_root: string; service_url?: string; token_path?: string; interval_ms?: number; task_name?: string; runtime_path?: string; node_path?: string; incident_id?: string; status?: string; note?: string };
 
 export function observerPaths(siteRoot: string) {
   const root = join(resolve(siteRoot), '.narada', 'runtime', 'mcp-runtime-observer');
@@ -24,7 +24,7 @@ export function observerWatchdogPlan(options: Options, siteId: string) {
   const entrypoint = fileURLToPath(import.meta.url);
   return {
     task_name: options.task_name ?? `Narada-PC-Site-Runtime-Observer-${siteId}`,
-    executable: resolveObserverNodePath(options.node_path),
+    executable: resolveObserverRuntimePath(options.runtime_path ?? options.node_path),
     arguments: `"${entrypoint}" ensure --site-root "${resolve(options.site_root)}"`,
     working_directory: resolve(options.site_root),
     interval_minutes: 1,
@@ -33,15 +33,18 @@ export function observerWatchdogPlan(options: Options, siteId: string) {
   };
 }
 
-export function resolveObserverNodePath(explicit?: string): string {
+export function resolveObserverRuntimePath(explicit?: string): string {
   if (explicit) return resolve(explicit);
   const execPath = resolve(process.execPath);
+  if ((process.versions as { bun?: string }).bun) return execPath;
   const fnmRoot = process.env.FNM_DIR ?? (process.env.APPDATA ? join(process.env.APPDATA, 'fnm') : undefined);
   const stable = fnmRoot ? resolve(fnmRoot, 'node-versions', process.version, 'installation', 'node.exe') : undefined;
   if (stable && existsSync(stable)) return stable;
   if (/[\\/]fnm_multishells[\\/]/i.test(execPath)) throw new Error(`pc_site_runtime_observer_stable_node_path_required:${stable ?? execPath}`);
   return execPath;
 }
+
+export const resolveObserverNodePath = resolveObserverRuntimePath;
 
 async function readServiceState(siteRoot: string): Promise<JsonRecord> {
   return JSON.parse(await readFile(join(resolve(siteRoot), '.narada', 'runtime', 'mcp-surface-service', 'state.json'), 'utf8')) as JsonRecord;
@@ -151,7 +154,7 @@ function parse(argv: string[]): { command: string; options: Options } {
   for (let i = 1; i < argv.length; i += 2) values.set(String(argv[i]).replace(/^--/, ''), String(argv[i + 1] ?? ''));
   const siteRoot = values.get('site-root') || process.env.NARADA_SITE_ROOT;
   if (!siteRoot) throw new Error('pc_site_runtime_observer_site_root_required');
-  return { command, options: { site_root: siteRoot, ...(values.get('service-url') ? { service_url: values.get('service-url') } : {}), ...(values.get('token-path') ? { token_path: values.get('token-path') } : {}), ...(values.get('interval-ms') ? { interval_ms: Number(values.get('interval-ms')) } : {}), ...(values.get('node-path') ? { node_path: values.get('node-path') } : {}), ...(values.get('incident-id') ? { incident_id: values.get('incident-id') } : {}), ...(values.get('status') ? { status: values.get('status') } : {}), ...(values.get('note') ? { note: values.get('note') } : {}) } };
+  return { command, options: { site_root: siteRoot, ...(values.get('service-url') ? { service_url: values.get('service-url') } : {}), ...(values.get('token-path') ? { token_path: values.get('token-path') } : {}), ...(values.get('interval-ms') ? { interval_ms: Number(values.get('interval-ms')) } : {}), ...(values.get('runtime-path') ? { runtime_path: values.get('runtime-path') } : {}), ...(values.get('node-path') ? { node_path: values.get('node-path') } : {}), ...(values.get('incident-id') ? { incident_id: values.get('incident-id') } : {}), ...(values.get('status') ? { status: values.get('status') } : {}), ...(values.get('note') ? { note: values.get('note') } : {}) } };
 }
 
 async function main() { const { command, options } = parse(process.argv.slice(2)); process.stdout.write(`${JSON.stringify(await runObserverCommand(command, options), null, 2)}\n`); }
