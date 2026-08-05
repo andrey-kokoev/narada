@@ -28,6 +28,7 @@ const steps: Step[] = [
   { name: "CLI output admission guard", command: "node scripts/cli-output-admission-guard.ts" },
   { name: "Process launch posture guard tests", command: "node --import tsx --test scripts/process-launch-posture-guard.test.ts" },
   { name: "Process launch posture guard", command: "node scripts/process-launch-posture-guard.ts" },
+  { name: "Operator surface carrier matrix tests", command: "pnpm operator-surface-carrier-matrix:test" },
   { name: "Typecheck", command: "pnpm typecheck" },
   { name: "Build", command: "pnpm build" },
   { name: "Task lifecycle snapshot guard", command: "pnpm narada:guard-task-db" },

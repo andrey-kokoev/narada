@@ -76,4 +76,6 @@ packages/mcp-fabric/test/fixtures/site-valid/.ai/runtime/agent-start-command-res
 packages/layers/cli/.ai/inbox.db
 packages/layers/cli/.ai/inbox.db-*
 packages/layers/cli/.ai/mutation-evidence/
-tools/operator-surface-carriers/
+tools/operator-surface-carriers/*
+!tools/operator-surface-carriers/carrier-conformance-matrix.ts
+!tools/operator-surface-carriers/carrier-conformance-matrix.test.ts
