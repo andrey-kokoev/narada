@@ -12,9 +12,12 @@
     "./fixtures/*": "./fixtures/*"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
-    "test": "node --import tsx --test src/carrier-protocol.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
+    "test": "bun test src/carrier-protocol.test.ts",
+    "test:node": "node --import tsx --test src/carrier-protocol.test.ts",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "description": "Shared protocol types, constructors, fixtures, and validators for Narada interactive carriers",
   "license": "MIT",
@@ -24,6 +27,7 @@
     "directory": "packages/carrier-protocol"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
