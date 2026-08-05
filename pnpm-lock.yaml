@@ -79,7 +79,7 @@ importers:
         version: link:../shared/mcp-transport
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../../narada/packages/sqlite
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
@@ -123,7 +123,7 @@ importers:
         version: link:../shared/mcp-transport
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../../narada/packages/sqlite
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
@@ -164,7 +164,7 @@ importers:
         version: link:../shared/mcp-transport
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../../narada/packages/sqlite
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@narada-core/mcp-e2e-harness':
         specifier: workspace:*
@@ -192,7 +192,7 @@ importers:
         version: link:../../../narada/packages/site-paths
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../../narada/packages/sqlite
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@types/node':
         specifier: ^22.15.3
@@ -293,7 +293,7 @@ importers:
     devDependencies:
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../../../narada/packages/sqlite
+        version: link:../../../../narada-core/packages/sqlite
       '@types/node':
         specifier: ^22.15.3
         version: 22.19.19
@@ -358,7 +358,7 @@ importers:
         version: link:../shared/mcp-transport
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../../narada/packages/sqlite
+        version: link:../../../narada-core/packages/sqlite
       '@narada-core/task-governance-core':
         specifier: workspace:*
         version: link:../../../narada-core/packages/task-governance-core
@@ -949,7 +949,7 @@ importers:
         version: link:../host-fleet
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../sqlite
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -1279,7 +1279,7 @@ importers:
         version: link:../../site-registry-contract
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../sqlite
+        version: link:../../../../narada-core/packages/sqlite
       '@narada-core/task-governance':
         specifier: workspace:*
         version: link:../../task-governance
@@ -1361,7 +1361,7 @@ importers:
         version: link:../../process-launch-posture
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../sqlite
+        version: link:../../../../narada-core/packages/sqlite
       zod:
         specifier: ^3.22.0
         version: 3.25.76
@@ -1402,7 +1402,7 @@ importers:
     devDependencies:
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../sqlite
+        version: link:../../../../narada-core/packages/sqlite
       '@types/node':
         specifier: ^20.10.0
         version: 20.19.39
@@ -1417,7 +1417,7 @@ importers:
     dependencies:
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../sqlite
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -1855,7 +1855,7 @@ importers:
         version: link:../site-paths
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../sqlite
+        version: link:../../../narada-core/packages/sqlite
       '@narada-core/task-governance':
         specifier: workspace:*
         version: link:../task-governance
@@ -1994,7 +1994,7 @@ importers:
         version: 4.20260421.1
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../sqlite
+        version: link:../../../../narada-core/packages/sqlite
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.19
@@ -2034,7 +2034,7 @@ importers:
         version: link:../../process-launch-posture
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../sqlite
+        version: link:../../../../narada-core/packages/sqlite
     devDependencies:
       typescript:
         specifier: ^5.3.0
@@ -2056,7 +2056,7 @@ importers:
         version: link:../../site-registry-contract
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../sqlite
+        version: link:../../../../narada-core/packages/sqlite
     devDependencies:
       typescript:
         specifier: ^5.3.0
@@ -2065,7 +2065,7 @@ importers:
         specifier: ^4.1.10
         version: 4.1.10(@opentelemetry/api@1.9.0)(@types/node@22.19.19)(@vitest/coverage-v8@4.1.10)(jsdom@26.1.0)(vite@8.1.5(@types/node@22.19.19)(esbuild@0.27.7)(jiti@2.7.0)(stylus@0.57.0)(tsx@4.21.0)(yaml@2.9.0))
 
-  packages/sqlite:
+  ../narada-core/packages/sqlite:
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
@@ -2090,7 +2090,7 @@ importers:
         version: link:../process-launch-posture
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../sqlite
+        version: link:../../../narada-core/packages/sqlite
       '@narada-core/task-governance-core':
         specifier: link:../../../narada-core/packages/task-governance-core
         version: link:../../../narada-core/packages/task-governance-core
@@ -2120,7 +2120,7 @@ importers:
         version: link:../site-common-tools
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../sqlite
+        version: link:../../../narada-core/packages/sqlite
       '@narada-core/task-governance':
         specifier: workspace:*
         version: link:../task-governance
@@ -2212,7 +2212,7 @@ importers:
         version: link:../../layers/control-plane
       '@narada-core/sqlite':
         specifier: workspace:*
-        version: link:../../sqlite
+        version: link:../../../../narada-core/packages/sqlite
     devDependencies:
       '@types/node':
         specifier: ^22.0.0
