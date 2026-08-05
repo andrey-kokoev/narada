@@ -38,6 +38,12 @@ type GuardOptions = {
   runCommand?: CommandRunner;
 };
 
+type SnapshotCardinality = {
+  tableCount: number;
+  rowCount: number;
+  rowsByTable: Map<string, number>;
+};
+
 const defaultRunCommand: CommandRunner = (command, args, options) => runGovernedCommandSync(command, args, {
   cwd: options.cwd,
   env: options.env,
@@ -50,6 +56,34 @@ function result(exitCode: number, stdout: string[] = [], stderr: string[] = []):
 
 function commandSucceeded(commandResult: CommandResult): boolean {
   return !commandResult.error && commandResult.status === 0;
+}
+
+function snapshotCardinality(path: string): SnapshotCardinality | null {
+  try {
+    const parsed = JSON.parse(readFileSync(path, 'utf8')) as {
+      tables?: Array<{ name?: unknown; rows?: unknown }>;
+    };
+    if (!Array.isArray(parsed.tables)) return null;
+    const rowsByTable = new Map<string, number>();
+    let rowCount = 0;
+    for (const table of parsed.tables) {
+      if (typeof table.name !== 'string' || !Array.isArray(table.rows) || rowsByTable.has(table.name)) return null;
+      rowsByTable.set(table.name, table.rows.length);
+      rowCount += table.rows.length;
+    }
+    return { tableCount: parsed.tables.length, rowCount, rowsByTable };
+  } catch {
+    return null;
+  }
+}
+
+function isStructurallySmaller(live: SnapshotCardinality, tracked: SnapshotCardinality): boolean {
+  if (live.tableCount < tracked.tableCount || live.rowCount < tracked.rowCount) return true;
+  for (const [table, trackedRows] of tracked.rowsByTable) {
+    const liveRows = live.rowsByTable.get(table);
+    if (liveRows === undefined || liveRows < trackedRows) return true;
+  }
+  return false;
 }
 
 function naradaInvocation(root: string, platform: NodeJS.Platform): { command: string; args: string[] } {
@@ -135,6 +169,14 @@ export function guardTaskLifecycleDb({
     }
 
     if (!readFileSync(temporarySnapshot).equals(readFileSync(snapshotPath))) {
+      const trackedCardinality = snapshotCardinality(snapshotPath);
+      const liveCardinality = snapshotCardinality(temporarySnapshot);
+      if (trackedCardinality && liveCardinality && isStructurallySmaller(liveCardinality, trackedCardinality)) {
+        return result(2, [], [
+          `task lifecycle snapshot differs, but live DB export is structurally smaller: tracked ${trackedCardinality.tableCount} tables/${trackedCardinality.rowCount} rows; live ${liveCardinality.tableCount} tables/${liveCardinality.rowCount} rows`,
+          `Refusing snapshot overwrite remediation; inspect tracked authority first: narada task lifecycle inspect-snapshot --input ${SNAPSHOT_RELATIVE_PATH}`,
+        ]);
+      }
       return result(2, [], [
         `task lifecycle snapshot is stale: ${SNAPSHOT_RELATIVE_PATH}`,
         `Run: narada task lifecycle export --output ${SNAPSHOT_RELATIVE_PATH}`,

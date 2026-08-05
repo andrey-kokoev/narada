@@ -10,6 +10,17 @@ import { join } from 'node:path';
 import test from 'node:test';
 import { guardTaskLifecycleDb } from './guard-task-lifecycle-db.ts';
 
+function snapshot(tables: Record<string, Array<Record<string, unknown>>> = { task_lifecycle: [] }): string {
+  return `${JSON.stringify({
+    snapshot_kind: 'task_lifecycle_snapshot',
+    snapshot_version: 1,
+    exported_at: '2026-08-05T00:00:00.000Z',
+    tables: Object.entries(tables).map(([name, rows]) => ({ name, columns: [], rows })),
+  }, null, 2)}\n`;
+}
+
+const EMPTY_SNAPSHOT = snapshot();
+
 type RunnerOptions = {
   snapshotTracked?: boolean;
   dbTracked?: boolean;
@@ -21,7 +32,7 @@ type RunnerOptions = {
 
 function fixture({
   db = false,
-  snapshot = '{"tasks":[]}\n',
+  snapshot = EMPTY_SNAPSHOT,
 }: { db?: boolean; snapshot?: string | null } = {}) {
   const root = mkdtempSync(join(tmpdir(), 'narada-task-db-guard-'));
   mkdirSync(join(root, '.ai'), { recursive: true });
@@ -36,7 +47,7 @@ function runner({
   snapshotTracked = true,
   dbTracked = false,
   dbIgnored = true,
-  exportedSnapshot = '{"tasks":[]}\n',
+  exportedSnapshot = EMPTY_SNAPSHOT,
   naradaUnavailable = false,
   calls = [],
 }: RunnerOptions = {}) {
@@ -109,14 +120,38 @@ test('exports through the built workspace CLI and compares snapshot freshness', 
   const calls: Array<{ command: string; args: string[] }> = [];
   try {
     const fresh = guardTaskLifecycleDb(guardOptions(root, runner({ calls })));
-    const stale = guardTaskLifecycleDb(guardOptions(root, runner({ exportedSnapshot: '{"tasks":[1]}\n' })));
+    const stale = guardTaskLifecycleDb(guardOptions(root, runner({
+      exportedSnapshot: snapshot({ task_lifecycle: [{ task_id: 'task-1' }] }),
+    })));
     assert.equal(fresh.exitCode, 0);
     assert.match(fresh.stdout[0]!, /tracked fresh snapshot/);
     assert.equal(stale.exitCode, 2);
     assert.match(stale.stderr[0]!, /snapshot is stale/);
+    assert.match(stale.stderr[1]!, /task lifecycle export/);
     const exportCall = calls.find(({ args }) => args.includes('export'));
     assert.equal(exportCall?.command, process.execPath);
     assert.match(exportCall?.args[0] ?? '', /packages[\\/]layers[\\/]cli[\\/]dist[\\/]main\.js$/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('refuses overwrite remediation when the live export is structurally smaller', () => {
+  const trackedSnapshot = snapshot({
+    task_lifecycle: [{ task_id: 'task-1' }, { task_id: 'task-2' }],
+    task_specs: [{ task_id: 'task-1' }, { task_id: 'task-2' }],
+  });
+  const liveSnapshot = snapshot({
+    task_lifecycle: [{ task_id: 'task-1' }],
+  });
+  const root = fixture({ db: true, snapshot: trackedSnapshot });
+  try {
+    const outcome = guardTaskLifecycleDb(guardOptions(root, runner({ exportedSnapshot: liveSnapshot })));
+    assert.equal(outcome.exitCode, 2);
+    assert.match(outcome.stderr[0]!, /structurally smaller: tracked 2 tables\/4 rows; live 1 tables\/1 rows/);
+    assert.match(outcome.stderr[1]!, /Refusing snapshot overwrite remediation/);
+    assert.match(outcome.stderr[1]!, /inspect-snapshot/);
+    assert.doesNotMatch(outcome.stderr.join('\n'), /task lifecycle export --output/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
