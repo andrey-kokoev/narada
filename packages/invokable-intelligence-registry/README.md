@@ -85,7 +85,13 @@ the same suite.
 ## Scripts
 
 ```sh
-pnpm build       # tsc → dist/
-pnpm typecheck
-pnpm test        # node --import tsx --test
+pnpm build       # Bun-driven tsc → dist/
+pnpm typecheck   # Bun-driven tsc
+pnpm test        # explicit Node conformance runner
+pnpm build:node
+pnpm typecheck:node
+pnpm test:node
 ```
+
+The conformance suite remains Node-only for now because Bun 1.3 does not
+implement the nested `node:test` subtests used by `defineRegistryConformanceSuite`.
