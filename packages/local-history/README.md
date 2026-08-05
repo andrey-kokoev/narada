@@ -18,3 +18,9 @@ baseline plus the optional User Site template
 authoritative afterward. A mandatory privacy floor excludes authority data,
 environment files, key/certificate material, and secret/credential-named
 paths regardless of policy edits.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The package-local Vitest
+config routes Bun tests to the existing `@narada-core/sqlite` Bun adapter;
+`build:node`, `typecheck:node`, and `test:node` retain explicit Node paths.
