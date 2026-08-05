@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     environment: 'jsdom',
+    environmentOptions: {
+      jsdom: {
+        url: 'http://localhost/',
+      },
+    },
+    setupFiles: ['test/setup.ts'],
     include: ['test/**/*.unit.test.ts'],
     restoreMocks: true,
     coverage: {

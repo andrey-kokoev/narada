@@ -8,12 +8,27 @@ import { readProjectionRegistration, registerProjectionRemotely, startLocalProje
 import { AGENT_WEB_UI_CLOUDFLARE_METHOD_LIST, AGENT_WEB_UI_NARS_METHOD_LIST } from '@narada-core/nars-client-projection-contract';
 import { isRecord, type UnknownRecord } from './types.ts';
 
-// Node 22 provides this runtime API, but older installed @types/node versions
-// do not declare it yet. Keep the runtime requirement explicit while making
-// the package build against the workspace's current type declarations.
+// Node 22 provides this runtime API, but Bun exposes the same capability
+// through Bun.Transpiler instead. Keep this fallback local to the browser
+// source-serving boundary; the package does not need a general runtime layer.
 const stripTypeScriptTypes = (nodeModule as typeof nodeModule & {
   stripTypeScriptTypes(source: string, options?: { mode?: 'strip' | 'transform'; sourceMap?: boolean }): string;
 }).stripTypeScriptTypes;
+
+type BunTranspiler = {
+  transformSync(source: string): string;
+};
+
+const bunTranspiler = (() => {
+  const runtime = globalThis as typeof globalThis & {
+    Bun?: {
+      Transpiler?: new (options: { loader: 'tsx' }) => BunTranspiler;
+    };
+  };
+  return typeof runtime.Bun?.Transpiler === 'function'
+    ? new runtime.Bun.Transpiler({ loader: 'tsx' })
+    : null;
+})();
 
 type AgentWebUiOptions = {
   host: string;
@@ -421,7 +436,13 @@ function resolveDistRoot(artifactRoot: unknown): URL {
 }
 
 function transpileBrowserModule(source: string): string {
-  let content = stripTypeScriptTypes(source, { mode: 'strip' });
+  const contentWithoutTypes = typeof stripTypeScriptTypes === 'function'
+    ? stripTypeScriptTypes(source, { mode: 'strip' })
+    : bunTranspiler?.transformSync(source);
+  if (contentWithoutTypes === undefined) {
+    throw new Error('agent-web-ui browser module serving requires Node stripTypeScriptTypes or Bun.Transpiler');
+  }
+  let content = contentWithoutTypes;
   content = content.replace(/(['"])(\.{1,2}\/[^'"]+?)\.ts\1/g, '$1$2.js$1');
   for (const [from, to] of BROWSER_IMPORT_REWRITES) {
     content = content.replaceAll(`'${from}'`, `'${to}'`).replaceAll(`\"${from}\"`, `\"${to}\"`);

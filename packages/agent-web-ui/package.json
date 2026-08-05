@@ -43,13 +43,18 @@
   ],
   "scripts": {
     "prebuild": "pnpm --filter @narada-core/ui build && pnpm --filter @narada-core/cloudflare-operator-projection build",
-    "build": "vite build",
-    "postbuild": "node --import tsx ../layers/cli/scripts/write-launch-artifact.ts --target agent-web-ui --package-root . --site-root ../..",
+    "build": "bunx --bun vite build && bun ../layers/cli/scripts/write-launch-artifact.ts --target agent-web-ui --package-root . --site-root ../..",
+    "prebuild:node": "pnpm --filter @narada-core/ui build && pnpm --filter @narada-core/cloudflare-operator-projection build",
+    "build:node": "pnpm exec vite build && node --import tsx ../layers/cli/scripts/write-launch-artifact.ts --target agent-web-ui --package-root . --site-root ../..",
     "pretest": "pnpm --filter @narada-core/cloudflare-operator-projection build",
-    "test": "node --import tsx --test test/agent-web-ui.test.ts test/agent-web-ui-projection.test.ts test/agent-web-ui-protocol.test.ts && pnpm run test:unit",
+    "test": "bun test test/agent-web-ui.test.ts test/agent-web-ui-projection.test.ts test/agent-web-ui-protocol.test.ts && bunx --bun vitest run --config vitest.config.ts",
+    "pretest:node": "pnpm --filter @narada-core/cloudflare-operator-projection build",
+    "test:node": "node --import tsx --test test/agent-web-ui.test.ts test/agent-web-ui-projection.test.ts test/agent-web-ui-protocol.test.ts && pnpm exec vitest run --config vitest.config.ts",
     "pretest:unit": "pnpm --filter @narada-core/cloudflare-operator-projection build",
-    "test:unit": "vitest run --config vitest.config.ts",
-    "test:unit:coverage": "vitest run --config vitest.config.ts --coverage",
+    "test:unit": "bunx --bun vitest run --config vitest.config.ts",
+    "test:unit:node": "pnpm exec vitest run --config vitest.config.ts",
+    "test:unit:coverage": "bunx --bun vitest run --config vitest.config.ts --coverage",
+    "test:unit:coverage:node": "pnpm exec vitest run --config vitest.config.ts --coverage",
     "test:browser": "pnpm run test:e2e && pnpm run test:projection",
     "test:runtime:slash-commands": "pnpm run build && playwright test --config playwright.config.ts test/e2e/live-slash-smoke.spec.ts",
     "test:live:external-nars-input": "pnpm --dir ../../../agent-cli build && pnpm --filter @narada-core/cli build && pnpm run build && pnpm --dir ../../../mcp-surfaces --filter @narada-core/nars-session-mcp build && pnpm --filter @narada-core/cloudflare-operator-projection build && node --import tsx test/live-launcher-affordance-e2e.ts --scenario external_input",
@@ -118,6 +123,7 @@
     "directory": "packages/agent-web-ui"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
