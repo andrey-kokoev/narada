@@ -65,3 +65,24 @@ still documents the lone-clone path and is wrong for clean machines.
 
 ## Execution Notes
 
+### 2026-08-04 — Installer end-to-end findings (clean temp workspace)
+
+1. **Lone-clone install failure (confirmed)**: `pnpm install` in a lone clone
+   fails with `ERR_PNPM_WORKSPACE_PKG_NOT_FOUND` (`@narada-core/agent-cli` and
+   other `workspace:*` sibling deps). Installers patched to clone all five
+   repos side by side (narada, narada-core, mcp-surfaces, agent-cli,
+   agent-tui). Deployed to narada.systems.
+2. **mcp-surfaces missing declared types (upstream bug)**: 41 packages under
+   `mcp-surfaces/packages/**` import `node:*` builtins but declare no
+   `@types/node` (and no `typescript`) — clean-machine `tsc -b` fails with
+   TS2307/TS2503/TS2580. Root cause: pnpm publicly hoists `@types/*` to the
+   narada workspace root, which narada's own packages reach via tsc's upward
+   typeRoots walk; sibling-repo packages sit outside that root and their walk
+   never reaches it. Dev machines mask this with stale per-package state.
+   Fix: each affected package declares `@types/node@^22.15.3` +
+   `typescript@^5.8.3` (convention per `mcp-fabric-contracts`).
+3. **agent-tui hardcoded sibling path assumption**: its cargo build reads
+   `../../narada/packages/*/contracts/*.json` relative to `src/` — the narada
+   checkout must be a sibling **literally named `narada`**. Installers warn
+   when `NARADA_SRC` does not end in `narada`. Portability follow-up: make
+   agent-tui resolve the narada root the same way mcp-surfaces 3fbc4e4 did.
