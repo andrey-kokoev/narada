@@ -53,11 +53,12 @@ describe('task lifecycle MCP contract', () => {
       expect(schema.reviewer).toBeTruthy();
       expect(schema.changed_files).toBeTruthy();
       expect(schema.no_files_changed).toBeTruthy();
-      expect(schema.verdict?.type).toBe('string');
-      expect(schema.verdict?.description).toMatch(/Review-state verdict only/);
-      expect(schema.verdict?.description).toMatch(/Omit for claimed-state finish/);
+      expect(schema).not.toHaveProperty('verdict');
       expect(schema.payload_ref?.description).toMatch(/top-level task_number and agent_id win/);
     }
+
+    const review = tools.get('task_lifecycle_review')?.inputSchema.properties ?? {};
+    expect(review.verdict?.enum).toEqual(['accepted', 'accepted_with_notes', 'rejected']);
   });
 
   it('keeps compact next-work fields in the canonical contract', () => {
