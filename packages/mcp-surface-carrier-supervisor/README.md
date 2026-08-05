@@ -41,3 +41,9 @@ Restart/rebind is represented as request/evidence data only. The package is
 read-only: it never kills processes, restarts carriers, rebinds surfaces, or
 mutates runtime registries. A receiving Site must admit a separate execution
 surface before any such operation can occur.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain explicit Node compatibility
+paths.
