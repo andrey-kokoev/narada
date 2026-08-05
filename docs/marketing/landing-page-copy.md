@@ -292,7 +292,7 @@ Every outward claim above, with its grounding source in this repo:
 | Posture names and meanings (`observe-only` → `autonomous`) | `TERMINOLOGY.md` (posture); `README.md` (`want-posture`) |
 | `draft-only` default for new mailbox operations | `QUICKSTART.md` (step 3 defaults) |
 | User Site commands (`install windows-user-site`, `onboarding start`) | `QUICKSTART.md`; `README.md` (first-run paths) |
-| Source-bootstrap install commands (`irm`/`curl` installers) | `QUICKSTART.md` (source checkout path); `scripts/install-narada-shim.sh`; CLI `bin` in `packages/layers/cli/package.json` |
+| Source-bootstrap install commands (`irm`/`curl` installers) | `QUICKSTART.md` (source checkout path); `scripts/install-narada-shim.sh`; CLI `bin` in `packages/layers/cli/package.json`; `pnpm-workspace.yaml` (sibling-repo spans — installers clone all five repos; see task #2235) |
 | `narada demo` zero-setup behavior | `README.md`; `QUICKSTART.md` (path 1) |
 | Two-stage confirmation, draft-first delivery, read-only observation | `AGENTS.md` (critical invariants 16–22) |
 | Invariants lint-checked in CI | `AGENTS.md` (`pnpm control-plane-lint`, CI workflows) |
