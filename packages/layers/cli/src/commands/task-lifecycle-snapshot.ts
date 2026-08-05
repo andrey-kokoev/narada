@@ -15,6 +15,7 @@ export interface TaskLifecycleSnapshotOptions {
   cwd?: string;
   output?: string;
   input?: string;
+  dryRun?: boolean;
   format?: CliFormat;
   store?: SqliteTaskLifecycleStore;
 }
@@ -140,6 +141,8 @@ export async function taskLifecycleImportCommand(options: TaskLifecycleSnapshotO
         result: {
           status: 'error',
           error: 'Task lifecycle snapshot is incompatible with the destination schema',
+          dry_run: Boolean(options.dryRun),
+          destination_mutated: false,
           compatibility,
         },
       };
@@ -148,6 +151,34 @@ export async function taskLifecycleImportCommand(options: TaskLifecycleSnapshotO
     return {
       exitCode: ExitCode.GENERAL_ERROR,
       result: { status: 'error', error: error instanceof Error ? error.message : String(error) },
+    };
+  }
+
+  const tableCount = snapshot.tables.length;
+  const rowCount = snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0);
+  if (options.dryRun) {
+    return {
+      exitCode: ExitCode.SUCCESS,
+      result: formattedResult(
+        {
+          status: 'success',
+          input,
+          dry_run: true,
+          destination_mutated: false,
+          would_import: true,
+          table_count: tableCount,
+          row_count: rowCount,
+          compatibility,
+        },
+        [
+          `Task lifecycle snapshot import preflight passed: ${input}`,
+          `Tables: ${tableCount}`,
+          `Rows: ${rowCount}`,
+          'Destination mutation: none (--dry-run)',
+          `Ignored empty snapshot tables: ${compatibility.ignored_empty_snapshot_tables.length}`,
+        ],
+        options.format ?? 'auto',
+      ),
     };
   }
 
@@ -162,14 +193,16 @@ export async function taskLifecycleImportCommand(options: TaskLifecycleSnapshotO
         {
           status: 'success',
           input,
-          table_count: snapshot.tables.length,
-          row_count: snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0),
+          dry_run: false,
+          destination_mutated: true,
+          table_count: tableCount,
+          row_count: rowCount,
           compatibility,
         },
         [
           `Task lifecycle snapshot imported: ${input}`,
-          `Tables: ${snapshot.tables.length}`,
-          `Rows: ${snapshot.tables.reduce((sum, table) => sum + table.rows.length, 0)}`,
+          `Tables: ${tableCount}`,
+          `Rows: ${rowCount}`,
           `Ignored empty snapshot tables: ${compatibility.ignored_empty_snapshot_tables.length}`,
         ],
         options.format ?? 'auto',

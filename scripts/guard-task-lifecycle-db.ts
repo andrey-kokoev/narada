@@ -174,7 +174,7 @@ export function guardTaskLifecycleDb({
       if (trackedCardinality && liveCardinality && isStructurallySmaller(liveCardinality, trackedCardinality)) {
         return result(2, [], [
           `task lifecycle snapshot differs, but live DB export is structurally smaller: tracked ${trackedCardinality.tableCount} tables/${trackedCardinality.rowCount} rows; live ${liveCardinality.tableCount} tables/${liveCardinality.rowCount} rows`,
-          `Refusing snapshot overwrite remediation; inspect tracked authority first: narada task lifecycle inspect-snapshot --input ${SNAPSHOT_RELATIVE_PATH}`,
+          `Refusing snapshot overwrite remediation; inspect compatibility first: narada task lifecycle import --dry-run --input ${SNAPSHOT_RELATIVE_PATH}`,
         ]);
       }
       return result(2, [], [

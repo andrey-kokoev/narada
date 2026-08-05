@@ -99,6 +99,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
     .command('import')
     .description('Import task lifecycle SQLite authority from a JSON snapshot')
     .option('--input <path>', 'Snapshot input path', '.ai/task-lifecycle-snapshot.json')
+    .option('--dry-run', 'Check import compatibility without mutating the destination', false)
     .option('--format <fmt>', 'Output format: json|human|auto', 'auto')
     .option('--cwd <path>', 'Working directory (defaults to cwd)', '.')
     .action(directCommandAction<[CommanderOptionValues]>({
@@ -107,6 +108,7 @@ export function registerTaskLifecycleCommands(taskCmd: Command): void {
       format: (opts: CommanderOptionValues) => opts.format,
       invocation: (opts) => taskLifecycleImportCommand({
         input: opts.input as string | undefined,
+        dryRun: opts.dryRun as boolean | undefined,
         cwd: opts.cwd as string | undefined,
         format: resolveCommandFormat(opts.format, 'auto'),
       }),

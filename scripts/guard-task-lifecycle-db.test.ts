@@ -150,7 +150,7 @@ test('refuses overwrite remediation when the live export is structurally smaller
     assert.equal(outcome.exitCode, 2);
     assert.match(outcome.stderr[0]!, /structurally smaller: tracked 2 tables\/4 rows; live 1 tables\/1 rows/);
     assert.match(outcome.stderr[1]!, /Refusing snapshot overwrite remediation/);
-    assert.match(outcome.stderr[1]!, /inspect-snapshot/);
+    assert.match(outcome.stderr[1]!, /import --dry-run/);
     assert.doesNotMatch(outcome.stderr.join('\n'), /task lifecycle export --output/);
   } finally {
     rmSync(root, { recursive: true, force: true });

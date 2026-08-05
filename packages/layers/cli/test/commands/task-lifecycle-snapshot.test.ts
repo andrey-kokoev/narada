@@ -201,6 +201,25 @@ describe('task lifecycle snapshot commands', () => {
     });
     writeFileSync(snapshotPath, `${JSON.stringify(snapshotWithEmptyLegacyTable, null, 2)}\n`, 'utf8');
 
+    const dryRun = await taskLifecycleImportCommand({
+      cwd: targetDir,
+      input: snapshotPath,
+      dryRun: true,
+      format: 'json',
+    });
+    expect(dryRun.exitCode).toBe(ExitCode.SUCCESS);
+    expect(dryRun.result).toEqual(expect.objectContaining({
+      status: 'success',
+      dry_run: true,
+      destination_mutated: false,
+      would_import: true,
+      compatibility: expect.objectContaining({
+        status: 'compatible',
+        ignored_empty_snapshot_tables: ['retired_empty_projection'],
+      }),
+    }));
+    expect(existsSync(join(targetDir, '.ai', 'task-lifecycle.db'))).toBe(false);
+
     const imported = await taskLifecycleImportCommand({
       cwd: targetDir,
       input: snapshotPath,
@@ -208,8 +227,16 @@ describe('task lifecycle snapshot commands', () => {
     });
     expect(imported.exitCode).toBe(ExitCode.SUCCESS);
     expect((imported.result as {
+      dry_run: boolean;
+      destination_mutated: boolean;
       compatibility: { ignored_empty_snapshot_tables: string[] };
-    }).compatibility.ignored_empty_snapshot_tables).toEqual(['retired_empty_projection']);
+    })).toEqual(expect.objectContaining({
+      dry_run: false,
+      destination_mutated: true,
+      compatibility: expect.objectContaining({
+        ignored_empty_snapshot_tables: ['retired_empty_projection'],
+      }),
+    }));
 
     const target = openTaskLifecycleStore(targetDir);
     expect(target.getLifecycleByNumber(100)?.status).toBe('closed');
