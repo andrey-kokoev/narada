@@ -27,3 +27,9 @@ These commands are exposed through the unified `narada` CLI in `@narada-core/cli
 - `narada activate <operation>` — mark an operation as activated
 
 `ops-kit` is a library package. It does not ship a binary.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The package-local Vitest
+config inlines `zod` for Bun’s worker interop; `build:node`, `typecheck:node`,
+and `test:node` retain explicit Node compatibility paths.
