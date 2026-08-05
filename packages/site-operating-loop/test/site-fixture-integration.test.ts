@@ -10,6 +10,7 @@ const packageRoot = new URL('..', import.meta.url);
 const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.ts', import.meta.url));
 const storeModulePath = fileURLToPath(new URL('./fixtures/site-loop-store.ts', import.meta.url));
 const loopModulePath = fileURLToPath(new URL('./fixtures/site-loop-body.ts', import.meta.url));
+const runtimePrelude = (process.versions as { bun?: string }).bun ? [] : ['--import', 'tsx'];
 
 test('Site-owned loop fixture runs end-to-end through generic supervise surface', () => {
   const dir = mkdtempSync(join(tmpdir(), 'narada-site-loop-site-fixture-'));
@@ -104,7 +105,7 @@ test('Site-owned loop fixture runs end-to-end through generic supervise surface'
 });
 
 function runCli(args: any, env: any): any {
-  const child = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath, ...args], {
+  const child = runHiddenPostureCommandSync(process.execPath, [...runtimePrelude, cliPath, ...args], {
     cwd: packageRoot,
     env,
     encoding: 'utf8',

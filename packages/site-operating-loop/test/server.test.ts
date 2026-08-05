@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from '@narada-core/sqlite';
 import { ensureSiteLoopTables, getLoopStatus, recordLoopRuntimeEvent } from '../src/site-loop-store.js';
 import { startSiteOperatingLoopRuntime } from '../src/runtime.js';
 import { createSiteOperatingLoopHttpServer, listenSiteOperatingLoopHttpServer } from '../src/server.js';

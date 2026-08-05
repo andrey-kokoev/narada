@@ -1,4 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from '@narada-core/sqlite';
 import { ensureSiteLoopTables } from '../../src/site-loop-store.js';
 
 export function openSiteLoopStore(siteRoot: any): any {

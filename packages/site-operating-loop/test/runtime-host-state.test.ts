@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { DatabaseSync } from 'node:sqlite';
+import { DatabaseSync } from '@narada-core/sqlite';
 import test from 'node:test';
 import {
   assertSiteOperatingLoopRuntimeHostAuthority,

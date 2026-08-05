@@ -10,13 +10,19 @@ import { runHiddenPostureCommandSync, spawnTestChild } from '@narada-core/proces
 const packageRoot = new URL('..', import.meta.url);
 const cliPath = fileURLToPath(new URL('../bin/narada-site-loop.ts', import.meta.url));
 const storePath = new URL('../src/site-loop-store.js', import.meta.url);
+const sqliteModuleUrl = import.meta.resolve('@narada-core/sqlite');
+const runtimePrelude = (process.versions as { bun?: string }).bun ? [] : ['--import', 'tsx'];
+
+function cliRuntimeArgs(...args: string[]): string[] {
+  return [...runtimePrelude, cliPath, ...args];
+}
 
 function text(value: string | Buffer | null | undefined): string {
   return value == null ? '' : value.toString();
 }
 
 test('CLI help does not require a store module', () => {
-  const child = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath, 'help'], {
+  const child = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs('help'), {
     cwd: packageRoot,
     encoding: 'utf8',
     posture: 'test_child',
@@ -37,7 +43,7 @@ test('CLI supervise emits startup evidence before a forever runtime exits', asyn
     const loopModulePath = join(dir, 'loop.mjs');
 
     writeFileSync(storeModulePath, `
-      import { DatabaseSync } from 'node:sqlite';
+      import { DatabaseSync } from ${JSON.stringify(sqliteModuleUrl)};
       import { ensureSiteLoopTables } from ${JSON.stringify(storePath.href)};
       export function openSiteLoopStore() {
         const db = new DatabaseSync(${JSON.stringify(dbFile)});
@@ -52,10 +58,7 @@ test('CLI supervise emits startup evidence before a forever runtime exits', asyn
       }
     `, 'utf8');
 
-    child = spawnTestChild(process.execPath, [
-      '--import',
-      'tsx',
-      cliPath,
+    child = spawnTestChild(process.execPath, cliRuntimeArgs(
       'supervise',
       '--store-module',
       storeModulePath,
@@ -69,7 +72,7 @@ test('CLI supervise emits startup evidence before a forever runtime exits', asyn
       '--jsonl-events',
       '--interval-ms',
       '10000',
-    ], {
+    ), {
       cwd: packageRoot,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -135,7 +138,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     const loopModulePath = join(dir, 'loop.mjs');
 
     writeFileSync(storeModulePath, `
-      import { DatabaseSync } from 'node:sqlite';
+      import { DatabaseSync } from ${JSON.stringify(sqliteModuleUrl)};
       import { ensureSiteLoopTables } from ${JSON.stringify(storePath.href)};
       export function openSiteLoopStore() {
         const db = new DatabaseSync(${JSON.stringify(dbFile)});
@@ -153,7 +156,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       }
     `, 'utf8');
 
-    const trigger = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
+    const trigger = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs(
       'trigger',
       '--store-module',
       storeModulePath,
@@ -165,7 +168,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       'cli-test',
       '--payload-json',
       '{"intent":"run"}',
-    ], {
+    ), {
       cwd: packageRoot,
       encoding: 'utf8',
       posture: 'test_child',
@@ -175,7 +178,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     const triggerResult = JSON.parse(text(trigger.stdout));
     assert.equal(triggerResult.status, 'pending');
 
-    const child = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
+    const child = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs(
       'run',
       '--store-module',
       storeModulePath,
@@ -184,7 +187,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       '--loop-id',
       'test.loop',
       '--once',
-    ], {
+    ), {
       cwd: packageRoot,
       encoding: 'utf8',
       posture: 'test_child',
@@ -198,13 +201,13 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     assert.equal(parsed.cycles[0].run.steps[0].step_id, 'cli-cycle');
     assert.equal(parsed.cycles[0].run.steps[0].evidence.trigger_id, triggerResult.trigger_id);
 
-    const triggers = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
+    const triggers = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs(
       'triggers',
       '--store-module',
       storeModulePath,
       '--loop-id',
       'test.loop',
-    ], {
+    ), {
       cwd: packageRoot,
       encoding: 'utf8',
       posture: 'test_child',
@@ -214,13 +217,13 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     const triggersResult = JSON.parse(text(triggers.stdout));
     assert.equal(triggersResult.triggers[0].status, 'completed');
 
-    const events = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
+    const events = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs(
       'events',
       '--store-module',
       storeModulePath,
       '--loop-id',
       'test.loop',
-    ], {
+    ), {
       cwd: packageRoot,
       encoding: 'utf8',
       posture: 'test_child',
@@ -242,13 +245,13 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     ]);
     assert.ok(eventResult.events.some((event: any) => event.event === 'runtime_host_lifecycle_transition'));
 
-    const health = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
+    const health = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs(
       'health',
       '--store-module',
       storeModulePath,
       '--loop-id',
       'test.loop',
-    ], {
+    ), {
       cwd: packageRoot,
       encoding: 'utf8',
       posture: 'test_child',
@@ -258,7 +261,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     const healthResult = JSON.parse(text(health.stdout));
     assert.equal(healthResult.status, 'healthy');
 
-    const serve = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
+    const serve = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs(
       'serve',
       '--store-module',
       storeModulePath,
@@ -267,7 +270,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       '--port',
       '0',
       '--once',
-    ], {
+    ), {
       cwd: packageRoot,
       encoding: 'utf8',
       posture: 'test_child',
@@ -278,7 +281,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
     assert.equal(serveResult.status, 'listening');
     assert.match(serveResult.base_url, /^http:\/\/127\.0\.0\.1:\d+$/);
 
-    const supervise = runHiddenPostureCommandSync(process.execPath, ['--import', 'tsx', cliPath,
+    const supervise = runHiddenPostureCommandSync(process.execPath, cliRuntimeArgs(
       'supervise',
       '--store-module',
       storeModulePath,
@@ -289,7 +292,7 @@ test('CLI run hosts one Site-provided runtime cycle', () => {
       '--port',
       '0',
       '--once',
-    ], {
+    ), {
       cwd: packageRoot,
       encoding: 'utf8',
       posture: 'test_child',

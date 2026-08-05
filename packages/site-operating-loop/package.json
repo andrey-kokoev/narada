@@ -7,15 +7,18 @@
   "main": "./dist/src/site-loop-store.js",
   "types": "./dist/src/site-loop-store.d.ts",
   "scripts": {
-    "build": "node --import tsx scripts/build.ts",
+    "build": "bun scripts/build.ts",
+    "build:node": "node --import tsx scripts/build.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --import tsx --test test/*.test.ts"
+    "test": "bun test test",
+    "test:node": "node --import tsx --test test/*.test.ts"
   },
   "bin": {
     "narada-site-loop": "./dist/bin/narada-site-loop.js"
   },
   "dependencies": {
-    "@narada-core/process-launch-posture": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/sqlite": "workspace:*"
   },
   "exports": {
     ".": {
@@ -70,6 +73,7 @@
     "directory": "packages/site-operating-loop"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }
