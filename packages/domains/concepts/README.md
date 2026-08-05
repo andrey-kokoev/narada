@@ -28,3 +28,8 @@ pnpm add @narada-core/concepts
 
 - `@narada-core/cli`: operator CLI query surface
 - `@narada-core/charters`: adjacent policy/package pattern
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain the Node compatibility paths.

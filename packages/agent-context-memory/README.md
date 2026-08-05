@@ -34,3 +34,8 @@ Named agent identity, role assignment, and claimed runtime identity are distinct
 - Runtime hydration execution.
 - Copying narada-andrey, CPY, Narada proper, operator-surface, or PC runtime state.
 - Treating role assignment or claimed identity as naming authority.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain the Node compatibility paths.
