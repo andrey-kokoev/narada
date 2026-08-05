@@ -11,6 +11,7 @@
     "narada:guard-cli-output:report": "node --import tsx scripts/cli-output-admission-guard.ts --report",
     "narada:guard-process-launch-posture": "node --import tsx scripts/process-launch-posture-guard.ts",
     "narada:guard-process-launch-posture:report": "node --import tsx scripts/process-launch-posture-guard.ts --report",
+    "narada:guard-process-launch-posture:test": "node --import tsx --test scripts/process-launch-posture-guard.test.ts",
     "narada:verify-workspace-launch-hidden-runtime": "pwsh -NoProfile -File packages/layers/cli/scripts/verify-workspace-launch-hidden-runtime.ps1",
     "narada:guard-site-paths": "node --import tsx scripts/site-path-semantics-guard.ts",
     "narada:guard-intelligence-zero-consumer": "node --import tsx scripts/intelligence-legacy-consumer-inventory.ts",

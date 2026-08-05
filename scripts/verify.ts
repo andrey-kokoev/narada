@@ -26,6 +26,7 @@ interface Step {
 const steps: Step[] = [
   { name: "Task file guard", command: "node --import tsx scripts/task-file-guard.ts" },
   { name: "CLI output admission guard", command: "node scripts/cli-output-admission-guard.ts" },
+  { name: "Process launch posture guard tests", command: "node --import tsx --test scripts/process-launch-posture-guard.test.ts" },
   { name: "Process launch posture guard", command: "node scripts/process-launch-posture-guard.ts" },
   { name: "Typecheck", command: "pnpm typecheck" },
   { name: "Build", command: "pnpm build" },
