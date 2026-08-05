@@ -47,7 +47,7 @@ test('owns Cloudflare D1 migration apply surface', async () => {
 
 test('product store migration carries Worker read-path indexes', async () => {
   const migrationSql = await readFile(new URL('../migrations/0003_cloudflare_product_stores.sql', import.meta.url), 'utf8');
-  const workerSource = await readFile(new URL('../../cloudflare-carrier/src/cloudflare-worker.mjs', import.meta.url), 'utf8');
+  const workerSource = await readFile(new URL('../../cloudflare-carrier/src/cloudflare-worker.ts', import.meta.url), 'utf8');
   const expectedIndexNames = [
     'cloudflare_site_continuity_loop_reports_site_idx',
     'cloudflare_site_continuity_reconciliation_executions_site_idx',

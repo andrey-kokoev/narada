@@ -15,10 +15,13 @@
     }
   },
   "scripts": {
-    "test": "node --import tsx --test test/cloudflare-site-registry.test.ts",
+    "test": "bun test test/cloudflare-site-registry.test.ts",
+    "test:node": "node --import tsx --test test/cloudflare-site-registry.test.ts",
     "pretest": "pnpm run build",
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "bunx --bun tsc -p tsconfig.build.json",
+    "build:node": "pnpm exec tsc -p tsconfig.build.json",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
     "deploy:check": "pnpm test",
     "d1:migrations:local": "wrangler d1 migrations apply narada-cloudflare-site-registry --local --config wrangler.toml",
     "d1:migrations:remote": "wrangler d1 migrations apply narada-cloudflare-site-registry --remote --config wrangler.toml",
@@ -31,7 +34,8 @@
     "directory": "packages/cloudflare-site-registry"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "main": "./dist/cloudflare-site-registry.js",
   "types": "./dist/cloudflare-site-registry.d.ts",
