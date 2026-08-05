@@ -143,3 +143,7 @@ verifies durable run, event, trigger, status, and health evidence, asserts that 
 Sonar phase records `narada.sonar.generic_site_loop_projected_step.v1`, and then
 proves that the installed `narada-site-loop supervise --once --jsonl-events` CLI
 can host the same Sonar store/body modules against fixture state.
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain explicit Node compatibility
+paths.
