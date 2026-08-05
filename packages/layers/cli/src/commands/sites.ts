@@ -3900,14 +3900,14 @@ async function desiredToolSurfaceEntry(siteRoot: string, filePath: string): Prom
     allowed_root_refs: allowedRootRefs,
   };
 }
-async function buildToolSurfaceManifest(siteRoot: string): Promise<Record<string, unknown>> {
-  const toolRoot = join(siteRoot, 'tools');
+async function buildToolSurfaceManifest(siteControlRoot: string, workspaceRoot: string): Promise<Record<string, unknown>> {
+  const toolRoot = join(siteControlRoot, 'tools');
   const files = (await listFilesRecursive(toolRoot)).filter(isExecutableToolPath);
-  const entries = await Promise.all(files.map((file) => desiredToolSurfaceEntry(siteRoot, file)));
+  const entries = await Promise.all(files.map((file) => desiredToolSurfaceEntry(siteControlRoot, file)));
   entries.sort((a, b) => String(a.path ?? '').localeCompare(String(b.path ?? '')));
   return {
     schema: 'narada.site_tool_surface.manifest.v1',
-    site_root: siteRoot,
+    site_root: workspaceRoot,
     tool_root: toolRoot,
     generated_at: new Date().toISOString(),
     entries,
@@ -4195,9 +4195,9 @@ export async function sitesReconcileAgentCliWrapperCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const inputRoot = resolve(options.root ?? '.');
-
-  const siteRoot = containedSiteRootFromInput(inputRoot);
-  const wrapper = await inspectAgentCliWrapper(siteRoot);
+  const siteControlRoot = containedSiteRootFromInput(inputRoot);
+  const workspaceRoot = workspaceRootFromContainedInput(inputRoot, siteControlRoot);
+  const wrapper = await inspectAgentCliWrapper(siteControlRoot);
   const template = await loadAgentCliWrapperTemplate();
   const mutationNeeded = !wrapper.current;
   if (options.apply && mutationNeeded) {
@@ -4205,13 +4205,14 @@ export async function sitesReconcileAgentCliWrapperCommand(
     await writeFile(wrapper.wrapperPath, template.renderedText, 'utf8');
   }
 
-  const after = options.apply ? await inspectAgentCliWrapper(siteRoot) : wrapper;
+  const after = options.apply ? await inspectAgentCliWrapper(siteControlRoot) : wrapper;
   const result = {
     schema: 'narada.site_agent_cli_wrapper_reconcile.v1',
     status: after.current ? 'current' : options.apply ? 'failed' : 'stale',
     mutation_attempted: options.apply === true,
     mutation_performed: options.apply === true && mutationNeeded,
-    site_root: siteRoot,
+    site_root: workspaceRoot,
+    site_control_root: siteControlRoot,
     wrapper_path: after.wrapperPath,
     wrapper_exists: after.exists,
     wrapper_current: after.current,
@@ -4221,7 +4222,8 @@ export async function sitesReconcileAgentCliWrapperCommand(
   };
   const lines = [
     `agent-cli wrapper: ${result.status}`,
-    `site_root: ${siteRoot}`,
+    `site_root: ${workspaceRoot}`,
+    `site_control_root: ${siteControlRoot}`,
     `wrapper_path: ${after.wrapperPath}`,
     `expected_template_hash: ${after.templateHash}`,
     `existing_hash: ${after.existingHash ?? 'missing'}`,
@@ -4238,10 +4240,11 @@ export async function sitesReconcileToolSurfaceManifestCommand(
   _context: CommandContext,
 ): Promise<{ exitCode: ExitCode; result: unknown }> {
   const inputRoot = resolve(options.root ?? '.');
-  const siteRoot = containedSiteRootFromInput(inputRoot);
-  const manifestPath = join(siteRoot, 'site-tool-surface.manifest.json');
+  const siteControlRoot = containedSiteRootFromInput(inputRoot);
+  const workspaceRoot = workspaceRootFromContainedInput(inputRoot, siteControlRoot);
+  const manifestPath = join(siteControlRoot, 'site-tool-surface.manifest.json');
   const existingText = existsSync(manifestPath) ? await readFile(manifestPath, 'utf8') : '';
-  const manifest = await buildToolSurfaceManifest(siteRoot);
+  const manifest = await buildToolSurfaceManifest(siteControlRoot, workspaceRoot);
   let nextText = `${JSON.stringify(manifest, null, 2)}\n`;
   if (existingText) {
     try {
@@ -4264,7 +4267,8 @@ export async function sitesReconcileToolSurfaceManifestCommand(
     status: mutationNeeded ? options.apply ? 'repaired' : 'stale' : 'current',
     mutation_attempted: options.apply === true,
     mutation_performed: options.apply === true && mutationNeeded,
-    site_root: siteRoot,
+    site_root: workspaceRoot,
+    site_control_root: siteControlRoot,
     manifest_path: manifestPath,
     entry_count: Array.isArray(manifest.entries) ? manifest.entries.length : 0,
     site_owned_count: Array.isArray(manifest.entries) ? manifest.entries.filter((entry) => entry.class === 'site_owned').length : 0,
@@ -4272,7 +4276,8 @@ export async function sitesReconcileToolSurfaceManifestCommand(
   };
   const lines = [
     `tool-surface manifest: ${result.status}`,
-    `site_root: ${siteRoot}`,
+    `site_root: ${workspaceRoot}`,
+    `site_control_root: ${siteControlRoot}`,
     `manifest_path: ${manifestPath}`,
     `entries: ${result.entry_count}`,
     `site_owned: ${result.site_owned_count}`,

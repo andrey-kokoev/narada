@@ -78,8 +78,17 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 
-$SiteRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
-$NaradaProperRoot = if ($env:NARADA_PROPER_ROOT) { $env:NARADA_PROPER_ROOT } else { $null }
+$SiteControlRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$SiteRoot = Split-Path -Parent $SiteControlRoot
+$UserHome = [Environment]::GetFolderPath('UserProfile')
+$SourceRoot = if ($env:NARADA_SRC_ROOT) { $env:NARADA_SRC_ROOT } else { Join-Path $UserHome 'src' }
+$NaradaProperRoot = if ($env:NARADA_PROPER_ROOT) {
+    $env:NARADA_PROPER_ROOT
+} elseif ($env:NARADA_ROOT) {
+    $env:NARADA_ROOT
+} else {
+    Join-Path $SourceRoot 'narada'
+}
 
 if (-not ([string]$env:NODE_OPTIONS -match '(^|\s)--no-warnings(=|\s|$)')) {
     $env:NODE_OPTIONS = (($env:NODE_OPTIONS, '--no-warnings=ExperimentalWarning') | Where-Object { $_ }) -join ' '
@@ -103,7 +112,7 @@ function Resolve-NaradaPackageRoot {
     }
 
     if ($PackageName -eq '@narada-core/agent-cli') {
-        $agentCliRoot = if ($env:NARADA_AGENT_CLI_ROOT) { $env:NARADA_AGENT_CLI_ROOT } else { 'D:\code\agent-cli' }
+        $agentCliRoot = if ($env:NARADA_AGENT_CLI_ROOT) { $env:NARADA_AGENT_CLI_ROOT } else { Join-Path $SourceRoot 'agent-cli' }
         $agentCliPackageJson = Join-Path $agentCliRoot 'package.json'
         if (Test-Path -LiteralPath $agentCliPackageJson -PathType Leaf) {
             return $agentCliRoot
