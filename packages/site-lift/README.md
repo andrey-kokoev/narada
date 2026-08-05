@@ -12,3 +12,9 @@ This package models liftable artifact metadata, adoption plans, and adoption com
 - Refuse runtime databases, generated projections, histories, local roots, credentials, and live authority as portable state.
 
 Receiving Sites must admit any lift locally before copying, installing, bootstrapping, registering, or executing anything.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain explicit Node compatibility
+paths.

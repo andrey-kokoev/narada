@@ -145,3 +145,9 @@ Not lifted into generic defaults:
   branding, or client-service assumptions;
 - any UI control that mutates task lifecycle, inbox, publication, credentials,
   external services, or Site authority.
+
+## Runtime posture
+
+Local build, typecheck, and tests are Bun-first. The `build:node`,
+`typecheck:node`, and `test:node` scripts retain explicit Node compatibility
+paths.
