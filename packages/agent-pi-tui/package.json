@@ -29,11 +29,14 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run --config vitest.config.ts",
+    "build": "bunx --bun tsc -p tsconfig.json",
+    "build:node": "pnpm exec tsc -p tsconfig.json",
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "test": "bunx --bun vitest run --config vitest.config.ts",
+    "test:node": "pnpm exec vitest run --config vitest.config.ts",
     "test:baseline-live": "pnpm --filter @narada-core/cli build && pnpm run build && pnpm --filter @narada-core/agent-web-ui build && pnpm --dir ../../../agent-cli build && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e --bun-runtime && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e --bun-runtime --pi-rpc",
-    "test:baseline-live:node": "pnpm --filter @narada-core/cli build && pnpm run build && pnpm --filter @narada-core/agent-web-ui build && pnpm --dir ../../../agent-cli build && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e --pi-rpc",
+    "test:baseline-live:node": "pnpm --filter @narada-core/cli build && pnpm run build:node && pnpm --filter @narada-core/agent-web-ui build && pnpm --dir ../../../agent-cli build && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e --pi-rpc",
     "test:live:guard": "node --import tsx test/live-suite-guard.ts",
     "test:live:local": "pnpm run build && node --import tsx test/live-p0-durability-cancellation-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-authority-negative-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-controls-launch-binding-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-mcp-faults-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-pty-boundary-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-transport-idempotency-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-uncertain-admission-retry-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-ambient-isolation-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-provider-auth-faults-e2e.ts --enable-live-e2e && node --import tsx test/live-p1-compaction-reconstruction-e2e.ts --enable-live-e2e && node --import tsx test/live-p2-determinism-e2e.ts --enable-live-e2e",
     "test:live:production-binding": "pnpm --filter @narada-core/cli build && pnpm run build && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e && node --import tsx test/live-four-surface-acceptance-e2e.ts --enable-live-e2e --pi-rpc && node --import tsx test/live-p0-durability-cancellation-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-authority-negative-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-controls-launch-binding-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-mcp-faults-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-pty-boundary-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-transport-idempotency-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-uncertain-admission-retry-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-ambient-isolation-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-provider-auth-faults-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p1-compaction-reconstruction-e2e.ts --enable-live-e2e --production-launch && node --import tsx test/live-p2-determinism-e2e.ts --enable-live-e2e --production-launch",
@@ -63,6 +66,7 @@
     "directory": "packages/agent-pi-tui"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   }
 }

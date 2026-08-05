@@ -55,6 +55,8 @@ pnpm --filter @narada-core/agent-pi-tui test
 pnpm --filter @narada-core/agent-pi-tui test:live:production-binding  # opt-in launcher matrix
 ```
 
+Local build, typecheck, and fixture tests default to Bun; use `build:node`, `typecheck:node`, and `test:node` for the explicit Node compatibility path. Live launcher scripts remain explicit integration boundaries.
+
 The normal test suite does not start providers, runtimes, browsers, or sibling
 surface binaries. The gated live suite does. Its broad scenario is a
 **baseline-live-acceptance**. P0/P1/P2 probes default to direct-runtime
