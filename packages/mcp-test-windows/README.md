@@ -9,3 +9,5 @@ The package defines test target descriptors and structured evidence payloads. It
 The `narada.mcp_test_windows.run_request.v0` contract plans approved test execution by registry id or approved repo path. Decisions are descriptor-only: the package does not launch tests, bind agents, mutate evidence stores, or import pass/fail history.
 
 Run decisions refuse mixed id/path requests, missing targets, suspicious shell syntax, raw WSL path crossings, invalid timeouts, source pass/fail imports, and credentials. Command-based registry entries remain warnings until a receiving Site admits its own test carrier.
+
+Local build, typecheck, and tests default to Bun; use the `:node` script variants for explicit Node compatibility.

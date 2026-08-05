@@ -9,3 +9,5 @@ This package defines request envelopes, approval categories, and refusal policy.
 The package also provides `narada.mcp_shell_windows.boundary_request.v0` descriptors for deciding whether a requested operation belongs to filesystem MCP, shell MCP Git tools, a domain MCP surface, or refusal. Decisions are descriptor-only: they never execute a command, mutate Git state, grant live shell authority, or import credentials.
 
 Boundary guards refuse raw WSL crossings, destructive process-kill patterns, source Site runtime imports, and credential import requests. Repository text reads/writes are classified as filesystem-MCP-preferred, while task lifecycle, inbox, and operator-surface mutations are classified as domain-MCP-required.
+
+Local build, typecheck, and tests default to Bun; use the `:node` script variants for explicit Node compatibility.
