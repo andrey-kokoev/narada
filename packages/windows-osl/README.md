@@ -9,3 +9,5 @@ This package models label projection, panel payload, and install/start/stop/insp
 The `narada.operator_surface.osl_panel_payload.v0` contract models a read-only WebView2 panel payload assembled from receiving-Site supplied projection data. It carries source surface, identity summary, capability projection, execution policy, authority posture, activity, presentation hints, and an empty `future_controls` list.
 
 Validation refuses payloads that grant shell-like authority, add visible controls without separate admission, or treat external evidence as local projection authority. The package does not open WebView2, install a panel host, mutate PC state, or import source Site runtime payloads.
+
+Local build, typecheck, and tests default to Bun; use the `:node` script variants for explicit Node compatibility.

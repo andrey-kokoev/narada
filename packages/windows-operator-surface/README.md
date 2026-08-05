@@ -11,3 +11,5 @@ The package is descriptor-only. It does not capture live HWNDs, mutate PC runtim
 - Compatibility runtime-binding projection from receiving-Site supplied evidence.
 
 See `docs/source-inventory.md` for admitted source classification and exclusions.
+
+Local build, typecheck, and tests default to Bun; use the `:node` script variants for explicit Node compatibility.
