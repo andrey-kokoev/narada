@@ -14,7 +14,8 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "repository": {
     "type": "git",
@@ -38,13 +39,18 @@
   },
   "scripts": {
     "prepublishOnly": "node --import tsx ../../../scripts/assert-publication-admission.ts",
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
+    "build": "bunx --bun tsc",
+    "build:node": "pnpm exec tsc",
+    "typecheck": "bunx --bun tsc --noEmit",
+    "typecheck:node": "pnpm exec tsc --noEmit",
     "start": "bun dist/index.js",
     "start:node": "node dist/index.js",
-    "test": "vitest run",
-    "test:unit": "vitest run test/unit",
-    "test:integration": "vitest run test/integration"
+    "test": "bunx --bun vitest run",
+    "test:node": "pnpm exec vitest run",
+    "test:unit": "bunx --bun vitest run test/unit",
+    "test:unit:node": "pnpm exec vitest run test/unit",
+    "test:integration": "bunx --bun vitest run test/integration",
+    "test:integration:node": "pnpm exec vitest run test/integration"
   },
   "dependencies": {
     "@narada-core/control-plane": "workspace:*",

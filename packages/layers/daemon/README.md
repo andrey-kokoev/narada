@@ -21,6 +21,10 @@ npm start
 CONFIG_PATH=./custom-config.json npm start
 ```
 
+## Runtime
+
+Local build, typecheck, and test scripts default to Bun. Node remains an explicit compatibility path via `build:node`, `typecheck:node`, `test:node`, `test:unit:node`, and `test:integration:node`.
+
 ## Configuration
 
 Uses the same config format as `narada`. Key runtime settings:
