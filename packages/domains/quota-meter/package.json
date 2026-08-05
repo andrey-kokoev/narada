@@ -18,13 +18,17 @@
   },
   "scripts": {
     "check": "node --check src/core.js && node --check src/codex.js && node --check src/kimi.js && node --check src/providers.js && node --check src/format.js && node --check src/overlay.js && node --check src/overlay-worker.js && node --check src/cli.js && node --check src/mcp.js",
-    "test": "node --test",
-    "mcp": "node src/mcp.js"
+    "check:node": "node --check src/core.js && node --check src/codex.js && node --check src/kimi.js && node --check src/providers.js && node --check src/format.js && node --check src/overlay.js && node --check src/overlay-worker.js && node --check src/cli.js && node --check src/mcp.js",
+    "test": "bun test",
+    "test:node": "node --test",
+    "mcp": "bun src/mcp.js",
+    "mcp:node": "node src/mcp.js"
   },
   "dependencies": {
     "@narada-core/window-overlay-core": "workspace:*"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "bun": ">=1.3.0"
   }
 }
