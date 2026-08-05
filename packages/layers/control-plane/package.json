@@ -22,7 +22,8 @@
     "config.schema.json"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "repository": {
     "type": "git",
@@ -49,7 +50,10 @@
     "build": "tsc && pnpm run generate:config-schema",
     "typecheck": "tsc --noEmit",
     "generate:config-schema": "node --import tsx scripts/generate-config-schema.ts",
-    "test": "vitest run",
+    "test": "vitest run && pnpm run test:reactor-sqlite",
+    "test:node": "vitest run && pnpm run test:reactor-sqlite:node",
+    "test:reactor-sqlite": "bun test/runtime/reactor-sqlite-runtime.ts",
+    "test:reactor-sqlite:node": "node --import tsx test/runtime/reactor-sqlite-runtime.ts",
     "test:unit": "vitest run test/unit",
     "test:integration": "vitest run test/integration",
     "test:watch": "vitest",

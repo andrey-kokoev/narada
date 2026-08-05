@@ -2,7 +2,7 @@
  * Test Database Lifecycle Helper
  *
  * Tracks in-memory databases created during tests and ensures they are closed
- * before process exit. Uses the project's node:sqlite Database wrapper.
+ * before process exit. Uses the package's runtime-neutral SQLite wrapper.
  */
 
 import Database from "../src/sqlite/database.js";

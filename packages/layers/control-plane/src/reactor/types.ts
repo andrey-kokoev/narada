@@ -145,7 +145,7 @@ export interface ReactorGovernanceResult {
  * Minimal store surface required for reactor output persistence.
  *
  * Decoupled from CoordinatorStore so implementations can use either
- * better-sqlite3 or node:sqlite.
+ * the package's runtime-neutral SQLite adapter.
  */
 export interface ReactorOutputStore {
   getReactorOutputById(outputId: string): import("../coordinator/types.js").ReactorOutputRow | undefined;

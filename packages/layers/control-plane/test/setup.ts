@@ -23,7 +23,7 @@ beforeEach(() => {
 });
 
 // Database lifecycle: close all tracked databases after each test file
-// to prevent node:sqlite teardown issues during process exit.
+// to prevent SQLite teardown issues during process exit.
 import { closeAllTestDatabases } from "./db-lifecycle.js";
 
 afterAll(() => {

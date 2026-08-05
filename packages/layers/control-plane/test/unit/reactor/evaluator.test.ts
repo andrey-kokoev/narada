@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { DatabaseSync } from "node:sqlite";
+import Database from "../../../src/sqlite/database.js";
 import { InKernelReactor } from "../../../src/reactor/evaluator.js";
 import { governReactorOutput } from "../../../src/reactor/governance.js";
 import { materializeProposal } from "../../../src/reactor/proposals.js";
@@ -241,11 +241,11 @@ describe("materializeProposal", () => {
 
 
 describe("persistReactorOutput", () => {
-  let db: DatabaseSync;
+  let db: Database;
   let store: NodeSqliteReactorOutputStore;
 
   beforeEach(() => {
-    db = new DatabaseSync(":memory:");
+    db = new Database(":memory:");
     store = new NodeSqliteReactorOutputStore(db);
   });
 

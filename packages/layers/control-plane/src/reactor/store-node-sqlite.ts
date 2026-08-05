@@ -1,13 +1,12 @@
 /**
- * Node:sqlite Reactor Output Store
+ * SQLite Reactor Output Store
  *
- * Adapter-first node:sqlite implementation of ReactorOutputStore.
- *
- * This is intended as a migration step alongside the better-sqlite3-based
- * SqliteCoordinatorStore. It owns only the reactor_outputs table.
+ * Runtime-neutral implementation of ReactorOutputStore over the package's
+ * existing SQLite boundary. The public class name is retained for API
+ * compatibility. It owns only the reactor_outputs table.
  */
 
-import { DatabaseSync, type StatementSync } from "node:sqlite";
+import Database, { type Statement } from "../sqlite/database.js";
 import type { ReactorOutputRow } from "../coordinator/types.js";
 import type { ReactorOutputStore } from "./types.js";
 
@@ -34,12 +33,12 @@ const SCHEMA_SQL = `
 `;
 
 export class NodeSqliteReactorOutputStore implements ReactorOutputStore {
-  private readonly insertStmt: StatementSync;
-  private readonly getByIdStmt: StatementSync;
-  private readonly getByContextStmt: StatementSync;
-  private readonly getByReactorStmt: StatementSync;
+  private readonly insertStmt: Statement;
+  private readonly getByIdStmt: Statement;
+  private readonly getByContextStmt: Statement;
+  private readonly getByReactorStmt: Statement;
 
-  constructor(private readonly db: DatabaseSync) {
+  constructor(private readonly db: Database) {
     this.db.exec(SCHEMA_SQL);
     this.insertStmt = this.db.prepare(`
       insert into reactor_outputs (
