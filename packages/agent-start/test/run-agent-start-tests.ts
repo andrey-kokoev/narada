@@ -13,6 +13,12 @@ await runProcessTests([
     timeoutMs: 15000,
   },
   {
+    label: 'result-contract-generator-line-endings',
+    args: ['--import', 'tsx', '--test', 'test/generate-result-schema.test.ts'],
+    cwd: packageRoot,
+    timeoutMs: 15000,
+  },
+  {
     label: 'agent-start-tsx-transform-syntax',
     args: ['--import', 'tsx', '--check', 'src/narada-agent-start.ts'],
     cwd: packageRoot,
