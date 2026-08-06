@@ -2,6 +2,9 @@
 
 Full-text search index for Narada compiled local state.
 
+Local build, typecheck, and test commands default to Bun; explicit `:node`
+variants retain Node verification.
+
 > **How to read this package**: This is a vertical-specific search utility for the mailbox vertical, indexing normalized messages produced by the kernel. Future verticals may provide their own search surfaces.
 
 ## Overview
