@@ -20,6 +20,25 @@ pnpm benchmark:watch
 pnpm benchmark:report
 ```
 
+## Node vs Bun runtime comparison
+
+The generic Vitest benchmarks above are useful for control-plane regression
+tracking, but they do not compare JavaScript runtimes. For a matched runtime
+comparison, build the artifacts once and run:
+
+```bash
+pnpm --filter @narada-core/control-plane build
+pnpm --filter @narada-core/cli build
+pnpm benchmark:runtime -- --warmup 5 --samples 12 --repeats 3
+```
+
+This executes the same worker cases under Node and Bun in alternating order,
+retains every sample, and measures the same built CLI artifact with `--version`
+as a fresh child-process startup case. The JSON and Markdown reports are written
+under `benchmark-results/` (ignored because results are host-specific). Set
+`NARADA_NODE_EXECUTABLE` or `NARADA_BUN_EXECUTABLE` when runtime discovery from
+`PATH` is not sufficient.
+
 ## Performance Targets
 
 ### Sync Operations

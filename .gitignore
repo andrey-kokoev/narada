@@ -8,6 +8,7 @@ data/*
 .env
 .DS_Store
 coverage/
+benchmark-results/
 .vscode/
 .idea/
 *.tmp

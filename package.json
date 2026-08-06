@@ -56,6 +56,7 @@
     "typecheck": "pnpm -r typecheck",
     "build": "pnpm -r build",
     "benchmark": "pnpm -r benchmark",
+    "benchmark:runtime": "node scripts/benchmark-runtime-comparison.mjs",
     "benchmark:compare": "tsx scripts/benchmark-compare.ts",
     "changeset": "changeset",
     "version-packages": "changeset version",
