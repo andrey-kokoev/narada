@@ -12,13 +12,18 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "continuity:windows": "node scripts/windows-site-continuity-sync.ts",
-    "test": "vitest run",
+    "build": "bunx --bun tsc",
+    "build:node": "pnpm exec tsc",
+    "typecheck": "bunx --bun tsc --noEmit",
+    "typecheck:node": "pnpm exec tsc --noEmit",
+    "continuity:windows": "bun scripts/windows-site-continuity-sync.ts",
+    "continuity:windows:node": "node --import tsx scripts/windows-site-continuity-sync.ts",
+    "test": "bunx --bun vitest run",
+    "test:node": "pnpm exec vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
