@@ -68,6 +68,12 @@ export function workspaceLaunchPnpmNaradaCommandSpec(
   };
 }
 
+function workspaceLaunchNodeExecutable(): string {
+  const configured = process.env.NARADA_NODE_EXECUTABLE?.trim();
+  if (configured) return configured;
+  return /(?:^|[\\/])node(?:\.exe)?$/iu.test(process.execPath) ? process.execPath : 'node';
+}
+
 export function workspaceLaunchNodeNaradaCommandSpec(
   naradaProper: string,
   runtimeCommand: WorkspaceLaunchCommandSpec,
@@ -81,7 +87,7 @@ export function workspaceLaunchNodeNaradaCommandSpec(
     };
   }
   return {
-    executable: process.execPath,
+    executable: workspaceLaunchNodeExecutable(),
     args: [join(naradaProper, 'packages', 'layers', 'cli', 'dist', 'main.js'), ...runtimeCommand.args],
     cwd: runtimeCommand.cwd,
   };
