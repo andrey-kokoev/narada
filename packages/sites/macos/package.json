@@ -12,12 +12,16 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run",
+    "build": "bunx --bun tsc",
+    "build:node": "pnpm exec tsc",
+    "typecheck": "bunx --bun tsc --noEmit",
+    "typecheck:node": "pnpm exec tsc --noEmit",
+    "test": "bunx --bun vitest run",
+    "test:node": "pnpm exec vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
