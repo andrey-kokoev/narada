@@ -63,6 +63,9 @@ if (vitestFiles.length > 0) {
     vitestEntrypoint,
     'run',
     '--silent=true',
+    '--pool=forks',
+    '--maxWorkers=1',
+    '--no-file-parallelism',
     ...vitestFiles,
   ]) || exitCode;
 }
