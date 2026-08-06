@@ -163,7 +163,7 @@ function inspectScript(siteRoot: string, scriptName: string, command: string, en
       exists: true,
       loadable: false,
       detail,
-      failure_kind: classifyFailure(detail, command),
+    failure_kind: classifyFailure(detail, command, true),
       repair_command: DEFAULT_REPAIR_COMMAND,
     };
   }
@@ -271,10 +271,10 @@ function errorDetail(error: unknown): string {
   return [error.message, stderr, stdout].filter(Boolean).join('\n');
 }
 
-function classifyFailure(detail: string, command: string): DelegatedCliFailureKind {
-  if (/node(?:\.exe)?: not found|exec: node: not found|node: command not found/i.test(detail)) return 'missing_node';
+function classifyFailure(detail: string, command: string, entrypointExists = false): DelegatedCliFailureKind {
+  if (/\bnode(?:\.exe)?\b.*(?:not found|not recognized|inaccessible)/i.test(detail)) return 'missing_node';
   if (/source files are newer than dist|dist is stale|stale/i.test(detail)) return 'stale_dist';
   if (/node_modules[\\/]\.bin[\\/]narada|SyntaxError: missing \) after argument list/i.test(`${command}\n${detail}`)) return 'broken_shim';
-  if (/packages[\\/]+layers[\\/]+cli[\\/]+dist[\\/]+main\.js.*missing|Cannot find module .*dist[\\/]+main\.js/i.test(detail)) return 'missing_build_output';
+  if (!entrypointExists && /packages[\\/]+layers[\\/]+cli[\\/]+dist[\\/]+main\.js.*missing|Cannot find module .*dist[\\/]+main\.js/i.test(detail)) return 'missing_build_output';
   return 'execution_failed';
 }
