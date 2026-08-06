@@ -38,7 +38,7 @@
     "build:node": "pnpm exec tsc -p tsconfig.build.json",
     "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
     "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
-    "test": "pnpm run test:node",
+    "test": "bun test test/index.test.ts",
     "test:node": "node --import tsx --test test/index.test.ts"
   },
   "dependencies": {

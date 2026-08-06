@@ -5,7 +5,7 @@
  */
 
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 import { CLOUDFLARE_KIMI, fixtureBundle } from "@narada-core/invokable-intelligence-contract";
 import type {
@@ -89,19 +89,31 @@ const TEST_PLAN: InvocationPlan = {
   },
 };
 
+async function runConformanceCase(
+  context: TestContext,
+  name: string,
+  fn: () => Promise<void>,
+): Promise<void> {
+  if (process.versions.bun) {
+    await fn();
+    return;
+  }
+  await context.test(name, fn);
+}
+
 export function defineRegistryConformanceSuite(label: string, makeTarget: () => Promise<ConformanceTarget>): void {
   void test(`registry conformance [${label}]`, async (t) => {
     const target = await makeTarget();
     const { store } = target;
     try {
-      await t.test("migration is versioned, idempotent, and safe on an initialized store", async () => {
+      await runConformanceCase(t, "migration is versioned, idempotent, and safe on an initialized store", async () => {
         assert.equal(store.schemaVersion !== undefined, true);
         assert.equal(await store.schemaVersion(), REGISTRY_SCHEMA_VERSION);
         assert.equal(await store.migrate(), REGISTRY_SCHEMA_VERSION);
         assert.equal(await store.schemaVersion(), REGISTRY_SCHEMA_VERSION);
       });
 
-      await t.test("bundle loads and resources read back deterministically", async () => {
+      await runConformanceCase(t, "bundle loads and resources read back deterministically", async () => {
         await store.loadBundle(fixtureBundle(CLOUDFLARE_KIMI));
         const resources = await store.listResources();
         assert.equal(resources.length, CLOUDFLARE_KIMI.resources.length);
@@ -113,7 +125,7 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         assert.equal(await store.getResource("model:does-not-exist"), null);
       });
 
-      await t.test("typed relations are derived from resource refs", async () => {
+      await runConformanceCase(t, "typed relations are derived from resource refs", async () => {
         const relations = await store.listRelations("inference-endpoint:cf-workers-ai-default");
         assert.deepEqual(
           relations.map((r) => `${r.relation}:${r.to_id}`),
@@ -126,7 +138,7 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         );
       });
 
-      await t.test("assertion filters work and loci never merge implicitly", async () => {
+      await runConformanceCase(t, "assertion filters work and loci never merge implicitly", async () => {
         assert.equal((await store.listAssertions({ family: "thinking" })).length, 1);
         assert.equal((await store.listAssertions({ locus: "global" })).length, 2);
         assert.equal((await store.listAssertions({ locus: "host-site" })).length, 1);
@@ -134,7 +146,7 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         assert.equal((await store.listAssertions({ locus: "user-site" })).length, 0);
       });
 
-      await t.test("policies read by locus/site/kind with derived bindings", async () => {
+      await runConformanceCase(t, "policies read by locus/site/kind with derived bindings", async () => {
         assert.equal((await store.listPolicies({ locus: "target-site" })).length, 2);
         assert.equal((await store.listPolicies({ locus: "user-site" })).length, 1);
         assert.equal((await store.listPolicies({ kind: "eligibility" })).length, 1);
@@ -142,7 +154,7 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         assert.deepEqual(bindings.map((b) => b.subject_id), ["model:kimi-k2-thinking"]);
       });
 
-      await t.test("supersession is atomic and history-preserving", async () => {
+      await runConformanceCase(t, "supersession is atomic and history-preserving", async () => {
         const original = (await store.listAssertions({ family: "thinking" }))[0];
         const next: CapabilityAssertion = {
           ...original,
@@ -161,7 +173,7 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         });
       });
 
-      await t.test("v2 invocation lifecycle remains distinct, immutable, linked, and queryable", async () => {
+      await runConformanceCase(t, "v2 invocation lifecycle remains distinct, immutable, linked, and queryable", async () => {
         await store.recordPlan(TEST_PLAN);
         await store.recordPlanSnapshot(TEST_PLAN.snapshot);
         assert.equal((await store.getPlanByIntent(TEST_PLAN.intent_id))?.id, TEST_PLAN.id);
@@ -325,7 +337,7 @@ export function defineRegistryConformanceSuite(label: string, makeTarget: () => 
         assert.equal((await store.listRefusalsByIntent("intent:unrelated-999")).length, 1);
       });
 
-      await t.test("invalid writes are rejected with contract errors", async () => {
+      await runConformanceCase(t, "invalid writes are rejected with contract errors", async () => {
         await assert.rejects(
           store.putResource({
             schema: "narada.invokable-intelligence.model.v1",
