@@ -136,6 +136,7 @@
     "test:artifact:node": "node --import tsx --test test/lib/launch-artifact.test.ts",
     "pretest": "pnpm run build && pnpm --filter @narada-core/cloudflare-operator-projection build && pnpm --filter @narada-core/operator-router build && pnpm --filter @narada-core/ui build && pnpm --filter @narada-core/operator-console-ui build",
     "test": "node --import tsx scripts/run-vitest-quiet.ts run --silent && pnpm run test:realfs",
+    "test:bun": "pnpm run build && bun scripts/run-bun-test-matrix.mjs",
     "test:launcher": "pnpm run build && node --import tsx scripts/run-vitest-quiet.ts run --silent test/commands/carrier-launcher.test.ts test/commands/launcher-workspace-plan.test.ts test/commands/nars.test.ts test/commands/workspace-launch-admission.test.ts && pnpm run test:realfs",
     "test:launcher:focused": "node --import tsx scripts/run-launcher-focused.ts",
     "test:publication-boundary": "node --import tsx scripts/run-publication-boundary-e2e.ts",

@@ -3,8 +3,11 @@
 Command-line interface for the Narada deterministic state compiler and control plane.
 
 The CLI compiler/typecheck entries and launch-artifact check default to Bun.
-The package prebuild and broader test matrix retain their existing dependency
-orchestration while SQLite and real-filesystem paths are migrated.
+`test:bun` runs the complete source test matrix with Bun, dispatching
+Vitest files to Bun's Vitest process and `node:test` files to Bun's
+native test runner. The package's canonical `test` command retains its
+Node orchestration for compatibility while SQLite and real-filesystem paths are
+migrated.
 
 > **How to read this package**: The CLI currently surfaces the Exchange/Graph mailbox vertical most prominently because it is the first mature vertical. Under the hood, all commands operate through the same kernel-agnostic `@narada-core/control-plane` library, which also supports timer, webhook, filesystem, and process automations as first-class peers.
 
