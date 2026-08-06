@@ -2,6 +2,9 @@
 
 This package owns Narada's reusable intent-zone contracts for local command and test execution.
 
+Local build, typecheck, and test commands default to Bun; explicit `:node`
+variants retain Node verification.
+
 ## Owned Zones
 
 | Zone | Owns |
