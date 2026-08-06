@@ -78,6 +78,12 @@ function outcome(status: number, stdout = ''): { status: number; stdout: string;
   return { status, stdout, stderr: '' };
 }
 
+function cliSourceInvocation(entrypoint: string, args: string[]): string[] {
+  return process.versions.bun
+    ? [entrypoint, ...args]
+    : ['--import', 'tsx', entrypoint, ...args];
+}
+
 describe('Host Fleet service lifecycle', () => {
   it('keeps missing-config CLI refusals bounded without eagerly loading SQLite', async () => {
     const root = await mkdtemp(join(tmpdir(), 'narada-host-fleet-cli-missing-'));
@@ -85,9 +91,7 @@ describe('Host Fleet service lifecycle', () => {
     const missingConfig = join(root, 'missing.json');
     const cliEntrypoint = fileURLToPath(new URL('../../src/main.ts', import.meta.url));
     const result = spawnSync(process.execPath, [
-      '--import',
-      'tsx',
-      cliEntrypoint,
+      ...cliSourceInvocation(cliEntrypoint, []),
       'host-fleet',
       'plan',
       '--config',
