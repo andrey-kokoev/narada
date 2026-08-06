@@ -21,6 +21,7 @@
     "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
     "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
+    "test:bun": "bun test test/*.test.ts",
     "test:node": "node --import tsx --test test/*.test.ts"
   },
   "dependencies": {
