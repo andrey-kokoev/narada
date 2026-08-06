@@ -9,8 +9,10 @@
   },
   "scripts": {
     "test": "pnpm run test:unit && pnpm run test:contract && pnpm run test:live",
-    "test:unit": "node --import tsx --test scripts/contracts/unit-suite.test.ts",
-    "test:contract": "node --import tsx --test scripts/contracts/contract-suite.test.ts",
+    "test:unit": "bun test scripts/contracts/unit-suite.test.ts",
+    "test:unit:node": "node --import tsx --test scripts/contracts/unit-suite.test.ts",
+    "test:contract": "bun test scripts/contracts/contract-suite.test.ts",
+    "test:contract:node": "node --import tsx --test scripts/contracts/contract-suite.test.ts",
     "test:live": "node --import tsx --test scripts/contracts/live-suite.test.ts",
     "deploy:check": "node --import tsx scripts/commands/cloudflare-carrier-deploy-check.ts",
     "intelligence:deploy": "node --import tsx scripts/commands/cloudflare-intelligence-deploy.ts",
@@ -297,8 +299,10 @@
     "continuity:health:last": "node --import tsx scripts/workflows/cloudflare-site-continuity-scheduler.ts --action read-health-last",
     "site-registry:projection": "node --import tsx scripts/read-models/cloudflare-carrier-site-registry-projection.ts",
     "ship": "pnpm --filter @narada-core/cloudflare-site-registry ship && pnpm test && pnpm deploy:check && pnpm deploy:dry-run",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
-    "build": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "typecheck:node": "pnpm exec tsc --noEmit -p tsconfig.json",
+    "build": "bunx --bun tsc --noEmit -p tsconfig.json",
+    "build:node": "pnpm exec tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@narada-core/carrier-command-contract": "workspace:*",
@@ -321,7 +325,8 @@
     "directory": "packages/cloudflare-carrier"
   },
   "engines": {
-    "node": ">=22.0.0"
+    "node": ">=22.0.0",
+    "bun": ">=1.3.0"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

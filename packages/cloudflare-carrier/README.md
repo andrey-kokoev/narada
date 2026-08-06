@@ -21,7 +21,9 @@ The script directory has explicit ownership surfaces:
 Existing flat script paths remain compatibility entrypoints, so package script
 names and operator command invocations do not change. The package test posture
 is explicit: `pnpm test:unit`, `pnpm test:contract`, `pnpm test:live`, or the
-combined `pnpm test`.
+combined `pnpm test`. Unit and contract checks default to Bun; use
+`test:unit:node` and `test:contract:node` for the Node equivalents. The live
+suite remains Node until its child-process and timing checks have Bun parity.
 
 ## Public Surface
 
