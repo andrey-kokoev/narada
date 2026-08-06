@@ -17,6 +17,7 @@
  */
 
 import { mkdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSyncService } from "../service.js";
@@ -24,6 +25,56 @@ import type { LogFormat } from "../lib/logger.js";
 import { LitmusInboxAdapter } from "./adapter.js";
 import { createLitmusRulesFilter } from "./rules-filter.js";
 import { installLitmusGraphShim } from "./graph-shim.js";
+
+const require = createRequire(import.meta.url);
+
+/**
+ * Litmus crash-recovery helper.
+ *
+ * The harness kills the daemon with SIGKILL to simulate a crash. Any lease
+ * that was active at that moment is dead, but its `expires_at` is written in
+ * wall-clock time and may be minutes in the future. Without recovery the
+ * restarted daemon sees a "principal runtime blocked" state and refuses to
+ * dispatch follow-up work (e.g. the second turn in l1-multiturn-crash).
+ *
+ * This function force-expires active leases and abandons active execution
+ * attempts before the service starts, so the stock scheduler stale-lease
+ * recovery path in `createSyncService` can reset the principal and make the
+ * work runnable again.
+ */
+function forceRecoverActiveLeases(coordinatorDbPath: string): void {
+  type MinimalDb = {
+    prepare: (sql: string) => { run: (...args: unknown[]) => unknown };
+    close: () => void;
+  };
+
+  let db: MinimalDb | undefined;
+  try {
+    const { DatabaseSync } = require("node:sqlite") as {
+      DatabaseSync: new (path: string) => MinimalDb;
+    };
+    db = new DatabaseSync(coordinatorDbPath);
+    const nowIso = new Date().toISOString();
+    db.prepare(`
+      update work_item_leases
+      set expires_at = ?
+      where released_at is null and expires_at > ?
+    `).run(nowIso, nowIso);
+    db.prepare(`
+      update execution_attempts
+      set status = 'abandoned', completed_at = ?
+      where status = 'active'
+    `).run(nowIso);
+  } catch {
+    // First start, missing schema, or locked DB — nothing to recover.
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // ignore close errors
+    }
+  }
+}
 
 function substituteEnv(text: string): string {
   return text.replace(/\$\{([A-Z0-9_]+)\}/g, (_match, name: string) => {
@@ -118,10 +169,16 @@ async function main(): Promise<void> {
     normalize_flagged: (flag) => flag?.flagStatus === "flagged",
   });
 
+  const coordinatorDbPath = join(rootDir, ".narada", "coordinator.db");
+
   installLitmusGraphShim({
     sandboxDir,
-    coordinatorDbPath: join(rootDir, ".narada", "coordinator.db"),
+    coordinatorDbPath,
   });
+
+  // Recover leases left behind by a SIGKILL crash so the restarted daemon
+  // does not treat the old principal session as still executing.
+  forceRecoverActiveLeases(coordinatorDbPath);
 
   console.log(`Using config: ${resolvedConfigPath}`);
 
