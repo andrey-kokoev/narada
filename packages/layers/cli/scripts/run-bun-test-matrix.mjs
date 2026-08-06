@@ -52,10 +52,10 @@ function run(label, args) {
 
 let exitCode = 0;
 if (nodeTestFiles.length > 0) {
-  exitCode = run('Bun node:test files (' + nodeTestFiles.length + ')', [
-    'test',
-    ...nodeTestFiles,
-  ]) || exitCode;
+  console.log('Bun node:test files (' + nodeTestFiles.length + '):');
+  for (const file of nodeTestFiles) {
+    exitCode = run('Bun node:test ' + file, ['test', file]) || exitCode;
+  }
 }
 if (vitestFiles.length > 0) {
   const vitestEntrypoint = join(root, 'node_modules', 'vitest', 'vitest.mjs');

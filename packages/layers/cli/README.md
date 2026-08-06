@@ -4,11 +4,12 @@ Command-line interface for the Narada deterministic state compiler and control p
 
 The CLI compiler/typecheck entries and launch-artifact check default to Bun.
 `test:bun` runs the complete source test matrix with Bun, dispatching
-Vitest files to Bun's Vitest process and `node:test` files to Bun's
-native test runner. Its Vitest phase uses one fork with file parallelism
-disabled because Bun's Windows worker pools are not stable here. The package's
-canonical `test` command retains its Node orchestration for compatibility while
-SQLite and real-filesystem paths are migrated.
+Vitest files to Bun's Vitest process and each `node:test` file to its own
+Bun-native test process. Per-file native processes avoid Bun's Windows
+cross-file `node:test` registration limitation. Its Vitest phase uses one fork
+with file parallelism disabled because Bun's Windows worker pools are not stable
+here. The package's canonical `test` command retains its Node orchestration for
+compatibility while SQLite and real-filesystem paths are migrated.
 
 > **How to read this package**: The CLI currently surfaces the Exchange/Graph mailbox vertical most prominently because it is the first mature vertical. Under the hood, all commands operate through the same kernel-agnostic `@narada-core/control-plane` library, which also supports timer, webhook, filesystem, and process automations as first-class peers.
 
