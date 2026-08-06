@@ -13,9 +13,13 @@ let childArgs = args;
 let shell = false;
 if (command === 'pnpm') {
   const packageManagerScript = process.env.npm_execpath?.trim();
-  if (packageManagerScript && /\.(?:cjs|mjs|js)$/i.test(packageManagerScript)) {
+  const bunPackageManager = packageManagerScript && /(?:^|[\\/])bun(?:\.exe)?$/i.test(packageManagerScript);
+  if (packageManagerScript && !bunPackageManager && /\.(?:cjs|mjs|js)$/i.test(packageManagerScript)) {
     childCommand = process.execPath;
     childArgs = [packageManagerScript, ...args];
+  } else if (bunPackageManager) {
+    childCommand = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
+    shell = process.platform === 'win32';
   } else {
     childCommand = packageManagerScript ?? (process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm');
     shell = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(childCommand);
