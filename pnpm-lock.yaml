@@ -1532,6 +1532,9 @@ importers:
       '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
+      '@narada-core/sqlite':
+        specifier: workspace:*
+        version: link:../../../narada-core/packages/sqlite
     devDependencies:
       '@types/node':
         specifier: ^20.10.0

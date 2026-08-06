@@ -24,7 +24,8 @@
   },
   "dependencies": {
     "@narada-core/agent-context-memory": "workspace:*",
-    "@narada-core/process-launch-posture": "workspace:*"
+    "@narada-core/process-launch-posture": "workspace:*",
+    "@narada-core/sqlite": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.10.0",

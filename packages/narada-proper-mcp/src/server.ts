@@ -6,7 +6,7 @@ import {
   buildHydrationRequestDescriptor,
   findDeniedSourceImports,
 } from '@narada-core/agent-context-memory';
-import { execFileGovernedSync } from '@narada-core/process-launch-posture';
+import Database from '@narada-core/sqlite';
 import { cwd as processCwd, env as processEnv, stdin as defaultStdin, stdout as defaultStdout } from 'node:process';
 import {
   inboxDoctorCommand,
@@ -2791,14 +2791,24 @@ const SITE_TASK_LIFECYCLE_SCHEMA = [
   ].join('\n'),
 ];
 
+function withSqlite<T>(dbPath: string, callback: (database: Database) => T): T {
+  const database = new Database(dbPath);
+  try {
+    database.exec('PRAGMA busy_timeout = 5000;');
+    return callback(database);
+  } finally {
+    database.close();
+  }
+}
+
 function sqlite(dbPath: string, sql: string): void {
-  execFileGovernedSync('sqlite3.exe', ['-cmd', '.timeout 5000', dbPath, sql], { stdio: 'pipe' });
+  withSqlite(dbPath, (database) => {
+    database.exec(sql);
+  });
 }
 
 function sqliteJson(dbPath: string, sql: string): unknown[] {
-  const output = execFileGovernedSync('sqlite3.exe', ['-cmd', '.timeout 5000', '-json', dbPath, sql], { encoding: 'utf8' });
-  const text = String(output);
-  return text.trim().length > 0 ? JSON.parse(text) as unknown[] : [];
+  return withSqlite(dbPath, (database) => database.prepare(sql).all() as unknown[]);
 }
 
 function sqlLiteral(value: string): string {
