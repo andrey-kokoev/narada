@@ -14,6 +14,35 @@ function safeSegment(value: string): string {
   return encodeURIComponent(value);
 }
 
+// Windows file observers can briefly hold a newly written directory while the
+// projector is publishing it. Preserve atomic publication, but absorb only
+// bounded, platform-specific transient rename failures. After the retry
+// budget is exhausted the original error remains fatal.
+const WINDOWS_RENAME_RETRY_DELAYS_MS = [25, 50, 100, 200, 400, 800] as const;
+
+function isTransientWindowsRenameError(error: unknown): boolean {
+  if (process.platform !== "win32" || !error || typeof error !== "object") {
+    return false;
+  }
+  const code = (error as NodeJS.ErrnoException).code;
+  return code === "EACCES" || code === "EBUSY" || code === "EPERM";
+}
+
+async function renameWithRetry(from: string, to: string): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rename(from, to);
+      return;
+    } catch (error) {
+      const delayMs = WINDOWS_RENAME_RETRY_DELAYS_MS[attempt];
+      if (!isTransientWindowsRenameError(error) || delayMs === undefined) {
+        throw error;
+      }
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 function bodyTextFromPayload(payload: NormalizedPayload): string | undefined {
   return payload.body?.text;
 }
@@ -282,10 +311,10 @@ export class FileMessageStore implements MessageStore {
 
       // Atomic replacement: move existing to prior, move staging to destination, remove prior
       if (destinationExists) {
-        await rename(destinationDir, priorDir);
+        await renameWithRetry(destinationDir, priorDir);
       }
 
-      await rename(stagingDir, destinationDir);
+      await renameWithRetry(stagingDir, destinationDir);
 
       if (destinationExists) {
         await rm(priorDir, { recursive: true, force: true });
@@ -329,7 +358,7 @@ export class FileMessageStore implements MessageStore {
       if (!destinationNowExists && destinationExisted) {
         const priorExists = await exists(priorDir).catch(() => false);
         if (priorExists) {
-          await rename(priorDir, destinationDir).catch(() => undefined);
+          await renameWithRetry(priorDir, destinationDir).catch(() => undefined);
         }
       }
 
