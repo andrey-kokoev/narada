@@ -1,10 +1,24 @@
 import { defineConfig } from 'vitest/config';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const sqliteFocused = process.env.NARADA_CLI_SQLITE_FOCUSED === '1';
+const isBun = Boolean(process.versions.bun);
+const packageRoot = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  resolve: {
+    alias: isBun
+      ? {
+          '@narada-core/sqlite': resolve(packageRoot, '../../../../narada-core/packages/sqlite/dist/index-bun.js'),
+        }
+      : {},
+    conditions: isBun
+      ? ['bun', 'import', 'default']
+      : ['node', 'import', 'default'],
+  },
   ssr: {
-    external: ['node:sqlite'],
+    external: isBun ? [] : ['node:sqlite'],
   },
   test: {
     globals: true,
@@ -33,6 +47,11 @@ export default defineConfig({
       ]
     },
     testTimeout: sqliteFocused ? 120000 : 30000,
-    hookTimeout: sqliteFocused ? 120000 : 30000
+    hookTimeout: sqliteFocused ? 120000 : 30000,
+    server: {
+      deps: {
+        inline: isBun ? ['@narada-core/sqlite', 'zod'] : [],
+      },
+    },
   },
 });
