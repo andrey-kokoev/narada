@@ -392,6 +392,10 @@ function createRouteStore(statePath: string, now: () => Date): RouteStore {
 }
 
 async function readRequestBody(req: IncomingMessage, maxBytes: number): Promise<Buffer | null> {
+  const contentLength = headerValue(req.headers['content-length']);
+  if (contentLength !== null && /^\d+$/u.test(contentLength.trim()) && Number(contentLength) > maxBytes) {
+    return null;
+  }
   const chunks: Buffer[] = [];
   let size = 0;
   for await (const chunk of req) {

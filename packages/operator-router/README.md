@@ -64,6 +64,8 @@ provides stable ingress and the low-level route inventory.
 Build and typecheck are Bun-first. Transport conformance remains explicitly
 Node-based because this package owns raw `node:http`/`node:net` request-body,
 path-canonicalization, WebSocket upgrade, frame-relay, and liveness semantics.
-Under Bun 1.3.14, 18 of 22 tests pass; the four failures are confined to
-those transport behaviors. `test:node` is the canonical conformance command
-until a Bun-native executable proof covers the same boundary.
+`test:bun` is an executable compatibility probe: the bounded HTTP path passes,
+but Bun's `node:http` normalizes encoded dot-segments before application code
+and its raw upgrade path does not currently preserve the byte/liveness behavior
+required here. `test:node` is the canonical conformance command until a
+Bun-native executable proof covers that same boundary.
