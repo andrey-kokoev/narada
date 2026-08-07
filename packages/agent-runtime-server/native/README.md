@@ -5,7 +5,7 @@ native process boundary and delegates the not-yet-ported runtime-server
 components to the existing Node entrypoint through the stable NARS arguments
 and environment contract.
 
-Build it from this directory:
+Build it from this package with `pnpm run build:native`, or from this directory:
 
 ```text
 cargo build --release

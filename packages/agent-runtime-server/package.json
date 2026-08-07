@@ -112,6 +112,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "build:native": "cargo build --manifest-path native/Cargo.toml --release",
+    "build:runtime": "pnpm run build && pnpm run build:native",
     "pretest": "pnpm run build",
     "test": "node --import tsx --test --test-concurrency=1 --test-timeout=360000 test/*.test.ts src/*.test.ts",
     "pretest:one-by-one": "pnpm run build",
