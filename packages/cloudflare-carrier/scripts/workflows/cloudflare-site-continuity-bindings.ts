@@ -180,7 +180,7 @@ async function admitNextSiteContinuityBinding(plan: any) {
       operator_next_reason: health.operator_next_reason ?? null,
       cloudflare_site_projection_state: siteRecord ? 'found' : 'missing',
       cloudflare_site_ref_from_projection: siteRecord?.site_ref ?? null,
-      command_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute',
+      command_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///<src-root>/narada --cloudflare-site-ref cloudflare://<site-ref> --execute',
       embeds_credentials: false,
     };
   }

@@ -23,7 +23,7 @@ test('parseSiteActionWorkflowLiveArgs supports refs and operator session auth', 
     '--url', 'https://carrier.example',
     '--site', 'site_alpha',
     '--expected-action', 'bind_cloudflare_product_next_site_locally',
-    '--local-site-ref', 'file:///D:/code/narada',
+    '--local-site-ref', 'file:///C:/workspace/narada',
     '--cloudflare-site-ref', 'cloudflare://site-alpha',
     '--operator-session-cookie', 'operator-session-cookie',
     '--execute-site-action',
@@ -31,7 +31,7 @@ test('parseSiteActionWorkflowLiveArgs supports refs and operator session auth', 
 
   assert.equal(parsed.siteId, 'site_alpha');
   assert.equal(parsed.expectedAction, 'bind_cloudflare_product_next_site_locally');
-  assert.equal(parsed.localSiteRef, 'file:///D:/code/narada');
+  assert.equal(parsed.localSiteRef, 'file:///C:/workspace/narada');
   assert.equal(parsed.cloudflareSiteRef, 'cloudflare://site-alpha');
   assert.deepEqual(parsed.auth, {
     kind: 'operator_session',
@@ -102,8 +102,8 @@ test('formatSiteActionWorkflowLiveText renders delegated continuity binding hand
     delegated_result: {
       target_site_id: 'site_beta',
       packet_id: 'site-continuity-packet-v1-site_beta',
-      output_path: 'D:/code/narada/.narada/site-continuity/packets/site_beta-packet.json',
-      materialize_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings -- --packet D:/code/narada/.narada/site-continuity/packets/site_beta-packet.json',
+      output_path: 'C:/workspace/narada/.narada/site-continuity/packets/site_beta-packet.json',
+      materialize_hint: 'pnpm --filter @narada-core/cloudflare-carrier continuity:bindings -- --packet C:/workspace/narada/.narada/site-continuity/packets/site_beta-packet.json',
     },
   });
 
@@ -404,7 +404,7 @@ test('runSiteActionWorkflowLive delegates next-site binding preparation', async 
     workerUrl: 'https://carrier.example',
     siteId: 'site_alpha',
     expectedAction: 'bind_cloudflare_product_next_site_locally',
-    localSiteRef: 'file:///D:/code/narada',
+    localSiteRef: 'file:///C:/workspace/narada',
     cloudflareSiteRef: 'cloudflare://site-alpha',
     auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
     executeAcknowledged: true,

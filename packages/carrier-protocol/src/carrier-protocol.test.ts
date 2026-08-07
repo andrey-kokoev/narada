@@ -1184,7 +1184,7 @@ const sessionBase = {
   carrier_session_id: 'carrier_test',
   agent_id: 'sonar.resident',
   site_id: 'narada-sonar',
-  site_root: 'D:/code/narada.sonar',
+  site_root: 'C:/workspace/narada.sonar',
 };
 const sessionEvent = createSessionEvent({
   event_kind: 'input_admitted_to_turn',

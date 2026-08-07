@@ -6,7 +6,7 @@
   "carrier_session_id": "carrier_fixture",
   "agent_id": "sonar.architect",
   "site_id": "narada-sonar",
-  "site_root": "D:/code/narada.sonar",
+  "site_root": "C:/workspace/narada.sonar",
   "payload": {
     "observer_id": "narada.observer",
     "rule_id": "hesitation-source-check",

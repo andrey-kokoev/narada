@@ -8,7 +8,7 @@ import {
 } from '../workflows/cloudflare-site-continuity-scheduled-task.ts';
 
 test('site continuity scheduled task injects env-backed operator context when argv does not provide it', () => {
-  const repoRoot = 'D:\\code\\narada';
+  const repoRoot = 'C:\\workspace\\narada';
   const args = buildSiteContinuityScheduledTaskSchedulerArgs({
     argv: ['--format', 'text'],
     env: {
@@ -43,7 +43,7 @@ test('site continuity scheduled task preserves explicit operator context over en
       CLOUDFLARE_CARRIER_URL: 'https://carrier.example',
       CLOUDFLARE_OPERATOR_SESSION_FILE: '.narada/auth/cloudflare-operator-session.json',
     },
-    repoRoot: 'D:\\code\\narada',
+    repoRoot: 'C:\\workspace\\narada',
   });
 
   assert.deepEqual(args, [

@@ -12,13 +12,13 @@ test('durability coherence parse accepts operator-session-file and repeated site
     '--url', 'https://worker.example',
     '--site', 'site_alpha',
     '--site', 'site_beta',
-    '--operator-session-file', 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+    '--operator-session-file', 'C:\\workspace\\narada\\.narada\\auth\\cloudflare-operator-session.json',
     '--format', 'text',
   ]);
 
   assert.equal(config.workerUrl, 'https://worker.example');
   assert.deepEqual(config.siteIds, ['site_alpha', 'site_beta']);
-  assert.equal(config.operatorSessionFile, 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json');
+  assert.equal(config.operatorSessionFile, 'C:\\workspace\\narada\\.narada\\auth\\cloudflare-operator-session.json');
   assert.equal(config.format, 'text');
 });
 
@@ -71,7 +71,7 @@ test('durability coherence preserves operator-session-file auth for child script
       siteIds: ['site_alpha'],
       auth: { kind: 'operator_session', value: 'session-fixture', source: 'operator-session-file' },
       tokenFile: null,
-      operatorSessionFile: 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json',
+      operatorSessionFile: 'C:\\workspace\\narada\\.narada\\auth\\cloudflare-operator-session.json',
     },
     {
       runNodeScript: async (args: any) => {

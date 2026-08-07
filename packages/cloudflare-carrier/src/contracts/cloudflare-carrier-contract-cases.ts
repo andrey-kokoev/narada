@@ -1592,12 +1592,12 @@ test('worker site.read composes site sessions tasks authority events and carrier
     target_embodiment_kind: 'cloudflare_carrier',
     binding: {
       ...body.site_continuity.exchange_packet.binding,
-      local_windows_site_ref: 'file:///D:/code/narada',
+      local_windows_site_ref: 'file:///C:/workspace/narada',
       cloudflare_site_ref: 'cloudflare://site_fixture',
       authority_map_ref: 'narada:site-authority-map:site_fixture',
       embodiments: body.site_continuity.exchange_packet.binding.embodiments.map((embodiment: any) => ({
         ...embodiment,
-        site_ref: embodiment.embodiment_kind === 'local_windows' ? 'file:///D:/code/narada' : 'cloudflare://site_fixture',
+        site_ref: embodiment.embodiment_kind === 'local_windows' ? 'file:///C:/workspace/narada' : 'cloudflare://site_fixture',
       })),
     },
   };
@@ -1650,7 +1650,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketOnlyBody.site_product_status.continuity_loop_state, 'no_loop_report_observed');
   assert.deepEqual(readAfterPacketOnlyBody.site_product_status.attention, ['operation_posture', 'continuity_loop_report', 'open_tasks']);
   assert.equal(readAfterPacketOnlyBody.site_product_status.next_action, 'focus_next_operation');
-  assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.local_windows_site_ref, 'file:///D:/code/narada');
+  assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.local_windows_site_ref, 'file:///C:/workspace/narada');
   assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare://site_fixture');
   assert.equal(readAfterPacketOnlyBody.local_cloud_continuity_bridge.authority_map_ref, 'narada:site-authority-map:site_fixture');
 
@@ -1722,7 +1722,7 @@ test('worker site.read composes site sessions tasks authority events and carrier
   assert.equal(readAfterPacketPutBody.site_continuity_status.authority_boundary.executable_cross_embodiment_mutation, 'refused_by_site_continuity_classifier');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.schema, 'narada.local_cloud_continuity_bridge.v1');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.state, 'bidirectional_packets_observed');
-  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_site_ref, 'file:///D:/code/narada');
+  assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.local_windows_site_ref, 'file:///C:/workspace/narada');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_site_ref, 'cloudflare://site_fixture');
   assert.equal(readAfterPacketPutBody.local_cloud_continuity_bridge.authority_map_ref, 'narada:site-authority-map:site_fixture');
   assert.ok(readAfterPacketPutBody.local_cloud_continuity_bridge.cloudflare_to_local_windows_packets >= 1);
@@ -6232,7 +6232,7 @@ test('worker records task lifecycle shadow reads from Windows without admitting 
     mutation_authority: 'windows_task_lifecycle_sqlite',
     shadow_read_posture: 'read_only_projection',
     cloudflare_write_admission: 'not_admitted',
-    source_db_path: 'D:/code/narada.sonar/.ai/task-lifecycle.db',
+    source_db_path: 'C:/workspace/narada.sonar/.ai/task-lifecycle.db',
     limit: 5,
     task_count: 2,
     status_counts: { claimed: 1, closed: 1 },
@@ -9452,7 +9452,7 @@ test('worker site.read and site.list surface operation attention from a sibling 
       admission_reason: 'site_continuity_packet_projection_only',
       packet: {
         binding: {
-          local_windows_site_ref: 'file:///D:/code/narada',
+          local_windows_site_ref: 'file:///C:/workspace/narada',
           cloudflare_site_ref: 'cloudflare://site_fixture',
           authority_map_ref: 'narada:site-authority-map:site_fixture',
           embodiments: [],
@@ -9468,7 +9468,7 @@ test('worker site.read and site.list surface operation attention from a sibling 
       admission_reason: 'site_continuity_packet_projection_only',
       packet: {
         binding: {
-          local_windows_site_ref: 'file:///D:/code/narada',
+          local_windows_site_ref: 'file:///C:/workspace/narada',
           cloudflare_site_ref: 'cloudflare://site_fixture',
           authority_map_ref: 'narada:site-authority-map:site_fixture',
           embodiments: [],

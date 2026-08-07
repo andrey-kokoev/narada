@@ -16,9 +16,9 @@ test('codexAuthHome uses explicit Narada auth home first', () => {
 
 test('codexAuthHome honors Codex HOME when Narada has not overridden it', () => {
   assert.equal(codexAuthHome({
-    processEnv: { CODEX_HOME: 'D:/codex-home', USERPROFILE: 'C:/Users/Andrey' },
+    processEnv: { CODEX_HOME: 'C:/workspacex-home', USERPROFILE: 'C:/Users/Andrey' },
     osHomedir: () => 'ignored',
-  }), 'D:/codex-home');
+  }), 'C:/workspacex-home');
 });
 
 test('codexAuthHome resolves user profile Codex home', () => {

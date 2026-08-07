@@ -45,7 +45,7 @@ function sampleIntent() {
   return createCloudflareNarsProjectionIntent({
     projection_id: 'proj_sonar_resident_1',
     site_id: 'narada.sonar',
-    site_root: 'D:/code/narada.sonar',
+    site_root: 'C:/workspace/narada.sonar',
     nars_session_id: 'carrier_123',
     operator_input_policy: ['conversation.send', 'conversation.enqueue'],
     created_by: 'operator',
@@ -432,7 +432,7 @@ describe('Cloudflare NARS projection schemas', () => {
   test('builds a two-phase registration plan without treating Cloudflare as local authority', () => {
     const plan = buildProjectionRegistrationPlan({
       site_id: 'narada.sonar',
-      site_root: 'D:/code/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
       nars_session_id: 'carrier_abc',
       dry_run: true,
     });
@@ -445,7 +445,7 @@ describe('Cloudflare NARS projection schemas', () => {
       'projection',
       'bridge-start',
       '--site-root',
-      'D:/code/narada.sonar',
+      'C:/workspace/narada.sonar',
       '--projection-id',
       plan.projection_id,
     ]);
@@ -1138,7 +1138,7 @@ describe('Cloudflare Worker routes', () => {
     const intent = createCloudflareNarsProjectionIntent({
       projection_id: 'proj_input_methods',
       site_id: 'narada.sonar',
-      site_root: 'D:/code/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
       nars_session_id: 'carrier_input_methods',
       operator_input_policy: ['conversation.send', 'conversation.enqueue', 'conversation.steer', 'conversation.interrupt', 'session.close'],
       created_by: 'operator',

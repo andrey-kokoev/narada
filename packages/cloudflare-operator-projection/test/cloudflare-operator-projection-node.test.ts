@@ -80,7 +80,7 @@ describe('node projection store and bridge', () => {
   test('bridge-run process launcher builds durable polling command without shell mediation', () => {
     const spawned = [];
     const result = startLocalProjectionBridgeRunProcess({
-      site_root: 'D:/code/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
       projection_id: 'proj_process',
       cloudflare_api_base_url: 'https://projection.example.test',
       poll_interval_ms: 2500,
@@ -92,15 +92,15 @@ describe('node projection store and bridge', () => {
     expect(result).toMatchObject({ status: 'launched', projection_id: 'proj_process', pid: 4242, detached: true });
     expect(spawned[0]).toMatchObject({
       command: process.execPath,
-      args: [expect.stringMatching(/layers[\\/]cli[\\/]dist[\\/]main\.js$/), 'nars', 'projection', 'bridge-run', '--site-root', 'D:/code/narada.sonar', '--projection-id', 'proj_process', '--cloudflare-api-base-url', 'https://projection.example.test', '--poll-interval-ms', '2500'],
-      options: { cwd: 'D:/code/narada.sonar', detached: true, stdio: 'ignore', windowsHide: true },
+      args: [expect.stringMatching(/layers[\\/]cli[\\/]dist[\\/]main\.js$/), 'nars', 'projection', 'bridge-run', '--site-root', 'C:/workspace/narada.sonar', '--projection-id', 'proj_process', '--cloudflare-api-base-url', 'https://projection.example.test', '--poll-interval-ms', '2500'],
+      options: { cwd: 'C:/workspace/narada.sonar', detached: true, stdio: 'ignore', windowsHide: true },
     });
   });
 
   test('bridge-run process launcher keeps explicit command override for packaged callers', () => {
     const spawned = [];
     startLocalProjectionBridgeRunProcess({
-      site_root: 'D:/code/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
       projection_id: 'proj_process',
       command: 'narada',
       spawn_impl: (command, args, options) => {
@@ -110,7 +110,7 @@ describe('node projection store and bridge', () => {
     });
     expect(spawned[0]).toMatchObject({
       command: 'narada',
-      args: ['nars', 'projection', 'bridge-run', '--site-root', 'D:/code/narada.sonar', '--projection-id', 'proj_process'],
+      args: ['nars', 'projection', 'bridge-run', '--site-root', 'C:/workspace/narada.sonar', '--projection-id', 'proj_process'],
     });
   });
 

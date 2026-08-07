@@ -423,7 +423,7 @@ test('runOperationNextWorkflowLive forwards continuation inputs and executes con
     expectedListRouteAction: 'focus_next_operation',
     expectedOperationId: 'operation_continuation',
     agentId: 'agent.operator',
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     continuationReason: 'operator_resuming_continuation',
     auth: { kind: 'operator_session', value: 'operator-session-cookie', source: 'operator-session-cookie' },
     executeAcknowledged: true,
@@ -478,7 +478,7 @@ test('runOperationNextWorkflowLive forwards continuation inputs and executes con
   assert.equal(result.delegated_route_action, 'resume_operation_continuation');
   assert.equal(invocations[2][0].split(/[\\\\/]/).pop(), 'cloudflare-carrier-operation-continuation-workflow-live.ts');
   assert.equal(invocations[2][invocations[2].indexOf('--agent-id') + 1], 'agent.operator');
-  assert.equal(invocations[2][invocations[2].indexOf('--site-root') + 1], 'D:\\code\\narada');
+  assert.equal(invocations[2][invocations[2].indexOf('--site-root') + 1], 'C:\\workspace\\narada');
   assert.equal(invocations[2][invocations[2].indexOf('--continuation-reason') + 1], 'operator_resuming_continuation');
 });
 

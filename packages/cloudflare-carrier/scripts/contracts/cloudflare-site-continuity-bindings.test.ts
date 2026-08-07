@@ -41,7 +41,7 @@ test('site continuity binding materializer writes registry from packet binding',
   const registryPath = path.join(tmp, 'bindings.json');
   const binding = createSiteContinuityBinding({
     site_id: 'site_bound',
-    local_windows_site_ref: 'file:///D:/code/narada',
+    local_windows_site_ref: 'file:///C:/workspace/narada',
     cloudflare_site_ref: 'cloudflare://narada-cloudflare-carrier',
     authority_map_ref: 'narada:site-authority-map:site_bound',
     generated_at: '2026-06-11T00:00:00.000Z',
@@ -66,7 +66,7 @@ test('site continuity binding materializer writes registry from packet binding',
 
 test('site continuity binding plan captures optional text/operator context', () => {
   const plan = buildBindingMaterializationPlan({
-    cwd: 'D:\\code\\narada',
+    cwd: 'C:\\workspace\\narada',
     argv: [
       '--action', 'prepare-next-binding-packet',
       '--format', 'text',
@@ -173,7 +173,7 @@ test('site continuity binding packet preparation writes packet consumable by mat
     argv: [
       '--action', 'prepare-next-binding-packet',
       '--health', healthPath,
-      '--local-site-ref', 'file:///D:/code/narada',
+      '--local-site-ref', 'file:///C:/workspace/narada',
       '--cloudflare-site-ref', 'cloudflare://site-beta',
       '--packet-output', packetPath,
       '--generated-at', '2026-06-11T03:15:00.000Z',
@@ -212,7 +212,7 @@ test('site continuity binding admission plans without execute and preserves exis
   const registryPath = path.join(tmp, 'bindings.json');
   const existingBinding = createSiteContinuityBinding({
     site_id: 'site_alpha',
-    local_windows_site_ref: 'file:///D:/code/narada-alpha',
+    local_windows_site_ref: 'file:///C:/workspace/narada-alpha',
     cloudflare_site_ref: 'cloudflare://site-alpha',
     generated_at: '2026-06-11T02:00:00.000Z',
   });
@@ -231,7 +231,7 @@ test('site continuity binding admission plans without execute and preserves exis
       '--action', 'admit-next-binding',
       '--health', healthPath,
       '--registry', registryPath,
-      '--local-site-ref', 'file:///D:/code/narada',
+      '--local-site-ref', 'file:///C:/workspace/narada',
       '--cloudflare-site-ref', 'cloudflare://site-beta',
       '--generated-at', '2026-06-11T04:00:00.000Z',
     ],
@@ -253,7 +253,7 @@ test('site continuity binding admission executes append/update into registry', a
   const registryPath = path.join(tmp, 'bindings.json');
   const existingBinding = createSiteContinuityBinding({
     site_id: 'site_alpha',
-    local_windows_site_ref: 'file:///D:/code/narada-alpha',
+    local_windows_site_ref: 'file:///C:/workspace/narada-alpha',
     cloudflare_site_ref: 'cloudflare://site-alpha',
     generated_at: '2026-06-11T02:00:00.000Z',
   });
@@ -272,7 +272,7 @@ test('site continuity binding admission executes append/update into registry', a
       '--action', 'admit-next-binding',
       '--health', healthPath,
       '--registry', registryPath,
-      '--local-site-ref', 'file:///D:/code/narada',
+      '--local-site-ref', 'file:///C:/workspace/narada',
       '--cloudflare-site-ref', 'cloudflare://site-beta',
       '--generated-at', '2026-06-11T04:05:00.000Z',
       '--execute',
@@ -288,7 +288,7 @@ test('site continuity binding admission executes append/update into registry', a
   assert.equal(registry.registry_ref, 'operator-registry');
   assert.deepEqual(registry.bindings.map((binding: any) => binding.site_id), ['site_alpha', 'site_beta']);
   const beta = registry.bindings.find((binding: any) => binding.site_id === 'site_beta');
-  assert.equal(beta.embodiments.find((embodiment: any) => embodiment.embodiment_kind === 'local_windows').site_ref, 'file:///D:/code/narada');
+  assert.equal(beta.embodiments.find((embodiment: any) => embodiment.embodiment_kind === 'local_windows').site_ref, 'file:///C:/workspace/narada');
   assert.equal(beta.embodiments.find((embodiment: any) => embodiment.embodiment_kind === 'cloudflare_carrier').site_ref, 'cloudflare://site-beta');
 });
 
@@ -302,7 +302,7 @@ test('site continuity binding admission refuses smeared ref schemes', async () =
     argv: [
       '--action', 'admit-next-binding',
       '--health', healthPath,
-      '--local-site-ref', 'D:/code/narada',
+      '--local-site-ref', 'C:/workspace/narada',
       '--cloudflare-site-ref', 'https://example.com/site-beta',
     ],
     env: {},
@@ -379,7 +379,7 @@ test('site continuity binding workflow lists operator-readable binding details',
   const registryPath = path.join(tmp, 'bindings.json');
   const binding = createSiteContinuityBinding({
     site_id: 'site_bound',
-    local_windows_site_ref: 'file:///D:/code/narada',
+    local_windows_site_ref: 'file:///C:/workspace/narada',
     cloudflare_site_ref: 'cloudflare://narada-cloudflare-carrier',
   });
   await writeFile(registryPath, `${JSON.stringify({

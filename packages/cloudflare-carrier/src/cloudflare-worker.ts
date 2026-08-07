@@ -13682,7 +13682,7 @@ function createWebhookDelayThresholdPolicy(params: any= {}, classification: any=
   return {
     schema: 'narada.sonar.webhook_delay_threshold_policy.v1',
     policy_id: params.threshold_policy_id ?? 'webhook_delay_critical_threshold_policy',
-    policy_source_ref: params.threshold_policy_source_ref ?? 'D:/code/narada.sonar/.narada/capabilities/operating-loop-policy.json',
+    policy_source_ref: params.threshold_policy_source_ref ?? '<src-root>/narada.sonar/.narada/capabilities/operating-loop-policy.json',
     policy_authority: 'cloudflare_carrier_site_recorded_policy',
     critical_minutes: Number.isFinite(criticalMinutes) ? criticalMinutes : DEFAULT_WEBHOOK_DELAY_CRITICAL_MINUTES,
     classification_reason: classification.reason ?? null,

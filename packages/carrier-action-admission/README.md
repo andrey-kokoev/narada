@@ -12,7 +12,7 @@ carriers.
 Canonical source:
 
 ```text
-D:\code\narada\packages\carrier-action-admission\src\
+<src-root>\narada\packages\carrier-action-admission\src\
 ```
 
 `@narada-core/agent-cli` and Agent Runtime Server use this package to keep model-selected MCP calls

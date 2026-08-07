@@ -187,12 +187,12 @@ For local live probes that must use the Microsoft operator principal rather than
 pnpm --filter @narada-core/cloudflare-carrier operator-session:capture -- --url https://<worker-host>
 ```
 
-By default this writes to `D:\code\narada\.narada\auth\cloudflare-operator-session.json`, listens on `localhost`, and verifies `/auth/session` resolves to `auth_type: microsoft_oidc`. The capture endpoint refuses non-loopback `return_to` URLs.
+By default this writes to `<src-root>\narada\.narada\auth\cloudflare-operator-session.json`, listens on `localhost`, and verifies `/auth/session` resolves to `auth_type: microsoft_oidc`. The capture endpoint refuses non-loopback `return_to` URLs.
 
 To verify whether the current operator session file is still live before running governed workflows:
 
 ```powershell
-pnpm --filter @narada-core/cloudflare-carrier operator-session:status:text -- --url https://<worker-host> --operator-session-file D:\code\narada\.narada\auth\cloudflare-operator-session.json
+pnpm --filter @narada-core/cloudflare-carrier operator-session:status:text -- --url https://<worker-host> --operator-session-file <src-root>\narada\.narada\auth\cloudflare-operator-session.json
 ```
 
 Microsoft identity is not Site authority. The Worker maps Microsoft claims into a Narada principal:
@@ -236,7 +236,7 @@ pnpm --filter @narada-core/cloudflare-carrier continuity:bindings
 pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:validate
 pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:list
 pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:prepare-next
-pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///D:/code/narada --cloudflare-site-ref cloudflare://<site-ref> --execute
+pnpm --filter @narada-core/cloudflare-carrier continuity:bindings:admit-next -- --local-site-ref file:///<src-root>/narada --cloudflare-site-ref cloudflare://<site-ref> --execute
 ```
 
 `continuity:bindings` reads packet `binding` evidence and writes `.narada/site-continuity/bindings.json`. It accepts `NARADA_SITE_CONTINUITY_PACKET` or repeated `--packet` for explicit packet files, and `NARADA_SITE_CONTINUITY_PACKET_DIR` or `--packet-dir` for multi-site packet directories containing `<file-safe-site-id>-packet.json` files.
