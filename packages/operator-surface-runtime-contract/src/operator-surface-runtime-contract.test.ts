@@ -441,4 +441,9 @@ test('runtime profiles expose coherent user choices over the implementation matr
 
   const nonNars = resolveRuntimeProfileSelection({ value: 'bun', applicable: false });
   assert.equal(nonNars.status, 'refused');
+  assert.equal(nonNars.reason_code, 'runtime_profile_surface_unsupported');
+
+  const legacyRefused = resolveRuntimeProfileSelection({ runtimeEngineValue: 'deno' });
+  assert.equal(legacyRefused.status, 'refused');
+  assert.equal(legacyRefused.reason_code, 'runtime_engine_unsupported');
 });
