@@ -1,5 +1,5 @@
 import { existsSync } from 'node:fs';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import test from 'node:test';
@@ -15,6 +15,8 @@ const nativeBinary = join(
   'release',
   process.platform === 'win32' ? 'narada-agent-runtime-server-rust.exe' : 'narada-agent-runtime-server-rust',
 );
+const bunCommand = process.env.NARADA_BUN_COMMAND ?? 'bun';
+const bunAvailable = spawnSync(bunCommand, ['--version'], { stdio: 'ignore', windowsHide: true }).status === 0;
 
 const requests = [
   { id: 'health-1', method: 'session.health' },
@@ -22,9 +24,11 @@ const requests = [
   { id: 'close-1', method: 'session.close' },
 ];
 
-async function runEngine(engine: 'node' | 'rust'): Promise<Record<string, unknown>[]> {
-  const command = engine === 'node' ? process.execPath : nativeBinary;
-  const args = engine === 'node' ? [target, '--protocol-conformance'] : ['--protocol-conformance'];
+type Engine = 'node' | 'bun' | 'rust';
+
+async function runEngine(engine: Engine): Promise<Record<string, unknown>[]> {
+  const command = engine === 'node' ? process.execPath : engine === 'bun' ? bunCommand : nativeBinary;
+  const args = engine === 'rust' ? ['--protocol-conformance'] : [target, '--protocol-conformance'];
   const child = spawn(command, args, {
     cwd: packageRoot,
     env: {
@@ -73,12 +77,18 @@ function normalize(records: Record<string, unknown>[]): Record<string, unknown>[
   return records.map(({ runtime_engine_kind: _runtimeEngineKind, ...record }) => record);
 }
 
-test('Rust preserves the Node lifecycle, control, health, and MCP protocol sequence', { skip: !existsSync(nativeBinary) }, async () => {
-  const [nodeRecords, rustRecords] = await Promise.all([
+test('Node, Bun, and Rust preserve the lifecycle, control, health, and MCP protocol sequence', {
+  skip: !existsSync(nativeBinary) || !bunAvailable,
+}, async () => {
+  const [nodeRecords, bunRecords, rustRecords] = await Promise.all([
     runEngine('node'),
+    runEngine('bun'),
     runEngine('rust'),
   ]);
   assert.deepEqual(normalize(rustRecords), normalize(nodeRecords));
+  assert.deepEqual(normalize(bunRecords), normalize(nodeRecords));
+  assert.deepEqual(nodeRecords.map((record) => record.runtime_engine_kind), ['node', 'node', 'node', 'node']);
+  assert.deepEqual(bunRecords.map((record) => record.runtime_engine_kind), ['bun', 'bun', 'bun', 'bun']);
   assert.deepEqual(rustRecords.map((record) => record.runtime_engine_kind), ['rust', 'rust', 'rust', 'rust']);
   assert.deepEqual(rustRecords.map((record) => record.event), [
     'session_started',
