@@ -17,7 +17,7 @@ function assertNoEffects(evidence: any) {
 
 test('live start evidence records fixture-only runtime and reachability posture', async () => {
   const evidence = await buildLiveStartEvidence({
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     carrierSessionId: 'carrier_session_fixture_start',
     agentId: 'narada.builder',
     now: NOW,
@@ -34,7 +34,7 @@ test('live start evidence records fixture-only runtime and reachability posture'
 test('live start evidence records provider-configured posture without provider call', async () => {
   let capabilityLookups = 0;
   const evidence = await buildLiveStartEvidence({
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     carrierSessionId: 'carrier_session_provider_start',
     agentId: 'narada.builder',
     registration: {

@@ -5,7 +5,7 @@ import { buildLocalProcessRuntimeHandle } from './runtime-handle.ts';
 
 test('launch command posture exposes bounded runtime session capability authority and evidence fields', () => {
   const posture = buildLaunchCommandPosture({
-    siteRoot: 'D:/code/narada',
+    siteRoot: 'C:/workspace/narada',
     carrierSessionId: 'carrier_session_launch_posture',
     agentId: 'narada.builder',
     runtimeHandle: buildLocalProcessRuntimeHandle({
@@ -36,7 +36,7 @@ test('launch command posture exposes bounded runtime session capability authorit
 
 test('launch command posture supports dry-run planning without live provider calls', () => {
   const posture = buildLaunchCommandPosture({
-    siteRoot: 'D:/code/narada',
+    siteRoot: 'C:/workspace/narada',
     carrierSessionId: 'carrier_session_dry_run',
     agentId: 'narada.builder',
     dryRun: true,
@@ -51,7 +51,7 @@ test('launch command posture supports dry-run planning without live provider cal
 
 test('launch command posture is redacted and non-authoritative', () => {
   const posture = buildLaunchCommandPosture({
-    siteRoot: 'D:/code/narada',
+    siteRoot: 'C:/workspace/narada',
     carrierSessionId: 'carrier_session_launch_redaction',
     agentId: 'narada.builder',
     registration: {

@@ -18,7 +18,7 @@ import {
 import { validateToDataPacket } from './to-data-packet.ts';
 import { runFixtureWorkLoop } from './work-loop.ts';
 
-const SITE_ROOT = 'D:\\code\\narada';
+const SITE_ROOT = 'C:\\workspace\\narada';
 const NOW = '2026-05-16T01:30:00.000Z';
 
 function tempSite() {
@@ -69,7 +69,7 @@ test('task to-data reader uses narada task read and records only bounded field p
   assert.equal(packet.read_family, 'task_packet');
   assert.equal(packet.capability_projection.capability_kind, 'task_read_packet');
   assert.equal(packet.capability_lookup_status, 'admitted');
-  assert.equal(packet.source_surface, 'narada task read 1322 --format json --cwd D:\\code\\narada');
+  assert.equal(packet.source_surface, 'narada task read 1322 --format json --cwd C:\\workspace\\narada');
   assert.equal(packet.attribution.cwd, SITE_ROOT);
   assert.equal(packet.attribution.requested.task_number, 1322);
   assert.equal(packet.freshness.captured_at, NOW);
@@ -432,7 +432,7 @@ test('bounded file excerpt reader refuses traversal oversized binary secret and 
     now: NOW,
   });
   const foreignDriveAbsolute = await readBoundedFileExcerptToDataPacket({
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     carrierSessionId: 'session-1325',
     agentId: 'narada.builder',
     filePath: 'C:\\Windows\\win.ini',

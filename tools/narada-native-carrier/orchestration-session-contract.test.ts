@@ -11,7 +11,7 @@ import {
 test('orchestration input contract exposes explicit wrapper inputs', () => {
   const input = buildOrchestrationInputFixture();
 
-  assert.equal(input.siteRoot, 'D:\\code\\narada');
+  assert.equal(input.siteRoot, 'C:\\workspace\\narada');
   assert.equal(input.carrierSessionId, 'carrier_session_fixture');
   assert.equal(input.agentId, 'narada.builder');
   assert.equal(input.taskNumber, 1327);

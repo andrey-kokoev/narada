@@ -15,7 +15,7 @@ export const ORCHESTRATION_NO_MUTATION_FLAGS = Object.freeze({
 export function buildOrchestrationInputFixture(overrides: any= {}) {
   return deepMerge({
     schema: ORCHESTRATION_INPUT_SCHEMA,
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     carrierSessionId: 'carrier_session_fixture',
     agentId: 'narada.builder',
     taskNumber: 1327,

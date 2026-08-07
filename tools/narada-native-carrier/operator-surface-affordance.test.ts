@@ -4,7 +4,7 @@ import { buildOperatorSurfaceAffordanceProjection } from './operator-surface-aff
 
 test('operator-surface projection exposes launch and doctor affordances with canonical targets', () => {
   const projection = buildOperatorSurfaceAffordanceProjection({
-    siteRoot: 'D:/code/narada',
+    siteRoot: 'C:/workspace/narada',
     carrierSessionId: 'carrier_session_operator_surface',
     agentId: 'narada.builder',
     focusAvailable: true,
@@ -26,7 +26,7 @@ test('operator-surface projection exposes launch and doctor affordances with can
 
 test('operator-surface projection separates convenience from authority', () => {
   const projection = buildOperatorSurfaceAffordanceProjection({
-    siteRoot: 'D:/code/narada',
+    siteRoot: 'C:/workspace/narada',
     carrierSessionId: 'carrier_session_operator_surface_no_authority',
     agentId: 'narada.builder',
   });
@@ -44,7 +44,7 @@ test('operator-surface projection separates convenience from authority', () => {
 
 test('launch and focus convenience do not imply capability grants', () => {
   const projection = buildOperatorSurfaceAffordanceProjection({
-    siteRoot: 'D:/code/narada',
+    siteRoot: 'C:/workspace/narada',
     carrierSessionId: 'carrier_session_operator_surface_focus',
     agentId: 'narada.builder',
     focusAvailable: true,

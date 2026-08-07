@@ -17,7 +17,7 @@ function packet(family: any, overrides: any= {}) {
 test('to-data orchestration stage invokes required readers before intelligence', async () => {
   const calls: any[] = [];
   const result = await runToDataOrchestrationStage({
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     carrierSessionId: 'session-1328',
     agentId: 'narada.builder',
     taskNumber: 1328,
@@ -52,7 +52,7 @@ test('to-data orchestration stage invokes required readers before intelligence',
 test('missing task packet returns refused_missing_data_packet before adapter or provider invocation', async () => {
   let intelligenceInvoked = false;
   const result = await runToDataOrchestrationStage({
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     carrierSessionId: 'session-1328',
     agentId: 'narada.builder',
     taskNumber: 1328,
@@ -80,7 +80,7 @@ test('missing task packet returns refused_missing_data_packet before adapter or 
 test('refused readiness packet returns bounded refusal without provider invocation', async () => {
   let providerInvoked = false;
   const result = await runToDataOrchestrationStage({
-    siteRoot: 'D:\\code\\narada',
+    siteRoot: 'C:\\workspace\\narada',
     carrierSessionId: 'session-1328',
     agentId: 'narada.builder',
     taskNumber: 1328,
