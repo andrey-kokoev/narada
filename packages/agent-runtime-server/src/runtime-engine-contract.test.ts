@@ -14,3 +14,15 @@ test('runtime context carries the selected process engine as session evidence', 
   assert.equal(context.runtimeEngineKind, 'rust');
   assert.equal(context.runtime_engine_kind, 'rust');
 });
+
+test('runtime context refuses an engine outside the admitted host contract', () => {
+  assert.throws(
+    () => createNarsRuntimeContext({
+      identity: 'narada.test',
+      session: 'runtime-engine-invalid',
+      siteRoot: 'C:/narada-test-site',
+      runtimeEngineKind: 'deno',
+    }),
+    /runtime_engine_unsupported:deno/,
+  );
+});

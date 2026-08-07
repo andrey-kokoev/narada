@@ -1,5 +1,6 @@
 import { buildAgentIdentityRefV2, normalizeAgentIdentityRefV2, resolveAgentIdentityRef } from '@narada-core/agent-identity';
 import { resolveNaradaSitePaths } from '@narada-core/site-paths';
+import { resolveRuntimeEngineSelection } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
 import {
   NARS_EXECUTION_POLICY_DEFAULT_MAX_ROUNDS,
   NARS_EXECUTION_POLICY_MAX_MAX_ROUNDS,
@@ -106,9 +107,14 @@ export function createNarsRuntimeContext({
       ?? intelligence?.kernelKind
       ?? process.env.NARADA_INTELLIGENCE_KERNEL,
   );
-  const runtimeEngineKind = optionalString(directRuntimeEngineKind)
-    ?? optionalString(process.env.NARADA_RUNTIME_ENGINE)
-    ?? 'node';
+  const runtimeEngineSelection: any = resolveRuntimeEngineSelection({
+    value: directRuntimeEngineKind,
+    environmentValue: process.env.NARADA_RUNTIME_ENGINE,
+  });
+  if (runtimeEngineSelection.status !== 'accepted') {
+    throw new TypeError(`runtime_engine_unsupported:${runtimeEngineSelection.candidate_runtime_engine}`);
+  }
+  const runtimeEngineKind = runtimeEngineSelection.runtime_engine_kind;
   const normalizedIntelligence: any = intelligence == null
     ? null
     : {

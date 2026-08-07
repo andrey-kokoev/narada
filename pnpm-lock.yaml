@@ -576,6 +576,9 @@ importers:
       '@narada-core/nars-session-core':
         specifier: workspace:*
         version: link:../nars-session-core
+      '@narada-core/operator-surface-runtime-contract':
+        specifier: workspace:*
+        version: link:../operator-surface-runtime-contract
       '@narada-core/process-launch-posture':
         specifier: workspace:*
         version: link:../process-launch-posture
