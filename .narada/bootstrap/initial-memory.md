@@ -7,12 +7,12 @@ Authority: not admitted as Narada proper truth until recorded in admission ledge
 
 Prepared by: narada-andrey.Kevin
 Date: 2026-05-09
-Audience: first `narada.architect` session in `D:\code\narada`
+Audience: first `narada.architect` session in `<src-root>\narada`
 Status: local handoff packet; not itself Narada proper authority
 
 ## Handoff Intent
 
-Give the first Narada proper architect session enough context to understand why `D:\code\narada` can look empty from Codex resume and why the absence of `D:\code\narada\.narada` matters.
+Give the first Narada proper architect session enough context to understand why `<src-root>\narada` can look empty from Codex resume and why the absence of `<src-root>\narada\.narada` matters.
 
 This packet helps `narada.architect` initialize orientation without copying narada-andrey runtime state or treating narada-andrey as Narada proper authority.
 
@@ -20,8 +20,8 @@ This packet helps `narada.architect` initialize orientation without copying nara
 
 Observed from narada-andrey on 2026-05-09:
 
-- `D:\code\narada` is expected to be the Narada proper repo/workspace.
-- There was no `D:\code\narada\.narada` Site substrate before this seed.
+- `<src-root>\narada` is expected to be the Narada proper repo/workspace.
+- There was no `<src-root>\narada\.narada` Site substrate before this seed.
 - Codex resume in that repo could show an empty session.
 - Prior WSL/Codex cache may contain context, but cache is not durable Narada proper Site authority.
 - Narada proper identities were registered in narada-andrey operator-surface metadata: `narada.architect`, `narada.builder`, and `narada.observer`.
@@ -39,8 +39,8 @@ That `.narada` directory belongs to Narada proper. It is not a mirror of `C:\Use
 Treat these as hard boundaries:
 
 - `C:\Users\Andrey\Narada` is the narada-andrey User Site.
-- `D:\code\narada` is admitted here only as temporary mutation authority for this seed after explicit operator selection.
-- `D:\code\narada\.narada` is the resulting Narada proper seed substrate.
+- `<src-root>\narada` is admitted here only as temporary mutation authority for this seed after explicit operator selection.
+- `<src-root>\narada\.narada` is the resulting Narada proper seed substrate.
 - `C:\ProgramData\Narada\sites\pc\desktop-sunroom-2` is PC-locus runtime state, not portable Narada proper authority.
 - WSL/Codex cache is memory residue, not Site authority.
 - narada-andrey task history, inbox envelopes, checkpoints, rosters, and SQLite DBs must not be copied into Narada proper as authority.
@@ -49,7 +49,7 @@ Treat these as hard boundaries:
 
 The first Narada proper architect should distinguish:
 
-1. Repo orientation: understand what `D:\code\narada` already contains.
+1. Repo orientation: understand what `<src-root>\narada` already contains.
 2. Site substrate decision: decide what minimal `.narada` shape Narada proper needs next.
 3. Admission: choose which narada-andrey lift packets or upstream candidates are proposals worth admitting.
 
@@ -78,7 +78,7 @@ The following are candidates for Narada proper review, not admitted upstream wor
 
 Do not:
 
-- Copy `C:\Users\Andrey\Narada\.ai` into `D:\code\narada`.
+- Copy `C:\Users\Andrey\Narada\.ai` into `<src-root>\narada`.
 - Copy narada-andrey task markdown as Narada proper task authority.
 - Copy SQLite DBs, inbox envelopes, checkpoints, or roster runtime state.
 - Treat `narada-andrey.Kevin` checkpoints as Narada proper memory.

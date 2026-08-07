@@ -1,7 +1,7 @@
 {
   "schema": "narada.site_lift.adoption_catalog.v0",
   "site_id": "narada-proper",
-  "target_site_root": "D:\\code\\narada",
+  "target_site_root": "C:\\Users\\andrey\\src\\narada",
   "carrier_id": "site_lift_local_adoption",
   "package_name": "@narada-core/site-lift",
   "source_state_imported": false,

@@ -16,7 +16,7 @@ This surface is admitted under the Narada proper `.narada` seed/intake authority
 
 This surface exists because no full Narada proper MCP/task lifecycle substrate is available yet. It is a minimal markdown authority surface for owning implementation admission decisions and closeout gates.
 
-It does not admit `D:\code\narada` for implementation writes by implication. It does not use raw WSL crossing. It does not import narada-andrey state.
+It does not admit `<src-root>\narada` for implementation writes by implication. It does not use raw WSL crossing. It does not import narada-andrey state.
 
 ## Owned Task
 
@@ -55,7 +55,7 @@ Acceptable future mutation mechanisms:
 Not acceptable by implication:
 
 - raw WSL crossing to `/home/andrey/src/narada`;
-- treating `D:\code\narada` as package implementation authority because it was admitted for seed/intake work;
+- treating `<src-root>\narada` as package implementation authority because it was admitted for seed/intake work;
 - copying narada-andrey runtime or PC-locus state.
 
 ## Verification Gates

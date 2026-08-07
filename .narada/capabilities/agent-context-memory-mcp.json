@@ -7,7 +7,7 @@
   "source_residual": ".narada/capabilities/missing-capabilities.md#adopted-descriptor-and-policy-postures-2026-05-13",
   "state": "admitted_live_first_slice",
   "exposure_class": "mutating_guarded",
-  "authority_basis": ".narada/site.json declares D:\\code\\narada as Narada proper authority root; @narada-core/agent-context-memory is a pure descriptor/contracts package.",
+  "authority_basis": ".narada/site.json declares C:\\Users\\andrey\\src\\narada as Narada proper authority root; @narada-core/agent-context-memory is a pure descriptor/contracts package.",
   "candidate_tools": [
     "agent_context_memory.plan_hydration",
     "agent_context_memory.read_checkpoint_summary",

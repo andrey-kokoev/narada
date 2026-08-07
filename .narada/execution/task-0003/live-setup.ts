@@ -13,7 +13,7 @@ import {
   type TaskDbSchemaStatement,
 } from '../../../packages/site-task-lifecycle/src/index.ts';
 
-const siteRoot = resolve('D:/code/narada');
+const siteRoot = resolve(import.meta.dirname, '..', '..', '..');
 const taskDbPath = join(siteRoot, '.ai', 'task-lifecycle.db');
 const adapterId = 'narada-proper.adapter.task-0003.sqlite3-cli.v0';
 const recordedAt = '2026-05-10T14:20:00.000-05:00';
@@ -98,7 +98,7 @@ await writeFile(mcpCapabilityPath, `${JSON.stringify({
   site_id: 'narada-proper',
   site_root: siteRoot,
   package: '@narada-core/site-task-lifecycle',
-  transport_command: 'node_modules/.bin/narada-mcp.cmd --site-root D:\\\\code\\\\narada --site-id narada-proper',
+  transport_command: `node_modules/.bin/narada-mcp.cmd --site-root "${siteRoot}" --site-id narada-proper`,
   tools_expected: [
     'site_task_lifecycle.plan_init',
     'site_task_lifecycle.build_admission_contract',

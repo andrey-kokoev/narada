@@ -6,8 +6,8 @@
     "source_config_is_external_evidence": true,
     "source_site": "narada-andrey",
     "source_config_ref": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus",
-    "narada_proper_truth_source": "Windows-native doctrine files under D:\\code\\thoughts\\content\\concepts, with explicit Narada repo-local fallback only where a thoughts source is absent.",
-    "primary_doctrine_root": "D:\\code\\thoughts\\content\\concepts",
+    "narada_proper_truth_source": "Windows-native doctrine files under C:\\Users\\andrey\\src\\thoughts\\content\\concepts, with explicit Narada repo-local fallback only where a thoughts source is absent.",
+    "primary_doctrine_root": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts",
     "runtime_state_imported": false,
     "wsl_unc_paths_admitted_as_local_authority": false
   },
@@ -16,49 +16,49 @@
       "doctrine_id": "ie",
       "name": "Inhabited Evolution",
       "status": "windows_thoughts_source",
-      "local_path": "D:\\code\\thoughts\\content\\concepts\\inhabited-evolution.md",
+      "local_path": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\inhabited-evolution.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/ie"
     },
     {
       "doctrine_id": "cipda",
       "name": "Constructively Invariant Progressive De-arbitrarization",
       "status": "windows_thoughts_source",
-      "local_path": "D:\\code\\thoughts\\content\\concepts\\constructively-invariant-progressive-de-arbitrarization.md",
+      "local_path": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\constructively-invariant-progressive-de-arbitrarization.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/cipda"
     },
     {
       "doctrine_id": "ccc",
       "name": "Constructive Coherence Coordinates",
       "status": "windows_thoughts_source",
-      "local_path": "D:\\code\\thoughts\\content\\concepts\\constructive-coherence-coordinates.md",
+      "local_path": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\constructive-coherence-coordinates.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/ccc"
     },
     {
       "doctrine_id": "ias",
       "name": "Intelligence-Authority Separation",
       "status": "windows_thoughts_source",
-      "local_path": "D:\\code\\thoughts\\content\\concepts\\intelligence-authority-separation.md",
+      "local_path": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\intelligence-authority-separation.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/ias"
     },
     {
       "doctrine_id": "pesa",
       "name": "Plural Embodiment Singular Authority",
       "status": "windows_thoughts_source",
-      "local_path": "D:\\code\\thoughts\\content\\concepts\\plural-embodiment-singular-authority.md",
+      "local_path": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\plural-embodiment-singular-authority.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/pesa"
     },
     {
       "doctrine_id": "cu",
       "name": "Constructive Universalization by Re-instantiation",
       "status": "windows_thoughts_source",
-      "local_path": "D:\\code\\thoughts\\content\\concepts\\constructive-universalization-by-re-instantiation.md",
+      "local_path": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\constructive-universalization-by-re-instantiation.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/cu"
     },
     {
       "doctrine_id": "cis",
       "name": "On Constructively Invariant Systems",
       "status": "windows_thoughts_source",
-      "local_path": "D:\\code\\thoughts\\content\\concepts\\on-constructively-invariant-systems.md",
+      "local_path": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\on-constructively-invariant-systems.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/cis"
     },
     {
@@ -67,7 +67,7 @@
       "status": "narada_repo_local_fallback_missing_in_thoughts",
       "local_path": "docs/concepts/governed-crossing.md",
       "source_evidence_path": "C:\\Users\\Andrey\\Narada\\config.json#/runtime_config/doctrinal_corpus/sources/governed_crossing",
-      "resolution_required": "D:\\code\\thoughts\\content\\concepts\\governed-crossing.md is absent; using Narada repo-local doctrine fallback until thoughts corpus carries this file."
+      "resolution_required": "C:\\Users\\andrey\\src\\thoughts\\content\\concepts\\governed-crossing.md is absent; using Narada repo-local doctrine fallback until thoughts corpus carries this file."
     }
   ],
   "not_imported": [

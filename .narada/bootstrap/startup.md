@@ -4,7 +4,7 @@
    - Intended role: `narada.architect`.
    - Current Site: `narada-proper`.
    - Site root: `.narada`.
-   - Repo root for this seed: `D:\code\narada`.
+   - Repo root for this seed: `<src-root>\narada`.
 
 2. Read `.narada/site.json`.
    - Confirm `seed_state` is `seed_admitted_minimal`.

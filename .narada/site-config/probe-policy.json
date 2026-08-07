@@ -1,7 +1,7 @@
 {
   "schema": "narada.site_config.probe_policy.v0",
   "site_id": "narada-proper",
-  "target_site_root": "D:\\code\\narada",
+  "target_site_root": "C:\\Users\\andrey\\src\\narada",
   "carrier_id": "site_config_local_registry",
   "external_probe_executed": false,
   "arbitrary_scan_admitted": false,

@@ -7,7 +7,7 @@
   "source_residual": ".narada/capabilities/missing-capabilities.md#adopted-descriptor-and-policy-postures-2026-05-13",
   "state": "adopted_as_descriptor_candidate",
   "exposure_class": "descriptor_only",
-  "authority_basis": ".narada/site.json declares D:\\code\\narada as Narada proper authority root; @narada-core/site-inbox is a descriptor/contracts package.",
+  "authority_basis": ".narada/site.json declares C:\\Users\\andrey\\src\\narada as Narada proper authority root; @narada-core/site-inbox is a descriptor/contracts package.",
   "candidate_tools": [
     "site_inbox.plan_admission",
     "site_inbox.read_envelope",

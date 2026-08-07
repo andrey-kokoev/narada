@@ -15,7 +15,7 @@
   "authority": {
     "operator_originating": true,
     "target_locus": "narada-proper",
-    "target_root": "D:/code/narada",
+    "target_root": "C:/Users/andrey/src/narada",
     "intake_status": "pending_narada_proper_review",
     "execution_authority": "requires_narada_proper_task_admission_before_code_mutation"
   }
@@ -69,7 +69,7 @@ The Operator wants the Narada proper MCP infrastructure blown up in the engineer
 
 ## Acceptance Criteria
 
-- Narada proper Codex launch no longer depends on `D:/code/narada/packages/layers/cli/dist/mcp-main.js` as the agent-facing MCP runtime path.
+- Narada proper Codex launch no longer depends on `C:/Users/andrey/src/narada/packages/layers/cli/dist/mcp-main.js` as the agent-facing MCP runtime path.
 - The new MCP command path is named in launch result evidence and Codex config.
 - The new MCP surface has focused tests for:
   - argument parsing;

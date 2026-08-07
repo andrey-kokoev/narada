@@ -1,7 +1,7 @@
 {
   "schema": "narada.site_inbox.publication_policy.v0",
   "site_id": "narada-proper",
-  "target_site_root": "D:\\code\\narada",
+  "target_site_root": "C:\\Users\\andrey\\src\\narada",
   "carrier_id": "site_inbox_local_substrate",
   "publication_executed": false,
   "source_inbox_history_imported": false,

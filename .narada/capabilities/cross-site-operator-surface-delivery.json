@@ -7,7 +7,7 @@
   "target_locus": {
     "site_id": "narada",
     "runtime_locus": "narada",
-    "authority_root": "D:\\code\\narada"
+    "authority_root": "C:\\Users\\andrey\\src\\narada"
   },
   "route": {
     "source_site": "narada-andrey",

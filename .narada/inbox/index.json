@@ -1,7 +1,7 @@
 {
   "schema": "narada.site_inbox.local_index.v0",
   "site_id": "narada-proper",
-  "target_site_root": "D:\\code\\narada",
+  "target_site_root": "C:\\Users\\andrey\\src\\narada",
   "carrier_id": "site_inbox_local_substrate",
   "package_name": "@narada-core/site-inbox",
   "source_state_imported": false,

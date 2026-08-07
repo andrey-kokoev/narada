@@ -1,17 +1,17 @@
 {
   "schema": "narada.task_0003.live_setup_result.v0",
   "status": "partial_live_execution_completed",
-  "siteRoot": "D:\\code\\narada",
+  "siteRoot": "<src-root>\\narada",
   "initResult": {
     "status": "initialized",
     "siteId": "narada-proper",
     "initializedBy": "narada-proper.architect",
     "initializedAt": "2026-05-10T14:20:00.000-05:00",
     "paths": {
-      "siteRoot": "D:\\code\\narada",
-      "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
-      "taskSpecDir": "D:\\code\\narada\\.ai\\do-not-open\\tasks",
-      "manifestPath": "D:\\code\\narada\\.ai\\site-task-lifecycle-admission.json"
+      "siteRoot": "<src-root>\\narada",
+      "taskDbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
+      "taskSpecDir": "<src-root>\\narada\\.ai\\do-not-open\\tasks",
+      "manifestPath": "<src-root>\\narada\\.ai\\site-task-lifecycle-admission.json"
     },
     "roster": [
       {
@@ -41,7 +41,7 @@
   "adapterId": "narada-proper.adapter.task-0003.sqlite3-cli.v0",
   "adapterExecutionRequest": {
     "schema": "narada.site_task_lifecycle.task_db_adapter_execution_request.v0",
-    "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+    "taskDbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
     "statements": [
       {
         "name": "task_records",
@@ -74,7 +74,7 @@
   },
   "initPlan": {
     "schema": "narada.site_task_lifecycle.task_db_init_plan.v0",
-    "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+    "taskDbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
     "statements": [
       {
         "name": "task_records",
@@ -145,7 +145,7 @@
   },
   "writeRequest": {
     "schema": "narada.site_task_lifecycle.task_admission_write_request.v0",
-    "taskDbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+    "taskDbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
     "candidate": {
       "schema": "narada.site_task_lifecycle.task_candidate.v0",
       "taskId": "narada-proper.task-0003",
@@ -283,7 +283,7 @@
       }
     ]
   },
-  "mcpCapabilityPath": "D:\\code\\narada\\.ai\\mcp\\site-task-lifecycle-mcp.json",
+  "mcpCapabilityPath": "<src-root>\\narada\\.ai\\mcp\\site-task-lifecycle-mcp.json",
   "packageOwnsSqliteDependency": false,
   "packageExecutedSqliteMutation": false,
   "sourceStateImported": false,

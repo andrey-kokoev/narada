@@ -1,7 +1,7 @@
 {
   "schema": "narada.site_local_storage_hydration_manifest.v0",
   "site_id": "narada-proper",
-  "target_site_root": "D:\\code\\narada",
+  "target_site_root": "C:\\Users\\andrey\\src\\narada",
   "carrier_id": "site_local_storage_hydration",
   "handoff_disposition": "none",
   "empty_histories_created": [

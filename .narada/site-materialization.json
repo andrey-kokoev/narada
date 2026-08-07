@@ -4,17 +4,17 @@
   "site_kind": "narada_proper",
   "authority_object": {
     "authority_locus": "narada_proper",
-    "site_root": "D:\\code\\narada",
-    "workspace_root": "D:\\code\\narada",
-    "governance_root": "D:\\code\\narada\\.narada",
-    "runtime_state_root": "D:\\code\\narada\\.ai"
+    "site_root": "C:\\Users\\andrey\\src\\narada",
+    "workspace_root": "C:\\Users\\andrey\\src\\narada",
+    "governance_root": "C:\\Users\\andrey\\src\\narada\\.narada",
+    "runtime_state_root": "C:\\Users\\andrey\\src\\narada\\.ai"
   },
   "realization": {
     "kind": "private_git_workspace_with_contained_governance_root",
-    "repository_root": "D:\\code\\narada",
+    "repository_root": "C:\\Users\\andrey\\src\\narada",
     "repository_remote": "https://github.com/narada-core/narada",
     "repository_visibility": "public",
-    "contained_governance_root": "D:\\code\\narada\\.narada"
+    "contained_governance_root": "C:\\Users\\andrey\\src\\narada\\.narada"
   },
   "operation_binding": {
     "launcher": "narada.ps1",
@@ -44,14 +44,14 @@
     },
     "authority_admission": {
       "kind": "operator_admitted_windows_native_narada_proper_authority",
-      "admitted_path": "D:\\code\\narada",
-      "canonical_authority_root": "D:\\code\\narada",
+      "admitted_path": "C:\\Users\\andrey\\src\\narada",
+      "canonical_authority_root": "C:\\Users\\andrey\\src\\narada",
       "previous_canonical_authority_root": "/home/andrey/src/narada",
       "admitted_scope": "Narada proper repo, package, task, inbox, admission, capability, and .narada Site substrate mutations performed through governed Narada proper tasks and evidence.",
-      "reason": "The operator directed migration to a fully Windows-native Narada proper setup. Subsequent admitted Narada proper tasks established and exercised D:\\code\\narada as the Windows-native mutation authority root.",
+      "reason": "The operator directed migration to a fully Windows-native Narada proper setup. Subsequent admitted Narada proper tasks established and exercised C:\\Users\\andrey\\src\\narada as the Windows-native mutation authority root.",
       "supersedes": {
         "kind": "operator_explicit_temporary_path_admission",
-        "admitted_path": "D:\\code\\narada",
+        "admitted_path": "C:\\Users\\andrey\\src\\narada",
         "canonical_authority_root": "/home/andrey/src/narada",
         "scope": "seed_only"
       },
@@ -90,7 +90,7 @@
     "substrate": "windows-native",
     "script_execution_surface": "mcp_only_by_default",
     "native_shell": "operator_admitted_only",
-    "launcher_cwd": "D:\\code\\narada"
+    "launcher_cwd": "C:\\Users\\andrey\\src\\narada"
   },
   "known_debts": [
     "Site marker modernization preserves existing seed admission history as lineage.",

@@ -8,8 +8,8 @@
   "task_id": "narada-proper.task-1228",
   "authority_basis": "narada_proper_self_adoption_task_1228",
   "target_locus": {
-    "repo_root": "D:\\code\\narada",
-    "site_root": "D:\\code\\narada\\.narada"
+    "repo_root": "C:\\Users\\andrey\\src\\narada",
+    "site_root": "C:\\Users\\andrey\\src\\narada\\.narada"
   },
   "adopted_target_local_carriers": [
     "site_local_db_init",

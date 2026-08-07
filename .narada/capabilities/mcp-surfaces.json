@@ -104,20 +104,20 @@
       "server_name": "narada-proper-agent-context",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:\\code\\mcp-surfaces\\packages\\agent-context-mcp\\dist\\src\\main.js",
+        "entrypoint": "C:\\Users\\andrey\\src\\mcp-surfaces\\packages\\agent-context-mcp\\dist\\src\\main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/shared/mcp-runtime-proxy/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/shared/mcp-runtime-proxy/dist/src/main.js",
             "--surface-id",
             "agent-context",
             "--entrypoint",
-            "D:\\code\\mcp-surfaces\\packages\\agent-context-mcp\\dist\\src\\main.js",
+            "C:\\Users\\andrey\\src\\mcp-surfaces\\packages\\agent-context-mcp\\dist\\src\\main.js",
             "--",
             "--site-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--site-id",
             "narada-proper"
           ]
@@ -203,13 +203,13 @@
       "server_name": "narada-proper-artifacts",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/artifacts-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/artifacts-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/artifacts-mcp/dist/src/main.js"
+            "C:/Users/andrey/src/mcp-surfaces/packages/artifacts-mcp/dist/src/main.js"
           ]
         }
       },
@@ -277,17 +277,17 @@
       "server_name": "narada-proper-delegated-task",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/delegated-task-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/delegated-task-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/delegated-task-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/delegated-task-mcp/dist/src/main.js",
             "--task-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--allowed-root",
-            "D:/code/narada"
+            "C:/Users/andrey/src/narada"
           ]
         }
       },
@@ -379,15 +379,15 @@
       "server_name": "narada-proper-git",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/git-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/git-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/git-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/git-mcp/dist/src/main.js",
             "--allowed-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--mode",
             "write"
           ]
@@ -502,15 +502,15 @@
       "server_name": "narada-proper-graph-mail",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/graph-mail-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/graph-mail-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/graph-mail-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/graph-mail-mcp/dist/src/main.js",
             "--site-root",
-            "D:/code/narada"
+            "C:/Users/andrey/src/narada"
           ]
         }
       },
@@ -638,15 +638,15 @@
       "server_name": "narada-proper-inbox",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/site-inbox-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/site-inbox-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/site-inbox-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/site-inbox-mcp/dist/src/main.js",
             "--site-root",
-            "D:/code/narada"
+            "C:/Users/andrey/src/narada"
           ]
         }
       },
@@ -729,21 +729,21 @@
       "server_name": "narada-proper-local-filesystem",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js",
             "--mode",
             "write",
             "--allowed-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--anchored-allowed-root",
             "user_home:.codex",
             "--output-root",
-            "D:/code/narada"
+            "C:/Users/andrey/src/narada"
           ]
         }
       },
@@ -844,15 +844,15 @@
       "server_name": "narada-proper-mailbox",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/mailbox-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/mailbox-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/mailbox-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/mailbox-mcp/dist/src/main.js",
             "--site-root",
-            "D:/code/narada"
+            "C:/Users/andrey/src/narada"
           ]
         }
       },
@@ -922,13 +922,13 @@
       "server_name": "narada-proper-scheduler",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/scheduler-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/scheduler-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/scheduler-mcp/dist/src/main.js"
+            "C:/Users/andrey/src/mcp-surfaces/packages/scheduler-mcp/dist/src/main.js"
           ]
         }
       },
@@ -1005,21 +1005,21 @@
       "server_name": "narada-proper-sop",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/sop-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/sop-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/sop-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/sop-mcp/dist/src/main.js",
             "--sop-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--server-name",
             "narada-proper-sop",
             "--sops-dir",
-            "D:/code/mcp-surfaces/packages/sop-mcp/sops",
+            "C:/Users/andrey/src/mcp-surfaces/packages/sop-mcp/sops",
             "--sops-dir",
-            "D:/code/mcp-surfaces/packages/mcp-registrar/sops"
+            "C:/Users/andrey/src/mcp-surfaces/packages/mcp-registrar/sops"
           ]
         }
       },
@@ -1130,13 +1130,13 @@
       "server_name": "narada-proper-speech",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/speech-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/speech-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/speech-mcp/dist/src/main.js"
+            "C:/Users/andrey/src/mcp-surfaces/packages/speech-mcp/dist/src/main.js"
           ]
         }
       },
@@ -1207,15 +1207,15 @@
       "server_name": "narada-proper-structured-command",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/structured-command-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/structured-command-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/structured-command-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/structured-command-mcp/dist/src/main.js",
             "--allowed-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--allow-command",
             "node",
             "--allow-command",
@@ -1286,15 +1286,15 @@
       "server_name": "narada-proper-surface-feedback",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/surface-feedback-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/surface-feedback-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/surface-feedback-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/surface-feedback-mcp/dist/src/main.js",
             "--feedback-root",
-            "D:/code/mcp-surfaces"
+            "C:/Users/andrey/src/mcp-surfaces"
           ]
         }
       },
@@ -1377,15 +1377,15 @@
       "server_name": "narada-proper-task-lifecycle",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/task-lifecycle-mcp/dist/src/task-lifecycle/task-mcp-server.js",
             "--site-root",
-            "D:/code/narada"
+            "C:/Users/andrey/src/narada"
           ]
         }
       },
@@ -1618,19 +1618,19 @@
       "server_name": "narada-proper-worker-delegation",
       "runtime_binding": {
         "runtime_kind": "node-stdio",
-        "entrypoint": "D:/code/mcp-surfaces/packages/worker-delegation-mcp/dist/src/main.js",
+        "entrypoint": "C:/Users/andrey/src/mcp-surfaces/packages/worker-delegation-mcp/dist/src/main.js",
         "owner_site_id": "narada-proper",
         "transport": {
           "type": "stdio",
           "command": "node",
           "args": [
-            "D:/code/mcp-surfaces/packages/worker-delegation-mcp/dist/src/main.js",
+            "C:/Users/andrey/src/mcp-surfaces/packages/worker-delegation-mcp/dist/src/main.js",
             "--site-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--allowed-root",
-            "D:/code/narada",
+            "C:/Users/andrey/src/narada",
             "--run-root",
-            "D:/code/narada/.narada/runtime/worker-delegation"
+            "C:/Users/andrey/src/narada/.narada/runtime/worker-delegation"
           ]
         }
       },
