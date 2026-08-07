@@ -27,6 +27,7 @@ export async function runWorkspaceLaunchSmoke(
       agent: plan.agent,
       carrier: plan.launch_operator_surface,
       runtime: plan.launch_runtime_host,
+      runtimeEngine: plan.runtime_engine_kind ?? undefined,
       authority: plan.authority ?? undefined,
       mcpScope: plan.mcp_scope,
       dryRun: true,

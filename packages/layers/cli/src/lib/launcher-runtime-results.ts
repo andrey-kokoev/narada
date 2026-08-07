@@ -431,6 +431,7 @@ function readLaunchResult(path: string): LaunchResultSummary {
       carrier_kind: stringValue(record.carrier_kind),
       runtime: stringValue(record.runtime),
       runtime_substrate_kind: stringValue(record.runtime_substrate_kind),
+      runtime_engine_kind: stringValue(record.runtime_engine_kind ?? record.nars_launch?.runtime_engine_kind),
       site_root: stringValue(record.required_environment?.NARADA_SITE_ROOT),
       target_site_root: stringValue(record.target_site_root),
       session_site_root: stringValue(record.session_site_root),

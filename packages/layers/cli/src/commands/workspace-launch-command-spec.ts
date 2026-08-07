@@ -12,6 +12,7 @@ export interface WorkspaceLaunchRuntimeCommandOptions {
   agent: string;
   targetSiteId: string;
   runtime: string;
+  runtimeEngine?: string | null;
   workspaceRoot?: string | null;
   authority: string;
   mcpScope: string;
@@ -45,6 +46,7 @@ export function workspaceLaunchRuntimeCommandSpec(
     '--agent', options.agent,
     '--target-site-id', options.targetSiteId,
     '--runtime', options.runtime,
+    ...(options.runtimeEngine ? ['--runtime-engine', options.runtimeEngine] : []),
     ...(mode === 'execute' ? ['--exec', '--format', 'human'] : ['--dry-run', '--format', 'json']),
   ];
   if (options.workspaceRoot) args.push('--workspace-root', options.workspaceRoot);

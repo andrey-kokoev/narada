@@ -28,6 +28,7 @@ const carrierRuntimeContractNames = [
   'operator-surface-launch-matrix.json',
   'boolean-values.json',
   'runtime-substrate-kinds.json',
+  'runtime-engines.json',
   'mcp-runtime.json',
   'terminal-runtime.json',
 ];

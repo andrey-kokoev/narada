@@ -7,7 +7,11 @@ import {
   runAgentStartCommand,
   writeOperatorProjectionLaunchBinding,
 } from '../lib/launcher-runtime.js';
-import { defaultRuntimeForOperatorSurface } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import {
+  defaultRuntimeForOperatorSurface,
+  NARADA_AGENT_RUNTIME_SERVER_KIND,
+} from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { resolveRuntimeEngineSelection } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
 import { requireAgent, requireSiteRoot } from './operator-surface-runtime-support.js';
 import { resolveWorkspaceLaunchSelection } from './workspace-launch-resolution.js';
 import { normalizeExplicitWorkspaceLaunchMcpScope } from './workspace-launch-contracts.js';
@@ -29,6 +33,7 @@ export interface OperatorSurfaceRuntimeStartOptions {
   agent?: string;
   carrier?: string;
   runtime?: string;
+  runtimeEngine?: string;
   authority?: string;
   mcpScope?: string;
   timeout?: number;
@@ -84,6 +89,38 @@ export async function operatorSurfaceRuntimeStartCommand(
     'command_default',
   );
   const runtime = runtimeSelection.value;
+  const runtimeEngineSelection = resolveRuntimeEngineSelection({
+    value: options.runtimeEngine ?? null,
+    environmentValue: process.env.NARADA_RUNTIME_ENGINE ?? null,
+    applicable: runtime === NARADA_AGENT_RUNTIME_SERVER_KIND,
+  });
+  if (runtimeEngineSelection.status !== 'accepted') {
+    const refusal = {
+      schema: 'narada.operator_surface.runtime_start_result.v1',
+      status: 'refused',
+      mutation_performed: false,
+      site_root: siteRoot,
+      workspace_root: options.workspaceRoot ?? null,
+      agent: options.agent ?? null,
+      operator_surface_kind: carrier,
+      runtime_host_kind: runtime,
+      runtime_engine_kind: null,
+      runtime_engine_selection: runtimeEngineSelection,
+      operator_surface: carrier,
+      carrier,
+      runtime,
+      reason_code: runtimeEngineSelection.reason_code,
+      reason: runtimeEngineSelection.reason,
+      required_next_step: runtimeEngineSelection.required_next_step,
+    };
+    return {
+      exitCode: ExitCode.INVALID_CONFIG,
+      result: formattedResult(refusal, String(runtimeEngineSelection.reason ?? 'Runtime engine selection was refused.'), options.format ?? 'auto'),
+    };
+  }
+  const runtimeEngineKind = runtime === NARADA_AGENT_RUNTIME_SERVER_KIND
+    ? String(runtimeEngineSelection.runtime_engine_kind)
+    : null;
   const mcpScope = normalizeExplicitWorkspaceLaunchMcpScope(options.mcpScope ?? 'none', 'operator-surface runtime start safe default');
   const agent = requireAgent(options);
   const existing = getOperatorSurfaceRuntimeStatus({
@@ -100,6 +137,7 @@ export async function operatorSurfaceRuntimeStartCommand(
       agent,
       operatorSurfaceKind: carrier,
       runtimeHostKind: runtime,
+      runtimeEngineKind,
       authority: options.authority ?? null,
       intelligenceSelectionAuthority,
       narsSessionId: existing.latest.nars_session_id ?? existing.latest.runtime_session_id ?? existing.latest.carrier_session_id ?? null,
@@ -115,11 +153,13 @@ export async function operatorSurfaceRuntimeStartCommand(
       agent,
       operator_surface_kind: carrier,
       runtime_host_kind: runtime,
+      runtime_engine_kind: runtimeEngineKind,
       operator_surface: carrier,
       carrier,
       runtime,
       operator_surface_status: existing,
       carrier_status: existing,
+      runtime_engine_selection: runtimeEngineSelection,
       selection_resolution: buildDirectSelectionResolution(carrierSelection, runtimeSelection, intelligenceSelectionAuthority),
     };
     return {
@@ -134,6 +174,7 @@ export async function operatorSurfaceRuntimeStartCommand(
     agent,
     carrier,
     runtime,
+    runtimeEngine: runtimeEngineKind ?? undefined,
     authority: options.authority,
     intelligenceSelectionAuthority,
     mcpScope,
@@ -166,6 +207,8 @@ export async function operatorSurfaceRuntimeStartCommand(
     operator_surface: carrier,
     carrier,
     runtime,
+    runtime_engine_kind: runtimeEngineKind,
+    runtime_engine_selection: runtimeEngineSelection,
     authority: options.authority ?? null,
     intelligence_selection_authority: intelligenceSelectionAuthority,
     mcp_scope: mcpScope,

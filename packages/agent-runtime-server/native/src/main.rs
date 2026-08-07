@@ -23,6 +23,10 @@ fn delegate_to_node() -> Result<i32, String> {
     command
         .arg(script)
         .args(env::args().skip(1))
+        // The selected executable is itself the runtime-engine boundary. Keep
+        // the delegated runtime context truthful even when the binary is
+        // launched directly rather than through agent-start.
+        .env("NARADA_RUNTIME_ENGINE", "rust")
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());

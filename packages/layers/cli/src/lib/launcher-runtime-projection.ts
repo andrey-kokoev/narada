@@ -20,6 +20,7 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
   agent: string;
   operatorSurfaceKind?: string;
   runtimeHostKind: string;
+  runtimeEngineKind?: string | null;
   authority?: string | null;
   intelligenceSelectionAuthority?: IntelligenceSelectionAuthority | null;
   agentStartResultFile?: string;
@@ -50,6 +51,7 @@ export function writeOperatorProjectionLaunchBinding(path: string | undefined, a
     agent: args.agent,
     operator_surface_kind: args.operatorSurfaceKind,
     runtime_host_kind: args.runtimeHostKind,
+    runtime_engine_kind: args.runtimeEngineKind ?? null,
     authority: args.authority ?? null,
     intelligence_selection_authority: args.intelligenceSelectionAuthority ?? null,
     agent_start_result_file: args.agentStartResultFile,

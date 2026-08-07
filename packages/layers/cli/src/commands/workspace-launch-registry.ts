@@ -25,6 +25,7 @@ export interface RawLaunchRegistry {
   OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
+  RuntimeEngine?: string;
   Authority?: string;
   McpScope?: string;
   Agents?: RawAgentRecord[] | RawAgentRecord;
@@ -43,6 +44,7 @@ export interface RawAgentRecord {
   OperatorSurface?: string;
   Carrier?: string;
   Runtime?: string;
+  RuntimeEngine?: string;
   Authority?: string;
   McpScope?: string;
   EnableNativeShell?: boolean;
@@ -196,6 +198,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
     throw new Error(`launch_registry_runtime_missing: ${agentId} in ${configPath}; set Runtime explicitly`);
   }
   const authority = nonEmpty(agent.Authority) ?? nonEmpty(registry.Authority) ?? null;
+  const runtimeEngine = nonEmpty(agent.RuntimeEngine) ?? nonEmpty(registry.RuntimeEngine) ?? null;
   const role = nonEmpty(agent.Role) ?? (agentId.split('.').at(-1) ?? agentId).replace(/\d+$/, '');
   const resolvedAgentIdentityRef = resolveAgentIdentityRef(agentId, { site_id: explicitSite, role });
   const agentIdentityRef = resolvedAgentIdentityRef.status === 'resolved' ? resolvedAgentIdentityRef.value : buildAgentIdentityRefV2({
@@ -219,6 +222,7 @@ function normalizeAgentRecord(registry: RawLaunchRegistry, agent: RawAgentRecord
     launcher_path: launcherPath,
     operator_surface: operatorSurface,
     runtime,
+    runtime_engine: runtimeEngine,
     authority,
     enable_native_shell: agent.EnableNativeShell === true,
     mcp_scope: nonEmpty(agent.McpScope) ?? nonEmpty(registry.McpScope) ?? null,

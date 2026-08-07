@@ -34,6 +34,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
     .option('--agent <id>', 'Agent identity')
     .option('--operator-surface <surface>', 'Operator Surface to launch')
     .option('--runtime <runtime>', 'Runtime substrate for the selected Operator Surface')
+    .option('--runtime-engine <node|bun|rust>', 'NARS process runtime engine')
     .option('--authority <mode>', 'Runtime mutation authority posture: auto|read|write', 'auto')
     .option('--mcp-scope <scope>', 'MCP injection scope: all|host|user-site|local-site|none', 'all')
     .option('--dry-run', 'Plan the runtime launch without writing launch artifacts or spawning', false)
@@ -58,6 +59,7 @@ export function registerOperatorSurfaceCommands(program: Command): void {
         agent: opts.agent as string | undefined,
         carrier: (opts.operatorSurface as string | undefined) ?? surface,
         runtime: opts.runtime as string | undefined,
+        runtimeEngine: opts.runtimeEngine as string | undefined,
         authority: opts.authority as string | undefined,
         mcpScope: opts.mcpScope as string | undefined,
         dryRun: opts.dryRun as boolean | undefined,

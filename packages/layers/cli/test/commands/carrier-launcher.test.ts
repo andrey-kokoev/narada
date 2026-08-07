@@ -151,6 +151,7 @@ describe('carrier launcher CLI commands', () => {
     const runtime = operatorSurface?.commands.find((command) => command.name() === 'runtime');
     const start = runtime?.commands.find((command) => command.name() === 'start');
     expect(start?.helpInformation()).toContain('--target-site-id <id>');
+    expect(start?.helpInformation()).toContain('--runtime-engine <node|bun|rust>');
   });
 
   it('reads latest carrier launch result and control path evidence', async () => {
@@ -429,6 +430,29 @@ describe('carrier launcher CLI commands', () => {
     expect(captured.status).toBe('not_available');
     expect(captured.command).toContain('--json-output-file');
     expect(captured.command).toContain('--json');
+  });
+
+  it('passes an explicit NARS runtime engine through the canonical start boundary', async () => {
+    const siteRoot = await tempSite();
+    const start = await carrierStartCommand({
+      siteRoot,
+      targetSiteId: 'narada-proper',
+      workspaceRoot: naradaProperRoot,
+      agent: 'narada.architect',
+      carrier: 'agent-cli',
+      runtimeEngine: 'bun',
+      mcpScope: 'none',
+      dryRun: true,
+      format: 'json',
+    }, createMockContext());
+
+    expect(start.exitCode).toBe(ExitCode.SUCCESS);
+    const result = start.result as {
+      runtime_engine_kind: string;
+      agent_start: { command: string[] };
+    };
+    expect(result.runtime_engine_kind).toBe('bun');
+    expect(result.agent_start.command).toEqual(expect.arrayContaining(['--runtime-engine', 'bun']));
   });
 
   it('treats materialized NARS handoff as ready even when wrapper execution reports failure', () => {

@@ -17,6 +17,7 @@ export interface LaunchResultSummary {
   carrier_kind?: string;
   runtime?: string;
   runtime_substrate_kind?: string;
+  runtime_engine_kind?: string;
   site_root?: string;
   target_site_root?: string;
   session_site_root?: string;
@@ -51,6 +52,7 @@ export interface AgentStartOptions {
   agent: string;
   carrier?: string;
   runtime: string;
+  runtimeEngine?: string;
   authority?: string;
   intelligenceSelectionAuthority?: IntelligenceSelectionAuthority;
   mcpScope?: string;
@@ -75,6 +77,7 @@ export interface OperatorProjectionLaunchBinding {
   agent: string;
   operator_surface_kind?: string;
   runtime_host_kind: string;
+  runtime_engine_kind?: string | null;
   authority?: string | null;
   intelligence_selection_authority?: IntelligenceSelectionAuthority | null;
   agent_start_result_file?: string;

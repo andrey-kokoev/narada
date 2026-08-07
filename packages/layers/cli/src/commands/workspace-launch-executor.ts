@@ -511,6 +511,7 @@ async function runWorkspaceLaunchCatalogPreflight(selectedAgents: WorkspaceLaunc
       agent: agent.agent,
       carrier: agent.launch_operator_surface,
       runtime: agent.launch_runtime_host,
+      runtimeEngine: agent.runtime_engine_kind ?? undefined,
       authority: agent.authority ?? undefined,
       mcpScope: agent.mcp_scope,
       preflightOnly: true,

@@ -90,7 +90,9 @@ entrypoint through Bun. `rust` currently owns the native process boundary and
 delegates unported intelligence/provider/runtime components to the Node
 entrypoint through the same arguments, environment, and stdio contract. The
 engine choice must not change session authority, lifecycle, health/events, MCP,
-or provider-selection semantics.
+or provider-selection semantics. The canonical `launcher workspace-plan`,
+`launcher workspace-launch`, and `operator-surface runtime start` commands
+carry this choice; registry records may persist it as `RuntimeEngine`.
 
 Load-bearing boundaries:
 

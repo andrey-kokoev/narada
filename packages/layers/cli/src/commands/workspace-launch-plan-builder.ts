@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada-core/launch-process-ownership';
 import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { resolveRuntimeEngineSelection } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
 import { createIntelligenceSelectionAuthority } from '@narada-core/invokable-intelligence-contract';
 import type {
   WorkspaceLaunchAgentPlan,
@@ -130,12 +131,27 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
   const operatorSurfaceKind = runtimeSelection.operator_surface_kind;
   const launchRuntime = runtimeSelection.runtime_substrate_kind;
   const runtimeHostKind = runtimeSelection.runtime_host_kind;
+  const isNarsRuntimeHost = runtimeHostKind === NARADA_AGENT_RUNTIME_SERVER_KIND;
+  const runtimeEngineSelection = resolveRuntimeEngineSelection({
+    value: options.runtimeEngine ?? record.runtime_engine ?? null,
+    environmentValue: process.env.NARADA_RUNTIME_ENGINE ?? null,
+    applicable: isNarsRuntimeHost,
+  });
+  if (runtimeEngineSelection.status !== 'accepted') {
+    throw new WorkspaceLaunchContractError(
+      String(runtimeEngineSelection.reason_code ?? 'runtime_engine_refused'),
+      String(runtimeEngineSelection.reason ?? 'Runtime engine selection was refused.'),
+      String(runtimeEngineSelection.required_next_step ?? 'Select an admitted runtime engine.'),
+    );
+  }
+  const runtimeEngineKind = isNarsRuntimeHost
+    ? String(runtimeEngineSelection.runtime_engine_kind)
+    : null;
   assertOperatorSurfaceRuntimeCoherence(launchOperatorSurfaces, launchRuntime, runtimeHostKind, context);
   const onboarding = options.onboarding === true;
   const enableNativeShell = options.enableNativeShell === true || record.enable_native_shell;
   const mcpScope = normalizeMcpScope(options.mcpScope ?? record.mcp_scope ?? undefined);
   const authority = normalizeRuntimeAuthority(options.authority ?? record.authority ?? undefined);
-  const isNarsRuntimeHost = runtimeHostKind === NARADA_AGENT_RUNTIME_SERVER_KIND;
   const hasAgentTuiOperatorSurface = launchOperatorSurfaces.includes('agent-tui');
   const hasAgentWebUiOperatorSurface = launchOperatorSurfaces.includes('agent-web-ui');
   const hasAgentPiTuiOperatorSurface = launchOperatorSurfaces.includes('agent-pi-tui');
@@ -187,6 +203,7 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     agent: record.agent,
     targetSiteId: record.site,
     runtime: launchRuntime,
+    runtimeEngine: runtimeEngineKind,
     workspaceRoot: runtimeWorkspaceRoot,
     authority,
     mcpScope,
@@ -270,6 +287,8 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     launch_runtime_host: runtimeHostKind,
     launch_runtime_hosts: [runtimeHostKind],
     launch_runtime: launchRuntime,
+    runtime_engine_kind: runtimeEngineKind,
+    runtime_engine_selection: runtimeEngineSelection,
     onboarding_mode: onboarding ? 'user-site' : null,
     launch_session_id: launchSessionId,
     process_ownership: processOwnership,

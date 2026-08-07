@@ -16,6 +16,7 @@ export interface WorkspaceLaunchPlanOptions {
   operatorSurface?: string;
   onboarding?: boolean;
   runtime?: string;
+  runtimeEngine?: string;
   authority?: string;
   mcpScope?: string;
   cloudflareApiBaseUrl?: string;
@@ -59,6 +60,7 @@ export interface WorkspaceLaunchRuntimeStartResult {
   mode: string;
   operator_surface_kind: string;
   runtime_host_kind: string;
+  runtime_engine_kind?: string | null;
   target_site_id: string | null;
 }
 
@@ -81,6 +83,7 @@ export interface WorkspaceLaunchRecord {
   launcher_path: string;
   operator_surface: string;
   runtime: string;
+  runtime_engine?: string | null;
   authority: string | null;
   enable_native_shell: boolean;
   mcp_scope: string | null;
@@ -123,6 +126,8 @@ export interface WorkspaceLaunchAgentPlan extends WorkspaceLaunchRecord {
   launch_runtime_host: string;
   launch_runtime_hosts: string[];
   launch_runtime: string;
+  runtime_engine_kind: string | null;
+  runtime_engine_selection: Record<string, unknown>;
   onboarding_mode: 'user-site' | null;
   launch_session_id: string | null;
   process_ownership: LaunchProcessOwnership | null;
