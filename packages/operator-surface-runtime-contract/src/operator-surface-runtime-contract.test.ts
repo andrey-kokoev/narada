@@ -359,13 +359,13 @@ test('runtime engine contract keeps process substrate separate from carrier subs
   const contract = loadRuntimeEnginesContract();
   assert.equal(contract.schema, 'narada.runtime_engine.v1');
   assert.deepEqual(contract.admitted_runtime_engines, ['node', 'bun', 'rust']);
-  assert.equal(contract.default_runtime_engine, 'node');
+  assert.equal(contract.default_runtime_engine, 'rust');
   assert.deepEqual([...ADMITTED_RUNTIME_ENGINES], contract.admitted_runtime_engines);
-  assert.equal(DEFAULT_RUNTIME_ENGINE, 'node');
+  assert.equal(DEFAULT_RUNTIME_ENGINE, 'rust');
 
   const defaultSelection = resolveRuntimeEngineSelection();
   assert.equal(defaultSelection.status, 'accepted');
-  assert.equal(defaultSelection.runtime_engine_kind, 'node');
+  assert.equal(defaultSelection.runtime_engine_kind, 'rust');
   assert.equal(defaultSelection.source_field, 'default');
 
   const bunSelection = resolveRuntimeEngineSelection({ value: 'BUN' });

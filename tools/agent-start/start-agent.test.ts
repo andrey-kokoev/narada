@@ -77,13 +77,13 @@ function assertModernAgentCliLaunch(result: any) {
   assert.equal(result.nars_launch.runtime_server.package, '@narada-core/agent-runtime-server');
   assert.equal(result.nars_launch.runtime_server.entrypoint, 'narada-agent-runtime-server');
   assert.equal(Object.hasOwn(result.nars_launch, 'private_carrier_substrate'), false);
-  assert.equal(result.nars_launch.command, process.execPath);
+  assert.equal(result.nars_launch.command.endsWith(process.platform === 'win32' ? 'narada-agent-runtime-server-rust.exe' : 'narada-agent-runtime-server-rust'), true);
   assert.equal(result.nars_events.attach_commands.registry_schema, 'narada.nars.client_projection_registry.v1');
   assert.equal(result.nars_events.attach_commands.agent_tui, 'agent-tui --attach <session_started.event_endpoint>');
   assert.equal(result.nars_events.attach_commands.agent_web_ui, 'narada-agent-web-ui --event-endpoint <session_started.event_endpoint> --health-endpoint <session_started.health_endpoint>');
   assert.match(result.nars_events.attach_commands.operator_input_protocol, /conversation\.send/);
   assert.match(result.nars_events.attach_commands.slash_command_protocol, /carrier\.command\.execute/);
-  assert.equal(result.runtime_args[0].endsWith('agent-runtime-server.ts'), true);
+  assert.equal(result.runtime_args[0], '--identity');
   assert.equal(result.runtime_args.includes('--session'), true);
   assert.equal(result.runtime_args.includes(result.carrier_session.carrier_session_id), true);
   assert.equal(result.runtime_args.includes('--control-jsonl'), false);

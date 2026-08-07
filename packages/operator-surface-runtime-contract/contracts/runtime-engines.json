@@ -5,7 +5,7 @@
     "bun",
     "rust"
   ],
-  "default_runtime_engine": "node",
+  "default_runtime_engine": "rust",
   "engine_profiles": {
     "node": {
       "execution_kind": "direct",

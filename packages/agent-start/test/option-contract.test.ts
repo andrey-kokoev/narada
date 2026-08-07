@@ -24,6 +24,9 @@ const naradaProperRoot: any = resolve(packageRoot, '..', '..');
 const launcherPath: any = join(packageRoot, 'src', 'narada-agent-start.ts');
 const tsxLoaderPath: any = pathToFileURL(require.resolve('tsx')).href;
 const identity: any = 'narada.architect';
+const nativeRuntimeBinaryName: any = process.platform === 'win32'
+  ? 'narada-agent-runtime-server-rust.exe'
+  : 'narada-agent-runtime-server-rust';
 const sharedRuntimeContract: any = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'operator-surface-runtime-contract', 'contracts', 'runtime-substrate-kinds.json'), 'utf8'));
 const sharedCarrierLaunchMatrix: any = JSON.parse(readFileSync(resolve(naradaProperRoot, 'packages', 'operator-surface-runtime-contract', 'contracts', 'operator-surface-launch-matrix.json'), 'utf8'));
 const baseArgs: any = [
@@ -492,10 +495,10 @@ test('selection scrub preserves credentials as transport only', () => {
   assert.equal(env.OPENAI_API_KEY, 'credential');
 });
 
-test('agent-cli exec launches package bin through node, not PowerShell', () => {
+test('agent-cli exec launches the native Rust NARS binary, not PowerShell', () => {
   const output: any = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--exec']);
   const sessionId: any = output.carrier_session.carrier_session_id;
-  assert.equal(output.exec_command.startsWith(process.execPath), true);
+  assert.equal(output.exec_command.startsWith(output.nars_launch.command), true);
   assert.equal(output.exec_command.includes('pwsh'), false);
   assert.equal(output.agent_start_execution_mode, 'hidden_detached');
   assert.deepEqual(output.detach_refusal_reasons, []);
@@ -507,7 +510,7 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
   assert.deepEqual(output.launcher_contracts.launch_selection_session.hidden_runtime_output_files, output.hidden_runtime_output_files);
   assert.equal(output.launcher_contracts.operator_terminal_projection_plan.hide_shell, true);
   assert.deepEqual(output.launcher_contracts.operator_terminal_projection_plan.hidden_runtime_output_files, output.hidden_runtime_output_files);
-  assert.equal(output.nars_launch.command, process.execPath);
+  assert.equal(output.nars_launch.command.endsWith(nativeRuntimeBinaryName), true);
   assert.equal(output.nars_launch.session_id, sessionId);
   assert.equal(output.nars_launch.runtime_session_id, sessionId);
   assert.equal(output.nars_launch.nars_session_id, sessionId);
@@ -555,8 +558,7 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
     effective: 'write',
     source: 'default',
   });
-  assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.ts'), true);
-  assert.deepEqual(output.runtime_args.slice(1), [
+  assert.deepEqual(output.runtime_args, [
     '--identity',
     identity,
     '--session',
@@ -575,12 +577,12 @@ test('agent-cli exec launches package bin through node, not PowerShell', () => {
 test('agent-web-ui exec launches NARS runtime server as first-class operator surface', () => {
   const output: any = runOk(['--carrier', 'agent-web-ui', '--runtime', 'nars', '--exec']);
   const sessionId: any = output.carrier_session.carrier_session_id;
-  assert.equal(output.exec_command.startsWith(process.execPath), true);
+  assert.equal(output.exec_command.startsWith(output.nars_launch.command), true);
   assert.equal(output.agent_start_execution_mode, 'hidden_detached');
   assert.deepEqual(output.detach_refusal_reasons, []);
   assert.equal(output.detach_decision.selected, true);
   assert.match(output.hidden_runtime_output_files.stdout_path, /agent-start-processes/);
-  assert.equal(output.nars_launch.command, process.execPath);
+  assert.equal(output.nars_launch.command.endsWith(nativeRuntimeBinaryName), true);
   assert.equal(output.nars_launch.session_id, sessionId);
   assert.equal(output.nars_launch.runtime_session_id, sessionId);
   assert.equal(output.nars_launch.nars_session_id, sessionId);
@@ -607,8 +609,7 @@ test('agent-web-ui exec launches NARS runtime server as first-class operator sur
     effective: 'write',
     source: 'default',
   });
-  assert.equal(output.runtime_args[0].endsWith('agent-runtime-server.ts'), true);
-  assert.deepEqual(output.runtime_args.slice(1), [
+  assert.deepEqual(output.runtime_args, [
     '--identity',
     identity,
     '--session',

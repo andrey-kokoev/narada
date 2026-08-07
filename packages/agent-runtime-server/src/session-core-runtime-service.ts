@@ -8,6 +8,7 @@ import { buildNarsRuntimeSurfaceContract } from '@narada-core/nars-runtime-contr
 import { buildLaunchProcessOwnershipEvidence } from '@narada-core/launch-process-ownership';
 import { normalizeIntelligenceInvocationControl } from '@narada-core/invokable-intelligence-contract';
 import { normalizeNarsExecutionPolicy } from '@narada-core/nars-intelligence-kernel-contract';
+import { DEFAULT_RUNTIME_ENGINE } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
 import { createRuntimeSessionBinding } from './runtime-session-binding.js';
 import { createNarsCapabilityGateway } from '@narada-core/nars-capability-gateway/capability-gateway';
 import { createNarsRuntimeRequestRegistry } from './runtime-request-state.js';
@@ -883,7 +884,7 @@ export function createSessionCoreRuntimeService({
     const sessionStartedEvent: any = supervisor.core.appendEvent({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',
-      runtime_engine_kind: runtimeContext.runtimeEngineKind ?? process.env.NARADA_RUNTIME_ENGINE ?? 'node',
+      runtime_engine_kind: runtimeContext.runtimeEngineKind ?? process.env.NARADA_RUNTIME_ENGINE ?? DEFAULT_RUNTIME_ENGINE,
       transport: 'jsonl_stdio',
       runtime_contract: 'nars_session_core_control.v1',
       runtime_origin: 'local',

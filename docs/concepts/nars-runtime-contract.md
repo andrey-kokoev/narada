@@ -85,8 +85,9 @@ select `runtime_engine_kind` as `node`, `bun`, or `rust` through
 `--runtime-engine`; the selected value is persisted in launch evidence and the
 NARS `session_started`/session-index projections.
 
-`node` remains the default direct engine. `bun` runs the same NARS JavaScript
-entrypoint through Bun; local SQLite authority uses the conditional
+`rust` is the default native engine. `node` remains available as an explicit
+direct-engine choice, and `bun` runs the same NARS JavaScript entrypoint
+through Bun; local SQLite authority uses the conditional
 `@narada-core/sqlite` adapter so the session does not depend on `node:sqlite`.
 `rust` owns the NARS session-core and session-authority paths natively: the
 Rust session supervisor and core own start/replay, durable session events,
@@ -99,6 +100,9 @@ choice must not change session authority, lifecycle, health/events, MCP, or
 provider-selection semantics. The canonical `launcher workspace-plan`,
 `launcher workspace-launch`, and `operator-surface runtime start` commands
 carry this choice; registry records may persist it as `RuntimeEngine`.
+The standard `@narada-core/agent-runtime-server` build (also included in the
+workspace build) compiles both its TypeScript entrypoint and the release Rust
+binary required by the default engine.
 The Windows workspace launcher assets expose the same choice as
 `-RuntimeEngine`.
 
