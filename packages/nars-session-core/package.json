@@ -5,6 +5,8 @@
   "type": "module",
   "narada": {
     "package_role": "nars_session_core",
+    "native_implementation": "native/",
+    "native_implementation_status": "parity_slice_in_progress",
     "owns": [
       "session_lifecycle_state",
       "session_shutdown_state",

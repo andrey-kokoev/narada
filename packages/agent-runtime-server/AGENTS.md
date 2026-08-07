@@ -26,10 +26,12 @@ It owns the public runtime-server contract for:
 It binds transport and process lifetime to one `@narada-core/nars-session-core` supervisor. The in-process carrier is a stateless turn adapter; provider execution is delegated to `@narada-core/nars-provider-runtime`.
 
 The process engine is selected separately by `agent-start` through
-`runtime_engine_kind` (`node`, `bun`, or `rust`). The Rust backend currently
-owns only the native process boundary and delegates unported runtime components
-to the Node entrypoint; it must preserve this package's protocol and authority
-contracts.
+`runtime_engine_kind` (`node`, `bun`, or `rust`). The Rust backend owns the
+NARS session-core and session-authority paths natively, including their event
+journal, lifecycle, input admission, heartbeat, recovery, and SQLite lease.
+Provider execution and MCP dispatch remain explicit adapter boundaries until
+their native implementations exist; they must not be smuggled into the Rust
+session-core implementation.
 
 ## Boundary Rules
 

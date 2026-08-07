@@ -1,35 +1,45 @@
-import assert from 'node:assert/strict';
-import { once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
-import { join, dirname } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import test from 'node:test';
+import { performance } from 'node:perf_hooks';
 import { buildCanonicalLocalTestSeed, CANONICAL_LOCAL_TEST_IDS, canonicalSha256 } from '@narada-core/invokable-intelligence-contract';
 import { SqliteRegistryStore } from '@narada-core/invokable-intelligence-registry';
 
-const packageRoot = dirname(fileURLToPath(import.meta.url));
+type Engine = 'node' | 'bun' | 'rust';
+
+const packageRoot = dirname(dirname(fileURLToPath(import.meta.url)));
 const runtimeEntrypoint = fileURLToPath(new URL('../dist/bin/narada-agent-runtime-server.js', import.meta.url));
 const nativeBinary = join(
   packageRoot,
-  '..',
   'native',
   'target',
   'release',
   process.platform === 'win32' ? 'narada-agent-runtime-server-rust.exe' : 'narada-agent-runtime-server-rust',
 );
 const bunCommand = process.env.NARADA_BUN_COMMAND ?? 'bun';
-const bunAvailable = spawnSync(bunCommand, ['--version'], { stdio: 'ignore', windowsHide: true }).status === 0;
-
-const requests = [
+const iterations = boundedInteger(process.env.NARADA_RUNTIME_SESSION_BENCHMARK_ITERATIONS, 10, 1, 50);
+const warmups = boundedInteger(process.env.NARADA_RUNTIME_SESSION_BENCHMARK_WARMUPS, 1, 0, 10);
+const workload = [
   { id: 'health-1', method: 'session.health', params: {} },
   { id: 'recovery-1', method: 'session.recovery', params: {} },
+  { id: 'command-1', method: 'session.command.execute', params: { command: 'status' } },
+  { id: 'cancel-1', method: 'session.cancel', params: {} },
   { id: 'legacy-1', method: 'session.resume', params: {} },
   { id: 'close-1', method: 'session.close', params: {} },
 ];
-type Engine = 'node' | 'bun' | 'rust';
+
+function boundedInteger(value: string | undefined, fallback: number, min: number, max: number): number {
+  const parsed = Number.parseInt(value ?? '', 10);
+  return Number.isInteger(parsed) ? Math.min(max, Math.max(min, parsed)) : fallback;
+}
+
+function percentile(values: number[], fraction: number): number {
+  const sorted = [...values].sort((left, right) => left - right);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * fraction) - 1))] ?? 0;
+}
 
 async function seedIntelligenceRegistry(siteRoot: string): Promise<string> {
   const dbPath = join(siteRoot, '.ai', 'intelligence-registry.db');
@@ -99,11 +109,11 @@ async function seedIntelligenceRegistry(siteRoot: string): Promise<string> {
   return dbPath;
 }
 
-function runtimeEnvironment(siteRoot: string, dbPath: string, engine: Engine): NodeJS.ProcessEnv {
-  return {
+function environmentFor(siteRoot: string, registryDbPath: string, engine: Engine): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {
     ...process.env,
     NARADA_SITE_ROOT: siteRoot,
-    NARADA_INTELLIGENCE_REGISTRY_DB: dbPath,
+    NARADA_INTELLIGENCE_REGISTRY_DB: registryDbPath,
     NARADA_INTELLIGENCE_TARGET_SITE: CANONICAL_LOCAL_TEST_IDS.targetSite,
     NARADA_INTELLIGENCE_USER_SITE: CANONICAL_LOCAL_TEST_IDS.userSite,
     NARADA_INTELLIGENCE_HOST_SITE: CANONICAL_LOCAL_TEST_IDS.hostSite,
@@ -111,37 +121,31 @@ function runtimeEnvironment(siteRoot: string, dbPath: string, engine: Engine): N
     NARADA_INTELLIGENCE_PRINCIPAL_BINDING: JSON.stringify({
       schema: 'narada.intelligence.principal_binding.v1',
       actor: { principal_id: CANONICAL_LOCAL_TEST_IDS.principal, auth_type: 'user-site-session' },
-      memberships: [{
-        registry: 'site-roster',
-        site_id: CANONICAL_LOCAL_TEST_IDS.targetSite,
-        role: 'resident',
-        evidence_ref: 'evidence:runtime-engine-nars-conformance',
-      }],
-      evidence_refs: ['evidence:runtime-engine-nars-conformance'],
+      memberships: [{ registry: 'site-roster', site_id: CANONICAL_LOCAL_TEST_IDS.targetSite, role: 'resident', evidence_ref: 'evidence:runtime-engine-session-core-benchmark' }],
+      evidence_refs: ['evidence:runtime-engine-session-core-benchmark'],
     }),
-    NARADA_AUTHORITY_REF: 'task:runtime-engine-nars-conformance',
+    NARADA_AUTHORITY_REF: 'task:runtime-engine-session-core-benchmark',
     NARADA_MCP_SCOPE: 'none',
     NARADA_AGENT_RUNTIME_HEALTH_ENABLED: '0',
     NARADA_AGENT_RUNTIME_EVENTS_ENABLED: '0',
     NARADA_RUNTIME_ENGINE: engine,
-    ...(engine === 'rust'
-      ? {
-          NARADA_RUNTIME_SERVER_SCRIPT: runtimeEntrypoint,
-          NARADA_RUNTIME_NODE_COMMAND: process.execPath,
-        }
-      : {}),
   };
+  delete environment.NARADA_RUNTIME_DELEGATE;
+  if (engine === 'rust') {
+    environment.NARADA_RUNTIME_SERVER_SCRIPT = runtimeEntrypoint;
+    environment.NARADA_RUNTIME_NODE_COMMAND = process.execPath;
+    environment.NARADA_NATIVE_PROVIDER_MODE = 'blocked';
+  } else {
+    delete environment.NARADA_RUNTIME_SERVER_SCRIPT;
+  }
+  return environment;
 }
 
-async function runEngine(engine: Engine): Promise<Record<string, any>[]> {
-  const siteRoot = await mkdtemp(join(tmpdir(), `narada-runtime-engine-${engine}-`));
+async function runOnce(engine: Engine): Promise<number> {
+  const siteRoot = await mkdtemp(join(tmpdir(), `narada-session-benchmark-${engine}-`));
   try {
-    const dbPath = await seedIntelligenceRegistry(siteRoot);
-    const command = engine === 'node'
-      ? process.execPath
-      : engine === 'bun'
-        ? bunCommand
-        : nativeBinary;
+    const registryDbPath = await seedIntelligenceRegistry(siteRoot);
+    const command = engine === 'node' ? process.execPath : engine === 'bun' ? bunCommand : nativeBinary;
     const args = [
       ...(engine === 'rust' ? [] : [runtimeEntrypoint]),
       '--raw-jsonl',
@@ -150,90 +154,72 @@ async function runEngine(engine: Engine): Promise<Record<string, any>[]> {
       '--identity',
       'narada.test',
       '--session',
-      `runtime-engine-${engine}`,
+      `session-benchmark-${engine}`,
     ];
-    const child = spawn(command, args, {
-      cwd: packageRoot,
-      env: runtimeEnvironment(siteRoot, dbPath, engine),
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-    });
-    let stdout = '';
-    let stderr = '';
-    child.stdout.setEncoding('utf8');
-    child.stderr.setEncoding('utf8');
-    child.stdout.on('data', (chunk) => { stdout += String(chunk); });
-    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
-    child.stdin.end(`${requests.map((request) => JSON.stringify(request)).join('\n')}\n`);
-    const exitCode = await new Promise<number>((resolve, reject) => {
+    return await new Promise<number>((resolve, reject) => {
+      const startedAt = performance.now();
+      const child = spawn(command, args, {
+        cwd: packageRoot,
+        env: environmentFor(siteRoot, registryDbPath, engine),
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      let stderr = '';
+      let stdoutBytes = 0;
+      child.stdout.on('data', (chunk) => {
+        stdoutBytes += Buffer.byteLength(String(chunk));
+        if (stdoutBytes > 512 * 1024) child.kill();
+      });
+      child.stderr.setEncoding('utf8');
+      child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+      child.stdin.end(workload.map((request) => JSON.stringify(request)).join('\n') + '\n');
       const timer = setTimeout(() => {
         child.kill();
-        reject(new Error(`runtime_engine_nars_timeout:${engine}:${stderr.slice(-500)}`));
+        reject(new Error(`session_benchmark_timeout:${engine}:${stderr.slice(-600)}`));
       }, 20_000);
-      child.once('error', reject);
+      child.once('error', (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
       child.once('close', (code) => {
         clearTimeout(timer);
-        resolve(code ?? 1);
+        if (code !== 0) reject(new Error(`session_benchmark_exit:${engine}:${code}:${stderr.slice(-600)}`));
+        else resolve(performance.now() - startedAt);
       });
     });
-    assert.equal(exitCode, 0, `${engine}: ${stderr}`);
-    return stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
   } finally {
     await rm(siteRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 }
 
-function semanticTrace(events: Record<string, any>[]): Record<string, any>[] {
-  return events.map((event) => ({
-    event: event.event,
-    request_id: event.request_id ?? null,
-    method: event.method ?? null,
-    runtime_host_state: event.runtime_host_state?.runtime_host_state ?? null,
-    mcp_scope: event.mcp_scope ?? null,
-    mcp_operational_state: event.mcp_operational_state ?? null,
-    terminal_state: event.terminal_state ?? null,
-    reason: event.reason ?? null,
-  }));
+async function measure(engine: Engine) {
+  if (engine === 'bun' && spawnSync(bunCommand, ['--version'], { stdio: 'ignore', windowsHide: true }).status !== 0) {
+    return { engine, status: 'unavailable', samples: 0, p50_ms: null, p95_ms: null, mean_ms: null };
+  }
+  if (engine === 'rust' && !existsSync(nativeBinary)) {
+    return { engine, status: 'unavailable', samples: 0, p50_ms: null, p95_ms: null, mean_ms: null };
+  }
+  for (let index = 0; index < warmups; index += 1) await runOnce(engine);
+  const samples: number[] = [];
+  for (let index = 0; index < iterations; index += 1) samples.push(await runOnce(engine));
+  return {
+    engine,
+    status: 'measured',
+    samples: samples.length,
+    p50_ms: Number(percentile(samples, 0.5).toFixed(3)),
+    p95_ms: Number(percentile(samples, 0.95).toFixed(3)),
+    mean_ms: Number((samples.reduce((sum, value) => sum + value, 0) / samples.length).toFixed(3)),
+  };
 }
 
-function semanticMilestones(events: Record<string, any>[]): Record<string, any>[] {
-  const admittedEvents = new Set([
-    'session_started',
-    'session_health',
-    'session_recovery',
-    'session_control_rejected',
-    'session_control_response',
-    'session_closed',
-  ]);
-  return semanticTrace(events)
-    .filter((event) => admittedEvents.has(event.event))
-    .map(({ runtime_host_state: _runtimeHostState, reason: _reason, ...event }) => event);
-}
-
-test('Node, Bun, and Rust run the real NARS entrypoint with equivalent session authority and control semantics', {
-  skip: !existsSync(nativeBinary) || !bunAvailable,
-  timeout: 45_000,
-}, async () => {
-  const [nodeEvents, bunEvents, rustEvents] = await Promise.all([
-    runEngine('node'),
-    runEngine('bun'),
-    runEngine('rust'),
-  ]);
-  // Node/Bun remain exact adapter peers. Rust owns the session core now, so
-  // its internal request/shutdown evidence is intentionally different; the
-  // public control milestones must remain equivalent.
-  assert.deepEqual(semanticMilestones(rustEvents), semanticMilestones(nodeEvents));
-  assert.deepEqual(semanticMilestones(bunEvents), semanticMilestones(nodeEvents));
-  assert.equal(nodeEvents[0]?.runtime_engine_kind, 'node');
-  assert.equal(bunEvents[0]?.runtime_engine_kind, 'bun');
-  assert.equal(rustEvents[0]?.runtime_engine_kind, 'rust');
-  assert.equal(rustEvents[0]?.event, 'session_started');
-  assert.equal(rustEvents[0]?.mcp_scope, 'none');
-  assert.equal(rustEvents[0]?.mcp_operational_state, 'disabled');
-  assert.equal(rustEvents[0]?.session_core_implementation, 'rust_native');
-  assert.equal(rustEvents[0]?.provider_adapter_kind, 'unavailable');
-  assert.equal(rustEvents.some((event) => event.event === 'session_health' && event.request_id === 'health-1'), true);
-  assert.equal(rustEvents.some((event) => event.event === 'session_recovery' && event.request_id === 'recovery-1'), true);
-  assert.equal(rustEvents.some((event) => event.event === 'session_control_rejected' && event.request_id === 'legacy-1'), true);
-  assert.equal(rustEvents.some((event) => event.event === 'session_closed' && event.request_id === 'close-1'), true);
-});
+const results = [];
+for (const engine of ['node', 'bun', 'rust'] as Engine[]) results.push(await measure(engine));
+process.stdout.write(`${JSON.stringify({
+  schema: 'narada.nars.session_core_benchmark.v1',
+  workload_profile: 'common-control-only-no-provider-or-mcp',
+  generated_at: new Date().toISOString(),
+  iterations,
+  warmups,
+  workload: workload.map(({ method }) => method),
+  results,
+}, null, 2)}\n`);

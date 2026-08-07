@@ -122,6 +122,7 @@
     "test:live:pi-client-kernel": "node --import tsx test/live-pi-client-kernel-substitutability-fixture-e2e.ts --enable-live-e2e",
     "test:live:codex-provider-admission": "pnpm --filter @narada-core/cli build && node --import tsx test/live-codex-provider-admission-e2e.ts --enable-live-codex",
     "benchmark:runtime-engine": "node --import tsx test/runtime-engine-boundary-benchmark.ts",
+    "benchmark:session-core": "node --import tsx test/runtime-engine-session-core-benchmark.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

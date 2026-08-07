@@ -374,7 +374,8 @@ test('runtime engine contract keeps process substrate separate from carrier subs
 
   const rustSelection = resolveRuntimeEngineSelection({ value: 'rust' });
   assert.equal(rustSelection.status, 'accepted');
-  assert.equal(rustSelection.runtime_engine_profile.execution_kind, 'native_bridge');
+  assert.equal(rustSelection.runtime_engine_profile.execution_kind, 'native_runtime_host');
+  assert.deepEqual(rustSelection.runtime_engine_profile.ownership, ['nars_session_core', 'nars_session_authority']);
 
   const refused = resolveRuntimeEngineSelection({ value: 'deno' });
   assert.equal(refused.status, 'refused');

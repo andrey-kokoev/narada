@@ -88,11 +88,13 @@ NARS `session_started`/session-index projections.
 `node` remains the default direct engine. `bun` runs the same NARS JavaScript
 entrypoint through Bun; local SQLite authority uses the conditional
 `@narada-core/sqlite` adapter so the session does not depend on `node:sqlite`.
-`rust` currently owns the native process boundary and
-delegates unported intelligence/provider/runtime components to the Node
-entrypoint through the same arguments, environment, and stdio contract. The
-engine choice must not change session authority, lifecycle, health/events, MCP,
-or provider-selection semantics. The canonical `launcher workspace-plan`,
+`rust` owns the NARS session-core and session-authority paths natively: durable
+session events, lifecycle, input admission, heartbeat/recovery projection, and
+the SQLite authority lease. Provider execution and MCP dispatch remain explicit
+adapter boundaries until their native implementations exist; a native Rust
+session must not delegate session authority or persistence to Node. The engine
+choice must not change session authority, lifecycle, health/events, MCP, or
+provider-selection semantics. The canonical `launcher workspace-plan`,
 `launcher workspace-launch`, and `operator-surface runtime start` commands
 carry this choice; registry records may persist it as `RuntimeEngine`.
 The Windows workspace launcher assets expose the same choice as
@@ -1112,9 +1114,11 @@ Expected coverage:
 - `agent-start` resolves `narada-agent-runtime-server` from the package bin;
 - startup event id and session id propagate to the runtime server boundary;
 - `runtime-engine-boundary-benchmark` reports bounded Node/Bun/Rust process-boundary measurements;
+- `benchmark:session-core` measures the equivalent health/recovery/control/close workload across Node, Bun, and native Rust;
 - `runtime-engine-protocol-conformance.test.ts` compares the Node/Bun/Rust lifecycle, control, health, and MCP frame sequence;
-- `runtime-engine-nars-conformance.test.ts` runs the built NARS entrypoint through Node, Bun, and the Rust bridge and compares the real session authority/control trace;
-- runtime-engine conformance tests prove that Rust changes only the process boundary and preserves the NARS host contract;
+- `runtime-engine-nars-conformance.test.ts` runs the built NARS entrypoint through Node, Bun, and native Rust and compares the public session authority/control milestones;
+- `runtime-engine-native-session-core.test.ts` proves Rust persistence, input admission, SQLite authority closure, and no-Node delegation;
+- runtime-engine conformance tests prove that Rust owns the session-core/authority path while preserving the NARS host contract;
 - Site MCP fabric is isolated from global/user Codex config;
 - projected terminal input maps ordinary text, slash commands, and JSON frames correctly;
 - command help/dispatch comes from a shared command contract;

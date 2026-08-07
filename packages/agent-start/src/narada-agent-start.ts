@@ -1425,7 +1425,7 @@ if (execFlag && !dryRun && runtimeEngine === 'rust' && runtimeEngineAvailability
     reason_code: 'runtime_engine_unavailable',
     candidate_runtime_engine: 'rust',
     admitted_runtime_engines: ['node', 'bun', 'rust'],
-    reason: 'The Rust NARS runtime bridge has not been built for this checkout.',
+    reason: 'The native Rust NARS runtime has not been built for this checkout.',
     required_next_step: 'Run cargo build --release --manifest-path packages/agent-runtime-server/native/Cargo.toml, then retry.',
   });
 }

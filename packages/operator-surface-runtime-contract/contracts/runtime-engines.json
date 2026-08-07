@@ -16,9 +16,10 @@
       "entrypoint_kind": "javascript_module"
     },
     "rust": {
-      "execution_kind": "native_bridge",
+      "execution_kind": "native_runtime_host",
       "entrypoint_kind": "native_binary",
-      "delegation_posture": "delegates_unsupported_runtime_components_to_node"
+      "ownership": ["nars_session_core", "nars_session_authority"],
+      "delegation_posture": "provider_and_mcp_adapters_are_explicit"
     }
   }
 }

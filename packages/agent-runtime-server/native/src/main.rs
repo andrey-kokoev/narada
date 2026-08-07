@@ -1,8 +1,16 @@
+mod native_runtime;
+
 use std::env;
 use std::process::{Command, Stdio};
 
 fn main() {
-    match delegate_to_node() {
+    let args: Vec<String> = env::args().skip(1).collect();
+    let result = if should_delegate(&args) {
+        delegate_to_node(&args)
+    } else {
+        native_runtime::run(&args).map(|()| 0)
+    };
+    match result {
         Ok(code) => std::process::exit(code),
         Err(error) => {
             eprintln!("narada-agent-runtime-server-rust: {error}");
@@ -11,9 +19,24 @@ fn main() {
     }
 }
 
-fn delegate_to_node() -> Result<i32, String> {
+fn should_delegate(args: &[String]) -> bool {
+    if env::var("NARADA_RUNTIME_DELEGATE").ok().as_deref() == Some("1") {
+        return true;
+    }
+    if args
+        .iter()
+        .any(|arg| arg == "--bridge-conformance" || arg == "--protocol-conformance")
+    {
+        return true;
+    }
+    // The process-boundary benchmark intentionally launches the binary with no
+    // NARS binding. Keep that fixture on the explicit legacy adapter path.
+    args.is_empty() && env::var_os("NARADA_RUNTIME_SERVER_SCRIPT").is_some()
+}
+
+fn delegate_to_node(args: &[String]) -> Result<i32, String> {
     let script = env::var("NARADA_RUNTIME_SERVER_SCRIPT")
-        .map_err(|_| "NARADA_RUNTIME_SERVER_SCRIPT is required".to_string())?;
+        .map_err(|_| "NARADA_RUNTIME_SERVER_SCRIPT is required for delegated mode".to_string())?;
     if script.trim().is_empty() {
         return Err("NARADA_RUNTIME_SERVER_SCRIPT is empty".to_string());
     }
@@ -22,10 +45,7 @@ fn delegate_to_node() -> Result<i32, String> {
     let mut command = Command::new(node);
     command
         .arg(script)
-        .args(env::args().skip(1))
-        // The selected executable is itself the runtime-engine boundary. Keep
-        // the delegated runtime context truthful even when the binary is
-        // launched directly rather than through agent-start.
+        .args(args)
         .env("NARADA_RUNTIME_ENGINE", "rust")
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())

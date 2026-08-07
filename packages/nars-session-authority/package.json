@@ -4,6 +4,10 @@
   "type": "module",
   "private": true,
   "description": "Authority-owned singleton admission for Narada Agent Runtime Server sessions",
+  "narada": {
+    "native_implementation": "native/",
+    "native_implementation_status": "parity_slice_in_progress"
+  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
