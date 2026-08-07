@@ -48,14 +48,14 @@ test('scheduled command launch contract round-trips the exact target without a s
   assert.equal(placeholder.console_window_policy, 'native_create_no_window');
   const plan = createScheduledCommandLaunchPlan(
     '"C:\\Program Files\\nodejs\\node.exe"',
-    '"D:\\code\\site\\worker.js" --ticket "ticket 1"',
+    '"C:\\workspace\\site\\worker.js" --ticket "ticket 1"',
     { platform: 'win32', env: {} },
   );
   assert.equal(plan.launcher_path, scheduledCommandEntrypoint({ platform: 'win32', env: {} }));
   assert.equal(plan.console_window_policy, 'native_create_no_window');
   assert.deepEqual(decodeScheduledCommandLaunchArguments(plan.launcher_arguments), {
     target_command: 'C:\\Program Files\\nodejs\\node.exe',
-    target_arguments: '"D:\\code\\site\\worker.js" --ticket "ticket 1"',
+    target_arguments: '"C:\\workspace\\site\\worker.js" --ticket "ticket 1"',
   });
 });
 

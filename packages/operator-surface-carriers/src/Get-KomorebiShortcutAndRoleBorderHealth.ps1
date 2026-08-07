@@ -113,7 +113,12 @@ $whkdProcess = @(if ($WhkdProcessCountFixture -ge 0) {
 $staleKomorebicClients = @(Get-CimInstance Win32_Process -Filter "name = 'komorebic.exe'" -ErrorAction SilentlyContinue | Select-Object ProcessId, CommandLine)
 $yasbLogPath = Join-Path $env:USERPROFILE ".config\yasb\yasb.log"
 $yasbSourceRoots = @(
-    $(if ($env:NARADA_YASB_SOURCE_ROOT) { $env:NARADA_YASB_SOURCE_ROOT } else { "D:\code\yasb" }),
+    $(if ($env:NARADA_YASB_SOURCE_ROOT) {
+        $env:NARADA_YASB_SOURCE_ROOT
+      } else {
+        $sourceRoot = if ($env:NARADA_SRC_ROOT) { $env:NARADA_SRC_ROOT } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'src' }
+        Join-Path $sourceRoot 'yasb'
+      }),
     (Join-Path $UserSiteRoot "vendor\yasb")
 )
 $roleLogPath = Join-Path $PcSiteRoot "logs\operator-surface-role-border-watcher\watcher.log"

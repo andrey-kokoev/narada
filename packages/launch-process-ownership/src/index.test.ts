@@ -12,8 +12,8 @@ test('requires pid for session-owned runtime process cleanup evidence', () => {
   const ownership = buildLaunchProcessOwnership({
     launchSessionId: 'launch_runtime',
     processRole: 'runtime_server',
-    siteRoot: 'D:/code/site',
-    workspaceRoot: 'D:/code/site',
+    siteRoot: 'C:/workspace/site',
+    workspaceRoot: 'C:/workspace/site',
     createdByPid: 10,
   });
   assert.equal(ownership.evidence_status, 'partial');
@@ -24,8 +24,8 @@ test('allows workspace launch plan evidence without a process pid', () => {
   const ownership = buildLaunchProcessOwnership({
     launchSessionId: 'launch_plan',
     processRole: 'workspace_launch_plan',
-    siteRoot: 'D:/code/site',
-    workspaceRoot: 'D:/code/site',
+    siteRoot: 'C:/workspace/site',
+    workspaceRoot: 'C:/workspace/site',
     createdByPid: 10,
   });
   assert.equal(ownership.evidence_status, 'complete');
@@ -36,8 +36,8 @@ test('builds session-owned cleanup ownership evidence', () => {
   const ownership = buildLaunchProcessOwnership({
     launchSessionId: 'launch_fixture',
     processRole: 'runtime_server',
-    siteRoot: 'D:/code/site',
-    workspaceRoot: 'D:/code/site',
+    siteRoot: 'C:/workspace/site',
+    workspaceRoot: 'C:/workspace/site',
     createdByPid: 10,
     pid: 20,
   });
@@ -46,8 +46,8 @@ test('builds session-owned cleanup ownership evidence', () => {
     launch_session_id: 'launch_fixture',
     ownership: 'session_owned',
     process_role: 'runtime_server',
-    owner_site_root: 'D:/code/site',
-    workspace_root: 'D:/code/site',
+    owner_site_root: 'C:/workspace/site',
+    workspace_root: 'C:/workspace/site',
     created_by_pid: 10,
     launch_supervisor_pid: null,
     cleanup_policy: 'terminate_with_launch_session',
