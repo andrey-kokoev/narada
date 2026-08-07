@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
 
 ## Goal
 
@@ -55,7 +55,7 @@ During cleanup, task 1483 was readable and present in SQLite lifecycle/spec tabl
 - `pnpm --dir packages/layers/cli exec vitest run test/commands/task-claim.test.ts` passed, 19 tests.
 - `pnpm --dir packages/task-governance build` passed.
 - `pnpm --dir packages/layers/cli build` passed.
-- `narada task claim 1483 --agent narada.architect --reason "Verify lookup repair in live workspace before snapshot refresh" --cwd D:\code\narada` returned `status=success` and `task_id=20260517-1483-refresh-task-lifecycle-snapshot-after-chapter-closure`.
+- `narada task claim 1483 --agent narada.architect --reason "Verify lookup repair in live workspace before snapshot refresh" --cwd <src-root>\narada` returned `status=success` and `task_id=20260517-1483-refresh-task-lifecycle-snapshot-after-chapter-closure`.
 
 ## Acceptance Criteria
 

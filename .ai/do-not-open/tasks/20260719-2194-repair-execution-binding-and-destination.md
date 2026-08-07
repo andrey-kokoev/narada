@@ -6,7 +6,7 @@ tags: execution-binding, invokable-intelligence, ontology-remediation, site-auth
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2211@v1
 creation_payload_sha256: 50850f4224740b2f0b4ef9aecec634aceae199a596a0a4ec6baf8610cf657631
 idempotency_key: invokable-intelligence-remediation-source-2211-narada-proper-v1
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"D:\\code\\narada","correlation_key":"user-site-task-2211"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"<src-root>\\narada","correlation_key":"user-site-task-2211"}
 ---
 
 # Repair execution binding and destination authority for the intelligence chapter
@@ -17,15 +17,15 @@ Ensure every invokable-intelligence task is governed and executed against the co
 
 ## Context
 
-Destination-side materialization of User Site coordination task #2211 (20260719-2211-repair-execution-binding-and-destination). This task is authoritative in the registered Narada Site at D:\code\narada. Source tasks #2180-#2186 and #2211-#2219 were created in C:\Users\Andrey\Narada with repository_root null while targeting this repository; preserve the source audit chain while correcting destination authority.
+Destination-side materialization of User Site coordination task #2211 (20260719-2211-repair-execution-binding-and-destination). This task is authoritative in the registered Narada Site at <src-root>\narada. Source tasks #2180-#2186 and #2211-#2219 were created in C:\Users\Andrey\Narada with repository_root null while targeting this repository; preserve the source audit chain while correcting destination authority.
 
 Source authority: User Site task #2211.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 
 Inspect the Narada repository Site's task authority and supported cross-Site handoff or execution-binding mechanisms.
-Establish destination-Site tasks with explicit D:\code\narada execution bindings and source-task audit references.
+Establish destination-Site tasks with explicit <src-root>\narada execution bindings and source-task audit references.
 Preserve identifiers, dependencies, and payload evidence through explicit source/destination correlation.
 Mark wrong-Site actionable projections superseded only after destination acceptance is proven.
 Add a focused guard so future external-Site implementation task creation is rejected or explicitly flagged when destination/binding metadata is absent.
@@ -54,7 +54,7 @@ Do not implement the ontology concerns owned by the other remediation tasks.
 
 ## Acceptance Criteria
 
-- [ ] Every active task in the invokable-intelligence chapter has an authoritative destination Site and repository binding for D:\code\narada.
+- [ ] Every active task in the invokable-intelligence chapter has an authoritative destination Site and repository binding for <src-root>\narada.
 - [ ] No active implementation task relies on repository_root null or conversational instructions to find its repository.
 - [ ] Any source-Site tombstone or supersession includes a destination task/binding reference and preserves audit history.
 - [ ] A focused lifecycle test rejects or explicitly flags creation of an external-repository implementation task without destination/binding metadata.

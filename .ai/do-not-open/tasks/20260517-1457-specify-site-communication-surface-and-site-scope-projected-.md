@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1457-1463-site-communication-surface.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1457-1463-site-communication-surface.md
 
 ## Goal
 

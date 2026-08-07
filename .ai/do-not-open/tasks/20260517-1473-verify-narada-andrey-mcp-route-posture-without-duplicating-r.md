@@ -18,7 +18,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
 
 ## Goal
 
@@ -55,9 +55,9 @@ Route posture verification follows addressability and the recorded capability po
 
 ## Verification
 
-- `narada test-run run --task 1473 --cmd 'narada routing resolve --target-kind site --target-ref narada-andrey --format json --cwd D:\code\narada' --scope focused --requester narada.architect --rationale 'Verify read-only route resolution for narada-andrey.' --cwd D:\code\narada` passed as `run_1779051482792_n2ii9k`.
-- `narada test-run run --task 1473 --cmd 'narada capability list --format json --cwd D:\code\narada' --scope focused --requester narada.architect --rationale 'Verify capability posture remains missing after 1472 deferral.' --cwd D:\code\narada` passed as `run_1779051482765_cq22yp`.
-- `narada test-run run --task 1473 --cmd 'rg -n "out_216c869d-5781-4539-a3d6-8ec21cd6b7c5|env_37e5cd13-d005-4ba9-b0a2-e982139f246b|delivery_confirmation_ref|execution_evidence_ref" .ai/canonical-outbox.json C:\Users\Andrey\Narada\.ai\inbox-envelopes' --scope focused --requester narada.architect --rationale 'Verify original registry outbox evidence exists and no route verification resend was created.' --cwd D:\code\narada` passed as `run_1779051490489_it4jcz`.
+- `narada test-run run --task 1473 --cmd 'narada routing resolve --target-kind site --target-ref narada-andrey --format json --cwd <src-root>\narada' --scope focused --requester narada.architect --rationale 'Verify read-only route resolution for narada-andrey.' --cwd <src-root>\narada` passed as `run_1779051482792_n2ii9k`.
+- `narada test-run run --task 1473 --cmd 'narada capability list --format json --cwd <src-root>\narada' --scope focused --requester narada.architect --rationale 'Verify capability posture remains missing after 1472 deferral.' --cwd <src-root>\narada` passed as `run_1779051482765_cq22yp`.
+- `narada test-run run --task 1473 --cmd 'rg -n "out_216c869d-5781-4539-a3d6-8ec21cd6b7c5|env_37e5cd13-d005-4ba9-b0a2-e982139f246b|delivery_confirmation_ref|execution_evidence_ref" .ai/canonical-outbox.json C:\Users\Andrey\Narada\.ai\inbox-envelopes' --scope focused --requester narada.architect --rationale 'Verify original registry outbox evidence exists and no route verification resend was created.' --cwd <src-root>\narada` passed as `run_1779051490489_it4jcz`.
 - `inbox_stage_submission_workflow` preview with `submit=false` for `target.ref=narada-andrey` returned dry-run/no mutation and selected route `route_1c33db5b-d527-4b45-aa6b-f917ddb7c45c`.
 
 ## Acceptance Criteria

@@ -6,7 +6,7 @@ tags: cross-locus, d1, invokable-intelligence, materialization, ontology-remedia
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2212@v2
 creation_payload_sha256: 5e6a75a54e15244d8a359b382bd7116b5fe441049b4beec6836c24d042d475b2
 idempotency_key: invokable-intelligence-remediation-source-2212-narada-proper-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-site-task-2212-narada-proper-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-site-task-2212-narada-proper-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T17:45:40.154Z
 ---
@@ -22,7 +22,7 @@ Provide an explicit, auditable path by which target-, User-, and execution-locus
 Destination-side materialization of User Site task #2212. Separate SQLite and D1 embodiments do not explain how a remote carrier receives authorized User preferences or execution feasibility. The design requires explicit materialization: origin authority remains identifiable, destination admission is separate, and stale or revoked projections cannot silently remain effective.
 
 Source authority: User Site task #2212.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

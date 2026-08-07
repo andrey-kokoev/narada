@@ -18,7 +18,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1475-1481-separate-site-telemetry-from-site-registry.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1475-1481-separate-site-telemetry-from-site-registry.md
 
 ## Goal
 
@@ -74,7 +74,7 @@ Message posture:
 - Ran `narada_inbox_doctor` for target `site:narada-andrey`; route was visible but readiness was false due to local publication backlog.
 - Attempted MCP routed submission; refused because cross-Site MCP mutation is not admitted and `canonical_inbox_cross_site_submission` capability is missing.
 - Attempted MCP explicit target-root submission; refused because cross-Site MCP mutation is not admitted.
-- Ran `narada inbox submit --cwd C:\Users\Andrey\Narada --source-kind agent_report --source-ref narada-proper:task-1481-hosted-telemetry-registry-separation-outcome --kind observation --authority-level agent_reported --principal narada.builder --payload-file D:\code\narada\.ai\handoffs\task-1481-narada-andrey-notification.json --target-locus local_site --format json --output full`; command returned `status=success` and `routing.authority_posture=direct_target_authority`.
+- Ran `narada inbox submit --cwd C:\Users\Andrey\Narada --source-kind agent_report --source-ref narada-proper:task-1481-hosted-telemetry-registry-separation-outcome --kind observation --authority-level agent_reported --principal narada.builder --payload-file <src-root>\narada\.ai\handoffs\task-1481-narada-andrey-notification.json --target-locus local_site --format json --output full`; command returned `status=success` and `routing.authority_posture=direct_target_authority`.
 
 ## Acceptance Criteria
 

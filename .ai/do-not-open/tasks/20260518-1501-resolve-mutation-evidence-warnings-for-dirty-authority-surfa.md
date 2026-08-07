@@ -16,7 +16,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260518-1499-1504-global-coherence-cleanup-after-operator-site-communication-relation.md
+<src-root>\narada\.ai\do-not-open\tasks\20260518-1499-1504-global-coherence-cleanup-after-operator-site-communication-relation.md
 
 ## Goal
 

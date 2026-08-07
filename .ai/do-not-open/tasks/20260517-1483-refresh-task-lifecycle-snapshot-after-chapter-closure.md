@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
 
 ## Goal
 
@@ -49,9 +49,9 @@ Bring the Git-visible task lifecycle snapshot into alignment with the SQLite lif
 
 ## Verification
 
-- `narada task lifecycle status --format json --cwd D:\code\narada` before export reported `snapshot_freshness=snapshot_stale`.
-- `narada task lifecycle export --output .ai/task-lifecycle-snapshot.json --format json --cwd D:\code\narada` succeeded with `table_count=26` and `row_count=3001`.
-- `narada task lifecycle status --format json --cwd D:\code\narada` after export reported `snapshot_freshness=snapshot_fresh`.
+- `narada task lifecycle status --format json --cwd <src-root>\narada` before export reported `snapshot_freshness=snapshot_stale`.
+- `narada task lifecycle export --output .ai/task-lifecycle-snapshot.json --format json --cwd <src-root>\narada` succeeded with `table_count=26` and `row_count=3001`.
+- `narada task lifecycle status --format json --cwd <src-root>\narada` after export reported `snapshot_freshness=snapshot_fresh`.
 - Governed verification run `run_1779053992511_ar6mk8` passed for post-export lifecycle status.
 
 ## Acceptance Criteria

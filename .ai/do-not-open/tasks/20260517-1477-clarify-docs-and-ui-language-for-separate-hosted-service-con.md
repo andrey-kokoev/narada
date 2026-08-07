@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1475-1481-separate-site-telemetry-from-site-registry.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1475-1481-separate-site-telemetry-from-site-registry.md
 
 ## Goal
 
@@ -50,9 +50,9 @@ After the boundary and audit, the docs and UI should tell agents that Site telem
 
 ## Verification
 
-- `narada test-run run --task 1477 --cmd 'rg -n "Registry Projection|four-concern vocabulary|not `site-telemetry publish`|Adjacent Site Registry Read Model|Adjacent Remote Candidate Exchange" docs/product/site-telemetry-publication.md docs/product/site-telemetry-publication-outcome-shapes.md packages/site-registry-cloudflare/README.md packages/site-operational-dashboard/src/index.ts' --scope focused --requester narada.architect --rationale 'Verify clarified concern vocabulary and warning text.' --cwd D:\code\narada` passed as `run_1779051921004_v8m2xl`.
-- `narada test-run run --task 1477 --cmd 'pnpm --dir packages/site-registry-cloudflare exec vitest run test/communication-docs.test.ts' --scope focused --requester narada.architect --rationale 'Verify hosted registry communication docs wording still satisfies posture tests.' --cwd D:\code\narada` passed as `run_1779051921848_wzi0ts`.
-- `narada test-run run --task 1477 --cmd 'pnpm --dir packages/site-operational-dashboard exec vitest run test/site-operational-dashboard.test.ts' --scope focused --requester narada.architect --rationale 'Verify dashboard projection label change does not break dashboard tests.' --cwd D:\code\narada` passed as `run_1779051921848_db4l13`.
+- `narada test-run run --task 1477 --cmd 'rg -n "Registry Projection|four-concern vocabulary|not `site-telemetry publish`|Adjacent Site Registry Read Model|Adjacent Remote Candidate Exchange" docs/product/site-telemetry-publication.md docs/product/site-telemetry-publication-outcome-shapes.md packages/site-registry-cloudflare/README.md packages/site-operational-dashboard/src/index.ts' --scope focused --requester narada.architect --rationale 'Verify clarified concern vocabulary and warning text.' --cwd <src-root>\narada` passed as `run_1779051921004_v8m2xl`.
+- `narada test-run run --task 1477 --cmd 'pnpm --dir packages/site-registry-cloudflare exec vitest run test/communication-docs.test.ts' --scope focused --requester narada.architect --rationale 'Verify hosted registry communication docs wording still satisfies posture tests.' --cwd <src-root>\narada` passed as `run_1779051921848_wzi0ts`.
+- `narada test-run run --task 1477 --cmd 'pnpm --dir packages/site-operational-dashboard exec vitest run test/site-operational-dashboard.test.ts' --scope focused --requester narada.architect --rationale 'Verify dashboard projection label change does not break dashboard tests.' --cwd <src-root>\narada` passed as `run_1779051921848_db4l13`.
 
 ## Acceptance Criteria
 

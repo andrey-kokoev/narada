@@ -15,7 +15,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260513-1264-1266-agent-carrier-factorization.md
+<src-root>\narada\.ai\do-not-open\tasks\20260513-1264-1266-agent-carrier-factorization.md
 
 ## Goal
 

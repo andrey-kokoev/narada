@@ -6,7 +6,7 @@ status: opened
 
 ## Goal
 
-Make D:/code/narada.sonar/config.json valid JSON declaring site_id sonar
+Make <src-root>/narada.sonar/config.json valid JSON declaring site_id sonar
 
 ## Context
 

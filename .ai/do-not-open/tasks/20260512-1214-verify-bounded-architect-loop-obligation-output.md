@@ -43,7 +43,7 @@ Summary: The architect loop again invoked `narada task workboard --view compact 
 
 ## Execution Notes
 
-- Target locus: Narada proper role-loop/architect duty-loop CLI in `D:\code\narada`.
+- Target locus: Narada proper role-loop/architect duty-loop CLI in `<src-root>\narada`.
 - Preserved source envelope `env_7fae8b6a-c46d-41c0-b236-43195c66eb0f` as operator-confirmed recurring CAPA evidence.
 - Verified current Narada proper already provides the bounded surface requested by the CAPA: `narada role-loop next-obligation --agent <id>|--role <role>`.
 - The bounded packet returns one selected action or one bounded idle/error reason, carries `output_budget`, marks optional `capa_recurrence`, and keeps broad `task workboard --view compact` as an explicit exploration command instead of embedding broad workboard payload by default.

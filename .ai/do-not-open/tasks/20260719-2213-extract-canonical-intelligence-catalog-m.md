@@ -6,7 +6,7 @@ tags: catalog, d1, invokable-intelligence, migration, sqlite
 creation_payload_ref: mcp_payload:invokable-intelligence-catalog-migration-v2@v1
 creation_payload_sha256: 734d719f8ad80868b8b1b66e3c06620dd176cdd15f6ac9951e39a6c103be3828
 idempotency_key: invokable-intelligence-catalog-migration-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"invokable-intelligence-catalog-migration-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"invokable-intelligence-catalog-migration-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T18:51:55.672Z
 ---

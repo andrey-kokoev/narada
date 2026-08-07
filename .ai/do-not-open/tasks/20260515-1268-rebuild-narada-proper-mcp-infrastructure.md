@@ -19,7 +19,7 @@ Replace the coupled Narada proper agent-facing MCP runtime with a target-local M
 
 ## Context
 
-Source directive: .narada/inbox/external-handoffs/20260515-operator-directive-mcp-infrastructure-rebuild.md. Target locus: Narada proper at D:/code/narada.
+Source directive: .narada/inbox/external-handoffs/20260515-operator-directive-mcp-infrastructure-rebuild.md. Target locus: Narada proper at <src-root>/narada.
 
 ## Required Work
 

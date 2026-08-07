@@ -32,7 +32,7 @@ Staccato earned a useful local operational dashboard, but Narada proper needs th
 
 ## Required Work
 
-1. Inspect Staccato evidence: `D:/code/staccato-elt/scripts/Build-NaradaStaccatoOpsPage.mjs`, `D:/code/staccato-elt/scripts/ops-dashboard-server.mjs`, and their tests.
+1. Inspect Staccato evidence: `<src-root>/staccato-elt/scripts/Build-NaradaStaccatoOpsPage.mjs`, `<src-root>/staccato-elt/scripts/ops-dashboard-server.mjs`, and their tests.
 2. Ground the contract in SEMANTICS observation/evidence distinction, Site factorization, site telemetry publication, capability-governed secret management, and operator-surface/action posture.
 3. Define generic dashboard snapshot, row, section, summary, row-provider, renderer, and freshness contracts.
 4. Classify reusable Staccato mechanics versus Staccato-specific row providers.

@@ -32,8 +32,8 @@ Envelope kind: observation
 Summary: Operator expected concrete buildout tasks for Claude Code and Narada native Agent Carrier types. Two lifecycle rows were admitted and read back successfully, but narada_task_work_next for narada.builder still reports no_admissible_task. Current MCP facade exposes admission/read/work-next, but no route/assign/allocate surface to make admitted rows scheduler-claimable.
 
 Evidence:
-- Admitted task 20260515-build-agent-carrier-type-claude-code with readback status admitted in D:\code\narada\.ai\task-lifecycle.db.
-- Admitted task 20260515-build-agent-carrier-type-narada-native with readback status admitted in D:\code\narada\.ai\task-lifecycle.db.
+- Admitted task 20260515-build-agent-carrier-type-claude-code with readback status admitted in <src-root>\narada\.ai\task-lifecycle.db.
+- Admitted task 20260515-build-agent-carrier-type-narada-native with readback status admitted in <src-root>\narada\.ai\task-lifecycle.db.
 - Mutation evidence paths: .ai/mutation-evidence/task_lifecycle/mcp_ce69ef6ab1807ed9.json and .ai/mutation-evidence/task_lifecycle/mcp_6e7acd6586f98b68.json.
 - narada_task_work_next for narada.builder returned status empty, reason no_admissible_task after both admissions.
 - tool_search exposed no task route/assign/allocate MCP surface in this session.

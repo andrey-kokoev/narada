@@ -23,7 +23,7 @@ Source ref: operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-cha
 Received at: 2026-06-02T17:09:14.989Z
 
 Summary:
-Create and maintain the ordered builder task breakdown for migrating D:/code/narada/packages/task-lifecycle-kernel from .mjs JavaScript to TypeScript and splitting oversized code files. Acceptance: builder tasks identify package boundaries, migration order, file split seams by authority/lifecycle responsibility, verification commands, and final handoff evidence expected for architect review.
+Create and maintain the ordered builder task breakdown for migrating <src-root>/narada/packages/task-lifecycle-kernel from .mjs JavaScript to TypeScript and splitting oversized code files. Acceptance: builder tasks identify package boundaries, migration order, file split seams by authority/lifecycle responsibility, verification commands, and final handoff evidence expected for architect review.
 
 Evidence refs:
 - AGENTS.md:user_request:create_chapter_task_lifecycle_kernel_ts_migration

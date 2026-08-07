@@ -28,7 +28,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260516-1357-1363-narada-native-end-to-end-builder-proof.md
+<src-root>\narada\.ai\do-not-open\tasks\20260516-1357-1363-narada-native-end-to-end-builder-proof.md
 
 ## Goal
 

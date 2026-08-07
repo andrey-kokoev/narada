@@ -6,7 +6,7 @@ tags: cross-locus, d1, invokable-intelligence, materialization, sqlite
 creation_payload_ref: mcp_payload:invokable-intelligence-materialization-adapters-v2@v1
 creation_payload_sha256: 21b42942cd9921205e4347626babb704ead915e5645edfa2dc83568cec7548f8
 idempotency_key: invokable-intelligence-materialization-adapters-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"invokable-intelligence-materialization-adapters-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"invokable-intelligence-materialization-adapters-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T19:16:33.981Z
 ---

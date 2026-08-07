@@ -10,7 +10,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260718-1523-1526-first-use-operator-success-validation.md
+<src-root>\narada\.ai\do-not-open\tasks\20260718-1523-1526-first-use-operator-success-validation.md
 
 ## Goal
 

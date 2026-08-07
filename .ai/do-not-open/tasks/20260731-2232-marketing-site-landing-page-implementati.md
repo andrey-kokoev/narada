@@ -6,7 +6,7 @@ tags: marketing, website
 creation_payload_ref: mcp_payload:narada-mkt-site-2026-07-31-landing-page@v1
 creation_payload_sha256: ac745dacdf411e1f8c8ed15f8a3f7e08e292b2eccf21f170e2d102c42ea88e14
 idempotency_key: chapter-narada-marketing-site-2026-07-31-landing-page
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"manual","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"D:\\code\\narada","correlation_key":"chapter-narada-marketing-site-2026-07-31-landing-page"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"manual","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"<src-root>\\narada","correlation_key":"chapter-narada-marketing-site-2026-07-31-landing-page"}
 criteria_proved_by: andrey-user.resident
 criteria_proved_at: 2026-07-31T22:43:01.422Z
 closed_at: 2026-07-31T23:14:34.343Z
@@ -39,7 +39,7 @@ Docs portal; blog; operator console changes.
 
 ## Implementation location decision
 
-Standalone project at D:\code\narada-systems (sibling of the product repo), NOT a package inside D:\code\narada. Rationale: the narada repo is a pnpm monorepo (packages/* globs) — adding an Astro app would churn the shared lockfile and CI for zero coupling benefit; the marketing site deploys independently to Cloudflare and only links back to the repo.
+Standalone project at <src-root>\narada-systems (sibling of the product repo), NOT a package inside <src-root>\narada. Rationale: the narada repo is a pnpm monorepo (packages/* globs) — adding an Astro app would churn the shared lockfile and CI for zero coupling benefit; the marketing site deploys independently to Cloudflare and only links back to the repo.
 
 ## Stack and provenance
 
@@ -60,7 +60,7 @@ wrangler.jsonc (assets binding ./dist, nodejs_compat; no 'main' — the vite-plu
 2. npx wrangler dev --port 8799: GET / returned HTTP 200.
 3. Content greps against served HTML all OK: 'actually govern', 'Intelligence-Authority Separation', 'reconciliation', 'narada.systems', '@narada2/cli'.
 Acceptance criteria: (a) builds and renders locally — build + wrangler dev 200 verified; (b) copy matches approved messaging — #2230 Execution Notes copy used verbatim; (c) implementation location recorded — see decision above.
-no_files_changed declared because the deliverable intentionally lives outside the narada site root at D:\code\narada-systems; the narada repo tree is untouched.
+no_files_changed declared because the deliverable intentionally lives outside the narada site root at <src-root>\narada-systems; the narada repo tree is untouched.
 
 ## Acceptance Criteria
 

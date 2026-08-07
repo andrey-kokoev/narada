@@ -32,7 +32,7 @@ Envelope kind: observation
 Summary: During the architect loop in narada-andrey, Kevin attempted task workboard --view compact and the CLI rejected --view as an unknown option. The bounded workloop command provided the compact facts correctly, but the remembered workboard shape caused avoidable command failure and context churn.
 
 Evidence:
-- Command failed: node D:\code\narada\packages\layers\cli\dist\main.js task workboard --cwd C:\Users\Andrey\Narada --view compact --format json -> error: unknown option --view.
+- Command failed: node <src-root>\narada\packages\layers\cli\dist\main.js task workboard --cwd C:\Users\Andrey\Narada --view compact --format json -> error: unknown option --view.
 - Sanctioned alternative worked: .\narada-andrey.ps1 work-next -Agent narada-andrey.Kevin -PassThru returned bounded facts with pending_reviews, in_progress, local_followups, dirty_files, and capped human_summary.
 
 Proposal:

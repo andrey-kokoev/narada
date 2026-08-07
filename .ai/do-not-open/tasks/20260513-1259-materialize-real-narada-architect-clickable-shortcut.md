@@ -28,7 +28,7 @@ The operator admitted PC-locus shortcut materialization for Narada proper archit
 
 ## Required Work
 
-Create a Windows PowerShell launch carrier script that verifies the Narada proper architect launch intent sequence, verifies the durable request artifact, records launch evidence, then starts Codex in D:\code\narada through the installed codex shim. Create a repo-local Windows .lnk pointing at that carrier. Add verification for shortcut target/arguments and carrier dry-run/preflight. Record audit/ledger evidence. Do not copy operator-surface runtime state, mutate Desktop/Start Menu, import source Site state, or create arbitrary shell fallback paths.
+Create a Windows PowerShell launch carrier script that verifies the Narada proper architect launch intent sequence, verifies the durable request artifact, records launch evidence, then starts Codex in <src-root>\narada through the installed codex shim. Create a repo-local Windows .lnk pointing at that carrier. Add verification for shortcut target/arguments and carrier dry-run/preflight. Record audit/ledger evidence. Do not copy operator-surface runtime state, mutate Desktop/Start Menu, import source Site state, or create arbitrary shell fallback paths.
 
 ## Non-Goals
 

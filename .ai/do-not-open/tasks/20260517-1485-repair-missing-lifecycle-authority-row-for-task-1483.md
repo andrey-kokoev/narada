@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
 
 ## Goal
 
@@ -51,11 +51,11 @@ Task 1483 was created by chapter commission and is readable through `narada task
 
 ## Verification
 
-- `narada task read 1483 --format json --cwd D:\code\narada` reported task 1483 as opened and readable.
-- `narada task claim 1483 --agent narada.architect --reason ... --cwd D:\code\narada` failed by resolving to task 1485 and reporting task 1485 is not claimable because it is already claimed.
-- `narada task claim 20260517-1483-refresh-task-lifecycle-snapshot-after-chapter-closure --agent narada.architect --reason ... --cwd D:\code\narada` failed with `NOT NULL constraint failed: assignment_intents.task_number`.
+- `narada task read 1483 --format json --cwd <src-root>\narada` reported task 1483 as opened and readable.
+- `narada task claim 1483 --agent narada.architect --reason ... --cwd <src-root>\narada` failed by resolving to task 1485 and reporting task 1485 is not claimable because it is already claimed.
+- `narada task claim 20260517-1483-refresh-task-lifecycle-snapshot-after-chapter-closure --agent narada.architect --reason ... --cwd <src-root>\narada` failed with `NOT NULL constraint failed: assignment_intents.task_number`.
 - Read-only SQLite inspection showed rows for task 1483 in `task_lifecycle` and `task_specs`; no direct SQLite write was attempted.
-- `narada chapter status 1482-1485 --format json --cwd D:\code\narada` reported three tasks in the range and still omitted 1483, confirming range projection remains affected.
+- `narada chapter status 1482-1485 --format json --cwd <src-root>\narada` reported three tasks in the range and still omitted 1483, confirming range projection remains affected.
 
 ## Acceptance Criteria
 

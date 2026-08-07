@@ -17,7 +17,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260518-1509-1511-mcp-policy-reconciliation.md
+<src-root>\narada\.ai\do-not-open\tasks\20260518-1509-1511-mcp-policy-reconciliation.md
 
 ## Goal
 
@@ -55,7 +55,7 @@ A test guard catches drift in package verification, but operator-facing drift sh
 - `pnpm --filter @narada2/narada-proper-mcp typecheck` passed.
 - `pnpm --filter @narada2/narada-proper-mcp test` passed: 38 tests.
 - `pnpm --filter @narada2/narada-proper-mcp build` passed.
-- Live read-only startup probe against `D:\code\narada` passed with `mcp_policy_reconciliation.status: aligned`, no additions/removals, no mutation, and repair command `narada-proper-mcp --site-root D:\code\narada --reconcile-mcp-policy --apply`.
+- Live read-only startup probe against `<src-root>\narada` passed with `mcp_policy_reconciliation.status: aligned`, no additions/removals, no mutation, and repair command `narada-proper-mcp --site-root <src-root>\narada --reconcile-mcp-policy --apply`.
 
 ## Acceptance Criteria
 

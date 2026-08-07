@@ -17,7 +17,7 @@ reopened_by: narada.architect
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260516-1421-1430-site-telemetry-publication-live-readiness-followon.md
+<src-root>\narada\.ai\do-not-open\tasks\20260516-1421-1430-site-telemetry-publication-live-readiness-followon.md
 
 ## Goal
 

@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
 
 ## Goal
 
@@ -54,8 +54,8 @@ The worktree is broadly dirty from many Narada work families. The Site Registry 
 - `git diff --stat -- <scoped Site Registry planner/docs files>` showed the Site Registry split touches docs, CLI/MCP planner surfaces, tests, and Cloudflare worker/README.
 - `rg -n "Required Follow-Up|Path Classification|Recommended Commit Grouping|chapter status 1482-1484" .ai/decisions/2026-05-17-remaining-coherence-cleanup-audit.md` found all required audit sections.
 - `git diff --cached --name-only` returned no staged files.
-- `narada chapter status 1482-1484 --format json --cwd D:\code\narada` reported `tasks_found=2` and warning `Expected 3 tasks in range, found 2`.
-- `narada task read 1483 --format json --cwd D:\code\narada` reported task 1483 as opened and readable.
+- `narada chapter status 1482-1484 --format json --cwd <src-root>\narada` reported `tasks_found=2` and warning `Expected 3 tasks in range, found 2`.
+- `narada task read 1483 --format json --cwd <src-root>\narada` reported task 1483 as opened and readable.
 
 ## Acceptance Criteria
 

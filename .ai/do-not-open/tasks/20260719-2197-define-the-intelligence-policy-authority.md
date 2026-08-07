@@ -6,7 +6,7 @@ tags: authority-matrix, consent, invokable-intelligence, ontology-remediation, p
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2214@v1
 creation_payload_sha256: b61f3dd78b71207f2c495de349edbeadda48e995b282d32a00957f0d1c11d303
 idempotency_key: invokable-intelligence-remediation-source-2214-narada-proper-v1
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"D:\\code\\narada","correlation_key":"user-site-task-2214"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"<src-root>\\narada","correlation_key":"user-site-task-2214"}
 ---
 
 # Define the intelligence policy authority matrix
@@ -20,7 +20,7 @@ Remove the contradiction between locus ownership and resolver composition by spe
 Destination-side materialization of User Site task #2214. The accepted posture assigns target-Site governance/defaults, User-Site preferences, and Host/execution-Site feasibility, but prior tasks imply that all loci can issue all hard constraints. A typed authority matrix is required; user consent/prohibitions must not be disguised as ranking preferences.
 
 Source authority: User Site task #2214.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

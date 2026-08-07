@@ -6,7 +6,7 @@ tags: cloudflare, execution-topology, feasibility, invokable-intelligence, local
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2215@v1
 creation_payload_sha256: 4b2396f25d09394d8d21b16ff5c47f92a24ab2d26a8696b5172e3140b4df53f4
 idempotency_key: invokable-intelligence-remediation-source-2215-narada-proper-v1
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"D:\\code\\narada","correlation_key":"user-site-task-2215"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"<src-root>\\narada","correlation_key":"user-site-task-2215"}
 ---
 
 # Model execution topology and multi-locus feasibility
@@ -20,7 +20,7 @@ Replace the overloaded Host/PC concept with an explicit execution topology capab
 Destination-side materialization of User Site task #2215. The desktop PC is the execution host for a local carrier but not for a Cloudflare Worker invocation. A remote route can involve several loci and boundaries. Feasibility may attach to nodes or edges and must be evaluated for the actual route.
 
 Source authority: User Site task #2215.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

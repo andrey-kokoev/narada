@@ -73,9 +73,9 @@ Recommendation: Architect should create or route a bounded crystallization task 
 
 ## Verification
 
-- `narada test-run run --task 1487 --cmd 'node -e "JSON.parse(require(\"fs\").readFileSync(\"docs/product/fixtures/agent-identity/narada-builder-codex-session.valid.json\",\"utf8\"))"' --cwd D:\code\narada --format json` passed as `run_1779054685418_nk1efj`.
-- `narada test-run run --task 1487 --cmd 'rg -n agent_identity_id docs/product/agent-identity.v0.md docs/product/fixtures/agent-identity/narada-builder-codex-session.valid.json' --cwd D:\code\narada --format json` passed as `run_1779054680519_2cqvcg`.
-- `narada test-run run --task 1487 --cmd 'rg -n "Agent Identity Object" docs/product/agent-identity.v0.md docs/concepts/agent-carrier.md AGENTS.md' --cwd D:\code\narada --format json` passed as `run_1779054680520_f8o3pb`.
+- `narada test-run run --task 1487 --cmd 'node -e "JSON.parse(require(\"fs\").readFileSync(\"docs/product/fixtures/agent-identity/narada-builder-codex-session.valid.json\",\"utf8\"))"' --cwd <src-root>\narada --format json` passed as `run_1779054685418_nk1efj`.
+- `narada test-run run --task 1487 --cmd 'rg -n agent_identity_id docs/product/agent-identity.v0.md docs/product/fixtures/agent-identity/narada-builder-codex-session.valid.json' --cwd <src-root>\narada --format json` passed as `run_1779054680519_2cqvcg`.
+- `narada test-run run --task 1487 --cmd 'rg -n "Agent Identity Object" docs/product/agent-identity.v0.md docs/concepts/agent-carrier.md AGENTS.md' --cwd <src-root>\narada --format json` passed as `run_1779054680520_f8o3pb`.
 - Earlier PowerShell-nested quoting attempts failed before exercising product behavior; the passing runs above are the admitted verification evidence.
 
 ## Acceptance Criteria

@@ -6,7 +6,7 @@ tags: authority-matrix, consent, invokable-intelligence, ontology-remediation, p
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2214@v2
 creation_payload_sha256: c65e516df5485afaf16625d05485afd81cf2fb460225a18923834b5bed0a1570
 idempotency_key: invokable-intelligence-remediation-source-2214-narada-proper-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-site-task-2214-narada-proper-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-site-task-2214-narada-proper-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T17:31:36.529Z
 ---
@@ -22,7 +22,7 @@ Remove the contradiction between locus ownership and resolver composition by spe
 Destination-side materialization of User Site task #2214. The accepted posture assigns target-Site governance/defaults, User-Site preferences, and Host/execution-Site feasibility, but prior tasks imply that all loci can issue all hard constraints. A typed authority matrix is required; user consent/prohibitions must not be disguised as ranking preferences.
 
 Source authority: User Site task #2214.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

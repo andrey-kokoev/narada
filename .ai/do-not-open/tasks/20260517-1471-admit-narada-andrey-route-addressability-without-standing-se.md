@@ -18,7 +18,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
 
 ## Goal
 
@@ -54,9 +54,9 @@ Addressability admission follows identity resolver repair and route contract cor
 
 ## Verification
 
-- `narada test-run run --task 1471 --cmd 'rg -n "site_id|site_root|authority_locus" C:\Users\Andrey\Narada\config.json' --scope focused --requester narada.architect --rationale 'Verify target root config still identifies narada-andrey.' --cwd D:\code\narada` passed as `run_1779050560830_fv4q7i`.
-- `narada test-run run --task 1471 --cmd 'narada routing resolve --target-kind site --target-ref narada-andrey --format json --cwd D:\code\narada' --scope focused --requester narada.architect --rationale 'Verify source-local route resolves for site:narada-andrey.' --cwd D:\code\narada` passed as `run_1779050565307_ectrjv`.
-- `narada test-run run --task 1471 --cmd 'narada capability list --format json --cwd D:\code\narada' --scope focused --requester narada.architect --rationale 'Verify no capability grant was created by route addressability admission.' --cwd D:\code\narada` passed as `run_1779050573010_883jg6`.
+- `narada test-run run --task 1471 --cmd 'rg -n "site_id|site_root|authority_locus" C:\Users\Andrey\Narada\config.json' --scope focused --requester narada.architect --rationale 'Verify target root config still identifies narada-andrey.' --cwd <src-root>\narada` passed as `run_1779050560830_fv4q7i`.
+- `narada test-run run --task 1471 --cmd 'narada routing resolve --target-kind site --target-ref narada-andrey --format json --cwd <src-root>\narada' --scope focused --requester narada.architect --rationale 'Verify source-local route resolves for site:narada-andrey.' --cwd <src-root>\narada` passed as `run_1779050565307_ectrjv`.
+- `narada test-run run --task 1471 --cmd 'narada capability list --format json --cwd <src-root>\narada' --scope focused --requester narada.architect --rationale 'Verify no capability grant was created by route addressability admission.' --cwd <src-root>\narada` passed as `run_1779050573010_883jg6`.
 - `narada_mcp_fabric_context` with `target.ref=narada-andrey` returned read-only route selection for `route_1c33db5b-d527-4b45-aa6b-f917ddb7c45c`; target Site identity in that live carrier remains stale until MCP refresh.
 
 ## Acceptance Criteria

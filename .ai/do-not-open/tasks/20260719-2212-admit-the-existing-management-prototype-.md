@@ -6,7 +6,7 @@ tags: governed-crossing, invokable-intelligence, prototype-reconciliation, task-
 creation_payload_ref: mcp_payload:invokable-intelligence-management-prototype-bridge@v2
 creation_payload_sha256: 0aa2efc4f281d94c4601fcc81de18de0684d002237dfc09ca2432da06e804475
 idempotency_key: invokable-intelligence-management-prototype-bridge-v1
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-2183-to-narada-management-split"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-2183-to-narada-management-split"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T18:06:37.013Z
 ---
@@ -19,7 +19,7 @@ Reconcile the terminal outcome and repository artifacts of User Site task #2183 
 
 ## Context
 
-User Site task #2183 is actively producing a combined catalog/migration/management/compatibility prototype in D:\code\narada. This bridge is a governed crossing, not duplicate implementation. It waits on durable task state rather than conversation, inventories the admitted artifacts once #2183 is terminal, and assigns each artifact to a split Narada-proper task without transferring User Site authority.
+User Site task #2183 is actively producing a combined catalog/migration/management/compatibility prototype in <src-root>\narada. This bridge is a governed crossing, not duplicate implementation. It waits on durable task state rather than conversation, inventories the admitted artifacts once #2183 is terminal, and assigns each artifact to a split Narada-proper task without transferring User Site authority.
 
 ## Required Work
 
@@ -43,7 +43,7 @@ Reconciled the terminal User Site #2183 prototype into Narada-proper authority. 
 ## Verification
 
 
-Verified through task-lifecycle MCP that User Site #2183 is closed with an admitted completed outcome. Verified commit 0fa8c1ae through git MCP and enumerated its 14 changed paths from the commit patch. Verified observations were admitted on #2212 through #2216. The source remains User-Site authority; implementation destinations are bound to D:\code\narada. No implementation source files were changed by this reconciliation task.
+Verified through task-lifecycle MCP that User Site #2183 is closed with an admitted completed outcome. Verified commit 0fa8c1ae through git MCP and enumerated its 14 changed paths from the commit patch. Verified observations were admitted on #2212 through #2216. The source remains User-Site authority; implementation destinations are bound to <src-root>\narada. No implementation source files were changed by this reconciliation task.
 
 ## Acceptance Criteria
 

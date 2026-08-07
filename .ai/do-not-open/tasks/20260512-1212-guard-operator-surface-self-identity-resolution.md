@@ -43,7 +43,7 @@ Summary: When narada.architect ran `narada operator-surface bind-focused --as se
 
 ## Execution Notes
 
-- Target locus: Narada proper operator-surface command behavior in `D:\code\narada`.
+- Target locus: Narada proper operator-surface command behavior in `<src-root>\narada`.
 - Preserved source envelope `env_3e624efe-8fd6-4e3a-8154-7b9a34578847` as local CAPA incident evidence.
 - Inspected `packages/layers/cli/src/commands/operator-surface.ts` and `packages/layers/cli/test/commands/operator-surface.test.ts`.
 - No source change was needed in this increment. Current behavior already refuses `bind-focused --as self` when active roster assignment is the only candidate identity evidence, reports `source: active_roster_assignment`, `trust_class: untrusted_projection`, and does not mutate runtime binding.

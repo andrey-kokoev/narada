@@ -18,7 +18,7 @@ Operator asked whether the doctrinal corpus can be copied from narada-andrey Sit
 
 ## Required Work
 
-1. Inspect narada-andrey config doctrinal_corpus and preserve source evidence. 2. Create Narada proper .narada-local doctrine corpus config using repo-local doctrine paths where available. 3. Do not create D:\code\narada\config.json and do not import narada-andrey runtime state. 4. Record audit/ledger evidence and verify configured paths exist or are explicitly marked external/unresolved. 5. Report whether MCP regrounding is fully wired or only the repo-local config exists.
+1. Inspect narada-andrey config doctrinal_corpus and preserve source evidence. 2. Create Narada proper .narada-local doctrine corpus config using repo-local doctrine paths where available. 3. Do not create <src-root>\narada\config.json and do not import narada-andrey runtime state. 4. Record audit/ledger evidence and verify configured paths exist or are explicitly marked external/unresolved. 5. Report whether MCP regrounding is fully wired or only the repo-local config exists.
 
 ## Non-Goals
 
@@ -33,7 +33,7 @@ Operator asked whether the doctrinal corpus can be copied from narada-andrey Sit
 - Created Narada proper repo-local corpus config at `.narada/agent-context/doctrinal-corpus.json`.
 - Used local Narada proper doctrine paths where exact or usable local references exist.
 - Marked missing exact repo-local doctrine files as `external_reference_unresolved` instead of copying WSL UNC paths as local authority.
-- Did not create `D:\code\narada\config.json`.
+- Did not create `<src-root>\narada\config.json`.
 - Did not import narada-andrey runtime DB, history, checkpoints, secrets, or MCP runtime state.
 - MCP regrounding remains not fully wired for this session because the available MCP surface still reports `doctrinal_corpus_not_configured`; this task creates the Narada proper config artifact only.
 

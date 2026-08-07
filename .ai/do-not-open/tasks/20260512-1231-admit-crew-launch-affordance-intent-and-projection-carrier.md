@@ -43,11 +43,11 @@ The inbox packet from narada-andrey.Kevin documents a portable crew/agent shortc
 
 - `node --test tools/operator-surface-carriers/agent-launch-affordance-materializer.test.mjs`
   - Result: 4 tests passed.
-- `node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode plan --site-root D:\code\narada --site-id narada`
+- `node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode plan --site-root <src-root>\narada --site-id narada`
   - Result: planned projections for `narada.architect` and `narada.builder`, no refusals.
-- `node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode apply --site-root D:\code\narada --site-id narada --mutation-authorized`
+- `node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode apply --site-root <src-root>\narada --site-id narada --mutation-authorized`
   - Result: applied projection files under ignored `.crew/agent-shortcuts`.
-- `node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode verify --site-root D:\code\narada --site-id narada`
+- `node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode verify --site-root <src-root>\narada --site-id narada`
   - Result: verified, `projection_count=2`, no missing projection files.
 - `Get-Content operator-surfaces\agent-launch-affordances.json | ConvertFrom-Json`
   - Result: JSON valid.

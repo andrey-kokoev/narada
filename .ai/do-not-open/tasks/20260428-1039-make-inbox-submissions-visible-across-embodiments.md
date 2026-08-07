@@ -25,7 +25,7 @@ Eliminate the invisible-inbox failure where an envelope submitted into one embod
 
 ## Context
 
-A Windows embodiment submitted envelope env_653b3570-94dc-4f86-9110-183a60f393c0 into D:/code/narada/.ai/inbox.db. The WSL authority clone could not see it because the SQLite DB is local runtime substrate and the envelope was not exported into .ai/inbox-envelopes. This recreates invisible work between embodiments.
+A Windows embodiment submitted envelope env_653b3570-94dc-4f86-9110-183a60f393c0 into <src-root>/narada/.ai/inbox.db. The WSL authority clone could not see it because the SQLite DB is local runtime substrate and the envelope was not exported into .ai/inbox-envelopes. This recreates invisible work between embodiments.
 
 ## Required Work
 

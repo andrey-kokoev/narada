@@ -18,7 +18,7 @@ continuation_packet:
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1464-1468-cross-site-mcp-inbox-route-narada-andrey.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1464-1468-cross-site-mcp-inbox-route-narada-andrey.md
 
 ## Goal
 

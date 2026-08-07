@@ -11,7 +11,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260515-1288-1290-claude-code-carrier-stage-3.md
+<src-root>\narada\.ai\do-not-open\tasks\20260515-1288-1290-claude-code-carrier-stage-3.md
 
 ## Goal
 

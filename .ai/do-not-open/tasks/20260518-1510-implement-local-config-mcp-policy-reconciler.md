@@ -16,7 +16,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260518-1509-1511-mcp-policy-reconciliation.md
+<src-root>\narada\.ai\do-not-open\tasks\20260518-1509-1511-mcp-policy-reconciliation.md
 
 ## Goal
 
@@ -54,9 +54,9 @@ Narada doctrine favors reconciliation over broad generation for Site-local runti
 - `pnpm --filter @narada2/narada-proper-mcp typecheck` passed.
 - `pnpm --filter @narada2/narada-proper-mcp test` passed: 35 tests.
 - `pnpm --filter @narada2/narada-proper-mcp build` passed.
-- `node packages/narada-proper-mcp/dist/main.js --site-root D:\code\narada --reconcile-mcp-policy` initially reported drift: removals `["site_registry_relation_plan_transition"]`.
-- `node packages/narada-proper-mcp/dist/main.js --site-root D:\code\narada --agent-id narada.builder --reconcile-mcp-policy --apply` repaired that stale tool and emitted mutation evidence.
-- Follow-up `node packages/narada-proper-mcp/dist/main.js --site-root D:\code\narada --reconcile-mcp-policy` passed with status `ok`, no additions/removals, and exit code `0`.
+- `node packages/narada-proper-mcp/dist/main.js --site-root <src-root>\narada --reconcile-mcp-policy` initially reported drift: removals `["site_registry_relation_plan_transition"]`.
+- `node packages/narada-proper-mcp/dist/main.js --site-root <src-root>\narada --agent-id narada.builder --reconcile-mcp-policy --apply` repaired that stale tool and emitted mutation evidence.
+- Follow-up `node packages/narada-proper-mcp/dist/main.js --site-root <src-root>\narada --reconcile-mcp-policy` passed with status `ok`, no additions/removals, and exit code `0`.
 
 ## Acceptance Criteria
 

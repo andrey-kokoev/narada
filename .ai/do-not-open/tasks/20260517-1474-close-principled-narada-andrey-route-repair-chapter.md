@@ -18,7 +18,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
 
 ## Goal
 
@@ -52,9 +52,9 @@ Chapter closure follows identity repair, contract correction, route addressabili
 
 ## Verification
 
-- `narada routing resolve --target-kind site --target-ref narada-andrey --format json --cwd D:\code\narada` selected `route_1c33db5b-d527-4b45-aa6b-f917ddb7c45c`.
-- `narada capability list --format json --cwd D:\code\narada` returned `count: 0`, confirming standing capability remains ungranted.
-- `narada task lifecycle status --format json --cwd D:\code\narada` showed no review handoff residuals and clean builder hand-back posture.
+- `narada routing resolve --target-kind site --target-ref narada-andrey --format json --cwd <src-root>\narada` selected `route_1c33db5b-d527-4b45-aa6b-f917ddb7c45c`.
+- `narada capability list --format json --cwd <src-root>\narada` returned `count: 0`, confirming standing capability remains ungranted.
+- `narada task lifecycle status --format json --cwd <src-root>\narada` showed no review handoff residuals and clean builder hand-back posture.
 - Governed final checks passed: `run_1779051612515_xl624f`, `run_1779051612439_ptld6q`, and `run_1779051612508_fko2vo`.
 
 ## Acceptance Criteria

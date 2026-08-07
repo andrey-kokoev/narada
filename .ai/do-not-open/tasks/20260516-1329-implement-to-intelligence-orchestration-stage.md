@@ -11,7 +11,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260516-1327-1332-narada-native-carrier-orchestration-wrapper.md
+<src-root>\narada\.ai\do-not-open\tasks\20260516-1327-1332-narada-native-carrier-orchestration-wrapper.md
 
 ## Goal
 

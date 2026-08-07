@@ -6,7 +6,7 @@ tags: acceptance, cutover, e2e-aggregation, invokable-intelligence
 creation_payload_ref: mcp_payload:invokable-intelligence-final-cutover-v2@v1
 creation_payload_sha256: 9ab2514e47dc66d64602345abc60941a5464dd8c80aaf4927a49e40341d36a6e
 idempotency_key: invokable-intelligence-final-cutover-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"invokable-intelligence-final-cutover-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"invokable-intelligence-final-cutover-v2"}
 ---
 
 # Complete canonical intelligence cutover and aggregate acceptance
@@ -49,4 +49,4 @@ Do not claim cutover with undocumented legacy readers or unresolved dependency f
 - [ ] Local and Cloudflare platform tasks have satisfying outcomes and their sole live-E2E evidence is aggregated.
 - [ ] All canonical contract/storage/resolver/materialization/management/runtime suites pass.
 - [ ] Documentation and diagnostics expose authority, offering/route, topology, access, temporal, and result/outcome semantics.
-- [ ] Final chapter audit is acyclic, fully routed to D:\code\narada, and records zero unresolved acceptance residuals or opens explicit remediation.
+- [ ] Final chapter audit is acyclic, fully routed to <src-root>\narada, and records zero unresolved acceptance residuals or opens explicit remediation.

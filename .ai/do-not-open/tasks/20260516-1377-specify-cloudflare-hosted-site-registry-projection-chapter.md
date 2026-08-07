@@ -33,7 +33,7 @@ Narada has @narada2/site-config contracts for Site Registry projection, typed Si
 ## Execution Notes
 
 - Inspected existing Narada contracts and docs for Site Registry projection, hosted Cloudflare Site runtime, and prior Site Registry typed webhook contract.
-- Inspected Staccato Cloudflare Worker source evidence read-only: `D:\code\staccato-elt\workers\staccato\src\index.mjs`, `wrangler.jsonc`, D1 migration `0001_surface_inbox.sql`, Worker tests, and `runbooks\cloudflare-published-surface.md`.
+- Inspected Staccato Cloudflare Worker source evidence read-only: `<src-root>\staccato-elt\workers\staccato\src\index.mjs`, `wrangler.jsonc`, D1 migration `0001_surface_inbox.sql`, Worker tests, and `runbooks\cloudflare-published-surface.md`.
 - Created task range 1377-1384 under chapter `Cloudflare hosted Site Registry projection`.
 - Chapter lifts Staccato setup as high-level shape: Worker route table, `POST /webhook`, read APIs, KV latest projections, D1 durable inbox/audit rows, bearer capability splits, local publish/pull/finalize scripts, deploy/runbook posture, and smoke verification.
 - Chapter does not authorize live Cloudflare mutation or deployment. Live deploy remains gated behind separate Operator instruction, capability grant, secret binding plan, and post-deploy evidence.

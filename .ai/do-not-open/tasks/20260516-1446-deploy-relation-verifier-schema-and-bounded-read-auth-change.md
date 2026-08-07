@@ -11,7 +11,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260516-1441-1447-site-registry-relation-capability-verifiers.md
+<src-root>\narada\.ai\do-not-open\tasks\20260516-1441-1447-site-registry-relation-capability-verifiers.md
 
 ## Goal
 

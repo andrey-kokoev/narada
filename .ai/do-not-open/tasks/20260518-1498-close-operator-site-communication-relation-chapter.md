@@ -18,7 +18,7 @@ confirmed_at: 2026-05-18T03:55:25.310Z
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260518-1494-1498-operator-site-communication-relation.md
+<src-root>\narada\.ai\do-not-open\tasks\20260518-1494-1498-operator-site-communication-relation.md
 
 ## Goal
 

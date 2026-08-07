@@ -25,7 +25,7 @@ criteria_proof_verification:
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1469-1474-principled-narada-andrey-cross-site-inbox-route.md
 
 ## Goal
 
@@ -56,7 +56,7 @@ Reusable cross-Site inbox submission capability can be admitted or deferred only
 - Did not create a capability grant. Source-local route addressability is not target-side consent.
 - Concrete unblock: obtain a target-side or operator-admitted consent artifact naming `site=narada-andrey`, `principal=narada.architect` or Narada proper agent class, `capability_kind=canonical_inbox_cross_site_submission`, source Site `narada-proper`, target ref `narada-andrey`, filesystem transport, inert envelope submission only, and allowed kinds `proposal`, `observation`, `message`.
 - Command shape after unblock:
-  `narada capability grant --site narada-andrey --principal narada.architect --kind canonical_inbox_cross_site_submission --credential-ref none --scope '{"source_site":"narada-proper","target_ref":"narada-andrey","transport":"filesystem","effect":"inert_inbox_submission","allowed_envelope_kinds":["proposal","observation","message"]}' --allow inbox_stage_submission_workflow,inbox_submit_observation,inbox_submit_typed_envelope --evidence-ref <explicit-consent-artifact> --by <consenting-principal> --format json --cwd D:\code\narada`
+  `narada capability grant --site narada-andrey --principal narada.architect --kind canonical_inbox_cross_site_submission --credential-ref none --scope '{"source_site":"narada-proper","target_ref":"narada-andrey","transport":"filesystem","effect":"inert_inbox_submission","allowed_envelope_kinds":["proposal","observation","message"]}' --allow inbox_stage_submission_workflow,inbox_submit_observation,inbox_submit_typed_envelope --evidence-ref <explicit-consent-artifact> --by <consenting-principal> --format json --cwd <src-root>\narada`
 
 ## Verification
 

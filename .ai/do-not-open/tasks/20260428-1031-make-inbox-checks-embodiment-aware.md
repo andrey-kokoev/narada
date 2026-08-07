@@ -18,7 +18,7 @@ Prevent inbox work checks from missing file-drop messages in configured sibling 
 
 ## Context
 
-The Operator pointed out that `narada inbox work-next` missed `D:/code/narada/.ai/inbox-drop/20260428-002-embodiment-aware-authority-routing.md`. Task 1030 made configured embodiments visible in authority preflight, but inbox work checks still only considered the authority clone's canonical inbox and local drop.
+The Operator pointed out that `narada inbox work-next` missed `<src-root>/narada/.ai/inbox-drop/20260428-002-embodiment-aware-authority-routing.md`. Task 1030 made configured embodiments visible in authority preflight, but inbox work checks still only considered the authority clone's canonical inbox and local drop.
 
 ## Required Work
 

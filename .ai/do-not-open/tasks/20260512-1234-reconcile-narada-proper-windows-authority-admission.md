@@ -14,7 +14,7 @@ Reconcile Narada proper authority records so the declared Windows authority post
 
 ## Context
 
-Doctrine-grounded review found .narada/site.json still says D:\code\narada admission was for the seed only, while subsequent Narada proper work used this Windows root for admitted tasks and commits. Execution then found the CLI still enforced `.ai/authority-clone.json`, which retained the missing WSL root as canonical authority.
+Doctrine-grounded review found .narada/site.json still says <src-root>\narada admission was for the seed only, while subsequent Narada proper work used this Windows root for admitted tasks and commits. Execution then found the CLI still enforced `.ai/authority-clone.json`, which retained the missing WSL root as canonical authority.
 
 ## Required Work
 
@@ -29,7 +29,7 @@ Doctrine-grounded review found .narada/site.json still says D:\code\narada admis
 ## Execution Notes
 
 - Updated `.narada/site.json` authority admission from seed-only temporary Windows path admission to `operator_admitted_windows_native_narada_proper_authority`.
-- Updated `.ai/authority-clone.json` so `D:\code\narada` is the `authority_root` and Windows-native authority embodiment.
+- Updated `.ai/authority-clone.json` so `<src-root>\narada` is the `authority_root` and Windows-native authority embodiment.
 - Preserved the previous WSL canonical root as `previous_canonical_authority_root`.
 - Recorded explicit non-admissions: narada-andrey authority over Narada proper, source runtime import, raw WSL crossing as mutation authority, and unrecorded native shell fallback.
 
@@ -42,6 +42,6 @@ Doctrine-grounded review found .narada/site.json still says D:\code\narada admis
 
 ## Acceptance Criteria
 
-- [x] .narada/site.json no longer claims D:\code\narada is seed-only
+- [x] .narada/site.json no longer claims <src-root>\narada is seed-only
 - [x] .ai/authority-clone.json no longer routes Narada proper mutation authority to the missing WSL root
 - [x] Authority record preserves no narada-andrey runtime state import

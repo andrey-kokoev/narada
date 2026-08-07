@@ -18,7 +18,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260518-1488-1493-incoming-message-intake-edge-coherence.md
+<src-root>\narada\.ai\do-not-open\tasks\20260518-1488-1493-incoming-message-intake-edge-coherence.md
 
 ## Goal
 

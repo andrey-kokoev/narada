@@ -2,7 +2,7 @@
 status: closed
 deferred_by: narada.architect
 deferred_at: 2026-05-12T18:18:52.143Z
-defer_reason: Implementation request requires WSL-side carrier authority, but current active embodiment is Windows D:\code\narada; raw WSL-to-Windows shell fallback remains forbidden.
+defer_reason: Implementation request requires WSL-side carrier authority, but current active embodiment is Windows <src-root>\narada; raw WSL-to-Windows shell fallback remains forbidden.
 unblock_condition: Admit a WSL-side Narada proper carrier rooted at /home/andrey/src/narada with typed Windows PowerShell transport boundary for ee-mcp.windows-powershell-from-wsl.
 continuation_packet:
   kind: task_unblock
@@ -69,7 +69,7 @@ Recommendation: Treat this as WSL-side architect work; keep narada-andrey's decl
 
 ## Execution Notes
 
-- Target locus assessment: the active execution embodiment is Windows `D:\code\narada`, not a WSL-side Narada proper carrier.
+- Target locus assessment: the active execution embodiment is Windows `<src-root>\narada`, not a WSL-side Narada proper carrier.
 - Source envelope `env_a01a78a7-a0a4-4500-bd9e-6773dbadde5a` asks specifically for a WSL-side implementation of `ee-mcp.windows-powershell-from-wsl`.
 - No raw WSL-to-Windows shell fallback is admitted here. Implementing or testing a WSL-originating adapter from the Windows embodiment would collapse the requested crossing and would falsely claim WSL-side execution.
 - Smallest missing admission/surface: an admitted WSL-side Narada proper carrier rooted at canonical `/home/andrey/src/narada`, with a typed Windows PowerShell transport boundary and explicit denial of ad hoc `powershell.exe`/`cmd.exe` fallback outside that carrier.

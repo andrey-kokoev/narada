@@ -6,7 +6,7 @@ tags: capabilities, deployment, invocation-route, invokable-intelligence, offeri
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2213@v2
 creation_payload_sha256: 8f0be07c6cc70490e1f5043b70b460a7a92cb13546794f0e40e0b18eec30e23b
 idempotency_key: invokable-intelligence-remediation-source-2213-narada-proper-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-site-task-2213-narada-proper-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-site-task-2213-narada-proper-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T17:49:39.651Z
 ---
@@ -22,7 +22,7 @@ Represent capabilities that belong to a model-as-offered-through-a-specific-serv
 Destination-side materialization of User Site task #2213. Thinking controls, streaming, structured output, pricing, batch support, and availability can differ for the same model across inference providers and endpoints. Unary provider/model assertions are insufficient. The ontology needs a minimally sufficient first-class offering/deployment and candidate-route shape within the typed resource graph.
 
 Source authority: User Site task #2213.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

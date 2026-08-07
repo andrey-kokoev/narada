@@ -43,7 +43,7 @@ Summary: A review wait was projected on Bob's operator-surface label as `awaitin
 
 ## Execution Notes
 
-- Target locus: Narada proper task-governance, role-loop, work-next, and operator-surface read-model behavior in `D:\code\narada`.
+- Target locus: Narada proper task-governance, role-loop, work-next, and operator-surface read-model behavior in `<src-root>\narada`.
 - Preserved source envelope `env_fdf9b9b7-39e8-4b5e-b535-7ee24f59d6e4` as operator-confirmed external proposal evidence.
 - Verified the current tree already implements directed obligations as first-class SQLite lifecycle records:
   - `task report` and `task review-request` create durable `review_request` obligations.

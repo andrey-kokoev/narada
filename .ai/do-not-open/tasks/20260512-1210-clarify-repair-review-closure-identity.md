@@ -53,7 +53,7 @@ Recommendation: Treat as task-governance CAPA: tighten review/finish semantics, 
 
 ## Execution Notes
 
-- Target locus: Narada proper task-governance/CLI review-finish behavior in `D:\code\narada`.
+- Target locus: Narada proper task-governance/CLI review-finish behavior in `<src-root>\narada`.
 - Preserved source envelope `env_704501c8-f660-4b22-bffc-6f532be37f38` as external observation evidence.
 - Inspected `packages/task-governance/src/task-finish-service.ts` and `packages/layers/cli/test/commands/task-finish.test.ts`.
 - No package source change was needed in this increment. Current behavior already submits a fresh accepted repair review when a reviewer supplies an accepted verdict after a stale rejection, reports `review_action: submitted`, reports `review_reuse_posture: submitted_superseding_stale_rejection`, records `ignored_review_ids`, admits fresh evidence, and closes.

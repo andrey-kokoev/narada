@@ -52,7 +52,7 @@ Recommendation: Add regression coverage for accepted review notes that mention a
 
 ## Execution Notes
 
-- Target locus: Narada proper task-governance review diagnostics in `D:\code\narada`, under the temporary Narada proper authority admission already recorded for this embodiment.
+- Target locus: Narada proper task-governance review diagnostics in `<src-root>\narada`, under the temporary Narada proper authority admission already recorded for this embodiment.
 - Preserved source envelope `env_7061001b-bdb2-4866-85d1-5ef43ee8dc21` as external observation evidence from `narada-andrey.Kevin`.
 - Changed `packages/task-governance/src/task-review-service.ts` so non-blocking CAPA relevance requires either a blocking finding or explicit lifecycle/authority defect language. Plain keyword mentions still appear in diagnostic trigger metadata, but they no longer create CAPA pressure by themselves.
 - Added regression coverage in `packages/layers/cli/test/commands/task-review.test.ts` for an `accepted_with_notes` review note that mentions authority/lifecycle/evidence verification while explicitly saying no lifecycle authority defect was found.

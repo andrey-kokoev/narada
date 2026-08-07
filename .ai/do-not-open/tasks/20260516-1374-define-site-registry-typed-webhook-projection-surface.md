@@ -32,7 +32,7 @@ Operator identified that the Staccato Cloudflare Worker is more than telemetry o
 
 ## Execution Notes
 
-- Inspected `@narada2/site-config`, Site state projection/operator console registry docs, and the Staccato Cloudflare published-surface runbook/Worker posture. The referenced Staccato `.narada/config.json` was not present at `D:\code\staccato-elt\.narada\config.json`; the runbook documents the relevant `integrations.cloudflare.published_surface` shape.
+- Inspected `@narada2/site-config`, Site state projection/operator console registry docs, and the Staccato Cloudflare published-surface runbook/Worker posture. The referenced Staccato `.narada/config.json` was not present at `<src-root>\staccato-elt\.narada\config.json`; the runbook documents the relevant `integrations.cloudflare.published_surface` shape.
 - Added Site Registry projection descriptors in `packages/site-config/src/index.ts`: projected Site records with site id, locus/substrate, registry status, relation, freshness/health, event endpoint posture, inbox/message endpoint posture, capabilities, evidence, and non-authority limits.
 - Added typed Site event envelope and receiver decision contracts for webhook/Cloudflare-style guarded receipt, including source/subject/target addressing, event id/idempotency, family/type, observed/sent timestamps, capability auth posture, payload bounds, refusal reasons, and no-authority flags.
 - Added projection read-model derivation for latest health, inbox availability, agent/session posture, task/work posture, attention, reports, freshness classification, and event provenance.

@@ -49,7 +49,7 @@ Evidence:
 
 ## Execution Notes
 
-- Target locus: Narada proper task/inbox mutation evidence freshness posture in `D:\code\narada`.
+- Target locus: Narada proper task/inbox mutation evidence freshness posture in `<src-root>\narada`.
 - Preserved source envelope `env_c5efbc89-6760-4f9c-89eb-5159d1452ac4` as external observation evidence.
 - Inspected `packages/layers/cli/src/lib/governance-freshness.ts`, `packages/layers/cli/src/lib/mutation-evidence-writer.ts`, and `packages/layers/cli/test/commands/task-lifecycle-mutation-evidence.test.ts`.
 - No source change was needed. Current mutation evidence can include `replay_payload.governance_freshness` with `stale_dist`, `accepted`, source paths, command identity/class, acceptance reason, and freshness posture.

@@ -11,7 +11,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260516-1301-1305-narada-native-intellect-provider-adapters.md
+<src-root>\narada\.ai\do-not-open\tasks\20260516-1301-1305-narada-native-intellect-provider-adapters.md
 
 ## Goal
 

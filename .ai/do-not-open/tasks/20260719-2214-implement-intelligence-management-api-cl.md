@@ -6,7 +6,7 @@ tags: cli, invokable-intelligence, management, mcp
 creation_payload_ref: mcp_payload:invokable-intelligence-management-surfaces-v2@v1
 creation_payload_sha256: 55c7440003bc433f571b9be7f4655ebbd30c5137d64e64b46724527841c53dc4
 idempotency_key: invokable-intelligence-management-surfaces-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"invokable-intelligence-management-surfaces-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"invokable-intelligence-management-surfaces-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T19:47:24.229Z
 ---

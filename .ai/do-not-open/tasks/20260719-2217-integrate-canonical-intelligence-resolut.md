@@ -6,7 +6,7 @@ tags: invokable-intelligence, live-e2e, local, runtime
 creation_payload_ref: mcp_payload:invokable-intelligence-local-runtime-v2@v1
 creation_payload_sha256: eb674dbf76b91bdbd1a7890270dd55c525b2e711e49ae12a30247c9005ce7e6e
 idempotency_key: invokable-intelligence-local-runtime-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"invokable-intelligence-local-runtime-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"invokable-intelligence-local-runtime-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-20T04:59:09.468Z
 criteria_proof_verification:

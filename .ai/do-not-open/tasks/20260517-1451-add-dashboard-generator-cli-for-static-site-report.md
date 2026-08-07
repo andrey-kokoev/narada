@@ -18,7 +18,7 @@ continuation_packet:
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1448-1455-common-site-operational-dashboard-generator.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1448-1455-common-site-operational-dashboard-generator.md
 
 ## Goal
 

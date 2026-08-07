@@ -6,7 +6,7 @@ tags: cloudflare, invokable-intelligence, live-e2e, runtime
 creation_payload_ref: mcp_payload:invokable-intelligence-cloudflare-runtime-v2@v1
 creation_payload_sha256: d3f108c6b00b787312830d907ef906bf3fcec14fa37a39f39b7359805023f6c2
 idempotency_key: invokable-intelligence-cloudflare-runtime-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"invokable-intelligence-cloudflare-runtime-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"invokable-intelligence-cloudflare-runtime-v2"}
 amended_by: operator
 amended_at: 2026-07-20T17:16:35.774Z
 deferred_by: operator

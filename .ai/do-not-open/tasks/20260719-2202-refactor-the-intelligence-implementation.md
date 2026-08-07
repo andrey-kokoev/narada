@@ -6,7 +6,7 @@ tags: integration-gate, invokable-intelligence, ontology-remediation, parallelis
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2219@v1
 creation_payload_sha256: e72538f00c86a8d58a54137ce772004f82eab98de12304d828eb6861ac0df59d
 idempotency_key: invokable-intelligence-remediation-source-2219-narada-proper-v1
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"D:\\code\\narada","correlation_key":"user-site-task-2219"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"<src-root>\\narada","correlation_key":"user-site-task-2219"}
 ---
 
 # Refactor the intelligence implementation task graph
@@ -20,7 +20,7 @@ Integrate the eight remediation contracts into the implementation chapter, split
 Destination-side materialization of User Site task #2219. The current graph serializes contracts -> storage -> resolver -> management/migration before either runtime, while the management task combines migration, CLI, MCP, compatibility, and cross-locus materialization. This task is the integration gate before the original implementation chapter becomes actionable.
 
 Source authority: User Site task #2219.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

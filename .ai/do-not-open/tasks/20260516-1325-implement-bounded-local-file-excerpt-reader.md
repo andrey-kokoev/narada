@@ -11,7 +11,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260516-1321-1326-narada-native-to-data-adapter-foundation.md
+<src-root>\narada\.ai\do-not-open\tasks\20260516-1321-1326-narada-native-to-data-adapter-foundation.md
 
 ## Goal
 
@@ -41,7 +41,7 @@ The carrier may need small local text excerpts, but file readability must not co
 - The reader refuses traversal outside the admitted Site root, binary files, oversized excerpt bounds, secret-like paths, and governed state paths that require stronger canonical readers.
 - Successful packets include bounded excerpts, path attribution, byte/line bounds, redaction posture, and the shared no-mutation flags.
 - Extended `tools/narada-native-carrier/to-data-readers.test.mjs` with capability, containment, size, binary, secret-path, stronger-reader, bounded excerpt, attribution, and no-mutation coverage.
-- Review continuation: fixed Windows absolute-path containment by rejecting `path.relative(siteRoot, absolutePath)` results that are absolute, covering cross-drive paths such as `C:\Windows\win.ini` from a `D:\code\narada` Site root.
+- Review continuation: fixed Windows absolute-path containment by rejecting `path.relative(siteRoot, absolutePath)` results that are absolute, covering cross-drive paths such as `C:\Windows\win.ini` from a `<src-root>\narada` Site root.
 
 ## Verification
 

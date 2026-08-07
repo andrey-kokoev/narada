@@ -6,7 +6,7 @@ tags: marketing, website
 creation_payload_ref: mcp_payload:narada-mkt-site-2026-07-31-positioning@v1
 creation_payload_sha256: ee196d0691bf343121c7510ed527d3aa7da7cdcb288b1e1b221dff92bc203ffe
 idempotency_key: chapter-narada-marketing-site-2026-07-31-positioning
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"manual","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"D:\\code\\narada","correlation_key":"chapter-narada-marketing-site-2026-07-31-positioning"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"manual","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"<src-root>\\narada","correlation_key":"chapter-narada-marketing-site-2026-07-31-positioning"}
 criteria_proved_by: andrey-user.resident
 criteria_proved_at: 2026-07-31T22:33:48.164Z
 closed_at: 2026-07-31T23:13:50.395Z

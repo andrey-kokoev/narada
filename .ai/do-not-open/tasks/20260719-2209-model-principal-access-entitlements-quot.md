@@ -6,7 +6,7 @@ tags: authorization, entitlement, governance, invokable-intelligence, ontology-r
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2217@v2
 creation_payload_sha256: d1023443b5511e6429bab130b8d1b915d616c3431a93df66d4806a18ec017d92
 idempotency_key: invokable-intelligence-remediation-source-2217-narada-proper-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-site-task-2217-narada-proper-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-site-task-2217-narada-proper-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T17:53:20.548Z
 ---
@@ -22,7 +22,7 @@ Ensure route feasibility requires authorized use of an account and service, not 
 Destination-side materialization of User Site task #2217. Credential existence, secret availability, principal authorization, account entitlement, quota, budget, data residency, retention policy, and current usability are distinct facts with different owners and freshness. The resolver must not select an available credential that the invoking principal may not use.
 
 Source authority: User Site task #2217.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

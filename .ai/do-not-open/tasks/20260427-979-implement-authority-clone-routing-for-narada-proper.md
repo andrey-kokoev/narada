@@ -37,7 +37,7 @@ Narada proper is operated from multiple embodiments, including the WSL checkout 
 
 ## Execution Notes
 
-1. Added `.ai/authority-clone.json` declaring `/home/andrey/src/narada` as the Narada proper authority clone and `D:\code\narada` as a non-authority Windows embodiment.
+1. Added `.ai/authority-clone.json` declaring `/home/andrey/src/narada` as the Narada proper authority clone and `<src-root>\narada` as a non-authority Windows embodiment.
 2. Added `packages/layers/cli/src/lib/narada-proper-authority.ts` with:
    - `inspectAuthorityClonePosture()`,
    - `shouldGuardAuthorityClone()`,

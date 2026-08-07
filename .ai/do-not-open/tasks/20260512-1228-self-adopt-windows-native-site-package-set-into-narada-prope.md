@@ -14,7 +14,7 @@ Adapt the verified Windows-native Narada package/live-carrier set for use by thi
 
 ## Context
 
-Operator asked whether the Windows-native package set should now be used by Narada proper's own .narada Site. Greenfield create-site is terminal; this task is self-adoption/reconciliation for the existing Narada proper Site root D:\code\narada.
+Operator asked whether the Windows-native package set should now be used by Narada proper's own .narada Site. Greenfield create-site is terminal; this task is self-adoption/reconciliation for the existing Narada proper Site root <src-root>\narada.
 
 ## Required Work
 
@@ -28,7 +28,7 @@ Plan, apply, verify, and audit target-local live carriers against the existing N
 
 ## Execution Notes
 
-Target locus: Narada proper Site root `D:\code\narada`, with Site memory under `D:\code\narada\.narada`.
+Target locus: Narada proper Site root `<src-root>\narada`, with Site memory under `<src-root>\narada\.narada`.
 
 Authority basis: `narada_proper_self_adoption_task_1228`, created after the Operator asked whether the verified Windows-native package set should be adapted for Narada proper's own `.narada` Site.
 
@@ -54,7 +54,7 @@ Evidence:
 
 ## Verification
 
-Carrier plan/apply/verify commands were run with `--target-site-root D:\code\narada`, `--site-id narada-proper`, and `--authority-basis narada_proper_self_adoption_task_1228`.
+Carrier plan/apply/verify commands were run with `--target-site-root <src-root>\narada`, `--site-id narada-proper`, and `--authority-basis narada_proper_self_adoption_task_1228`.
 
 Verification statuses:
 

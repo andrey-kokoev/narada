@@ -16,7 +16,7 @@ closure_mode: agent_finish
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260518-1509-1511-mcp-policy-reconciliation.md
+<src-root>\narada\.ai\do-not-open\tasks\20260518-1509-1511-mcp-policy-reconciliation.md
 
 ## Goal
 

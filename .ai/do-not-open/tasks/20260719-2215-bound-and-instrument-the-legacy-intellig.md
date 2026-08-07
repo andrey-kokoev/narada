@@ -6,7 +6,7 @@ tags: compatibility, consumer-inventory, deprecation, invokable-intelligence
 creation_payload_ref: mcp_payload:invokable-intelligence-compatibility-projection-v2@v1
 creation_payload_sha256: 88e28f60265cda2f19c2856e3ec85074f99594b535886d9a59c00df49aa9eaee
 idempotency_key: invokable-intelligence-compatibility-projection-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"invokable-intelligence-compatibility-projection-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"invokable-intelligence-compatibility-projection-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-20T04:55:01.955Z
 criteria_proof_verification:

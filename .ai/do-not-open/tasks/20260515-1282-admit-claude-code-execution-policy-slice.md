@@ -11,7 +11,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260515-1282-1284-claude-code-carrier-stage-2.md
+<src-root>\narada\.ai\do-not-open\tasks\20260515-1282-1284-claude-code-carrier-stage-2.md
 
 ## Goal
 
@@ -47,7 +47,7 @@ Stage 1 represented Claude Code carrier sessions but intentionally refused runti
 
 - `node --test tools\agent-start\start-agent.test.mjs` passed with 11 tests.
 - `node tools\agent-start\start-agent.mjs narada.builder --runtime claude-code --exec --dry-run --json` returned `claude_code_launch.status: process_launch_policy_admitted`, `execution_admitted: true`, `execution_blocker: null`, and `effectful_narada_authority.admitted: false`.
-- The real-site dry-run readback showed policy path `D:\code\narada\.narada\agent-carriers\claude-code-execution-policy.v0.json`, `source_site_runtime_imported: false`, `pc_runtime_authority_imported: false`, and no missing withheld authorities.
+- The real-site dry-run readback showed policy path `<src-root>\narada\.narada\agent-carriers\claude-code-execution-policy.v0.json`, `source_site_runtime_imported: false`, `pc_runtime_authority_imported: false`, and no missing withheld authorities.
 
 ## Acceptance Criteria
 

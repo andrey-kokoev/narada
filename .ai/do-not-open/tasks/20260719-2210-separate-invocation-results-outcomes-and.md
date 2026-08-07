@@ -6,7 +6,7 @@ tags: acknowledgment, evidence, invokable-intelligence, ontology-remediation, re
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2218@v2
 creation_payload_sha256: 3599de455dfe67de3b432411aa741dfbdd40d7e5369b855916c0a092acb1d540
 idempotency_key: invokable-intelligence-remediation-source-2218-narada-proper-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-site-task-2218-narada-proper-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-site-task-2218-narada-proper-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T17:41:08.239Z
 ---
@@ -22,7 +22,7 @@ Prevent InvocationEvidence from becoming an unbounded catch-all by defining dist
 Destination-side materialization of User Site task #2218. The current Intent -> Plan -> Attempt -> Evidence chain omits a clear result/outcome boundary. Provider output, usage, failure state, transport acknowledgment, audit proof, prompt/output retention, and evidence references have different semantics and data-governance requirements.
 
 Source authority: User Site task #2218.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

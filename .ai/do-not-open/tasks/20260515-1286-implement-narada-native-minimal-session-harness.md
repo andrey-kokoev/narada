@@ -13,7 +13,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260515-1285-1287-narada-native-carrier-stage-2.md
+<src-root>\narada\.ai\do-not-open\tasks\20260515-1285-1287-narada-native-carrier-stage-2.md
 
 ## Goal
 

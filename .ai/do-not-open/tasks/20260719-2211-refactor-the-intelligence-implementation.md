@@ -6,7 +6,7 @@ tags: integration-gate, invokable-intelligence, ontology-remediation, parallelis
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2219@v2
 creation_payload_sha256: 09a89f7f7257de04a8b3e6092a9d9291cf102dd590d07d9eb4c05da9d35e4d82
 idempotency_key: invokable-intelligence-remediation-source-2219-narada-proper-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-site-task-2219-narada-proper-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-site-task-2219-narada-proper-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T18:10:26.886Z
 ---
@@ -22,7 +22,7 @@ Integrate the eight remediation contracts into the implementation chapter, split
 Destination-side materialization of User Site task #2219. The current graph serializes contracts -> storage -> resolver -> management/migration before either runtime, while the management task combines migration, CLI, MCP, compatibility, and cross-locus materialization. This task is the integration gate before the original implementation chapter becomes actionable.
 
 Source authority: User Site task #2219.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 
@@ -60,7 +60,7 @@ Created authoritative Narada-proper chapter invokable-intelligence-implementatio
 
 
 
-Chapter MCP readback reports eight ordered members, all bound to D:\code\narada. A dependency-graph audit produced topological order 2212,2213,2214,2215,2216,2217,2218,2219 with no cycle. Every remediation number 2203–2210 appears as a satisfying dependency edge. #2213–#2216 are the safe parallel roots after completed bridge #2212; #2217/#2218 converge only after catalog and materialization; #2219 aggregates management, compatibility, and both runtimes. Task specifications assign live E2E ownership once per platform (#2217 local, #2218 Cloudflare) and make #2219 aggregate evidence only.
+Chapter MCP readback reports eight ordered members, all bound to <src-root>\narada. A dependency-graph audit produced topological order 2212,2213,2214,2215,2216,2217,2218,2219 with no cycle. Every remediation number 2203–2210 appears as a satisfying dependency edge. #2213–#2216 are the safe parallel roots after completed bridge #2212; #2217/#2218 converge only after catalog and materialization; #2219 aggregates management, compatibility, and both runtimes. Task specifications assign live E2E ownership once per platform (#2217 local, #2218 Cloudflare) and make #2219 aggregate evidence only.
 
 ## Acceptance Criteria
 

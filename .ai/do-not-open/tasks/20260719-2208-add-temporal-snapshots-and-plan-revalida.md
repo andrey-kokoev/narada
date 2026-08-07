@@ -6,7 +6,7 @@ tags: batch, invokable-intelligence, ontology-remediation, revalidation, snapsho
 creation_payload_ref: mcp_payload:invokable-intelligence-remediation-2216@v2
 creation_payload_sha256: 5a4b35b0e3c370ed0c1b473b284297a1794d53f7e59431d9809ab07037e3c5b0
 idempotency_key: invokable-intelligence-remediation-source-2216-narada-proper-v2
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"D:\\code\\narada","site_root":"D:\\code\\narada","correlation_key":"user-site-task-2216-narada-proper-v2"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"operator","executor_profile":null,"executor_id":null,"repository_root":"<src-root>\\narada","site_root":"<src-root>\\narada","correlation_key":"user-site-task-2216-narada-proper-v2"}
 criteria_proved_by: operator
 criteria_proved_at: 2026-07-19T17:38:15.314Z
 ---
@@ -22,7 +22,7 @@ Make off-peak, batch, availability, quota, and mutable-policy decisions reproduc
 Destination-side materialization of User Site task #2216. Provenance does not by itself establish that a plan is still valid. Plans may queue, retry, cross a pricing window, outlive a capability observation, or encounter changed policy. Resolution needs explicit time inputs, immutable decision snapshots, and revalidation rules.
 
 Source authority: User Site task #2216.
-Destination authority: Narada proper Site, D:\code\narada.
+Destination authority: Narada proper Site, <src-root>\narada.
 
 ## Required Work
 

@@ -23,7 +23,7 @@ Create an executable doctrinal review plan for /packages and the repo-local .nar
 
 ## Context
 
-Operator requested a governed plan first, followed by concrete review tasks and execution through commit. Target locus is Narada proper in D:\\code\\narada. Review lenses include authority-homogeneous zones, governed crossings, Inhabited Evolution, Intelligence-Authority Separation, Plural Embodiment Singular Authority, Canonical Mutation Evidence, and greenfield Site/package posture.
+Operator requested a governed plan first, followed by concrete review tasks and execution through commit. Target locus is Narada proper in <src-root>\\narada. Review lenses include authority-homogeneous zones, governed crossings, Inhabited Evolution, Intelligence-Authority Separation, Plural Embodiment Singular Authority, Canonical Mutation Evidence, and greenfield Site/package posture.
 
 ## Required Work
 

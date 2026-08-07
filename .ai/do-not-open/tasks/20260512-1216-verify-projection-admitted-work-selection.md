@@ -43,7 +43,7 @@ Summary: Role-loop and work-selection machinery should be able to use projection
 
 ## Execution Notes
 
-- Target locus: Narada proper work selection and operator-surface projection read models in `D:\code\narada`.
+- Target locus: Narada proper work selection and operator-surface projection read models in `<src-root>\narada`.
 - Preserved source envelope `env_edeb2408-6f8a-4b9b-ae76-23918ced45a8` as external proposal evidence.
 - Verified current `work-next` admits active-collaborator projection only when joined to authoritative task lifecycle facts, reports `projection_admission`, uses reason `active_collaborator_blocked`, and adds a skip policy requiring an explicit reason.
 - Verified authority wins when projection facts disagree with authoritative lifecycle state.

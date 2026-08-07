@@ -2,11 +2,11 @@
 status: opened
 ---
 
-# Converge D:/code/narada site identity on narada
+# Converge <src-root>/narada site identity on narada
 
 ## Goal
 
-Make narada the canonical site id for the D:/code/narada site
+Make narada the canonical site id for the <src-root>/narada site
 
 ## Context
 

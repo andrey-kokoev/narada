@@ -6,7 +6,7 @@ tags: docs, marketing, website
 creation_payload_ref: mcp_payload:narada-mkt-site-2026-07-31-docs-links@v1
 creation_payload_sha256: ecf75744a0b25a1ae251d307fd19fba943fe2e996f40dc428cd5aa7eb33e180c
 idempotency_key: chapter-narada-marketing-site-2026-07-31-docs-links
-execution_binding_json: {"workspace_root":"D:\\code\\narada","executor_kind":"manual","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"D:\\code\\narada","correlation_key":"chapter-narada-marketing-site-2026-07-31-docs-links"}
+execution_binding_json: {"workspace_root":"<src-root>\\narada","executor_kind":"manual","executor_profile":null,"executor_id":null,"repository_root":null,"site_root":"<src-root>\\narada","correlation_key":"chapter-narada-marketing-site-2026-07-31-docs-links"}
 criteria_proved_by: andrey-user.resident
 criteria_proved_at: 2026-07-31T22:51:06.528Z
 closed_at: 2026-07-31T23:15:33.626Z

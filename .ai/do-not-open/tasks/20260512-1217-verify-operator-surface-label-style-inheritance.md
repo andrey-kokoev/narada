@@ -43,7 +43,7 @@ Summary: After the Kevin identity migration from narada-andrey.architect to nara
 
 ## Execution Notes
 
-- Target locus: Narada proper operator-surface identity/label projection read model in `D:\code\narada`.
+- Target locus: Narada proper operator-surface identity/label projection read model in `<src-root>\narada`.
 - Preserved source envelope `env_0d0e1658-50cd-470e-a954-f50c9c276521` as external CAPA incident evidence.
 - Verified current `operator-surface-registry` resolves label style by explicit identity style first, then role affinity color, then Site affinity color, then default with diagnostic.
 - Verified default fallback includes `operator_surface_label_style_defaulted` diagnostics rather than silently emitting a generic grey projection.

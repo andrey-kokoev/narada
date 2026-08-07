@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
+<src-root>\narada\.ai\do-not-open\tasks\20260517-1482-1484-remaining-coherence-cleanup-after-site-registry-split.md
 
 ## Goal
 
@@ -49,9 +49,9 @@ Task 1480 was deferred before task 1479 closed. Its current deferral record stil
 
 ## Verification
 
-- `narada task read 1479 --format json --cwd D:\code\narada` reported task 1479 status `confirmed`.
-- `narada capability list --format json --cwd D:\code\narada` reported zero grants and no mutation.
-- `narada capability credential-preflight --site narada-proper --principal narada.architect --kind site_registry.relation.admin --operation bind_existing_secret --credential-ref config-ref:NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN --local-env NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN --by narada.architect --format json --cwd D:\code\narada` reported `local_env_status=missing`, `mutation_performed=false`, `raw_secret_exposed=false`, and `secret_values_stored=false`.
+- `narada task read 1479 --format json --cwd <src-root>\narada` reported task 1479 status `confirmed`.
+- `narada capability list --format json --cwd <src-root>\narada` reported zero grants and no mutation.
+- `narada capability credential-preflight --site narada-proper --principal narada.architect --kind site_registry.relation.admin --operation bind_existing_secret --credential-ref config-ref:NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN --local-env NARADA_SITE_REGISTRY_RELATION_ADMIN_TOKEN --by narada.architect --format json --cwd <src-root>\narada` reported `local_env_status=missing`, `mutation_performed=false`, `raw_secret_exposed=false`, and `secret_values_stored=false`.
 - `rg "still claimed|not reported closed|finish task 1479|finish or report task 1479" .ai/do-not-open/tasks/20260517-1480-plan-live-site-registry-relation-publication-capability-as-a.md` found no stale blocker text.
 - `narada test-run run --task 1482 --cmd 'rg -q "registry-owner relation capability plus relation admin credential binding" .ai/do-not-open/tasks/20260517-1480-plan-live-site-registry-relation-publication-capability-as-a.md'` passed as `run_1779052979648_ac4ozc`.
 - `narada test-run run --task 1482 --cmd "narada capability credential-preflight ..."` passed as `run_1779052956320_s1cirx`.

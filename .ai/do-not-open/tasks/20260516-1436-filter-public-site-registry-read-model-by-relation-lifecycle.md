@@ -16,7 +16,7 @@ closure_mode: peer_reviewed
 
 ## Chapter
 
-D:\code\narada\.ai\do-not-open\tasks\20260516-1433-1440-site-registry-relation-lifecycle.md
+<src-root>\narada\.ai\do-not-open\tasks\20260516-1433-1440-site-registry-relation-lifecycle.md
 
 ## Goal
 
