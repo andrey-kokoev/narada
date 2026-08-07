@@ -6,7 +6,7 @@ completed
 
 ## Authority Basis
 
-- authority root: `D:\code\narada`
+- authority root: `<src-root>\narada`
 - posture: Narada proper evidence task continuing the greenfield Site creation CLI objective
 - source Site state imported: false
 

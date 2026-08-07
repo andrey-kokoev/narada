@@ -11,7 +11,7 @@
   "candidate_ref": null,
   "execution_attempt_ref": null,
   "confirmation_ref": null,
-  "evidence_path": "D:\\code\\narada\\.narada\\crew\\action-admission\\car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_lwcehkWwXuWCbRscOix6nQz8_f0aab9f5d86b4edb.json",
+  "evidence_path": "<src-root>\\narada\\.narada\\crew\\action-admission\\car_act_run-20260707T215221Z-15bcb727_turn_1783461148255_2195nnt7_tool_lwcehkWwXuWCbRscOix6nQz8_f0aab9f5d86b4edb.json",
   "remediation": null,
   "request": {
     "schema": "narada.carrier_action_request.v0",
@@ -25,7 +25,7 @@
       "tool_call_id": "tool_lwcehkWwXuWCbRscOix6nQz8"
     },
     "target_locus": {
-      "site_root": "D:\\code\\narada",
+      "site_root": "<src-root>\\narada",
       "authority_hint": null
     },
     "requested_action": {
@@ -56,7 +56,7 @@
         "source": "surface_registry",
         "surface_id": "narada-proper.surface.structured-command-mcp.v1",
         "server_name": "narada-proper-structured-command",
-        "registry_source": "D:\\code\\narada\\.narada\\capabilities\\mcp-surfaces.json",
+        "registry_source": "<src-root>\\narada\\.narada\\capabilities\\mcp-surfaces.json",
         "generated_file": "narada-proper-mcp.json",
         "registry_metadata_authoritative": true,
         "live_tool_catalog_seen": true,

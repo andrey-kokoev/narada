@@ -3,7 +3,7 @@
 ## Authority Basis
 
 - Site: `narada-proper`
-- Authority root used by this carrier: `D:\code\narada`
+- Authority root used by this carrier: `<src-root>\narada`
 - Source handoff: `C:\Users\Andrey\Narada\kb\proposals\reusable-narada-site-machinery-extraction-map-20260507.md`
 - Source task: narada-andrey task `#445`
 

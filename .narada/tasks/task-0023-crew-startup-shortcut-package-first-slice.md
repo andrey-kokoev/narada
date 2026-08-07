@@ -3,7 +3,7 @@
 ## Authority Basis
 
 - Site: `narada-proper`
-- Authority root used by this carrier: `D:\code\narada`
+- Authority root used by this carrier: `<src-root>\narada`
 - Preceding candidate: `.narada/admission/candidates/task-0022-crew-startup-shortcut-capability-candidate.md`
 - Capability: `narada-proper.capability.crew-startup-shortcut.v0`
 - Source evidence: `env_f2c20035-bec3-4790-b223-3fccebc6de24`

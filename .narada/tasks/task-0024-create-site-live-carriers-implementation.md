@@ -3,7 +3,7 @@
 ## Authority Basis
 
 - Site: `narada-proper`
-- Authority root used by this carrier: `D:\code\narada`
+- Authority root used by this carrier: `<src-root>\narada`
 - Upstream evidence: User Site report that Robin completed requirements and Bob implemented all four carriers.
 - External evidence read:
   - `C:\Users\Andrey\Narada\kb\operations\greenfield-create-site-live-carriers.md`

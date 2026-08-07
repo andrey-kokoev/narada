@@ -15,7 +15,7 @@ Authority evidence:
 - Source handoff: `C:\Users\Andrey\Narada\kb\proposals\site-task-lifecycle-first-slice-handoff.md`
 - Inbound OSM: `osm_20260509_232218_379_79b45bee`
 
-Implementation authority is not yet admitted. The current `D:\code\narada` locus remains temporary seed/intake evidence scope only unless separately admitted for package implementation.
+Implementation authority is not yet admitted. The current `<src-root>\narada` locus remains temporary seed/intake evidence scope only unless separately admitted for package implementation.
 
 ## Goal
 

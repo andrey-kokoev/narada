@@ -3,7 +3,7 @@
 ## Authority Basis
 
 - Site: `narada-proper`
-- Authority root used by this carrier: `D:\code\narada`
+- Authority root used by this carrier: `<src-root>\narada`
 - Builds on: `narada-proper.task-0027` through `narada-proper.task-0033`
 
 ## Goal

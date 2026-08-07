@@ -1,11 +1,11 @@
-﻿{
+{
     "schema":  "narada.crew_startup_shortcut.launch_execution_evidence.v0",
     "status":  "verified_no_launch",
     "carrier_id":  "narada-proper.carrier.crew-launch-focus-bind.v0",
-    "site_root":  "D:\\code\\narada",
-    "sequence_path":  "D:\\code\\narada\\.narada\\crew\\architect.launch-intent-sequence.json",
-    "request_path":  "D:\\code\\narada\\.narada\\crew\\launch-requests\\narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json",
-    "agent_start_carrier":  "D:\\code\\narada\\tools\\agent-start\\start-agent.mjs",
+    "site_root":  "<src-root>\\narada",
+    "sequence_path":  "<src-root>\\narada\\.narada\\crew\\architect.launch-intent-sequence.json",
+    "request_path":  "<src-root>\\narada\\.narada\\crew\\launch-requests\\narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json",
+    "agent_start_carrier":  "<src-root>\\narada\\tools\\agent-start\\start-agent.mjs",
     "agent_start_command":  ".\\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec",
     "started_at":  "2026-05-13T05:10:03.7554774Z",
     "dry_run":  false,

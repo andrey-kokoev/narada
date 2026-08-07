@@ -3,8 +3,8 @@
   "request_id": "narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0",
   "status": "awaiting_admitted_carrier",
   "carrier_id": "narada-proper.carrier.crew-launch-focus-bind.v0",
-  "site_root": "D:\\code\\narada",
-  "sequence_path": "D:\\code\\narada\\.narada\\crew\\architect.launch-intent-sequence.json",
+  "site_root": "<src-root>\\narada",
+  "sequence_path": "<src-root>\\narada\\.narada\\crew\\architect.launch-intent-sequence.json",
   "sequence_request_id": "narada-proper.crew.architect.startup-request.v0",
   "launch_handoff": {
     "schema": "narada.crew_startup_shortcut.launch_handoff.v0",

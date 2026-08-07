@@ -20,14 +20,14 @@ The current OSM asks for the separate live execution task for root init, real ad
 
 Execute one coherent live setup increment:
 
-- initialize Narada proper task lifecycle paths under `D:\code\narada`;
+- initialize Narada proper task lifecycle paths under `<src-root>\narada`;
 - activate a concrete adapter outside `@narada-core/site-task-lifecycle`;
 - create/mutate the local task lifecycle DB through that adapter;
 - register local MCP capability evidence and smoke-test the available Narada MCP transport.
 
 ## Admitted Root
 
-Root: `D:\code\narada`
+Root: `<src-root>\narada`
 
 Admitted writes for this task only:
 

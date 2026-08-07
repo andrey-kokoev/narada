@@ -9,7 +9,7 @@ Source OSM: `osm_20260510_141155_707_3ce3f401`
 
 Narada proper received a correction/next-step request from `narada-andrey.Kevin` asking for a Narada proper implementation task to create/admit the missing carriers and surface named by `.narada/audit/task-0001-live-execution-missing-carriers-20260510.json`.
 
-This task runs under Narada proper `.narada` authority and the previously admitted task-0001 package implementation carrier. It does not admit `D:\code\narada` as an unbounded live receiving-Site write root.
+This task runs under Narada proper `.narada` authority and the previously admitted task-0001 package implementation carrier. It does not admit `<src-root>\narada` as an unbounded live receiving-Site write root.
 
 ## Goal
 

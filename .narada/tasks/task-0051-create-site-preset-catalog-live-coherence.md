@@ -6,7 +6,7 @@ completed
 
 ## Authority Basis
 
-- authority root: `D:\code\narada`
+- authority root: `<src-root>\narada`
 - posture: Narada proper coherence task continuing the greenfield Site creation CLI objective
 
 ## Goal

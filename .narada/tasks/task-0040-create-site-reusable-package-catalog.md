@@ -6,7 +6,7 @@ completed
 
 ## Authority Basis
 
-- authority root: `D:\code\narada`
+- authority root: `<src-root>\narada`
 - task source: Operator duty-loop continuation after reusable Site machinery extraction map coverage
 - posture: Narada proper implementation task
 

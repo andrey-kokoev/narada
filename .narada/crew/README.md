@@ -47,7 +47,7 @@ It is descriptor-only. It admits no `.lnk` creation, process launch, direct subs
 
 Verified sequences can be turned into carrier request artifacts with:
 
-`node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\code\narada --mode apply --mutation-authorized`
+`node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root <src-root>\narada --mode apply --mutation-authorized`
 
 The request artifact is local evidence under `.narada/crew/launch-requests/` with status `awaiting_admitted_carrier`. It is not a launch command and does not grant focus/bind authority.
 
@@ -73,4 +73,4 @@ The carrier verifies the launch intent sequence and launch request, then delegat
 
 `.\narada.ps1 agent-start -Agent narada.architect -Runtime codex -Exec`
 
-That carrier materializes a local agent start event, sets `NARADA_AGENT_ID` and `NARADA_AGENT_START_EVENT_ID`, and starts Codex in `D:\code\narada`. It does not place a shortcut on the Desktop or Start Menu, copy operator-surface runtime state, import source Site state, or provide a native shell fallback.
+That carrier materializes a local agent start event, sets `NARADA_AGENT_ID` and `NARADA_AGENT_START_EVENT_ID`, and starts Codex in `<src-root>\narada`. It does not place a shortcut on the Desktop or Start Menu, copy operator-surface runtime state, import source Site state, or provide a native shell fallback.

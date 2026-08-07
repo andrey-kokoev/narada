@@ -3,7 +3,7 @@
 ## Authority Basis
 
 - Site: `narada-proper`
-- Authority root used by this carrier: `D:\code\narada`
+- Authority root used by this carrier: `<src-root>\narada`
 - Source envelope: `env_62d32705-0386-4820-8013-47a70cfbc8dd`
 - Source artifact: `C:\Users\Andrey\Narada\kb\proposals\narada-proper-windows-machinery-capability-exchange-offer.md`
 - Source task/commit: `narada-andrey task #611`, commit `bc5ecc42`

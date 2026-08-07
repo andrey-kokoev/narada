@@ -43,7 +43,7 @@ Allowed evidence scope:
 ## Verification Checklist
 
 - [x] `tools/list` includes `site_task_lifecycle.plan_init`.
-- [x] `tools/call site_task_lifecycle.plan_init` returns local paths for `D:\code\narada`.
+- [x] `tools/call site_task_lifecycle.plan_init` returns local paths for `<src-root>\narada`.
 - [x] CLI MCP tests cover the new tool.
 - [x] Package-local and CLI MCP-focused tests pass.
 

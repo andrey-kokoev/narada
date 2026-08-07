@@ -1,10 +1,10 @@
-﻿{
+{
     "schema":  "narada.crew_startup_shortcut.launch_execution_evidence.v0",
     "status":  "verified_no_launch",
     "carrier_id":  "narada-proper.carrier.crew-launch-focus-bind.v0",
-    "site_root":  "D:\\code\\narada",
-    "sequence_path":  "D:\\code\\narada\\.narada\\crew\\architect.launch-intent-sequence.json",
-    "request_path":  "D:\\code\\narada\\.narada\\crew\\launch-requests\\narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json",
+    "site_root":  "<src-root>\\narada",
+    "sequence_path":  "<src-root>\\narada\\.narada\\crew\\architect.launch-intent-sequence.json",
+    "request_path":  "<src-root>\\narada\\.narada\\crew\\launch-requests\\narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json",
     "codex_command":  "C:\\Program Files\\nodejs\\codex.ps1",
     "started_at":  "2026-05-13T04:54:26.5609334Z",
     "dry_run":  false,
