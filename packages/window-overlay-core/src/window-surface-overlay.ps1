@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Id,
     [Parameter(Mandatory = $true)][string]$StateRoot,
     [int]$RefreshSeconds = 2,
-    [ValidateSet('always', 'windows-terminal')][string]$VisibilityPolicy = 'windows-terminal',
+    [ValidateSet('always', 'terminal-group', 'windows-terminal')][string]$VisibilityPolicy = 'terminal-group',
     [switch]$HostProcess
 )
 
@@ -18,11 +18,25 @@ $refreshPath = Get-OverlayPath 'refresh.signal'
 $focusPath = Get-OverlayPath 'focus.signal'
 $restartCommandPath = Get-OverlayPath 'restart.command.json'
 $actionStatePath = Get-OverlayPath 'action-state.json'
+. (Join-Path $PSScriptRoot 'WindowSurfaceOverlayCoordinator.ps1')
+$visibilityStatePath = Get-OverlayPath 'visibility.state.json'
+$surfaceRoot = Split-Path -Parent -Path $StateRoot
+$VisibilityPolicy = Normalize-OverlayVisibilityPolicy $VisibilityPolicy
+$script:LifecycleState = 'starting'
+$script:VisibilityState = 'unknown'
+$script:DesiredVisibility = 'unknown'
+$script:VisibilityReason = 'not_projected'
+$script:ZOrderState = 'topmost'
+$script:FocusState = 'inactive'
+$script:SurfaceRevision = $null
+$script:FocusLeaseUntil = [DateTime]::MinValue
 $actionRunnerPath = Join-Path $PSScriptRoot 'Invoke-WindowSurfaceOverlayAction.ps1'
 $hostStderrPath = Get-OverlayPath 'host.stderr.log'
 $script:OverlayWindowTitlePrefix = 'Narada Overlay: '
 trap {
+    $script:LifecycleState = 'failed'
     ($_ | Out-String) | Set-Content -Path $hostStderrPath -Encoding UTF8
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'failed' -Visibility 'fault' -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -Detail $_.Exception.Message } catch {}
     exit 1
 }
 
@@ -155,7 +169,7 @@ function Add-Button([object]$parent, [string]$label, [string]$tip, [scriptblock]
 function Update-PinButton {
     if ($null -eq $script:PinButton) { return }
     $script:PinButton.Content = if ($window.Topmost) { '◎' } else { '📌' }
-    $script:PinButton.ToolTip = if ($window.Topmost) { 'Unpin overlay (show everywhere)' } else { 'Pin overlay to Windows Terminal' }
+    $script:PinButton.ToolTip = if ($window.Topmost) { 'Use normal z-order' } else { 'Keep above other windows' }
 }
 function Set-OverlayOpacity([double]$delta) {
     $opacity = [Math]::Round([double]$window.Opacity + $delta, 1)
@@ -232,6 +246,7 @@ using System.Text;
 using System.Runtime.InteropServices;
 
 public static class NaradaWindowSurfaceOverlayNative {
+    public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
     [StructLayout(LayoutKind.Sequential)]
     public struct RECT {
         public int Left;
@@ -287,6 +302,26 @@ public static class NaradaWindowSurfaceOverlayNative {
 
     [DllImport("user32.dll")]
     public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+
+    [DllImport("user32.dll")]
+    public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsWindowVisible(IntPtr hWnd);
+
+    public static IntPtr FindTopLevelWindowForProcess(uint targetProcessId) {
+        IntPtr found = IntPtr.Zero;
+        EnumWindows((hWnd, lParam) => {
+            uint processId;
+            GetWindowThreadProcessId(hWnd, out processId);
+            if (processId == targetProcessId && IsWindowVisible(hWnd)) {
+                found = hWnd;
+                return false;
+            }
+            return true;
+        }, IntPtr.Zero);
+        return found;
+    }
 
     public static bool ForceForegroundWindow(IntPtr hWnd) {
         if (hWnd == IntPtr.Zero) return false;
@@ -367,11 +402,28 @@ function Focus-Overlay {
     if ($null -eq $window) { return }
     $windowHandle = Get-OverlayWindowHandle
     if ($windowHandle -eq [IntPtr]::Zero) { return }
+    Set-OverlayFocusState 'requested'
+    Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
     $window.Visibility = [Windows.Visibility]::Visible
     [void][NaradaWindowSurfaceOverlayNative]::ShowWindow($windowHandle, 9)
     [void][NaradaWindowSurfaceOverlayNative]::BringWindowToTop($windowHandle)
     [void]$window.Activate()
-    [void][NaradaWindowSurfaceOverlayNative]::ForceForegroundWindow($windowHandle)
+    for ($attempt = 0; $attempt -lt 5; $attempt++) {
+        [void][NaradaWindowSurfaceOverlayNative]::ForceForegroundWindow($windowHandle)
+        if ([NaradaWindowSurfaceOverlayNative]::GetForegroundWindow() -eq $windowHandle) { break }
+        Start-Sleep -Milliseconds 50
+    }
+    $focusResult = if ([NaradaWindowSurfaceOverlayNative]::GetForegroundWindow() -eq $windowHandle) { 'focused' } else { 'failed' }
+    Set-OverlayFocusState $focusResult
+    if ($script:FocusState -eq 'focused') {
+        Set-OverlayFocusOwner -SurfaceRoot $surfaceRoot -Id $Id -ProcessId $PID
+        # Windows can return focus to the launching terminal after a background
+        # process changes the foreground queue. Keep the explicit request
+        # stable for one bounded transition window; a later request replaces it.
+        $script:FocusLeaseUntil = [DateTime]::UtcNow.AddSeconds(5)
+    } else {
+        Clear-OverlayFocusOwner -SurfaceRoot $surfaceRoot -Id $Id
+    }
     Set-OverlayVisibility
 }
 
@@ -416,39 +468,41 @@ function Get-OverlayMonitor([switch]$UseCursor) {
     }
 }
 
-function Test-WindowsTerminalActive {
-    $foregroundWindow = [NaradaWindowSurfaceOverlayNative]::GetForegroundWindow()
-    if ($foregroundWindow -eq [IntPtr]::Zero) { return $false }
-
-    [uint32]$processId = 0
-    [void][NaradaWindowSurfaceOverlayNative]::GetWindowThreadProcessId($foregroundWindow, [ref]$processId)
-    if ($processId -eq 0) { return $false }
-
-    try {
-        $process = Get-Process -Id ([int]$processId) -ErrorAction Stop
-        return $process.ProcessName -in @('WindowsTerminal', 'WindowsTerminalPreview')
-    } catch {
-        return $false
-    }
-}
-
-function Test-NaradaOverlayActive {
-    $foregroundWindow = [NaradaWindowSurfaceOverlayNative]::GetForegroundWindow()
-    if ($foregroundWindow -eq [IntPtr]::Zero) { return $false }
-
-    $windowTitle = [System.Text.StringBuilder]::new(256)
-    [void][NaradaWindowSurfaceOverlayNative]::GetWindowText($foregroundWindow, $windowTitle, $windowTitle.Capacity)
-    return $windowTitle.ToString().StartsWith($script:OverlayWindowTitlePrefix, [StringComparison]::Ordinal)
-}
-
 function Set-OverlayVisibility {
     if ($null -eq $window) { return }
-    # All Narada overlays share one desktop surface. Keep the group visible while
-    # any member owns focus; otherwise the previous member disappears as soon as
-    # the operator moves focus from one overlay to another.
-    $visible = $VisibilityPolicy -eq 'always' -or [bool]$window.IsActive -or -not [bool]$window.Topmost -or (Test-WindowsTerminalActive) -or (Test-NaradaOverlayActive)
-    $desired = if ($visible) { [Windows.Visibility]::Visible } else { [Windows.Visibility]::Hidden }
-    if ($window.Visibility -ne $desired) { $window.Visibility = $desired }
+    try {
+        $snapshot = Update-OverlaySurfaceProjection -SurfaceRoot $surfaceRoot -CurrentId $Id -CurrentPid $PID -CurrentPolicy $VisibilityPolicy -CurrentLifecycle $script:LifecycleState -CurrentVisibility $script:VisibilityState -CurrentZOrder $script:ZOrderState -CurrentFocus $script:FocusState
+        $decision = Get-OverlaySurfaceDecision -Snapshot $snapshot -Id $Id -Policy $VisibilityPolicy
+        $script:SurfaceRevision = [int]$snapshot.revision
+        $script:DesiredVisibility = [string]$decision.desired_visibility
+        $script:VisibilityReason = [string]$decision.reason
+        $focusOwner = Read-OverlayFocusOwner $surfaceRoot
+        if ($focusOwner -and $focusOwner.id -ne $Id -and $script:FocusState -eq 'focused') { Set-OverlayFocusState 'inactive' }
+        if ($focusOwner -and $focusOwner.id -eq $Id -and [DateTime]::UtcNow -lt $script:FocusLeaseUntil) {
+            $windowHandle = Get-OverlayWindowHandle
+            if ($windowHandle -ne [IntPtr]::Zero -and [NaradaWindowSurfaceOverlayNative]::GetForegroundWindow() -ne $windowHandle) {
+                [void][NaradaWindowSurfaceOverlayNative]::ForceForegroundWindow($windowHandle)
+            }
+        }
+        $desired = if ($script:DesiredVisibility -eq 'visible') { [Windows.Visibility]::Visible } else { [Windows.Visibility]::Hidden }
+        if ($script:VisibilityState -eq 'unknown') {
+            $initialVisibilityTransition = if ($desired -eq [Windows.Visibility]::Visible) { 'showing' } else { 'hiding' }
+            Set-OverlayVisibilityState $initialVisibilityTransition
+        }
+        if ($window.Visibility -ne $desired) {
+            $visibilityTransition = if ($desired -eq [Windows.Visibility]::Visible) { 'showing' } else { 'hiding' }
+            Set-OverlayVisibilityState $visibilityTransition
+            Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
+            $window.Visibility = $desired
+        }
+        $appliedVisibility = if ($window.Visibility -eq [Windows.Visibility]::Visible) { 'visible' } else { 'hidden' }
+        Set-OverlayVisibilityState $appliedVisibility
+        Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
+    } catch {
+        $script:VisibilityState = 'fault'
+        $script:VisibilityReason = 'visibility_fault'
+        try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility 'fault' -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision -Detail $_.Exception.Message } catch {}
+    }
 }
 
 $preferences = Get-Preferences
@@ -466,6 +520,7 @@ $window.AllowsTransparency = $true
 $window.Background = [Windows.Media.Brushes]::Transparent
 $window.ShowInTaskbar = $false
 $window.Topmost = $preferences.pinned
+$script:ZOrderState = if ($window.Topmost) { 'topmost' } else { 'normal' }
 $window.Opacity = [Math]::Min([Math]::Max($preferences.opacity, 0.55), 1.0)
 $window.ShowActivated = $false
 $window.Padding = New-Object Windows.Thickness(0)
@@ -511,7 +566,7 @@ $headerActions.HorizontalAlignment = 'Right'
 $headerActions.VerticalAlignment = 'Top'
 [Windows.Controls.Grid]::SetColumn($headerActions, 1)
 $header.Children.Add($headerActions) | Out-Null
-$script:PinButton = Add-Button $headerActions '📌' 'Pin overlay to Windows Terminal' { $window.Topmost = -not $window.Topmost; Update-PinButton; Set-OverlayVisibility; Save-Preferences $window } -icon
+$script:PinButton = Add-Button $headerActions '📌' 'Keep above other windows' { $window.Topmost = -not $window.Topmost; $script:ZOrderState = if ($window.Topmost) { 'topmost' } else { 'normal' }; Update-PinButton; Set-OverlayVisibility; Save-Preferences $window } -icon
 $script:PinButton.FontFamily = [Windows.Media.FontFamily]::new('Segoe UI Symbol')
 $script:PinButton.FontSize = 12
 $script:PinButton.Width = 20
@@ -651,7 +706,13 @@ function Restore-OverlayPosition([switch]$UseCursor) {
 }
 
 $window.Add_Closed({
+    Set-OverlayLifecycleState 'stopping'
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'stopping' -Visibility 'hiding' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision } catch {}
     try { Save-Preferences $window } catch {}
+    Set-OverlayLifecycleState 'stopped'
+    $script:VisibilityState = 'hidden'
+    Clear-OverlayFocusOwner -SurfaceRoot $surfaceRoot -Id $Id
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'stopped' -Visibility 'hidden' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus 'inactive' -ProcessId $null -SurfaceRevision $script:SurfaceRevision } catch {}
     try { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue } catch {}
 })
 $window.Add_LocationChanged({
@@ -666,12 +727,13 @@ $window.Add_LocationChanged({
     }
 })
 $window.Add_ContentRendered({
-    Set-OverlayVisibility
     Render-Document (Get-Document)
     $window.UpdateLayout()
     Restore-OverlayPosition -UseCursor
     Save-Preferences $window
     $script:PositionHydrated = $true
+    Set-OverlayLifecycleState 'running'
+    Set-OverlayVisibility
 })
 $timer = New-Object Windows.Threading.DispatcherTimer
 $timer.Interval = [TimeSpan]::FromSeconds([Math]::Max(1, $RefreshSeconds))
@@ -714,16 +776,43 @@ $actionTimer.Add_Tick({ Apply-ActionState })
 $actionTimer.Start()
 
 Set-Content -Path $pidPath -Value ([string]$PID)
+Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'starting' -Visibility 'unknown' -DesiredVisibility 'unknown' -VisibilityReason 'not_projected' -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
 $application = New-Object Windows.Application
 try {
     # Explicitly show the borderless, non-taskbar window before entering the
     # dispatcher loop. Application.Run(Window) is not reliable for this
     # configuration when the host is launched as a hidden PowerShell process.
+    $surfaceSnapshot = Read-OverlaySurfaceJson (Join-Path $surfaceRoot 'surface.snapshot.json') $null
+    $focusOwner = Read-OverlayFocusOwner $surfaceRoot
+    # The actual foreground window is authoritative. A persisted focus owner is
+    # only a fallback for the short interval in which Windows reports no HWND.
+    $previousForegroundWindow = [NaradaWindowSurfaceOverlayNative]::GetForegroundWindow()
+    if ($previousForegroundWindow -eq [IntPtr]::Zero -and $surfaceSnapshot) {
+        $focusedMember = @($surfaceSnapshot.members | Where-Object { $_.id -ne $Id -and $_.focus -eq 'focused' -and $_.pid }) | Select-Object -First 1
+        if ($focusedMember) {
+            $focusedPid = 0
+            if ([int]::TryParse([string]$focusedMember.pid, [ref]$focusedPid) -and $focusedPid -gt 0) {
+                $previousForegroundWindow = [NaradaWindowSurfaceOverlayNative]::FindTopLevelWindowForProcess([uint32]$focusedPid)
+            }
+        }
+    }
+    if ($focusOwner) {
+        $focusOwnerPid = 0
+        if ($previousForegroundWindow -eq [IntPtr]::Zero -and [int]::TryParse([string]$focusOwner.pid, [ref]$focusOwnerPid) -and $focusOwnerPid -gt 0) {
+            $previousForegroundWindow = [NaradaWindowSurfaceOverlayNative]::FindTopLevelWindowForProcess([uint32]$focusOwnerPid)
+        }
+    }
     $window.Show()
+    if ($previousForegroundWindow -ne [IntPtr]::Zero) {
+        [void][NaradaWindowSurfaceOverlayNative]::ForceForegroundWindow($previousForegroundWindow)
+    }
     [void]$application.Run()
 } finally {
     $timer.Stop()
     $visibilityTimer.Stop()
     $actionTimer.Stop()
+    if ($script:LifecycleState -in @('starting', 'running')) { Set-OverlayLifecycleState 'stopping' }
+    if ($script:LifecycleState -eq 'stopping') { Set-OverlayLifecycleState 'stopped' }
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'stopped' -Visibility 'hidden' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus 'inactive' -ProcessId $null -SurfaceRevision $script:SurfaceRevision } catch {}
     try { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue } catch {}
 }

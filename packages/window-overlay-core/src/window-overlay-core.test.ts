@@ -7,12 +7,16 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   OVERLAY_DOCUMENT_SCHEMA,
+  createOverlayRuntimeState,
   createOverlayDocument,
   defaultLocalAppDataRoot,
   defaultOverlayStateRoot,
+  deriveOverlayVisibilityDecision,
   normalizeOverlayEnvironment,
+  normalizeOverlayVisibilityPolicy,
   overlayPaths,
   overlayStatus,
+  reduceOverlayRuntimeState,
   requestOverlayFocus,
 } from './index.js';
 
@@ -33,6 +37,47 @@ test('creates a versioned generic document with controlled actions', () => {
   assert.equal(document.actions[1].kind, 'restart');
   assert.equal(document.actions[1].icon, '↻');
   assert.equal(document.actions[1].tooltip, 'Restart overlay');
+});
+
+test('surface FSM separates policy visibility from lifecycle, focus, and z-order', () => {
+  assert.equal(normalizeOverlayVisibilityPolicy('windows-terminal'), 'terminal-group');
+  assert.deepEqual(
+    deriveOverlayVisibilityDecision('terminal-group', 'external'),
+    { desired_visibility: 'hidden', reason: 'foreground_external' },
+  );
+  assert.deepEqual(
+    deriveOverlayVisibilityDecision('terminal-group', 'overlay'),
+    { desired_visibility: 'visible', reason: 'terminal_group_active' },
+  );
+  assert.deepEqual(
+    deriveOverlayVisibilityDecision('always', 'external'),
+    { desired_visibility: 'visible', reason: 'policy_always' },
+  );
+
+  let state = createOverlayRuntimeState('fsm-overlay', 'terminal-group', 42, 'normal');
+  assert.equal(state.lifecycle, 'starting');
+  assert.equal(state.visibility, 'unknown');
+  assert.equal(state.z_order, 'normal');
+  state = reduceOverlayRuntimeState(state, { type: 'started' });
+  state = reduceOverlayRuntimeState(state, {
+    type: 'visibility_desired',
+    decision: { desired_visibility: 'visible', reason: 'terminal_group_active' },
+  });
+  state = reduceOverlayRuntimeState(state, { type: 'visibility_applied', visible: true });
+  state = reduceOverlayRuntimeState(state, { type: 'focus_requested' });
+  state = reduceOverlayRuntimeState(state, { type: 'focus_resolved', focused: true });
+  assert.equal(state.lifecycle, 'running');
+  assert.equal(state.visibility, 'visible');
+  assert.equal(state.focus, 'focused');
+  assert.equal(state.z_order, 'normal');
+  state = reduceOverlayRuntimeState(state, { type: 'stopping' });
+  state = reduceOverlayRuntimeState(state, { type: 'stopped' });
+  assert.equal(state.lifecycle, 'stopped');
+  assert.equal(state.visibility, 'hidden');
+  assert.throws(
+    () => reduceOverlayRuntimeState(createOverlayRuntimeState('invalid-fsm'), { type: 'stopped' }),
+    /overlay_lifecycle_transition_invalid/,
+  );
 });
 
 test('action runner records bounded durable completion only after readiness', async () => {
@@ -145,12 +190,12 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /\$script:lastRefreshStamp/);
   assert.match(source, /Remove-Item -LiteralPath \$focusPath/);
   assert.match(source, /GetWindowThreadProcessId/);
-  assert.match(source, /Test-WindowsTerminalActive/);
+  assert.match(source, /WindowSurfaceOverlayCoordinator\.ps1/);
   assert.match(source, /OverlayWindowTitlePrefix/);
-  assert.match(source, /function Test-NaradaOverlayActive/);
-  assert.match(source, /\(Test-NaradaOverlayActive\)/);
-  assert.match(source, /\[bool\]\$window\.IsActive/);
   assert.match(source, /function Set-OverlayVisibility/);
+  assert.match(source, /Update-OverlaySurfaceProjection/);
+  assert.match(source, /Get-OverlaySurfaceDecision/);
+  assert.doesNotMatch(source, /-not \[bool\]\$window\.Topmost/);
   assert.match(source, /visibilityTimer/);
   assert.match(source, /New-Object Windows\.Application/);
   assert.match(source, /\$window\.Show\(\)/);
@@ -230,11 +275,25 @@ test('PowerShell lifecycle scripts do not shadow the automatic PID variable', as
 
 test('existing overlay hosts are replaced when the requested visibility policy changes', async () => {
   const start = await readFile(new URL('./Start-WindowSurfaceOverlay.ps1', import.meta.url), 'utf8');
+  const coordinator = await readFile(new URL('./WindowSurfaceOverlayCoordinator.ps1', import.meta.url), 'utf8');
   assert.match(start, /visibilityPolicyPath/);
   assert.match(start, /storedPolicy/);
   assert.match(start, /Stop-HostForPolicyChange \$existing/);
   assert.match(start, /window_surface_overlay_policy_change_timeout/);
   assert.match(start, /-VisibilityPolicy/);
+  assert.match(start, /terminal-group/);
+  assert.ok(start.includes('[int]$StartupTimeoutSeconds = 30'));
+  assert.ok(start.includes('AddSeconds($StartupTimeoutSeconds)'));
+  assert.match(coordinator, /stateKey/);
+  assert.match(coordinator, /focusKey/);
+  assert.match(coordinator, /Write-OverlaySurfaceJsonAtomic/);
+  const host = await readFile(new URL('./window-surface-overlay.ps1', import.meta.url), 'utf8');
+  assert.match(host, /VisibilityReason = 'visibility_fault'/);
+  assert.match(host, /-Lifecycle \$script:LifecycleState/);
+  assert.match(host, /actual foreground window is authoritative/);
+  assert.match(host, /Set-OverlayLifecycleState/);
+  assert.match(host, /Set-OverlayVisibilityState/);
+  assert.match(host, /Set-OverlayFocusState/);
 });
 
 test('focus requests refuse stopped overlays without leaving a signal', async () => {

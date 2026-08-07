@@ -1,6 +1,7 @@
+export * from './overlay-surface-fsm.js';
+
 export type OverlayTone = 'default' | 'muted' | 'success' | 'warning' | 'danger' | 'accent';
 export type OverlayActionKind = 'open_url' | 'refresh' | 'close' | 'restart';
-export type OverlayVisibilityPolicy = 'always' | 'windows-terminal';
 
 export interface OverlayRow {
   label: string;
@@ -39,6 +40,9 @@ export interface OverlayPaths {
   focus: string;
   restartCommand: string;
   actionState: string;
+  visibilityState: string;
+  surfaceSnapshot: string;
+  focusOwner: string;
 }
 export interface OverlayActionState {
   schema: 'narada.window_surface_overlay.action_state.v1';
@@ -60,6 +64,9 @@ export interface OverlayStatus {
   document_path: string;
   document: OverlayDocument | null;
   action_state: OverlayActionState | null;
+  visibility_state: import('./overlay-surface-fsm.js').OverlayRuntimeState | null;
+  surface_snapshot: import('./overlay-surface-fsm.js').OverlaySurfaceSnapshot | null;
+  focus_owner: Record<string, unknown> | null;
 }
 export interface OverlayDocumentInput extends Record<string, unknown> {
   id?: unknown;
@@ -80,7 +87,7 @@ interface OverlayLifecycleOptions extends OverlayPathOptions {
 interface StartOverlayOptions extends OverlayPathOptions {
   id?: string;
   document?: OverlayDocumentInput | null;
-  visibilityPolicy?: OverlayVisibilityPolicy;
+  visibilityPolicy?: import('./overlay-surface-fsm.js').OverlayVisibilityPolicyInput;
   refreshSeconds?: number;
   restartCommand?: readonly string[];
   restartWorkingDirectory?: string;

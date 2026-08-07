@@ -191,7 +191,7 @@ export async function startQuotaMeterOverlay(options = {}, env = process.env) {
   const result = await startWindowOverlay({
     id: QUOTA_METER_OVERLAY_ID,
     document: createQuotaMeterOverlayDocument(),
-    visibilityPolicy: 'windows-terminal',
+    visibilityPolicy: 'terminal-group',
     refreshSeconds: 2,
     ...overlayOptions(env),
   });

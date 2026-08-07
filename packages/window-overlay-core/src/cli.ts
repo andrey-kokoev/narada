@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
-import { createOverlayDocument, inspectOverlay, requestOverlayFocus, requestOverlayRefresh, startOverlay, stopOverlay } from './index.js';
+import { createOverlayDocument, inspectOverlay, normalizeOverlayVisibilityPolicy, requestOverlayFocus, requestOverlayRefresh, startOverlay, stopOverlay } from './index.js';
 
 const args = process.argv.slice(2);
 const command = args.shift() || 'status';
@@ -29,7 +29,7 @@ if (command === 'start') {
     id,
     document,
     stateRoot,
-    visibilityPolicy: valueOf('--visibility', 'windows-terminal') as 'always' | 'windows-terminal',
+    visibilityPolicy: normalizeOverlayVisibilityPolicy(valueOf('--visibility', 'terminal-group')),
     refreshSeconds: Number(valueOf('--refresh-seconds', '2') ?? '2'),
   }));
 } else if (command === 'stop') {

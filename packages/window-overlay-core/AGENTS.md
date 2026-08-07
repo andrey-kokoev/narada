@@ -65,6 +65,9 @@ The state files are:
 - `preferences.json`: persisted position, opacity, pin, and related window preferences;
 - `refresh.signal`: an asynchronous request for the running host to re-read its document;
 - `focus.signal`: an asynchronous request for the running host to activate its window;
+- `visibility.state.json`: the host's durable lifecycle, visibility, z-order, focus, and policy state;
+- parent `surface.snapshot.json`: the coordinated surface projection of live overlay members and foreground context;
+- parent `focus.owner.json`: the shared explicit focus owner, replaced by each successful newer focus request;
 - `restart.command.json`: the fixed restart command supplied by the owning specialization;
 - `action-state.json`: durable state for the typed restart action.
 
@@ -72,8 +75,9 @@ Lifecycle semantics:
 
 1. `startOverlay()` validates and writes the document, then starts the host or updates an
    already-running overlay. If the requested visibility policy differs from the owned host,
-   it replaces that host so the new policy takes effect. Starting and idempotent starting must
-   not request foreground activation.
+   it replaces that host so the new policy takes effect. Success is reported only after the host
+   has published durable lifecycle `running`. Starting and idempotent starting must not request
+   foreground activation.
 2. `requestOverlayRefresh()` writes `refresh.signal`. It is a request, not proof that rendering
    has completed, and must not request foreground activation.
 3. `requestOverlayFocus()` first requires a live overlay, removes a stale signal when refusing,
@@ -89,6 +93,12 @@ Lifecycle semantics:
 The host consumes refresh and focus signals asynchronously. A signal is not a second lifecycle
 authority. Do not add a new signal file when an existing lifecycle operation or typed action
 expresses the intent.
+
+The overlay surface is coordinated, but each host owns its own lifecycle. Visibility policy is
+canonicalized to `always` or `terminal-group`; `windows-terminal` is a legacy ingress alias only.
+Visibility, z-order, and focus are separate state axes. Pinning changes only z-order. A successful
+focus request records one shared owner and keeps it stable for a bounded transition window; it does
+not hide or stop sibling overlays. Surface projection uses a named mutex and atomic JSON replacement.
 
 ## Focus Contract
 
@@ -128,6 +138,7 @@ Authoritative sources include:
 - `src/index.d.ts`, a checked-in compatibility declaration that must stay aligned with the source;
 - `src/cli.ts`;
 - `src/window-surface-overlay.ps1`;
+- `src/WindowSurfaceOverlayCoordinator.ps1`;
 - `src/Start-WindowSurfaceOverlay.ps1`;
 - `src/Stop-WindowSurfaceOverlay.ps1`;
 - `src/Inspect-WindowSurfaceOverlay.ps1`;

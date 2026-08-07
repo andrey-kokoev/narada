@@ -1,18 +1,22 @@
 param(
     [Parameter(Mandatory = $true)][string]$Id,
     [Parameter(Mandatory = $true)][string]$StateRoot,
-    [ValidateSet('always', 'windows-terminal')][string]$VisibilityPolicy = 'windows-terminal',
-    [int]$RefreshSeconds = 2
+    [ValidateSet('always', 'terminal-group', 'windows-terminal')][string]$VisibilityPolicy = 'terminal-group',
+    [int]$RefreshSeconds = 2,
+    [int]$StartupTimeoutSeconds = 30
 )
 $ErrorActionPreference = 'Stop'
+if ($StartupTimeoutSeconds -lt 1 -or $StartupTimeoutSeconds -gt 120) { throw 'window_surface_overlay_startup_timeout_invalid' }
 $hostScript = Join-Path $PSScriptRoot 'window-surface-overlay.ps1'
 if (-not (Test-Path $hostScript)) { throw 'window_surface_overlay_host_script_missing' }
+. (Join-Path $PSScriptRoot 'WindowSurfaceOverlayCoordinator.ps1')
 New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
 $pidPath = Join-Path $StateRoot 'overlay.pid'
 $refreshPath = Join-Path $StateRoot 'refresh.signal'
 $visibilityPolicyPath = Join-Path $StateRoot 'visibility.policy'
 $hostStdoutPath = Join-Path $StateRoot 'host.stdout.log'
 $hostStderrPath = Join-Path $StateRoot 'host.stderr.log'
+$surfaceRoot = Get-OverlaySurfaceRoot $StateRoot
 function Get-HostProcess {
     if (-not (Test-Path $pidPath)) { return $null }
     $raw = (Get-Content -Raw -Path $pidPath).Trim()
@@ -44,8 +48,10 @@ function Stop-HostForPolicyChange {
     if ($stillRunning) { throw 'window_surface_overlay_policy_change_timeout' }
     Remove-Item $pidPath -Force -ErrorAction SilentlyContinue
 }
-$requestedPolicy = $VisibilityPolicy.ToLowerInvariant()
-$storedPolicy = if (Test-Path $visibilityPolicyPath) { (Get-Content -Raw -Path $visibilityPolicyPath).Trim().ToLowerInvariant() } else { $null }
+$requestedPolicy = Normalize-OverlayVisibilityPolicy $VisibilityPolicy
+$storedPolicy = if (Test-Path $visibilityPolicyPath) {
+    try { Normalize-OverlayVisibilityPolicy ((Get-Content -Raw -Path $visibilityPolicyPath).Trim()) } catch { $null }
+} else { $null }
 $existing = Get-HostProcess
 if ($existing) {
     if ($storedPolicy -eq $requestedPolicy) {
@@ -56,6 +62,7 @@ if ($existing) {
     Stop-HostForPolicyChange $existing
 }
 Set-Content -Path $visibilityPolicyPath -Value $requestedPolicy
+Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $requestedPolicy -Lifecycle 'starting' -Visibility 'unknown' -DesiredVisibility 'unknown' -VisibilityReason 'not_projected' -ZOrder 'topmost' -Focus 'inactive'
 if (Test-Path $pidPath) { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue }
 $shell = Get-Command pwsh, powershell -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $shell) { throw 'powershell_runtime_not_found' }
@@ -65,11 +72,14 @@ $childArgs = @(
     '-Id', $Id,
     '-StateRoot', $StateRoot,
     '-RefreshSeconds', [string]$RefreshSeconds,
-    '-VisibilityPolicy', $VisibilityPolicy,
+    '-VisibilityPolicy', $requestedPolicy,
     '-HostProcess'
 )
 $child = Start-Process -WindowStyle Hidden -FilePath $shell.Source -ArgumentList $childArgs -PassThru
-$deadline = [DateTime]::UtcNow.AddSeconds(5)
+# PresentationFramework can take several seconds to load on a cold PowerShell
+# process. Wait for the durable PID and running-state markers within one total
+# startup budget instead of giving each phase an independent timeout.
+$startupDeadline = [DateTime]::UtcNow.AddSeconds($StartupTimeoutSeconds)
 $running = $null
 do {
     Start-Sleep -Milliseconds 100
@@ -79,6 +89,16 @@ do {
         if (-not $detail -and (Test-Path $hostStdoutPath)) { $detail = (Get-Content -Raw -Path $hostStdoutPath).Trim() }
         throw ('window_surface_overlay_host_failed:' + ($detail -replace '\s+', ' ').Trim())
     }
-} while (-not $running -and [DateTime]::UtcNow -lt $deadline)
+} while (-not $running -and [DateTime]::UtcNow -lt $startupDeadline)
 if (-not $running) { throw 'window_surface_overlay_start_timeout' }
+$runtimeStatePath = Join-Path $StateRoot 'visibility.state.json'
+$runtimeState = $null
+do {
+    Start-Sleep -Milliseconds 100
+    $runtimeState = if (Test-Path -LiteralPath $runtimeStatePath) { Read-OverlaySurfaceJson $runtimeStatePath $null } else { $null }
+    if ($runtimeState -and $runtimeState.lifecycle -eq 'failed') {
+        throw ('window_surface_overlay_host_failed:' + [string]$runtimeState.detail)
+    }
+} while ((-not $runtimeState -or $runtimeState.lifecycle -ne 'running') -and [DateTime]::UtcNow -lt $startupDeadline)
+if (-not $runtimeState -or $runtimeState.lifecycle -ne 'running') { throw 'window_surface_overlay_runtime_start_timeout' }
 [pscustomobject]@{ schema = 'narada.window_surface_overlay.result.v1'; id = $Id; state = 'started'; pid = $running.Id; state_directory = $StateRoot } | ConvertTo-Json -Compress

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
-import { execFileSync } from 'node:child_process';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
 import {
+  overlayPaths,
+  overlayStatus,
   requestOverlayFocus,
   startOverlay,
   stopOverlay,
@@ -58,6 +60,54 @@ Add-Type -TypeDefinition $code;
 [NaradaWindowOverlayLiveProbe]::Read([uint32]${'${PID_VALUE}'}) | ConvertTo-Json -Depth 5
 `;
 
+const NATIVE_WINDOW_ACTIVATE = String.raw`
+$code = @'
+using System;
+using System.Runtime.InteropServices;
+public static class NaradaWindowOverlayLiveActivation {
+  public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool EnumWindows(EnumWindowsProc callback, IntPtr lParam);
+  [DllImport("user32.dll")] public static extern bool IsWindowVisible(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint pid);
+  [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int command);
+  [DllImport("user32.dll")] public static extern bool BringWindowToTop(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint sourceThreadId, uint targetThreadId, bool attach);
+  [DllImport("kernel32.dll")] public static extern uint GetCurrentThreadId();
+  public static bool Activate(uint targetPid) {
+    IntPtr found = IntPtr.Zero;
+    EnumWindows((hWnd, lParam) => {
+      uint pid;
+      GetWindowThreadProcessId(hWnd, out pid);
+      if (pid == targetPid && IsWindowVisible(hWnd)) { found = hWnd; return false; }
+      return true;
+    }, IntPtr.Zero);
+    if (found == IntPtr.Zero) return false;
+    uint ignoredProcessId;
+    var foregroundThread = GetWindowThreadProcessId(GetForegroundWindow(), out ignoredProcessId);
+    var targetThread = GetWindowThreadProcessId(found, out ignoredProcessId);
+    var currentThread = GetCurrentThreadId();
+    var attachedForeground = foregroundThread != 0 && foregroundThread != currentThread
+      && AttachThreadInput(foregroundThread, currentThread, true);
+    var attachedTarget = targetThread != 0 && targetThread != currentThread
+      && AttachThreadInput(targetThread, currentThread, true);
+    try {
+      ShowWindow(found, 9);
+      BringWindowToTop(found);
+      SetForegroundWindow(found);
+      return GetForegroundWindow() == found;
+    } finally {
+      if (attachedTarget) AttachThreadInput(targetThread, currentThread, false);
+      if (attachedForeground) AttachThreadInput(foregroundThread, currentThread, false);
+    }
+  }
+}
+'@;
+Add-Type -TypeDefinition $code;
+[NaradaWindowOverlayLiveActivation]::Activate([uint32]${'${PID_VALUE}'}) | ConvertTo-Json
+`;
+
 function readNativeWindowSnapshot(pid: number): NativeWindowSnapshot | null {
   const command = NATIVE_WINDOW_PROBE.replace('${PID_VALUE}', String(pid));
   try {
@@ -70,6 +120,80 @@ function readNativeWindowSnapshot(pid: number): NativeWindowSnapshot | null {
     ], { encoding: 'utf8' }).trim()) as NativeWindowSnapshot;
   } catch {
     return null;
+  }
+}
+
+function activateNativeProcess(pid: number): boolean {
+  const command = NATIVE_WINDOW_ACTIVATE.replace('${PID_VALUE}', String(pid));
+  try {
+    return JSON.parse(execFileSync('pwsh', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      command,
+    ], { encoding: 'utf8' }).trim()) === true;
+  } catch {
+    return false;
+  }
+}
+
+function windowsTerminalPid(): number | null {
+  try {
+    const output = execFileSync('pwsh', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      '$process = Get-Process -Name WindowsTerminal,WindowsTerminalPreview -ErrorAction SilentlyContinue | Where-Object MainWindowHandle -ne 0 | Select-Object -First 1; if ($process) { $process.Id }',
+    ], { encoding: 'utf8' }).trim();
+    const pid = Number.parseInt(output, 10);
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
+const EXTERNAL_WINDOW_SCRIPT = String.raw`
+Add-Type -AssemblyName PresentationFramework
+$window = New-Object Windows.Window
+$window.Title = 'Narada external foreground'
+$window.Width = 420
+$window.Height = 220
+$window.WindowStartupLocation = 'CenterScreen'
+$window.ShowInTaskbar = $true
+$window.Content = 'External foreground test window'
+$window.Show()
+$application = New-Object Windows.Application
+$application.Run($window)
+`;
+
+function startExternalForegroundProcess(scriptPath: string) {
+  const child = spawn('pwsh', [
+    '-NoLogo',
+    '-NoProfile',
+    '-NonInteractive',
+    '-STA',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-File',
+    scriptPath,
+  ], { windowsHide: true });
+  if (!child.pid) throw new Error('external_foreground_process_start_failed');
+  return { pid: child.pid, child };
+}
+
+function stopExternalForegroundProcess(pid: number): void {
+  try {
+    execFileSync('pwsh', [
+      '-NoLogo',
+      '-NoProfile',
+      '-NonInteractive',
+      '-Command',
+      `Stop-Process -Id ${pid} -Force -ErrorAction SilentlyContinue`,
+    ], { encoding: 'utf8' });
+  } catch {
+    // The test cleanup is best effort if the fixture already exited.
   }
 }
 
@@ -108,6 +232,15 @@ test('live WPF overlay remains visible and focusable through its native HWND', {
     livePid = started.pid ?? 0;
     assert.ok(livePid > 0, 'live overlay must expose a host PID');
 
+    const status = await overlayStatus('live-overlay-e2e', { stateRoot });
+    assert.equal(status.visibility_state?.lifecycle, 'running');
+    assert.equal(status.visibility_state?.policy, 'always');
+    assert.equal(status.visibility_state?.desired_visibility, 'visible');
+    assert.equal(status.visibility_state?.visibility, 'visible');
+    assert.equal(status.visibility_state?.z_order, 'topmost');
+    assert.equal(status.surface_snapshot?.schema, 'narada.window_surface_overlay.surface_snapshot.v1');
+    assert.ok(status.surface_snapshot?.members.some((member) => member.id === 'live-overlay-e2e'));
+
     const visibleAfterStart = await waitForSnapshot(livePid, (snapshot) => snapshot.Windows.some(
       (window) => window.Visible && window.Title === overlayWindowTitle('live-overlay-e2e'),
     ));
@@ -130,6 +263,106 @@ test('live WPF overlay remains visible and focusable through its native HWND', {
   }
 });
 
+test('live always visibility is independent from normal z-order', {
+  skip: process.platform !== 'win32',
+}, async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-window-overlay-z-order-live-'));
+  let overlayPid = 0;
+  try {
+    const paths = overlayPaths('normal-z-order-overlay', { stateRoot });
+    await mkdir(paths.stateDirectory, { recursive: true });
+    await writeFile(paths.preferences, JSON.stringify({ position: null, opacity: 1, pinned: false }) + '\n', 'utf8');
+    const started = await startOverlay({
+      id: 'normal-z-order-overlay',
+      stateRoot,
+      visibilityPolicy: 'always',
+      refreshSeconds: 1,
+      document: {
+        title: 'Normal z-order overlay',
+        rows: [{ label: 'State', value: 'visible', tone: 'success' }],
+      },
+    });
+    overlayPid = started.pid ?? 0;
+    assert.ok(overlayPid > 0);
+    const status = await overlayStatus('normal-z-order-overlay', { stateRoot });
+    assert.equal(status.visibility_state?.z_order, 'normal');
+    assert.equal(status.visibility_state?.desired_visibility, 'visible');
+    await waitForSnapshot(overlayPid, (snapshot) => snapshot.Windows.some(
+      (window) => window.Visible && window.Title === overlayWindowTitle('normal-z-order-overlay'),
+    ));
+  } finally {
+    if (overlayPid > 0) await stopOverlay({ id: 'normal-z-order-overlay', stateRoot }).catch(() => undefined);
+    await rm(stateRoot, { recursive: true, force: true });
+    livePid = 0;
+  }
+});
+
+test('live terminal-group visibility follows terminal and external foreground transitions', {
+  skip: process.platform !== 'win32',
+}, async () => {
+  const terminalPid = windowsTerminalPid();
+  assert.ok(terminalPid, 'terminal-group live coverage requires a visible Windows Terminal window');
+  assert.ok(activateNativeProcess(terminalPid), 'Windows Terminal must be activatable for live policy coverage');
+
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-window-overlay-terminal-group-live-'));
+  let overlayPid = 0;
+  let externalProcess: ReturnType<typeof spawn> | null = null;
+  let externalPid = 0;
+  try {
+    const started = await startOverlay({
+      id: 'terminal-group-live-overlay',
+      stateRoot,
+      visibilityPolicy: 'terminal-group',
+      refreshSeconds: 1,
+      document: {
+        title: 'Terminal group live overlay',
+        rows: [{ label: 'Policy', value: 'terminal-group', tone: 'accent' }],
+      },
+    });
+    overlayPid = started.pid ?? 0;
+    assert.ok(overlayPid > 0);
+    await waitForSnapshot(overlayPid, (snapshot) => snapshot.ForegroundPid === terminalPid && snapshot.Windows.some(
+      (window) => window.Visible && window.Title === overlayWindowTitle('terminal-group-live-overlay'),
+    ));
+
+    const externalScriptPath = join(stateRoot, 'external-window.ps1');
+    await writeFile(externalScriptPath, EXTERNAL_WINDOW_SCRIPT, 'utf8');
+    const external = startExternalForegroundProcess(externalScriptPath);
+    externalProcess = external.child;
+    externalPid = external.pid;
+    const externalDeadline = Date.now() + 7_000;
+    while (Date.now() < externalDeadline && !activateNativeProcess(externalPid)) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.ok(activateNativeProcess(externalPid), 'external foreground process must expose an activatable window');
+    let externalStatus = await overlayStatus('terminal-group-live-overlay', { stateRoot });
+    const hiddenStateDeadline = Date.now() + 7_000;
+    while (Date.now() < hiddenStateDeadline && (
+      externalStatus.visibility_state?.desired_visibility !== 'hidden'
+      || externalStatus.visibility_state?.visibility !== 'hidden'
+    )) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      externalStatus = await overlayStatus('terminal-group-live-overlay', { stateRoot });
+    }
+    assert.equal(externalStatus.visibility_state?.desired_visibility, 'hidden', JSON.stringify(externalStatus.visibility_state));
+    assert.equal(externalStatus.visibility_state?.visibility, 'hidden', JSON.stringify(externalStatus.visibility_state));
+    await waitForSnapshot(overlayPid, (snapshot) => snapshot.ForegroundPid === externalPid && snapshot.Windows.some(
+      (window) => !window.Visible && window.Title === overlayWindowTitle('terminal-group-live-overlay'),
+    ));
+
+    assert.ok(activateNativeProcess(terminalPid), 'Windows Terminal must be restorable after external focus');
+    await waitForSnapshot(overlayPid, (snapshot) => snapshot.ForegroundPid === terminalPid && snapshot.Windows.some(
+      (window) => window.Visible && window.Title === overlayWindowTitle('terminal-group-live-overlay'),
+    ));
+  } finally {
+    if (overlayPid > 0) await stopOverlay({ id: 'terminal-group-live-overlay', stateRoot }).catch(() => undefined);
+    if (externalProcess) externalProcess.kill();
+    if (externalPid > 0) stopExternalForegroundProcess(externalPid);
+    await rm(stateRoot, { recursive: true, force: true });
+    livePid = 0;
+  }
+});
+
 test('live start applies a changed visibility policy to an existing host', {
   skip: process.platform !== 'win32',
 }, async () => {
@@ -140,7 +373,7 @@ test('live start applies a changed visibility policy to an existing host', {
     const first = await startOverlay({
       id: 'live-overlay-policy',
       stateRoot,
-      visibilityPolicy: 'windows-terminal',
+      visibilityPolicy: 'terminal-group',
       refreshSeconds: 1,
       document: {
         title: 'Live policy overlay',
@@ -190,7 +423,7 @@ test('live overlays share visibility when a sibling owns focus', {
     const first = await startOverlay({
       id: 'visibility-sibling-first',
       stateRoot,
-      visibilityPolicy: 'windows-terminal',
+      visibilityPolicy: 'terminal-group',
       refreshSeconds: 1,
       document: {
         title: 'Visibility sibling first',
@@ -205,7 +438,7 @@ test('live overlays share visibility when a sibling owns focus', {
     const second = await startOverlay({
       id: 'visibility-sibling-second',
       stateRoot,
-      visibilityPolicy: 'windows-terminal',
+      visibilityPolicy: 'terminal-group',
       refreshSeconds: 1,
       document: {
         title: 'Visibility sibling second',
@@ -262,6 +495,8 @@ test('live focus requests are one-shot and do not keep stealing later operator f
     assert.ok(overlayPid > 0, 'focus overlay must expose a host PID');
     await requestOverlayFocus('focus-one-shot-overlay', { stateRoot });
     await waitForSnapshot(overlayPid, (snapshot) => snapshot.ForegroundPid === overlayPid);
+    const focusedStatus = await overlayStatus('focus-one-shot-overlay', { stateRoot });
+    assert.equal(focusedStatus.focus_owner?.id, 'focus-one-shot-overlay');
 
     const inputSurface = await startOverlay({
       id: 'focus-one-shot-input-surface',
@@ -277,6 +512,8 @@ test('live focus requests are one-shot and do not keep stealing later operator f
     assert.ok(inputSurfacePid > 0, 'input surface must expose a host PID');
     await requestOverlayFocus('focus-one-shot-input-surface', { stateRoot });
     await waitForSnapshot(inputSurfacePid, (snapshot) => snapshot.ForegroundPid === inputSurfacePid);
+    const replacedFocusStatus = await overlayStatus('focus-one-shot-input-surface', { stateRoot });
+    assert.equal(replacedFocusStatus.focus_owner?.id, 'focus-one-shot-input-surface');
 
     await new Promise((resolve) => setTimeout(resolve, 2_500));
     const stable = readNativeWindowSnapshot(inputSurfacePid);

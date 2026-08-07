@@ -5,13 +5,13 @@ Reusable Windows overlay-window mechanics for Narada operator surfaces.
 This package owns the mechanics extracted from the quota-meter overlay:
 
 - one overlay process per stable overlay id;
-- user-local state for PID, document, visibility policy, refresh signal, position, opacity, and pin state; position is persisted as a nearest-corner anchor (`top-left`, `top-right`, `bottom-left`, or `bottom-right`) with monitor-work-area insets rather than absolute desktop coordinates;
-- borderless, rounded, topmost WPF window with drag-to-move;
+- user-local state for PID, document, canonical visibility policy, runtime visibility state, shared surface projection, focus ownership, refresh signal, position, opacity, and pin state; position is persisted as a nearest-corner anchor (`top-left`, `top-right`, `bottom-left`, or `bottom-right`) with monitor-work-area insets rather than absolute desktop coordinates;
+- borderless, rounded WPF window with user-controlled z-order and drag-to-move;
 - shared dark translucent chrome, compact icon actions, semantic row tones, hover states, opacity controls, and persisted pin/position preferences;
-- pinned overlays are visible only while Windows Terminal is the foreground window by default, except while the overlay itself is active so interaction and drag-to-move remain possible; callers can explicitly select the `always` visibility policy, and a later start applies a changed policy to an already-running host;
+- explicit visibility policies: `always` keeps the overlay visible, while `terminal-group` shows it when Windows Terminal or any Narada overlay is foreground; the legacy `windows-terminal` spelling is accepted only at ingress and is normalized immediately;
 - refreshable JSON document rendering with semantic tones, ochre accent titles/actions, and validated clickable HTTP(S) row values;
 - controlled actions: open an HTTP(S) URL, request refresh, close, or invoke an explicitly supplied local restart command. Actions may provide a presentation-only `icon` and `tooltip`; execution semantics remain defined by `kind`.
-- startup, idempotent start, and refresh preserve the current foreground input surface; focus is an explicit operation through `requestOverlayFocus()` or the `focus` CLI command and refuses when the overlay is stopped;
+- startup, idempotent start, and refresh preserve the current foreground input surface; focus is an explicit operation through `requestOverlayFocus()` or the `focus` CLI command and refuses when the overlay is stopped. Lifecycle, visibility, z-order, and focus are independent state axes: pinning changes z-order only, and a focus request claims a shared focus owner for a bounded stabilization window without making sibling overlays disappear;
 
 It does not own provider/quota logic, operator-console authority, site discovery, or arbitrary command execution. A specialization supplies a versioned document and may explicitly supply one fixed restart command for a typed `restart` action; the overlay never accepts a command from the document itself.
 

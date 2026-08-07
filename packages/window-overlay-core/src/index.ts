@@ -4,10 +4,16 @@ import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {
+  normalizeOverlayVisibilityPolicy,
+  type OverlayRuntimeState,
+  type OverlaySurfaceSnapshot,
+  type OverlayVisibilityPolicyInput,
+} from './overlay-surface-fsm.js';
+export * from './overlay-surface-fsm.js';
 
 export type OverlayTone = 'default' | 'muted' | 'success' | 'warning' | 'danger' | 'accent';
 export type OverlayActionKind = 'open_url' | 'refresh' | 'close' | 'restart';
-export type OverlayVisibilityPolicy = 'always' | 'windows-terminal';
 
 export interface OverlayRow {
   label: string;
@@ -61,6 +67,9 @@ export interface OverlayPaths {
   focus: string;
   restartCommand: string;
   actionState: string;
+  visibilityState: string;
+  surfaceSnapshot: string;
+  focusOwner: string;
 }
 
 export interface OverlayActionState {
@@ -84,6 +93,9 @@ export interface OverlayStatus {
   document_path: string;
   document: OverlayDocument | null;
   action_state: OverlayActionState | null;
+  visibility_state: OverlayRuntimeState | null;
+  surface_snapshot: OverlaySurfaceSnapshot | null;
+  focus_owner: Record<string, unknown> | null;
 }
 
 export interface OverlayDocumentInput extends Record<string, unknown> {
@@ -108,7 +120,7 @@ interface OverlayLifecycleOptions extends OverlayPathOptions {
 interface StartOverlayOptions extends OverlayPathOptions {
   id?: string;
   document?: OverlayDocumentInput | null;
-  visibilityPolicy?: OverlayVisibilityPolicy;
+  visibilityPolicy?: OverlayVisibilityPolicyInput;
   refreshSeconds?: number;
   restartCommand?: readonly string[];
   restartWorkingDirectory?: string;
@@ -318,6 +330,9 @@ export function overlayPaths(id: string, options: OverlayPathOptions = {}): Over
     focus: join(stateDirectory, 'focus.signal'),
     restartCommand: join(stateDirectory, 'restart.command.json'),
     actionState: join(stateDirectory, 'action-state.json'),
+    visibilityState: join(stateDirectory, 'visibility.state.json'),
+    surfaceSnapshot: join(dirname(stateDirectory), 'surface.snapshot.json'),
+    focusOwner: join(dirname(stateDirectory), 'focus.owner.json'),
   };
 }
 
@@ -370,6 +385,9 @@ export async function overlayStatus(id: string, options: OverlayPathOptions = {}
     };
     await writeJson(paths.actionState, actionState);
   }
+  const visibilityState = await readJson(paths.visibilityState) as OverlayRuntimeState | null;
+  const surfaceSnapshot = await readJson(paths.surfaceSnapshot) as OverlaySurfaceSnapshot | null;
+  const focusOwner = await readJson(paths.focusOwner) as Record<string, unknown> | null;
   return {
     schema: OVERLAY_RESULT_SCHEMA,
     id: normalizedId,
@@ -379,6 +397,9 @@ export async function overlayStatus(id: string, options: OverlayPathOptions = {}
     document_path: paths.document,
     document: storedDocument ? createOverlayDocument(asRecord(storedDocument)) : null,
     action_state: actionState,
+    visibility_state: visibilityState,
+    surface_snapshot: surfaceSnapshot,
+    focus_owner: focusOwner,
   };
 }
 
@@ -433,7 +454,7 @@ export async function startOverlay({
   id,
   document,
   stateRoot,
-  visibilityPolicy = 'windows-terminal',
+  visibilityPolicy = 'terminal-group',
   refreshSeconds = 2,
   restartCommand,
   restartWorkingDirectory,
@@ -441,6 +462,7 @@ export async function startOverlay({
   env = process.env,
 }: StartOverlayOptions = {}): Promise<OverlayStatus> {
   const normalized = createOverlayDocument({ ...(document ?? {}), id: id ?? document?.id });
+  const normalizedVisibilityPolicy = normalizeOverlayVisibilityPolicy(visibilityPolicy);
   const paths = await ensureStateDirectory(normalized.id, { stateRoot, env });
   await writeJson(paths.document, normalized);
   const normalizedRestartCommand = normalizeRestartCommand(restartCommand, restartWorkingDirectory);
@@ -456,7 +478,7 @@ export async function startOverlay({
   await runPowerShell(packageAsset('Start-WindowSurfaceOverlay.ps1'), [
     '-Id', normalized.id,
     '-StateRoot', paths.stateDirectory,
-    '-VisibilityPolicy', visibilityPolicy,
+    '-VisibilityPolicy', normalizedVisibilityPolicy,
     '-RefreshSeconds', String(refreshSeconds),
   ], env);
   return { ...(await overlayStatus(normalized.id, { stateRoot, env })), state: 'started' };
@@ -483,7 +505,7 @@ export async function readOverlayDocument({ id, stateRoot, env = process.env }: 
 export async function removeOverlayState({ id, stateRoot, env = process.env }: OverlayLifecycleOptions = {}): Promise<OverlayStatus> {
   const normalizedId = requireId(id);
   const paths = overlayPaths(normalizedId, { stateRoot, env });
-  for (const path of [paths.pid, paths.visibilityPolicy, paths.refresh, paths.restartCommand, paths.document]) {
+  for (const path of [paths.pid, paths.visibilityPolicy, paths.refresh, paths.restartCommand, paths.document, paths.visibilityState]) {
     try { await unlink(path); } catch (error: unknown) { if (errorCode(error) !== 'ENOENT') throw error; }
   }
   return overlayStatus(normalizedId, { stateRoot, env });
