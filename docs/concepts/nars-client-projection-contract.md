@@ -259,7 +259,7 @@ Identity sources, in priority order for display:
 
 Cross-Site compatibility rule:
 
-- Workspace-style Sites such as `D:/code/narada.sonar` and embedded authority roots such as `D:/code/narada.staccato/.narada` are both valid Site bindings.
+- Workspace-style Sites such as `<src-root>/narada.sonar` and embedded authority roots such as `<src-root>/narada.staccato/.narada` are both valid Site bindings.
 - Client projections must not append `.narada`, trim `.narada`, or infer Site identity from path shape.
 - When `site_id` is present, display should prefer `site_id.agent_id` or an equivalent prominent Site/agent split.
 - When `site_id` is absent, a dotted `agent_id` such as `narada-staccato.resident` may be split for display only; it must not become discovery or attach authority.

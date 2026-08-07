@@ -139,7 +139,7 @@ Minimum graph record:
     {
       "authority_runtime_id": "auth_local_nars_...",
       "kind": "nars",
-      "location": { "kind": "local", "site_root": "D:/code/narada.sonar" },
+      "location": { "kind": "local", "site_root": "<src-root>/narada.sonar" },
       "authority_role": "canonical_session_runtime",
       "owner": { "kind": "nars_session_authority", "id": "auth_local_nars_..." },
       "non_owner_boundary": "Projection stores and surfaces cannot mint session events or admit input.",

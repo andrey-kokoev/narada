@@ -142,7 +142,7 @@ First-class object: governing delegation contract for scope, repositories, budge
 
 Authority contract:
 
-- `@narada-core/delegated-task-mcp` target docs and tests in `D:/code/mcp-surfaces`
+- `@narada-core/delegated-task-mcp` target docs and tests in `<src-root>/mcp-surfaces`
 
 Current implementation posture:
 

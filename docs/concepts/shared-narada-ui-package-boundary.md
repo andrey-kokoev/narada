@@ -4,7 +4,7 @@
 
 Narada web presentation is split into a cross-renderer CSS foundation and a Vue component layer. Product-specific session behavior remains in Agent Web UI.
 
-The packages live in the Narada repository at D:/code/narada. They are not MCP surface packages.
+The packages live in the Narada repository at <src-root>/narada. They are not MCP surface packages.
 
 ## @narada-core/ui
 
@@ -45,7 +45,7 @@ It consumes @narada-core/ui and @narada-core/ui-vue; it is not their implementat
 
 ## MCP surfaces
 
-D:/code/mcp-surfaces remains UI-neutral. MCP packages may define UI-neutral affordance documents and validation contracts, but they must not import @narada-core/ui, @narada-core/ui-vue, Vue components, Tailwind runtime code, or Agent Web UI modules.
+<src-root>/mcp-surfaces remains UI-neutral. MCP packages may define UI-neutral affordance documents and validation contracts, but they must not import @narada-core/ui, @narada-core/ui-vue, Vue components, Tailwind runtime code, or Agent Web UI modules.
 
 The forbidden-renderer-import guard belongs in the repository that owns the MCP surface boundary.
 

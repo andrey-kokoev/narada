@@ -288,7 +288,7 @@ The posture is advisory. It may report `aligned`, `drift`, or `error`, plus exac
 The repair path is the reconciler, not hand editing or full config generation:
 
 ```powershell
-narada-proper-mcp --site-root D:\code\narada --reconcile-mcp-policy --apply
+narada-proper-mcp --site-root <src-root>\narada --reconcile-mcp-policy --apply
 ```
 
 Apply mode is explicit because it crosses from read-only posture into Site-local runtime config mutation. The reconciler patches only the allowed-tools subtree and records mutation evidence under `.ai/mutation-evidence/mcp_policy/`.

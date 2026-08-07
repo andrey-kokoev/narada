@@ -35,14 +35,14 @@ The current delegated-task validator accepts this shape under `workflow.work_ord
   "source": "task-or-operator-reference",
   "scope": ["short bounded scope statement"],
   "authority": "read",
-  "allowed_roots": ["D:/code/narada"],
-  "allowed_repositories": ["D:/code/narada"],
+  "allowed_roots": ["<src-root>/narada"],
+  "allowed_repositories": ["<src-root>/narada"],
   "mutation_boundaries": ["No commit or push without explicit authority."],
   "budget": {
     "max_minutes": 10,
     "max_worker_runs": 2,
     "max_verification_attempts": 1,
-    "allowed_repositories": ["D:/code/narada"]
+    "allowed_repositories": ["<src-root>/narada"]
   },
   "verification_budget": {
     "focus": "focused",
@@ -84,8 +84,8 @@ Use NARS-backed worker delegation when the worker needs Narada identity, Site MC
 {
   "constraints": {
     "runtime": "narada-agent-runtime-server",
-    "site_root": "D:/code/narada",
-    "cwd": "D:/code/narada",
+    "site_root": "<src-root>/narada",
+    "cwd": "<src-root>/narada",
     "provider": "codex-subscription",
     "authority": "read",
     "cognition": "low",

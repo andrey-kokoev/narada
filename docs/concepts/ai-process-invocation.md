@@ -69,7 +69,7 @@ The authoritative live-admission scope is:
   "schema": "narada.ai_process_invocation_scope.v1",
   "kind": "narada_runtime_session",
   "site_id": "sonar",
-  "site_root": "D:/code/narada.sonar",
+  "site_root": "<src-root>/narada.sonar",
   "runtime_session_id": "carrier_...",
   "agent_identity_ref": {},
   "launch_session_id": "..."

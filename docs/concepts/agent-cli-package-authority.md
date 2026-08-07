@@ -1,6 +1,6 @@
 # Agent CLI Package Authority
 
-`D:\code\narada` is the source authority for the Narada agent CLI carrier and the Narada Agent Runtime Server package.
+`<src-root>\narada` is the source authority for the Narada agent CLI carrier and the Narada Agent Runtime Server package.
 
 ## Hard Rule
 

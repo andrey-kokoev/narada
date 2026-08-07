@@ -64,7 +64,7 @@ Path vocabulary:
 
 | Term | Meaning |
 | --- | --- |
-| `siteRoot` | The operator/config-declared Site root, preserved as the external Site binding. It may be a workspace-style root such as `D:/code/narada.sonar` or an embedded Site authority root such as `D:/code/smart-scheduling/.narada`. |
+| `siteRoot` | The operator/config-declared Site root, preserved as the external Site binding. It may be a workspace-style root such as `<src-root>/narada.sonar` or an embedded Site authority root such as `<src-root>/smart-scheduling/.narada`. |
 | `siteAuthorityRoot` | The directory that owns Site-local Narada authority files. For workspace-style Sites this is `<siteRoot>/.narada`; for embedded Sites it may already equal `siteRoot`. |
 | `workspaceRoot` | The containing project/workspace root when distinguishable. For an embedded `.narada` Site root, this is the parent directory. |
 | `narsSessionsRoot` | The canonical NARS session storage root: `<siteAuthorityRoot>/crew/nars-sessions`. |
@@ -187,10 +187,10 @@ The preferred operator-visible presentation path is NARS-owned: after an artifac
   "agent_id": "sonar.resident",
   "site_id": "sonar",
   "site_id_source": "session_started",
-  "site_root": "D:/code/narada.sonar",
+  "site_root": "<src-root>/narada.sonar",
   "runtime_kind": "narada-agent-runtime-server",
   "launch_operator_surface_kind": "agent-cli",
-  "session_dir": "D:/code/narada.sonar/.narada/crew/nars-sessions/carrier_...",
+  "session_dir": "<src-root>/narada.sonar/.narada/crew/nars-sessions/carrier_...",
   "session_path": ".../session.jsonl",
   "events_path": ".../events.jsonl",
   "heartbeat_path": ".../heartbeat.json",
@@ -249,7 +249,7 @@ Local runtime context may carry this explicitly as `siteId`, or through `NARADA_
 ```json
 {
   "schema": "narada.nars.session_index.v1",
-  "site_root": "D:/code/narada.sonar",
+  "site_root": "<src-root>/narada.sonar",
   "generated_at": "2026-06-23T00:00:05.000Z",
   "sessions": [
     {
@@ -330,10 +330,10 @@ narada-agent-web-ui --event-endpoint <ws-url> --health-endpoint <http-url>
 Target Narada CLI UX is discovery-based:
 
 ```text
-narada nars sessions --site-root D:/code/narada.sonar
+narada nars sessions --site-root <src-root>/narada.sonar
 narada nars sessions --site sonar
 narada nars sessions
-narada nars attach-command --site-root D:/code/narada.sonar --session carrier_... --surface agent-web-ui
+narada nars attach-command --site-root <src-root>/narada.sonar --session carrier_... --surface agent-web-ui
 narada nars attach-command --site sonar --session carrier_... --surface agent-web-ui
 narada nars attach-command --session carrier_... --surface agent-web-ui
 narada agent-web-ui attach --session carrier_...
@@ -350,7 +350,7 @@ Projection attach by agent id is an index lookup, not a string-appending path he
 
 Attach refusals should be concise for humans and structured for tools. When no matching session is found but the selected Site has indexed sessions, the refusal should include bounded candidate summaries (`session_id`, `agent_id`, `site_id`/`site_root`, display state, health status, and start time) plus the next action: start the runtime host for that agent or pass an explicit `--session <id>`.
 
-Both workspace-style roots such as `D:/code/narada.sonar` and embedded `.narada` roots such as `D:/code/narada.staccato/.narada` are valid `siteRoot` values. Callers must pass the authority root they were given through the resolver and let `@narada-core/site-paths` derive `narsSessionsRoot`; they must not append `.narada` again.
+Both workspace-style roots such as `<src-root>/narada.sonar` and embedded `.narada` roots such as `<src-root>/narada.staccato/.narada` are valid `siteRoot` values. Callers must pass the authority root they were given through the resolver and let `@narada-core/site-paths` derive `narsSessionsRoot`; they must not append `.narada` again.
 
 Session listings should show Site, agent id, role, started time, liveness state, and launch surface. The explicit `latest` selector only chooses active/running sessions; closed or superseded sessions require an explicit id and, when appropriate, `--inspect-stale-session`.
 

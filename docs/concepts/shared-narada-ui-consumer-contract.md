@@ -6,8 +6,8 @@ This is the durable consumer contract for Narada's shared web presentation
 packages. It defines which package owns a concern, which package a consumer may
 depend on, and which checks prove that the boundary remains intact.
 
-The package boundary is in D:/code/narada. It is separate from the
-UI-neutral MCP surface boundary in D:/code/mcp-surfaces.
+The package boundary is in <src-root>/narada. It is separate from the
+UI-neutral MCP surface boundary in <src-root>/mcp-surfaces.
 
 ## Package Selection
 
@@ -72,11 +72,11 @@ token, reset, primitive, or generic command/tooltip implementation files.
 
 ## MCP Surface Boundary
 
-D:/code/mcp-surfaces remains UI-neutral. It may expose UI-neutral affordance
+<src-root>/mcp-surfaces remains UI-neutral. It may expose UI-neutral affordance
 documents and validation helpers, but MCP packages must not import Narada
 renderer packages, UI runtime packages, stylesheet modules, or Agent Web UI.
 
-The forbidden-renderer-import guard is owned and run in D:/code/mcp-surfaces.
+The forbidden-renderer-import guard is owned and run in <src-root>/mcp-surfaces.
 The Narada tests below verify Narada package consumers; they do not claim to
 enforce a rule in a different repository.
 
@@ -145,7 +145,7 @@ The following checks are the durable evidence for this boundary:
    1280x900 and 390x844, including overflow, hidden fields, refresh-preserved
    drafts, discard restoration, lifecycle blocking, and confirmation-gated
    apply.
-6. `pnpm test:ui-boundary` in D:/code/mcp-surfaces proves the
+6. `pnpm test:ui-boundary` in <src-root>/mcp-surfaces proves the
    repository-owned renderer-import boundary. It is intentionally a separate
    check from the Narada-side package tests.
 
