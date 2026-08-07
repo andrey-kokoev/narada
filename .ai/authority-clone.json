@@ -1,11 +1,11 @@
 {
   "site_id": "narada-proper",
-  "authority_root": "D:\\code\\narada",
+  "authority_root": "<src-root>\\narada",
   "embodiments": [
     {
       "id": "windows-authority",
       "kind": "git_clone",
-      "root": "D:\\code\\narada",
+      "root": "<src-root>\\narada",
       "role": "authority",
       "mutation_policy": "allow",
       "purpose": "Narada proper Windows-native mutation authority clone"

@@ -67,7 +67,7 @@
         "task_id": "20260515-1280-capa-builder-duty-loop-stopped-before-governed-next-action",
         "task_number": 1280,
         "file_name": "20260515-1280-capa-builder-duty-loop-stopped-before-governed-next-action.md",
-        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1280-capa-builder-duty-loop-stopped-before-governed-next-action.md",
+        "file_path": "<src-root>\\narada\\.ai\\do-not-open\\tasks\\20260515-1280-capa-builder-duty-loop-stopped-before-governed-next-action.md",
         "title": "CAPA: Builder duty loop stopped before governed next action",
         "handoff_actionability": {
           "status": "actionable",

@@ -22,4 +22,4 @@ Verification:
 - `pnpm --filter @narada2/narada-proper-mcp typecheck` passed.
 - `pnpm --filter @narada2/narada-proper-mcp test` passed: 1 file, 35 tests.
 - `pnpm --filter @narada2/narada-proper-mcp build` passed.
-- `node packages/narada-proper-mcp/dist/main.js --site-root D:\code\narada --reconcile-mcp-policy` passed after repair with status `ok`.
+- `node packages/narada-proper-mcp/dist/main.js --site-root <src-root>\narada --reconcile-mcp-policy` passed after repair with status `ok`.

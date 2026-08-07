@@ -25,7 +25,7 @@
       "result": "refused: Cross-Site MCP mutation is not admitted in v1 fabric proof"
     },
     {
-      "command": "narada inbox submit --cwd C:\\Users\\Andrey\\Narada --source-kind agent_report --source-ref narada-proper:task-1481-hosted-telemetry-registry-separation-outcome --kind observation --authority-level agent_reported --principal narada.builder --payload-file D:\\code\\narada\\.ai\\handoffs\\task-1481-narada-andrey-notification.json --target-locus local_site --format json --output full",
+      "command": "narada inbox submit --cwd C:\\Users\\Andrey\\Narada --source-kind agent_report --source-ref narada-proper:task-1481-hosted-telemetry-registry-separation-outcome --kind observation --authority-level agent_reported --principal narada.builder --payload-file <src-root>\\narada\\.ai\\handoffs\\task-1481-narada-andrey-notification.json --target-locus local_site --format json --output full",
       "result": "passed: delivered env_2265d546-744b-4b3e-ac3c-15e03d91151a via direct_target_authority"
     }
   ],

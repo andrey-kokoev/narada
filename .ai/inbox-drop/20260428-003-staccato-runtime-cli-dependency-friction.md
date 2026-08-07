@@ -18,11 +18,11 @@ The Staccato Narada mailbox runtime state is healthy enough when inspected direc
 - no stuck outbound items
 - one `failed_retryable` work item remains due to `Charter declared clarification_needed`
 
-However, Staccato's operator commands fail because its `.narada/package.json` delegates to `D:/code/narada/packages/layers/cli/dist/main.js`, and that built CLI currently fails at module load:
+However, Staccato's operator commands fail because its `.narada/package.json` delegates to `<src-root>/narada/packages/layers/cli/dist/main.js`, and that built CLI currently fails at module load:
 
 ```text
 Error [ERR_MODULE_NOT_FOUND]: Cannot find package '@narada2/task-governance'
-imported from D:\code\narada\packages\layers\cli\dist\commands\site-immune-scan.js
+imported from <src-root>\narada\packages\layers\cli\dist\commands\site-immune-scan.js
 ```
 
 This means a downstream Site can have valid runtime state while losing its ergonomic operator surface because Narada proper's current Windows CLI embodiment is not loadable.

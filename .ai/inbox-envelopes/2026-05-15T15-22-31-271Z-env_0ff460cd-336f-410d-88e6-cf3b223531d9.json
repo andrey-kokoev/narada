@@ -36,7 +36,7 @@
         "task_id": "20260515-1278-repair-mcp-narada-shim-command-resolution",
         "task_number": 1278,
         "file_name": "20260515-1278-repair-mcp-narada-shim-command-resolution.md",
-        "file_path": "D:\\code\\narada\\.ai\\do-not-open\\tasks\\20260515-1278-repair-mcp-narada-shim-command-resolution.md",
+        "file_path": "<src-root>\\narada\\.ai\\do-not-open\\tasks\\20260515-1278-repair-mcp-narada-shim-command-resolution.md",
         "title": "Repair MCP Narada shim command resolution",
         "handoff_actionability": {
           "status": "actionable",

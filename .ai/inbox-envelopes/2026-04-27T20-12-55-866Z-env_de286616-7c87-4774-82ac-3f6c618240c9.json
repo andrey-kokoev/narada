@@ -16,7 +16,7 @@
     "evidence": [
       "Initial WSL command cd /home/andrey/src/narada && pnpm narada inbox ... failed with MODULE_NOT_FOUND for \\\\wsl.localhost\\Ubuntu-24.04\\home\\andrey\\src\\narada\\node_modules\\@narada2\\cli\\dist\\main.js.",
       "Direct Windows node against the WSL UNC path failed to resolve package dependencies such as commander.",
-      "D:\\code\\narada had a working older CLI, but it did not expose the canonical inbox command, so it was not the correct target for Narada proper submission.",
+      "<src-root>\\narada had a working older CLI, but it did not expose the canonical inbox command, so it was not the correct target for Narada proper submission.",
       "The successful invocation was: source ~/.nvm/nvm.sh, cd /home/andrey/src/narada, then node packages/layers/cli/dist/main.js inbox submit-observation ..."
     ],
     "proposal": [

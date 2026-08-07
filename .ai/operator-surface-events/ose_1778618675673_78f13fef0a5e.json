@@ -106,7 +106,7 @@
     "runtime_locus": "narada",
     "critical_section": "focus_clipboard_type_submit",
     "started_at": "2026-05-12T20:44:35.675Z",
-    "active_lease_artifact": "D:\\code\\narada\\.ai\\operator-surface-send-queue\\narada.active.json",
+    "active_lease_artifact": "<src-root>\\narada\\.ai\\operator-surface-send-queue\\narada.active.json",
     "active_send": {
       "event_id": "ose_1778618675673_78f13fef0a5e",
       "target_identity": "architect",
@@ -122,18 +122,18 @@
       "lease_ms": 300000,
       "ordering": {
         "policy": "single_active_send_per_runtime_locus",
-        "active_lease_artifact": "D:\\code\\narada\\.ai\\operator-surface-send-queue\\narada.active.json"
+        "active_lease_artifact": "<src-root>\\narada\\.ai\\operator-surface-send-queue\\narada.active.json"
       }
     },
     "stale_recovery": null,
     "ordering": {
       "policy": "single_active_send_per_runtime_locus",
-      "active_lease_artifact": "D:\\code\\narada\\.ai\\operator-surface-send-queue\\narada.active.json"
+      "active_lease_artifact": "<src-root>\\narada\\.ai\\operator-surface-send-queue\\narada.active.json"
     }
   },
   "delivery_promise": {
     "promise_id": "osdq_ose_1778618675673_78f13fef0a5e",
-    "artifact": "D:\\code\\narada\\.ai\\operator-surface-delivery-queue\\osdq_ose_1778618675673_78f13fef0a5e.json",
+    "artifact": "<src-root>\\narada\\.ai\\operator-surface-delivery-queue\\osdq_ose_1778618675673_78f13fef0a5e.json",
     "status": "promised"
   },
   "fallback_inbox": null,

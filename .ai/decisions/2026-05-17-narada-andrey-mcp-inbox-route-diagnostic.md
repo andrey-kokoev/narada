@@ -27,7 +27,7 @@ The missing pieces are:
 2. **Route resolution missing**: `narada routing resolve --target-kind site --target-ref narada-andrey --format json`
    returned `status: not_found` with no selected route or alternatives.
 3. **Target Site root absent in this workspace**: a bounded local search under
-   `D:\code` found only `D:\code\narada\.narada\site.json`; no
+   `<src-root>` found only `<src-root>\narada\.narada\site.json`; no
    `narada-andrey` Site root was discovered.
 4. **Capability grant not established for this direction**: existing admitted
    `narada-andrey` capability evidence covers bounded Operator Surface delivery

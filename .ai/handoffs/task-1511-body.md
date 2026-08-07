@@ -23,4 +23,4 @@ Verification:
 - `pnpm --filter @narada2/narada-proper-mcp typecheck` passed.
 - `pnpm --filter @narada2/narada-proper-mcp test` passed: 1 file, 38 tests.
 - `pnpm --filter @narada2/narada-proper-mcp build` passed.
-- Live startup probe against `D:\code\narada` returned `mcp_policy_reconciliation.status: aligned` with no additions/removals and no mutation.
+- Live startup probe against `<src-root>\narada` returned `mcp_policy_reconciliation.status: aligned` with no additions/removals and no mutation.

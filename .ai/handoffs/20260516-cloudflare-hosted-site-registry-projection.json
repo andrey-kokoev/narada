@@ -10,11 +10,11 @@
     "packages/site-config/README.md",
     "packages/sites/cloudflare/README.md",
     "docs/deployment/cloudflare-site-materialization.md",
-    "D:/code/staccato-elt/workers/staccato/src/index.mjs",
-    "D:/code/staccato-elt/workers/staccato/wrangler.jsonc",
-    "D:/code/staccato-elt/workers/staccato/migrations/0001_surface_inbox.sql",
-    "D:/code/staccato-elt/tests/staccato-cloud-worker.test.mjs",
-    "D:/code/staccato-elt/runbooks/cloudflare-published-surface.md"
+    "<src-root>/staccato-elt/workers/staccato/src/index.mjs",
+    "<src-root>/staccato-elt/workers/staccato/wrangler.jsonc",
+    "<src-root>/staccato-elt/workers/staccato/migrations/0001_surface_inbox.sql",
+    "<src-root>/staccato-elt/tests/staccato-cloud-worker.test.mjs",
+    "<src-root>/staccato-elt/runbooks/cloudflare-published-surface.md"
   ],
   "staccato_patterns_to_lift": [
     "Worker-local route table with POST /webhook and guarded read APIs",

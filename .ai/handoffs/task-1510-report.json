@@ -24,7 +24,7 @@
       "result": "passed"
     },
     {
-      "command": "node packages/narada-proper-mcp/dist/main.js --site-root D:\\code\\narada --reconcile-mcp-policy",
+      "command": "node packages/narada-proper-mcp/dist/main.js --site-root <src-root>\\narada --reconcile-mcp-policy",
       "result": "initially reported stale site_registry_relation_plan_transition; after explicit apply, passed with status ok and no additions/removals"
     }
   ],

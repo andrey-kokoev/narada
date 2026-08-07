@@ -5,7 +5,7 @@ Source: codex-windows-staccato-runtime
 Authority: agent_reported
 Principal: codex
 
-Windows clone `D:/code/narada` committed and pushed `de852d9` to `origin/main`.
+Windows clone `<src-root>/narada` committed and pushed `de852d9` to `origin/main`.
 
 The WSL clone at `/home/andrey/src/narada` attempted `git pull --ff-only` but could not pull because it has unstaged local changes:
 
