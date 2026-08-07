@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "operator:2026-05-18-config-json-mcp-policy-drift",
   "eventId": "mcp-task-materialized-628bfcabfc346610",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-05-18T15:28:30.914Z",
   "materializedBy": "narada.architect",
   "materializedTaskId": "20260518-1508-repair-narada-proper-mcp-role-policy-drift-in-config-json",

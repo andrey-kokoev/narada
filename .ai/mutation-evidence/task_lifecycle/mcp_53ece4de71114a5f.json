@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter",
   "eventId": "mcp-task-materialized-32513d11204d0955",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-06-02T17:09:57.819Z",
   "materializedBy": "narada.architect",
   "materializedTaskId": "20260602-1514-architect-define-builder-task-chapter-for-task-lifecycle-ker",

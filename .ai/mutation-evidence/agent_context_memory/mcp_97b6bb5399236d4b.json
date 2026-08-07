@@ -10,5 +10,5 @@
   "sessionId": "carrier_session_20260528_163727416_narada_architect",
   "namedAgentId": "narada.architect",
   "recordedAt": "2026-05-28T21:20:22.720Z",
-  "storePath": "D:\\code\\narada\\.narada\\agent-context-memory\\memory-store.json"
+  "storePath": "<src-root>\\narada\\.narada\\agent-context-memory\\memory-store.json"
 }

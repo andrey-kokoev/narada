@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter",
   "eventId": "mcp-task-materialized-1e4395380d2a31ae",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-06-02T17:10:27.989Z",
   "materializedBy": "narada.architect",
   "materializedTaskId": "20260602-1518-builder-verify-task-lifecycle-kernel-typescript-migration-an",

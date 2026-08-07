@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "user_chat:2026-05-15-add-narada-native-agent-carrier-chapter",
   "eventId": "mcp-task-admission-593bb86b46bff3c9",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-05-15T04:26:50.313Z",
   "admittedBy": "narada.architect",
   "readback": [

@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "operator_chat:2026-05-15:missing-agent-carrier-type-buildout-tasks; inbox:env_7d3e1971-d6f1-499f-8089-860c35bcb029; promoted-task:1267",
   "eventId": "mcp-task-admission-f50e4aae7fb5bade",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-05-15T14:51:49.068Z",
   "admittedBy": "narada.builder",
   "readback": [

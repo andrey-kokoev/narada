@@ -6,7 +6,7 @@
   "mutation_performed": true,
   "occurred_at": "2026-05-28T11:41:24.098Z",
   "by": "narada-proper-mcp",
-  "config_path": "D:\\code\\narada\\config.json",
+  "config_path": "<src-root>\\narada\\config.json",
   "target_subtree": "mcp.role_policies.architect.servers[\"narada-proper\"].allowed_tools",
   "policy_source": {
     "kind": "mcp_surface_registry",

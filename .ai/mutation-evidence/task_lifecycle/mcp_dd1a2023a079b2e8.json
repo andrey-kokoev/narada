@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter",
   "eventId": "mcp-task-admission-152acb994fcf16c9",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-06-02T17:09:49.096Z",
   "admittedBy": "narada.architect",
   "readback": [

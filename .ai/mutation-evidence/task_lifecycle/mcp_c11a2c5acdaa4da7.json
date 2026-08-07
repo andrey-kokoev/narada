@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "operator:user_chat:2026-06-02:task-lifecycle-kernel-ts-migration-chapter",
   "eventId": "mcp-task-materialized-faf5f7c3168b0a99",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-06-02T17:10:21.595Z",
   "materializedBy": "narada.architect",
   "materializedTaskId": "20260602-1517-builder-split-large-task-lifecycle-kernel-code-files-by-resp",

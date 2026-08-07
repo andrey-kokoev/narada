@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "OSM:osm_20260510_142839_058_af43c473",
   "eventId": "mcp-task-admission-8ded3b20ca541eda",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-05-10T19:34:48.462Z",
   "admittedBy": "narada-proper.architect",
   "readback": [

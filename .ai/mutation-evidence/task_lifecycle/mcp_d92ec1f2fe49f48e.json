@@ -8,7 +8,7 @@
   "siteId": "narada-proper",
   "sourceRef": "operator:2026-05-18-stale-review-obligation-projection",
   "eventId": "mcp-task-materialized-a12467c3f9b7431b",
-  "dbPath": "D:\\code\\narada\\.ai\\task-lifecycle.db",
+  "dbPath": "<src-root>\\narada\\.ai\\task-lifecycle.db",
   "recordedAt": "2026-05-18T17:36:07.991Z",
   "materializedBy": "narada.architect",
   "materializedTaskId": "20260518-1512-fix-stale-architect-review-obligations-for-terminal-tasks",
