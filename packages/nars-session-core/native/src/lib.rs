@@ -1184,6 +1184,7 @@ impl SessionCore {
             cancellation: cancellation.clone(),
         };
         let cancellation_requested = cancellation.is_cancelled();
+        let mut adapter_failure: Option<CoreError> = None;
         let outcome = if cancellation.is_cancelled() {
             ProviderOutcome::Interrupted("provider_request_cancelled".to_string())
         } else {
@@ -1194,7 +1195,10 @@ impl SessionCore {
             };
             match adapter.run_turn_with_context(context, &mut sink) {
                 Ok(outcome) => outcome,
-                Err(error) => ProviderOutcome::Error(error.0),
+                Err(error) => {
+                    adapter_failure = Some(error.clone());
+                    ProviderOutcome::Error(error.0)
+                }
             }
         };
         events.extend(self.events_after(provider_start_sequence));
@@ -1304,6 +1308,9 @@ impl SessionCore {
         } else {
             "completed"
         })?;
+        if let Some(error) = adapter_failure {
+            return Err(error);
+        }
         Ok(events)
     }
 

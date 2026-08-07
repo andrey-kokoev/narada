@@ -134,7 +134,28 @@ impl SessionSupervisor {
             );
             self.active_turn_id = None;
             self.active_cancellation = None;
-            drain_result?;
+            if let Err(error) = drain_result {
+                let recovery_state = turn_id
+                    .and_then(|id| self.core.turn(id))
+                    .and_then(|turn| {
+                        turn.get("terminal_state")
+                            .and_then(Value::as_str)
+                            .map(ToOwned::to_owned)
+                    })
+                    .filter(|state| matches!(state.as_str(), "interrupted" | "failed"))
+                    .unwrap_or_else(|| "failed".to_string());
+                self.core.transition_recovery_attempt(
+                    &attempt_id,
+                    &recovery_state,
+                    Some(if recovery_state == "interrupted" {
+                        "recovery_replay_interrupted"
+                    } else {
+                        "recovery_replay_failed"
+                    }),
+                    Some(json!(error.0)),
+                )?;
+                return Err(error);
+            }
             output.extend(self.core.events_after(start_sequence));
             let progressed = self.core.pending_count() < before;
             let terminal = turn_id.and_then(|id| self.core.turn(id)).and_then(|turn| {
@@ -484,6 +505,78 @@ mod tests {
             "failed"
         );
         supervisor.close_with_evidence("test", Value::Null).unwrap();
+        let _ = fs::remove_dir_all(root);
+    }
+
+    struct ThrowingAdapter;
+
+    impl NarsProviderAdapter for ThrowingAdapter {
+        fn run_turn(&mut self, _input: &Value) -> ProviderOutcome {
+            ProviderOutcome::Completed("unexpected".to_string())
+        }
+
+        fn run_turn_with_context(
+            &mut self,
+            _context: crate::ProviderTurnContext<'_>,
+            _sink: &mut dyn FnMut(Value) -> Result<(), CoreError>,
+        ) -> Result<ProviderOutcome, CoreError> {
+            Err(CoreError("provider_request_aborted".to_string()))
+        }
+    }
+
+    #[test]
+    fn adapter_errors_reject_submission_and_mark_recovery_attempt_failed() {
+        let root = std::env::temp_dir().join(format!(
+            "narada-supervisor-adapter-error-{}",
+            Uuid::new_v4().simple()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let mut first = SessionSupervisor::new(core(&root));
+        first.start().unwrap();
+        let mut throwing = ThrowingAdapter;
+        let error = first
+            .submit_with_adapter(
+                json!({ "event_id": "throwing-turn", "content": "retry" }),
+                &mut throwing,
+            )
+            .expect_err("adapter errors must reject the active submission");
+        assert_eq!(error.0, "provider_request_aborted");
+        assert_eq!(first.core().pending_count(), 1);
+        assert_eq!(
+            first.core().turn("throwing-turn").unwrap()["terminal_state"],
+            "interrupted"
+        );
+        assert!(!first
+            .core()
+            .events_after(0)
+            .iter()
+            .any(|event| event["event"] == "input_completed"));
+        drop(first);
+
+        let mut replay_attempt = SessionSupervisor::new(core(&root));
+        let mut throwing_again = ThrowingAdapter;
+        let recovery_error = replay_attempt
+            .start_with_adapter(&mut throwing_again)
+            .expect_err("failed recovery adapter must remain observable");
+        assert_eq!(recovery_error.0, "provider_request_aborted");
+        assert_eq!(
+            replay_attempt.core().recovery()["recovery_attempts"][0]["recovery_attempt_state"],
+            "interrupted"
+        );
+        assert_eq!(replay_attempt.core().pending_count(), 1);
+        drop(replay_attempt);
+
+        let mut recovered = SessionSupervisor::new(core(&root));
+        let mut echo = ModeProvider {
+            mode: "echo".to_string(),
+        };
+        recovered.start_with_adapter(&mut echo).unwrap();
+        assert_eq!(recovered.core().pending_count(), 0);
+        assert_eq!(
+            recovered.core().turn("throwing-turn").unwrap()["terminal_state"],
+            "completed"
+        );
+        recovered.close_with_evidence("test", Value::Null).unwrap();
         let _ = fs::remove_dir_all(root);
     }
 
