@@ -10,7 +10,7 @@ carriers.
 Canonical source:
 
 ```text
-D:\code\narada\packages\mcp-fabric\src\mcp-fabric.mjs
+<src-root>\narada\packages\mcp-fabric\src\mcp-fabric.mjs
 ```
 
 `@narada-core/agent-cli` imports this package source for interactive `agent-cli` and

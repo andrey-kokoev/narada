@@ -686,14 +686,14 @@ writeFileSync(join(windowsPathSite, '.ai', 'mcp', 'windows-mcp.json'), `${JSON.s
   mcpServers: {
     'narada-windows': {
       command: 'node',
-      args: ['D:\\code\\narada.sonar\\tools\\server.js', '{site_root}\\tools\\fixture.js'],
+      args: ['C:\\workspace\\narada.sonar\\tools\\server.js', '{site_root}\\tools\\fixture.js'],
       target_site_root: '{site_root}\\subdir',
     },
   },
 }, null, 2)}\n`, 'utf8');
 
 const windowsFabric = loadSiteMcpFabric(windowsPathSite, { required: true });
-assert.equal(windowsFabric.servers['narada-windows'].args[0], 'D:/code/narada.sonar/tools/server.js');
+assert.equal(windowsFabric.servers['narada-windows'].args[0], 'C:/workspace/narada.sonar/tools/server.js');
 assert.equal(windowsFabric.servers['narada-windows'].args[1], `${windowsPathSite.replaceAll('\\', '/')}/tools/fixture.js`);
 assert.equal(windowsFabric.servers['narada-windows'].target_site_root, `${windowsPathSite.replaceAll('\\', '/')}/subdir`);
 rmSync(windowsPathSite, { recursive: true, force: true });

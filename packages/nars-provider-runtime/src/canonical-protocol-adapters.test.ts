@@ -109,7 +109,7 @@ test('provider-specific request facts remain explicit protocol behavior', () => 
 });
 
 test('Codex continuation state is explicit and isolated by the caller', () => {
-  const siteRoot = 'D:/code/site';
+  const siteRoot = 'C:/workspace/site';
   const messages = [{ role: 'user', content: 'continue' }];
   const first = buildCodexMcpRequest(messages, [], {
     model: 'gpt-5.5',

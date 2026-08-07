@@ -8,12 +8,12 @@
       "command": "node",
       "args": ["site-loop.mjs"],
       "env": {
-        "NARADA_SITE_ROOT": "D:/code/narada.sonar"
+        "NARADA_SITE_ROOT": "C:/workspace/narada.sonar"
       },
       "env_vars": ["NARADA_AGENT_ID"],
       "tools": ["site_loop_run_once", "site_loop_status"],
       "surface_id": "sonar.site-loop",
-      "target_site_root": "D:/code/narada.sonar"
+      "target_site_root": "C:/workspace/narada.sonar"
     }
   }
 }

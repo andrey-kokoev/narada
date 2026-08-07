@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { basename, dirname, relative, resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import {
   buildCheckpointDescriptor,
   buildHydrationRequestDescriptor,
@@ -1571,11 +1572,12 @@ function readThoughtsDoctrineCorpus(args: { siteRoot: string; doctrineCorpusRoot
 }
 
 function resolveThoughtsDoctrineCorpusRoot(args: { siteRoot: string; doctrineCorpusRoot?: string }): string | undefined {
+  const sourceRoot = processEnv.NARADA_SRC_ROOT ?? join(homedir(), 'src');
   const candidates = [
     args.doctrineCorpusRoot,
     processEnv.NARADA_DOCTRINE_CORPUS_ROOT,
     resolve(dirname(resolve(args.siteRoot)), 'thoughts', 'content', 'concepts'),
-    resolve('D:/code/thoughts/content/concepts'),
+    resolve(sourceRoot, 'thoughts', 'content', 'concepts'),
   ].filter((candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0);
 
   for (const candidate of candidates) {

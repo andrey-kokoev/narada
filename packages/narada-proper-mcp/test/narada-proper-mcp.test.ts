@@ -30,21 +30,21 @@ import { handleMcpRequest, NARADA_MCP_TOOLS, resolveMcpSiteContext } from '../sr
 describe('narada proper MCP surface', () => {
   it('parses target-local startup identity arguments', () => {
     expect(parseNaradaProperMcpArgs([
-      '--site-root', 'D:/code/narada',
+      '--site-root', 'C:/workspace/narada',
       '--site-id', 'narada-proper',
       '--agent-id', 'narada.architect',
       '--agent-role', 'architect',
       '--agent-start-event-id', 'agent_start_test',
       '--carrier-session-id', 'carrier_session_test',
-      '--agent-context-db', 'D:/code/narada/.ai/state/agent-context.sqlite',
+      '--agent-context-db', 'C:/workspace/narada/.ai/state/agent-context.sqlite',
     ])).toEqual({
-      siteRoot: 'D:/code/narada',
+      siteRoot: 'C:/workspace/narada',
       siteId: 'narada-proper',
       agentId: 'narada.architect',
       agentRole: 'architect',
       agentStartEventId: 'agent_start_test',
       carrierSessionId: 'carrier_session_test',
-      agentContextDb: 'D:/code/narada/.ai/state/agent-context.sqlite',
+      agentContextDb: 'C:/workspace/narada/.ai/state/agent-context.sqlite',
     });
   });
 
@@ -256,7 +256,7 @@ describe('narada proper MCP surface', () => {
           question: 'Who owns hosted telemetry monitoring and secret rotation?',
         },
       },
-    }, { siteRoot: 'D:/code/narada', siteId: 'narada-proper' });
+    }, { siteRoot: 'C:/workspace/narada', siteId: 'narada-proper' });
 
     const text = (((response?.result as { content: Array<{ text: string }> }).content[0]).text);
     const result = JSON.parse(text);
@@ -537,7 +537,7 @@ describe('narada proper MCP surface', () => {
           doctrine_ids: ['docs_concepts_canonical_inbox'],
         },
       },
-    }, { siteRoot: 'D:/code/narada', siteId: 'narada-proper' });
+    }, { siteRoot: 'C:/workspace/narada', siteId: 'narada-proper' });
 
     const text = (((response?.result as { content: Array<{ text: string }> }).content[0]).text);
     const result = JSON.parse(text);
@@ -617,7 +617,7 @@ describe('narada proper MCP surface', () => {
           require_inquiry_space_data: true,
         },
       },
-    }, { siteRoot: 'D:/code/narada', siteId: 'narada-proper' });
+    }, { siteRoot: 'C:/workspace/narada', siteId: 'narada-proper' });
 
     const text = (((response?.result as { content: Array<{ text: string }> }).content[0]).text);
     const result = JSON.parse(text);
@@ -836,13 +836,13 @@ describe('narada proper MCP surface', () => {
   it('generates Codex and generic stdio carrier configs from the registry without client mutation', () => {
     const codex = generateCarrierMcpConfig({
       client_shape: 'codex',
-      site_root: 'D:/code/narada',
+      site_root: 'C:/workspace/narada',
       site_id: 'narada-proper',
       agent_id_env: 'narada.builder',
     });
     const generic = generateCarrierMcpConfig({
       client_shape: 'generic_stdio',
-      site_root: 'D:/code/narada',
+      site_root: 'C:/workspace/narada',
       site_id: 'narada-proper',
     });
 
@@ -853,9 +853,9 @@ describe('narada proper MCP surface', () => {
       mcpServers: {
         narada: {
           command: 'narada-proper-mcp',
-          args: ['--site-root', 'D:/code/narada', '--site-id', 'narada-proper'],
+          args: ['--site-root', 'C:/workspace/narada', '--site-id', 'narada-proper'],
           env: {
-            NARADA_SITE_ROOT: 'D:/code/narada',
+            NARADA_SITE_ROOT: 'C:/workspace/narada',
             NARADA_SITE_ID: 'narada-proper',
             NARADA_AGENT_ID: 'narada.builder',
           },
@@ -873,7 +873,7 @@ describe('narada proper MCP surface', () => {
     const [record] = NARADA_PROPER_MCP_SURFACE_REGISTRY;
     const drift = generateCarrierMcpConfig({
       client_shape: 'generic_stdio',
-      site_root: 'D:/code/narada',
+      site_root: 'C:/workspace/narada',
       registry: [{
         ...record,
         runtime_binding: {
@@ -893,9 +893,9 @@ describe('narada proper MCP surface', () => {
   });
 
   it('projects the target workspace bin directory onto the Narada CLI PATH', () => {
-    const env = localNaradaCliEnvironment('D:/code/narada', { PATH: 'C:/Windows/System32' }, 'win32');
+    const env = localNaradaCliEnvironment('C:/workspace/narada', { PATH: 'C:/Windows/System32' }, 'win32');
 
-    expect(env.PATH).toBe('D:\\code\\narada\\node_modules\\.bin;C:/Windows/System32');
+    expect(env.PATH).toBe('C:\\workspace\\narada\\node_modules\\.bin;C:/Windows/System32');
   });
 
   it('resolves a PowerShell Narada shim through PATH on Windows', () => {
