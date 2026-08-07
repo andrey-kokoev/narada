@@ -17,7 +17,7 @@ const { readNarsSessionIndex } = await import('../../nars-session-core/src/sessi
 
 const TEST_ID = 'agent-web-ui-live-delegated-task-launcher-e2e';
 const NARADA_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
-const MCP_SURFACES_ROOT = resolve(process.env.NARADA_E2E_MCP_SURFACES_ROOT ?? 'D:/code/mcp-surfaces');
+const MCP_SURFACES_ROOT = resolve(process.env.NARADA_E2E_MCP_SURFACES_ROOT ?? 'C:/workspace/mcp-surfaces');
 const timeoutMs = Number(process.env.NARADA_E2E_L5_TIMEOUT_MS ?? 90_000);
 const siteRoot = mkdtempSync(join(tmpdir(), `${TEST_ID}-`));
 const siteId = 'delegation-l5';

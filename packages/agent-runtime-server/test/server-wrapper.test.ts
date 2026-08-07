@@ -2990,7 +2990,7 @@ test('runtime server creates a governed delegated authority handoff for the carr
   assert.deepEqual(createDelegatedAuthorityHandoff({
     args: ['--identity', 'narada.test', '--session', 'runtime-package-test'],
     env: {
-      NARADA_SITE_ROOT: 'D:/code/narada.test',
+      NARADA_SITE_ROOT: 'C:/workspace/narada.test',
       NARADA_AGENT_START_EVENT_ID: 'evt_test',
       NARADA_AUTHORITY_REF: 'task:1328',
     },
@@ -3021,7 +3021,7 @@ test('runtime server creates a governed delegated authority handoff for the carr
     authority_ref: 'task:1328',
     authority_mode: null,
     evidence: {
-      site_root: 'D:/code/narada.test',
+      site_root: 'C:/workspace/narada.test',
       agent_start_event_id: 'evt_test',
       codex_admission_id: null,
       authority_source: 'env_ref',
@@ -3031,7 +3031,7 @@ test('runtime server creates a governed delegated authority handoff for the carr
 
 test('lifecycle binding derives site-qualified identity ref for role-local launch identity', () => {
   const binding: any = lifecycleBindingFromArgs(['--identity', 'resident', '--session', 'runtime-package-test'], {
-    NARADA_SITE_ROOT: 'D:/code/narada.sonar',
+    NARADA_SITE_ROOT: 'C:/workspace/narada.sonar',
     NARADA_SITE_ID: 'sonar',
     NARADA_AGENT_ROLE: 'resident',
     NARADA_AGENT_START_EVENT_ID: 'evt_test',
@@ -3047,7 +3047,7 @@ test('runtime server derives delegated write authority from worker argv when no 
   assert.deepEqual(createDelegatedAuthorityHandoff({
     args: ['--identity', 'narada.test', '--session', 'runtime-package-test', '--authority', 'write'],
     env: {
-      NARADA_SITE_ROOT: 'D:/code/narada.test',
+      NARADA_SITE_ROOT: 'C:/workspace/narada.test',
       NARADA_AGENT_START_EVENT_ID: 'evt_test',
     },
     generatedAt: '2026-06-23T00:00:00.000Z',
@@ -3077,7 +3077,7 @@ test('runtime server derives delegated write authority from worker argv when no 
     authority_ref: 'nars-delegated:write:runtime-package-test',
     authority_mode: 'write',
     evidence: {
-      site_root: 'D:/code/narada.test',
+      site_root: 'C:/workspace/narada.test',
       agent_start_event_id: 'evt_test',
       codex_admission_id: null,
       authority_source: 'argv_authority',
@@ -3485,7 +3485,7 @@ test('task executability dispatch hook defers scheduled work on shutdown', async
 
 test('lifecycle binding is derived from runtime args before session bind', () => {
   const binding: any = lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test'], {
-    NARADA_SITE_ROOT: 'D:/code/narada.test',
+    NARADA_SITE_ROOT: 'C:/workspace/narada.test',
     NARADA_AGENT_START_EVENT_ID: 'evt_test',
   });
   assert.deepEqual({
@@ -3503,7 +3503,7 @@ test('lifecycle binding is derived from runtime args before session bind', () =>
     },
     session_id: 'runtime-package-test',
     metadata: {
-      site_root: 'D:/code/narada.test',
+      site_root: 'C:/workspace/narada.test',
       agent_start_event_id: 'evt_test',
     },
   });
@@ -3517,7 +3517,7 @@ test('lifecycle binding is derived from runtime args before session bind', () =>
 test('lifecycle binding accepts canonical session environment aliases', () => {
   const baseEnvironment: any = {
     NARADA_AGENT_ID: 'narada.test',
-    NARADA_SITE_ROOT: 'D:/code/narada.test',
+    NARADA_SITE_ROOT: 'C:/workspace/narada.test',
   };
   for (const sessionEnvironmentName of ['NARADA_NARS_SESSION_ID', 'NARADA_RUNTIME_SESSION_ID', 'NARADA_CARRIER_SESSION_ID']) {
     const binding: any = lifecycleBindingFromArgs([], {
@@ -3538,7 +3538,7 @@ test('lifecycle binding accepts canonical session environment aliases', () => {
 
 test('lifecycle binding refuses missing or contradictory launch binding', () => {
   assert.throws(
-    () => lifecycleBindingFromArgs(['--identity', 'narada.test'], { NARADA_SITE_ROOT: 'D:/code/narada.test' }),
+    () => lifecycleBindingFromArgs(['--identity', 'narada.test'], { NARADA_SITE_ROOT: 'C:/workspace/narada.test' }),
     /missing_nars_binding:session_id/,
   );
   assert.throws(
@@ -3546,8 +3546,8 @@ test('lifecycle binding refuses missing or contradictory launch binding', () => 
     /missing_nars_binding:site_root/,
   );
   assert.throws(
-    () => lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test', '--site-root', 'D:/code/one'], {
-      NARADA_SITE_ROOT: 'D:/code/two',
+    () => lifecycleBindingFromArgs(['--identity', 'narada.test', '--session', 'runtime-package-test', '--site-root', 'C:/workspace/one'], {
+      NARADA_SITE_ROOT: 'C:/workspace/two',
     }),
     /contradictory_nars_binding:site_root/,
   );

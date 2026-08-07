@@ -14,7 +14,8 @@
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const DOCTRINAL_SOURCES: any = [
   {
@@ -188,16 +189,12 @@ export function buildReground(siteRoot: any) {
 }
 
 function resolveThoughtsCorpus() {
+  const sourceRoot: any = process.env.NARADA_SRC_ROOT ?? join(homedir(), 'src');
   const candidates: any = [
     {
-      label: 'windows',
-      path: 'D:\\code\\thoughts\\content\\concepts',
-      note: 'Windows thoughts corpus path.',
-    },
-    {
-      label: 'wsl',
-      path: '/home/andrey/src/thoughts/content/concepts/',
-      note: 'WSL thoughts corpus path.',
+      label: 'local',
+      path: join(sourceRoot, 'thoughts', 'content', 'concepts'),
+      note: 'Local thoughts corpus path.',
     },
   ];
 

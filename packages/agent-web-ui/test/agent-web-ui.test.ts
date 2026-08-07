@@ -714,7 +714,7 @@ test('session identity projection prefers explicit Site id for workspace-root Si
       agent_id: 'resident',
       role: 'resident',
       session_id: 'carrier_workspace_root',
-      site_root: 'D:/code/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
     },
     {
       event: 'session_health',
@@ -744,7 +744,7 @@ test('session identity projection keeps embedded-authority roots out of display 
       agent_id: 'narada-staccato.resident',
       role: 'resident',
       session_id: 'carrier_embedded_authority',
-      site_root: 'D:/code/narada.staccato/.narada',
+      site_root: 'C:/workspace/narada.staccato/.narada',
     },
     {
       event: 'session_health',
@@ -1332,7 +1332,7 @@ test('local client config is public-base aware for Operator Router session mount
     publicBasePath: '/sessions/carrier_demo',
     publicEventEndpoint: 'ws://127.0.0.1:61729/sessions/carrier_demo/events',
     sessionId: 'carrier_demo',
-    siteRoot: 'D:/code/narada.demo',
+    siteRoot: 'C:/workspace/narada.demo',
     siteId: 'narada.demo',
     cloudflareApiBaseUrl: 'https://projection.example.test',
   });
@@ -1395,7 +1395,7 @@ test('local client config exposes Cloudflare projection control only with sessio
     eventEndpoint: 'ws://nars/events',
     healthEndpoint: 'http://nars/health',
     sessionId: 'carrier_1',
-    siteRoot: 'D:/code/narada.sonar',
+    siteRoot: 'C:/workspace/narada.sonar',
     siteId: 'narada.sonar',
     cloudflareApiBaseUrl: 'https://projection.example.test/',
   }).projectionControl, {
@@ -1416,7 +1416,7 @@ test('local projection control refuses browser-supplied session authority and st
     eventEndpoint: 'ws://nars/events',
     healthEndpoint: 'http://nars/health',
     sessionId: 'carrier_server',
-    siteRoot: 'D:/code/narada.sonar',
+    siteRoot: 'C:/workspace/narada.sonar',
     siteId: 'narada.sonar',
     agentId: 'resident',
     cloudflareApiBaseUrl: 'https://projection.example.test/',
@@ -1448,7 +1448,7 @@ test('local projection control refuses browser-supplied session authority and st
     assert.equal(accepted.status, 200);
     assert.deepEqual(captured, {
       siteId: 'narada.sonar',
-      siteRoot: 'D:/code/narada.sonar',
+      siteRoot: 'C:/workspace/narada.sonar',
       sessionId: 'carrier_server',
       agentId: 'resident',
       cloudflareApiBaseUrl: 'https://projection.example.test',

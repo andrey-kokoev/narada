@@ -36,7 +36,7 @@ function runtimeContext() {
   return {
     identity: 'narada.test',
     session: 'canonical-local-test',
-    siteRoot: 'D:/code/narada',
+    siteRoot: 'C:/workspace/narada',
     intelligence: {
       principal: IDS.principal,
       principalBinding: {

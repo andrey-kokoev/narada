@@ -23,7 +23,7 @@ describe('Windows PowerShell package portability', () => {
     const mcp = buildMcpRegistrationDescriptor();
     const capability = buildCapabilityRegistryFragment();
     const findings = findDeniedSourceImports([
-      'D:\\code\\narada\\.narada\\checkpoints\\2026-05-10-task-0008-agent-thread-checkpoint.md',
+      'C:\\workspace\\narada\\.narada\\checkpoints\\2026-05-10-task-0008-agent-thread-checkpoint.md',
       'C:\\Users\\Andrey\\Narada\\.ai\\state\\agent-context.sqlite',
     ]);
 

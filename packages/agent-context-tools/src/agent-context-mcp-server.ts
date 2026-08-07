@@ -31,6 +31,7 @@
 
 import Database from './sqlite-database.js';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -5594,10 +5595,11 @@ function firstArray(...candidates: any[]) {
 }
 
 function resolveThoughtsDoctrineCorpusRoot(root: any) {
+  const sourceRoot: any = process.env.NARADA_SRC_ROOT ?? join(homedir(), 'src');
   const candidates: any = [
     process.env.NARADA_DOCTRINE_CORPUS_ROOT,
     resolve(dirname(resolve(root)), 'thoughts', 'content', 'concepts'),
-    resolve('D:/code/thoughts/content/concepts'),
+    resolve(sourceRoot, 'thoughts', 'content', 'concepts'),
   ].filter((candidate: any) => typeof candidate === 'string' && candidate.trim().length > 0);
 
   for (const candidate of candidates) {

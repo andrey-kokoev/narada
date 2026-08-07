@@ -21,7 +21,7 @@ import { seedLiveIntelligenceRegistry } from './live-intelligence-registry-fixtu
 const { readNarsSessionIndex } = await import('../../nars-session-core/src/session-index.js');
 
 const REPO_ROOT = fileURLToPath(new URL('../../..', import.meta.url));
-const DEFAULT_SITE_ROOT = 'D:\\code\\narada.sonar';
+const DEFAULT_SITE_ROOT = 'C:\\workspace\\narada.sonar';
 const NARS_SESSION_MCP_ENTRYPOINT = resolve(
   REPO_ROOT,
   '..',

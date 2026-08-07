@@ -5,7 +5,7 @@ Future Windows PowerShell Narada Sites should consume `@narada-core/agent-contex
 ## Package Consumption
 
 ```powershell
-$RepoRoot = 'D:\code\narada'
+$RepoRoot = '<src-root>\narada'
 pnpm --dir "$RepoRoot\packages\agent-context-memory" build
 pnpm --dir "$RepoRoot\packages\agent-context-memory" test
 ```

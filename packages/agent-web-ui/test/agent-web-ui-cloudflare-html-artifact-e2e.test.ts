@@ -46,7 +46,7 @@ async function createRealNarsSiteWithHtmlArtifact() {
       '</html>',
     ].join(''), 'utf8');
     const audioPath = join(siteRoot, 'spoken.wav');
-    assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir D:/code/mcp-surfaces --filter @narada-core/speech-mcp build`);
+    assert.ok(existsSync(speechMcpMain), `expected built speech-mcp at ${speechMcpMain}; run pnpm --dir C:/workspace/mcp-surfaces --filter @narada-core/speech-mcp build`);
     assert.ok(existsSync(speechProviderRegistryPath), `expected speech provider registry at ${speechProviderRegistryPath}`);
     const speech = await callLiveSpeechMcp({
       siteRoot,

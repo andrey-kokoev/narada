@@ -20,7 +20,7 @@ test('formats agent-start preamble with redacted API keys and startup sequence',
     },
     mcp_fabric: {
       source: '.ai/mcp',
-      site_root: 'D:/code/site',
+      site_root: 'C:/workspace/site',
       files: ['narada-site-mcp.json'],
       server_names: [
         'narada-site-agent-context',
@@ -110,7 +110,7 @@ test('formats structured MCP skipped entries without object-object leakage', () 
     runtime: 'narada-agent-runtime-server',
     mcp_fabric: {
       source: 'mcp-scope:all',
-      site_root: 'D:/code/site',
+      site_root: 'C:/workspace/site',
       files: ['local-site:narada-site-mcp.json'],
       server_names: ['narada-site-agent-context'],
       skipped: [

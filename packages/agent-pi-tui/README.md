@@ -74,7 +74,7 @@ production-launch obligations and completion gate are defined in
 
 ```powershell
 # Build the real sibling agent-tui binary first, or point the test at one.
-$env:NARADA_AGENT_TUI_BIN = 'D:\code\agent-tui\target\debug\narada-agent-tui.exe'
+$env:NARADA_AGENT_TUI_BIN = '<src-root>\agent-tui\target\debug\narada-agent-tui.exe'
 pnpm --filter @narada-core/agent-pi-tui test:baseline-live
 ```
 
