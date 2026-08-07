@@ -64,5 +64,5 @@ test('task lifecycle MCP resolution falls back through package bin, MCP config, 
 test('task lifecycle MCP resolution has no developer-machine fallback path', async () => {
   const sourcePath: any = fileURLToPath(new URL('./task-lifecycle-mcp-resolution.ts', import.meta.url));
   const text: any = await readFile(sourcePath, 'utf8');
-  assert.equal(text.includes('D:/code/mcp-surfaces'), false);
+  assert.equal(text.includes('C:/workspace/mcp-surfaces'), false);
 });

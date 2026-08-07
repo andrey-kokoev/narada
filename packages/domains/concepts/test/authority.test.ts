@@ -49,7 +49,7 @@ function makeTopology(): ProjectionTopology {
     authority_runtimes: [{
       authority_runtime_id: 'auth:local-nars',
       kind: 'nars',
-      location: { kind: 'local', site_root: 'D:/code/narada' },
+      location: { kind: 'local', site_root: 'C:/workspace/narada' },
       authority_role: 'canonical_session_runtime',
       owner: { kind: 'nars_session_authority', id: 'auth:local-nars' },
       non_owner_boundary: 'Projection stores and surfaces cannot mint session events or admit input.',

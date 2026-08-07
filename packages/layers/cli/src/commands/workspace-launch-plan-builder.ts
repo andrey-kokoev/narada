@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { buildLaunchProcessOwnership, launchSessionIdFromToken } from '@narada-core/launch-process-ownership';
 import { NARADA_AGENT_RUNTIME_SERVER_KIND } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { resolveRuntimeEngineSelection } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
@@ -177,7 +178,11 @@ export function buildAgentPlan(record: WorkspaceLaunchRecord, options: Workspace
     || process.env.NARADA_CLOUDFLARE_NARS_PROJECTION_URL
     || process.env.CLOUDFLARE_NARS_PROJECTION_URL
     || null;
-  const naradaProper = resolve(process.env.NARADA_PROPER_ROOT ?? 'D:/code/narada');
+  const naradaProper = resolve(
+    process.env.NARADA_PROPER_ROOT
+      ?? process.env.NARADA_ROOT
+      ?? fileURLToPath(new URL('../../../../..', import.meta.url)),
+  );
   const launchSessionToken = workspaceLaunchSessionToken(record);
   const launchSessionId = launchSessionIdFromToken(launchSessionToken);
   // Every hidden NARS launch gets a durable binding. Web UI/TUI use it for

@@ -27,6 +27,7 @@ import {
   consoleMirrorStopCommand,
   type ConsoleMirrorCommandOptions,
 } from './console-mirror.js';
+import { normalizeOverlayVisibilityPolicy } from '@narada-core/window-overlay-core';
 import {silentCommandContext, wrapCommand, type CommanderOptionValues} from '../lib/command-wrapper.js';
 import { openOperatorConsoleWorkspace } from '../lib/operator-console-browser.js';
 import {
@@ -47,18 +48,17 @@ export function registerConsoleCommands(program: Command): void {
     .option('--url <url>', 'Operator Workspace URL; defaults to the local Operator Router')
     .option('--title <title>', 'Overlay title', 'Narada Operator Console')
     .option('--state-root <path>', 'Override the user-local overlay state root')
-    .option('--visibility <policy>', 'Visibility policy: always or windows-terminal', 'always')
+    .option('--visibility <policy>', 'Visibility policy: always or terminal-group', 'always')
     .option('--refresh-seconds <seconds>', 'Document refresh interval', '2')
     .option('-f, --format <format>', 'Output format: json, human, or auto', 'auto')
     .option('-v, --verbose', 'Enable verbose output', false)
     .action(async (opts: CommanderOptionValues) => {
-      const visibility = String(opts.visibility ?? 'always');
-      if (visibility !== 'always' && visibility !== 'windows-terminal') throw new Error('operator_console_overlay_visibility_invalid');
+      const visibility = normalizeOverlayVisibilityPolicy(String(opts.visibility ?? 'always'));
       const result = await consoleOverlayCommand({
         url: opts.url as string | undefined,
         title: opts.title as string | undefined,
         state_root: opts.stateRoot as string | undefined,
-        visibility_policy: visibility as 'always' | 'windows-terminal',
+        visibility_policy: visibility,
         refresh_seconds: Number.parseInt(String(opts.refreshSeconds ?? '2'), 10),
         format: String(opts.format ?? 'auto'),
         verbose: opts.verbose as boolean | undefined,

@@ -20,7 +20,7 @@ const authorityBasis = {
 } as const;
 
 const setupPlan = buildReceivingSiteSetupPlan({
-  siteRoot: 'D:\\code\\narada',
+  siteRoot: 'C:\\workspace\\narada',
   siteId: 'site-alpha',
   initializedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
   roster: neutralRoster,

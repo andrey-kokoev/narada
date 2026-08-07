@@ -36,7 +36,7 @@ describe('SQLite adapter boundary', () => {
   });
 
   it('builds an execution request without executing SQLite mutations', () => {
-    const request = buildTaskDbAdapterExecutionRequest('D:\\code\\narada\\.ai\\task-lifecycle.db');
+    const request = buildTaskDbAdapterExecutionRequest('C:\\workspace\\narada\\.ai\\task-lifecycle.db');
 
     expect(request.schema).toBe('narada.site_task_lifecycle.task_db_adapter_execution_request.v0');
     expect(request.statements).toBe(TASK_DB_SCHEMA_STATEMENTS);
@@ -92,7 +92,7 @@ describe('SQLite adapter boundary', () => {
       summary: 'Admit neutral adapter fixture task',
     });
     const writeRequest = buildTaskAdmissionWriteRequest({
-      taskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
+      taskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
       candidate,
       admittedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
       admittedAt: '2026-05-10T18:57:00.000Z',

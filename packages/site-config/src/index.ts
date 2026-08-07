@@ -1094,8 +1094,8 @@ export function staccatoPublishedSurfacePatternMap(): StaccatoPublishedSurfacePa
       'staccato_secret_environment_variable_names',
     ],
     source_evidence_refs: [
-      'D:/code/staccato-elt/runbooks/cloudflare-published-surface.md',
-      'D:/code/staccato-elt/workers/staccato/src/index.mjs',
+      '<src-root>/staccato-elt/runbooks/cloudflare-published-surface.md',
+      '<src-root>/staccato-elt/workers/staccato/src/index.mjs',
     ],
     projection_is_authority: false,
   };

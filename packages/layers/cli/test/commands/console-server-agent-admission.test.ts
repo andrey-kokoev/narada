@@ -14,16 +14,16 @@ function launchRecord(overrides: Partial<WorkspaceLaunchRecord> = {}): Workspace
     title: 'Resident',
     role: 'resident',
     site: 'site',
-    narada_root: 'D:/code/narada',
-    site_root: 'D:/code/site',
-    workspace_root: 'D:/code/site',
-    launcher_path: 'D:/code/site/site.ps1',
+    narada_root: 'C:/workspace/narada',
+    site_root: 'C:/workspace/site',
+    workspace_root: 'C:/workspace/site',
+    launcher_path: 'C:/workspace/site/site.ps1',
     operator_surface: 'agent-web-ui',
     runtime: 'narada-agent-runtime-server',
     authority: 'auto',
     enable_native_shell: false,
     mcp_scope: 'local-site',
-    config_path: 'D:/code/site/config/launch/agents.json',
+    config_path: 'C:/workspace/site/config/launch/agents.json',
     ...overrides,
   };
 }
@@ -32,7 +32,7 @@ function createFixture(records: WorkspaceLaunchRecord[]) {
   let written: unknown = null;
   let identityInput: Record<string, unknown> | null = null;
   let selectionInput: { siteRoot: string; registryDbPath?: string } | null = null;
-  const registryDbPath = 'D:/code/site/.ai/intelligence-registry.active-v2.db';
+  const registryDbPath = 'C:/workspace/site/.ai/intelligence-registry.active-v2.db';
   const gateway = createSiteAgentAdmissionGateway({
     readLaunchRecords: async () => ({ records, siteCatalog: [] }),
     resolveRegistryDbPath: () => registryDbPath,
@@ -64,7 +64,7 @@ it('returns catalog-backed options and derives identity server-side', async () =
   expect(options.intelligence.selection_authority).toBeTruthy();
   expect(options.intelligence.selection_authority?.catalog.locator).toBe(fixture.registryDbPath);
   expect(fixture.getSelectionInput()).toEqual({
-    siteRoot: 'D:/code/site',
+    siteRoot: 'C:/workspace/site',
     registryDbPath: fixture.registryDbPath,
   });
   expect(options.intelligence.provider_choices.map((item) => item.value)).toEqual(['codex']);

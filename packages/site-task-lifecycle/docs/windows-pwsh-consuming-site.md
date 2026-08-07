@@ -7,8 +7,8 @@ This guide describes how a future Windows PowerShell Narada Site should consume 
 A future Site should depend on the package artifact or workspace package:
 
 ```powershell
-pnpm --dir D:\code\narada\packages\site-task-lifecycle build
-pnpm --dir D:\code\narada\packages\site-task-lifecycle test
+pnpm --dir <src-root>\narada\packages\site-task-lifecycle build
+pnpm --dir <src-root>\narada\packages\site-task-lifecycle test
 ```
 
 The receiving Site then imports descriptor/contract APIs such as:
@@ -53,7 +53,7 @@ If any of those appear as inputs, treat them as external evidence only and run t
 A Windows PowerShell host can keep the package boundary explicit:
 
 ```powershell
-$RepoRoot = 'D:\code\narada'
+$RepoRoot = '<src-root>\narada'
 $SiteRoot = 'D:\Sites\site-alpha'
 
 pnpm --dir "$RepoRoot\packages\site-task-lifecycle" build

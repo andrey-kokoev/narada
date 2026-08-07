@@ -21,7 +21,7 @@ const candidate = projectInboxEnvelopeToTaskCandidate({
 describe('task admission write request', () => {
   it('builds descriptor-only operations for an admitted adapter', () => {
     const request = buildTaskAdmissionWriteRequest({
-      taskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
+      taskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
       candidate,
       admittedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
       admittedAt: '2026-05-10T05:06:00.000Z',
@@ -41,7 +41,7 @@ describe('task admission write request', () => {
 
   it('builds a ready-for-adapter result without claiming package mutation', () => {
     const request = buildTaskAdmissionWriteRequest({
-      taskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
+      taskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
       candidate,
       admittedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
       admittedAt: '2026-05-10T05:06:00.000Z',
@@ -55,7 +55,7 @@ describe('task admission write request', () => {
 
   it('rejects non-pending candidates', () => {
     expect(() => buildTaskAdmissionWriteRequest({
-      taskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
+      taskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
       candidate: { ...candidate, status: 'admitted' as 'pending_admission' },
       admittedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
       admittedAt: '2026-05-10T05:06:00.000Z',
@@ -64,7 +64,7 @@ describe('task admission write request', () => {
 
   it('rejects non-neutral admitting identities', () => {
     expect(() => buildTaskAdmissionWriteRequest({
-      taskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
+      taskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
       candidate,
       admittedBy: { identityId: 'andrey-user.Kevin', role: 'architect' },
       admittedAt: '2026-05-10T05:06:00.000Z',
@@ -73,7 +73,7 @@ describe('task admission write request', () => {
 
   it('rejects source Site DB or history evidence refs before adapter handoff', () => {
     expect(() => buildTaskAdmissionWriteRequest({
-      taskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
+      taskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
       candidate: {
         ...candidate,
         evidenceRefs: [

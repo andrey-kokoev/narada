@@ -15,7 +15,7 @@ import { readOperatorConsoleUiAsset, readOperatorConsoleUiDocument } from '../..
  */
 const site = {
   site_id: 'site-a',
-  site_root: 'D:/code/site-a',
+  site_root: 'C:/workspace/site-a',
   variant: 'native',
   substrate: 'windows',
   aim_json: '{"purpose":"browser fixture"}',
@@ -161,7 +161,7 @@ const activeAgentSession = {
 const retiredSite = {
   ...site,
   site_id: 'retired-site',
-  site_root: 'D:/code/retired-site',
+  site_root: 'C:/workspace/retired-site',
   lifecycle_status: 'retired',
   observation_status: 'stale',
   retired_at: '2026-07-10T00:00:00.000Z',
@@ -569,7 +569,7 @@ test('[fixture-boundary] Operator Console Vue registry projection works at deskt
     assert.equal(await page.locator('.site-tile__name').textContent(), 'site-a');
     await page.locator('.site-tile').click();
     await page.waitForFunction(() => document.querySelector('.site-detail h2')?.textContent === 'site-a');
-    assert.ok((await page.locator('.site-detail').textContent()).includes('D:/code/site-a'));
+    assert.ok((await page.locator('.site-detail').textContent()).includes('C:/workspace/site-a'));
     await assertNoHorizontalOverflow(page, 'operator console desktop');
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -873,7 +873,7 @@ test('[fixture-boundary] Operator Console Vue exposes retired-record recovery an
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await page.goto(fixture.url + '/console/registry/add');
     await page.getByLabel('Canonical Site ID').fill('retired-site');
-    await page.getByLabel('Site root folder').fill('D:/code/retired-site');
+    await page.getByLabel('Site root folder').fill('C:/workspace/retired-site');
     await page.getByRole('button', { name: 'Preview change' }).click();
     await page.getByText('The registry refused this operation.').waitFor();
     assert.equal(fixture.requests[0].input.re_admit, undefined);
@@ -910,14 +910,14 @@ test('[fixture-boundary] Operator Console Vue mutation pages preserve plan/apply
     const page = await browser.newPage({ viewport: { width: 1280, height: 900 } });
     await page.goto(fixture.url + '/console/registry/add');
     await page.getByLabel('Canonical Site ID').fill('new-site');
-    await page.getByLabel('Site root folder').fill('D:/code/new-site');
+    await page.getByLabel('Site root folder').fill('C:/workspace/new-site');
     await page.getByRole('button', { name: 'Preview change' }).click();
     await page.getByText('Preview ready.').waitFor();
     assert.equal(fixture.requests.length, 1);
     assert.equal(fixture.requests[0].pathname, '/console/registry/api/operations/plan');
     assert.equal(fixture.requests[0].input.operation, 'add');
     assert.equal(fixture.requests[0].input.site_id, 'new-site');
-    assert.equal(fixture.requests[0].input.root, 'D:/code/new-site');
+    assert.equal(fixture.requests[0].input.root, 'C:/workspace/new-site');
     assert.equal(await page.getByRole('button', { name: 'Apply change' }).isDisabled(), true);
 
     await page.getByLabel('I reviewed this preview and want to apply it.').check();
@@ -929,7 +929,7 @@ test('[fixture-boundary] Operator Console Vue mutation pages preserve plan/apply
 
     await page.goto(fixture.url + '/console/registry/manage?site=site-a&operation=edit');
     await page.getByLabel('Site record').waitFor();
-    await page.getByLabel('Site root folder').fill('D:/code/site-a-renamed');
+    await page.getByLabel('Site root folder').fill('C:/workspace/site-a-renamed');
     await page.getByRole('button', { name: 'Preview change' }).click();
     await page.getByText('Preview ready.').waitFor();
     assert.equal(fixture.requests[2].input.operation, 'edit');

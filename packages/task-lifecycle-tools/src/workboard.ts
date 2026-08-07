@@ -560,7 +560,7 @@ function detectReviewAcceptanceDeferredBlocker(normalizedText: any) : any {
 
 function detectExternalDeferredBlocker(normalizedText: any) : any {
   const hasBlockerLanguage: any = /\b(blocked|blocker|refused|rejects|rejected|invalid --kind|still fails|still rejects|unresolved)\b/.test(normalizedText);
-  const hasExternalBoundary: any = /\b(external|upstream|outside (?:this )?(?:workspace|user site|writable roots)|canonical .*cli|d:\\code\\narada|missing .*capability)\b/.test(normalizedText);
+  const hasExternalBoundary: any = /\b(external|upstream|outside (?:this )?(?:workspace|user site|writable roots)|canonical .*cli|narada proper|missing .*capability)\b/.test(normalizedText);
   const hasNoLocalPath: any = /\b(cannot honestly|cannot .* from .*workspace|no local executable path|outside .*authority|outside .*writable roots|awaiting upstream|until canonical)\b/.test(normalizedText);
   if (hasBlockerLanguage && hasExternalBoundary && hasNoLocalPath) {
     return {

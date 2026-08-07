@@ -11,6 +11,8 @@ import { GraphHttpClient } from "./client.js";
 import { GraphDeltaWalker } from "./delta.js";
 import type { RetryConfig } from "../../retry.js";
 
+export const DEFAULT_ATTACHMENT_HYDRATION_CONCURRENCY = 4;
+
 export interface GraphAdapterConfig {
   mailbox_id: string;
   user_id: string;
@@ -22,8 +24,38 @@ export interface GraphAdapterConfig {
   normalize_folder_ref: (graph_message: GraphDeltaMessage) => string[];
   normalize_flagged: (flag: GraphDeltaMessage["flag"]) => boolean;
   classify_removed_as_delete?: (message: GraphDeltaMessage) => boolean;
+  attachment_hydration_concurrency?: number;
   retryConfig?: Partial<RetryConfig>;
   circuitBreakerThreshold?: number;
+}
+
+function resolveAttachmentHydrationConcurrency(value: number | undefined): number {
+  const resolved = value ?? DEFAULT_ATTACHMENT_HYDRATION_CONCURRENCY;
+  if (!Number.isInteger(resolved) || resolved < 1) {
+    throw new Error("attachment_hydration_concurrency must be a positive integer");
+  }
+  return resolved;
+}
+
+async function mapWithConcurrency<T, R>(
+  items: T[],
+  concurrency: number,
+  mapper: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+
+  const worker = async (): Promise<void> => {
+    while (true) {
+      const index = nextIndex++;
+      if (index >= items.length) return;
+      results[index] = await mapper(items[index]!, index);
+    }
+  };
+
+  const workerCount = Math.min(concurrency, items.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
 }
 
 function resolveFolderCursor(
@@ -93,14 +125,16 @@ export class DefaultGraphAdapter implements GraphAdapter {
       return messages;
     }
 
-    return Promise.all(
-      messages.map(async (message) => {
+    return mapWithConcurrency(
+      messages,
+      resolveAttachmentHydrationConcurrency(this.cfg.attachment_hydration_concurrency),
+      async (message) => {
         if (!shouldHydrateAttachments(message)) {
           return message;
         }
         const attachments = await this.cfg.client.getMessageAttachments(this.cfg.user_id, message.id);
         return { ...message, attachments };
-      }),
+      },
     );
   }
 

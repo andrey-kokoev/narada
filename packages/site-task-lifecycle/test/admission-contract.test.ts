@@ -12,9 +12,9 @@ describe('site task lifecycle admission contract', () => {
   it('records receiving-Site admission fields and rejected source evidence', () => {
     const contract = buildSiteTaskLifecycleAdmissionContract({
       packageVersion: '0.1.0',
-      localSiteRoot: 'D:\\code\\narada',
-      localTaskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
-      taskSpecProjectionDir: 'D:\\code\\narada\\.ai\\do-not-open\\tasks',
+      localSiteRoot: 'C:\\workspace\\narada',
+      localTaskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
+      taskSpecProjectionDir: 'C:\\workspace\\narada\\.ai\\do-not-open\\tasks',
       rosterInitializationSource: 'neutral_fixture',
       packageTests: [
         {
@@ -45,20 +45,20 @@ describe('site task lifecycle admission contract', () => {
   });
 
   it('builds a neutral MCP registration snippet without registering live transport', () => {
-    const snippet = createMcpRegistrationSnippet('D:\\code\\narada');
+    const snippet = createMcpRegistrationSnippet('C:\\workspace\\narada');
 
     expect(snippet.status).toBe('snippet_ready');
     expect(snippet.packageName).toBe('@narada-core/site-task-lifecycle');
     expect(snippet.args).toContain('--site-root');
-    expect(snippet.args).toContain('D:\\code\\narada');
+    expect(snippet.args).toContain('C:\\workspace\\narada');
   });
 
   it('rejects source-Site identities in local identity mappings', () => {
     expect(() => buildSiteTaskLifecycleAdmissionContract({
       packageVersion: '0.1.0',
-      localSiteRoot: 'D:\\code\\narada',
-      localTaskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
-      taskSpecProjectionDir: 'D:\\code\\narada\\.ai\\do-not-open\\tasks',
+      localSiteRoot: 'C:\\workspace\\narada',
+      localTaskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
+      taskSpecProjectionDir: 'C:\\workspace\\narada\\.ai\\do-not-open\\tasks',
       rosterInitializationSource: 'neutral_fixture',
       packageTests: [],
       localIdentityMappings: [{ localIdentity: { identityId: 'andrey-user.Kevin', role: 'architect' } }],
@@ -72,9 +72,9 @@ describe('site task lifecycle admission contract', () => {
   it('rejects writing compatibility projection into a source-specific legacy table', () => {
     expect(() => buildSiteTaskLifecycleAdmissionContract({
       packageVersion: '0.1.0',
-      localSiteRoot: 'D:\\code\\narada',
-      localTaskDbPath: 'D:\\code\\narada\\.ai\\task-lifecycle.db',
-      taskSpecProjectionDir: 'D:\\code\\narada\\.ai\\do-not-open\\tasks',
+      localSiteRoot: 'C:\\workspace\\narada',
+      localTaskDbPath: 'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
+      taskSpecProjectionDir: 'C:\\workspace\\narada\\.ai\\do-not-open\\tasks',
       rosterInitializationSource: 'neutral_fixture',
       packageTests: [],
       localIdentityMappings: neutralRoster.map((localIdentity) => ({ localIdentity })),

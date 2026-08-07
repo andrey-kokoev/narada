@@ -1138,7 +1138,7 @@ describe('console server', () => {
             count: 1,
             sites: [{
               site_id: 'site-a',
-              site_root: 'D:/code/site-a',
+              site_root: 'C:/workspace/site-a',
               variant: 'native',
               substrate: 'windows',
               lifecycle_status: 'active',
@@ -1328,7 +1328,7 @@ describe('console server', () => {
 
       const discovery = await httpGet(`${url}/console/registry/api/discover-plan?source=filesystem&root=D%3A%2Fcode&actor=operator`);
       expect(discovery.status).toBe(200);
-      expect(registryReadModel.discoverPlan).toHaveBeenCalledWith({ source: 'filesystem', root: 'D:/code', actor: 'operator' });
+      expect(registryReadModel.discoverPlan).toHaveBeenCalledWith({ source: 'filesystem', root: 'C:/workspace', actor: 'operator' });
       expect((discovery.body as { mutation_performed: boolean }).mutation_performed).toBe(false);
 
       const previewResponse = await httpPost(`${url}/console/registry/api/operations/plan`, {

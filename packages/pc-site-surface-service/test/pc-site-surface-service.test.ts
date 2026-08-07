@@ -13,7 +13,7 @@ import { pcSiteSurfaceServiceWatchdogPlan, resolveWatchdogNodePath } from '../sr
 test('watchdog plan is a hidden bounded direct-Node ensure action', () => {
   const plan = pcSiteSurfaceServiceWatchdogPlan({
     site_root: 'C:/pc-site',
-    mcp_surfaces_root: 'D:/code/mcp-surfaces',
+    mcp_surfaces_root: 'C:/workspace/mcp-surfaces',
     node_path: 'C:/node/node.exe',
     watchdog_interval_minutes: 2,
   }, 'test-site');

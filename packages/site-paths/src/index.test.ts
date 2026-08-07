@@ -8,15 +8,15 @@ import {
 } from './index.js';
 
 test('resolves workspace-style sonar Site root to Site authority root', () => {
-  const siteRoot = 'D:/code/narada.sonar';
+  const siteRoot = 'C:/workspace/narada.sonar';
   const paths = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_1' });
 
   assert.equal(paths.rootKind, 'workspace_root');
   assert.equal(paths.siteRoot, resolve(siteRoot));
   assert.equal(paths.workspaceRoot, resolve(siteRoot));
-  assert.equal(paths.siteAuthorityRoot, resolve('D:/code/narada.sonar/.narada'));
-  assert.equal(paths.narsSessionsRoot, resolve('D:/code/narada.sonar/.narada/crew/nars-sessions'));
-  assert.equal(paths.narsSessionDir, resolve('D:/code/narada.sonar/.narada/crew/nars-sessions/carrier_1'));
+  assert.equal(paths.siteAuthorityRoot, resolve('C:/workspace/narada.sonar/.narada'));
+  assert.equal(paths.narsSessionsRoot, resolve('C:/workspace/narada.sonar/.narada/crew/nars-sessions'));
+  assert.equal(paths.narsSessionDir, resolve('C:/workspace/narada.sonar/.narada/crew/nars-sessions/carrier_1'));
   assert.equal(paths.narsControlSidebandPath, join(paths.narsSessionDir, 'control.jsonl'));
   assert.equal(paths.narsControlPath, join(paths.narsSessionDir, 'control.jsonl'));
   assert.equal(paths.narsOperatorInputQueuePath, join(paths.narsSessionDir, 'operator-input-queue.json'));
@@ -24,25 +24,25 @@ test('resolves workspace-style sonar Site root to Site authority root', () => {
 });
 
 test('resolves staccato .narada Site root without double-appending .narada', () => {
-  const siteRoot = 'D:/code/narada.staccato/.narada';
+  const siteRoot = 'C:/workspace/narada.staccato/.narada';
   const paths = resolveNaradaSitePaths({ siteRoot, sessionId: 'carrier_2' });
 
   assert.equal(paths.rootKind, 'site_authority_root');
   assert.equal(paths.siteRoot, resolve(siteRoot));
-  assert.equal(paths.workspaceRoot, resolve('D:/code/narada.staccato'));
+  assert.equal(paths.workspaceRoot, resolve('C:/workspace/narada.staccato'));
   assert.equal(paths.siteAuthorityRoot, resolve(siteRoot));
-  assert.equal(paths.narsSessionsRoot, resolve('D:/code/narada.staccato/.narada/crew/nars-sessions'));
-  assert.equal(paths.narsSessionPath, resolve('D:/code/narada.staccato/.narada/crew/nars-sessions/carrier_2/session.jsonl'));
+  assert.equal(paths.narsSessionsRoot, resolve('C:/workspace/narada.staccato/.narada/crew/nars-sessions'));
+  assert.equal(paths.narsSessionPath, resolve('C:/workspace/narada.staccato/.narada/crew/nars-sessions/carrier_2/session.jsonl'));
 });
 
 test('resolves smart-scheduling .narada Site root as authority root', () => {
-  const siteRoot = 'D:/code/smart-scheduling/.narada';
+  const siteRoot = 'C:/workspace/smart-scheduling/.narada';
   const paths = resolveNaradaSitePaths({ siteRoot });
 
   assert.equal(paths.rootKind, 'site_authority_root');
-  assert.equal(paths.workspaceRoot, resolve('D:/code/smart-scheduling'));
+  assert.equal(paths.workspaceRoot, resolve('C:/workspace/smart-scheduling'));
   assert.equal(paths.siteAuthorityRoot, resolve(siteRoot));
-  assert.equal(paths.narsSessionsRoot, resolve('D:/code/smart-scheduling/.narada/crew/nars-sessions'));
+  assert.equal(paths.narsSessionsRoot, resolve('C:/workspace/smart-scheduling/.narada/crew/nars-sessions'));
 });
 
 test('resolves user-site-like root as workspace-style Site root', () => {
@@ -57,12 +57,12 @@ test('resolves user-site-like root as workspace-style Site root', () => {
 
 test('convenience helpers delegate to canonical resolver', () => {
   assert.equal(
-    siteAuthorityRootFromSiteRoot('D:/code/narada.staccato/.narada'),
-    resolve('D:/code/narada.staccato/.narada'),
+    siteAuthorityRootFromSiteRoot('C:/workspace/narada.staccato/.narada'),
+    resolve('C:/workspace/narada.staccato/.narada'),
   );
   assert.equal(
-    narsSessionsRootFromSiteRoot('D:/code/narada.sonar'),
-    resolve('D:/code/narada.sonar/.narada/crew/nars-sessions'),
+    narsSessionsRootFromSiteRoot('C:/workspace/narada.sonar'),
+    resolve('C:/workspace/narada.sonar/.narada/crew/nars-sessions'),
   );
 });
 

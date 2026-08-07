@@ -34,7 +34,7 @@ describe('first slice extraction posture', () => {
   it('keeps live MCP binding descriptor-mediated and source-state refusing', () => {
     const adapterBoundary = decideTaskDbAdapterBoundary();
     const request = buildMcpRuntimeBindingRequest({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       authorityBasis: {
         siteId: 'narada-proper',
         taskSurfaceId: 'narada-proper.task-0007',

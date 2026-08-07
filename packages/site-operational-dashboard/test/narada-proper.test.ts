@@ -15,7 +15,7 @@ function fixtureArtifacts(): NaradaProperArtifactSource[] {
       key: 'site_identity',
       evidence_ref: 'fixture:site-identity',
       observed_at: '2026-05-17T12:00:00.000Z',
-      data: { site_id: 'narada-proper', authority_locus: 'narada_proper', roots: ['D:/code/narada'] },
+      data: { site_id: 'narada-proper', authority_locus: 'narada_proper', roots: ['C:/workspace/narada'] },
     },
     { key: 'task_lifecycle', evidence_ref: 'fixture:task-lifecycle-status', data: { open: 2, claimed: 1, in_review: 1, blocked: 0 } },
     { key: 'roster', evidence_ref: 'fixture:roster-show', data: { agents: [{ agent_id: 'narada.builder2', status: 'working' }] } },

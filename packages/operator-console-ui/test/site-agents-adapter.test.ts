@@ -80,7 +80,7 @@ test('site agents admission transport and adapter preserve authoritative choices
     owner: '@narada-core/invokable-intelligence-runtime',
     resolution_phase: 'runtime-invocation',
     authority_scope: { kind: 'site', site_id: 'sonar' },
-    catalog: { store_kind: 'node:sqlite', locator: 'D:/code/sonar/.ai/intelligence-registry.db' },
+    catalog: { store_kind: 'node:sqlite', locator: 'C:/workspace/sonar/.ai/intelligence-registry.db' },
     launcher_selection: false,
     authoritative_inputs: ['invocation-intent', 'catalog'],
   };

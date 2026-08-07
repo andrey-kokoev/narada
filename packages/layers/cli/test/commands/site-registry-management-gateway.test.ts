@@ -22,16 +22,16 @@ describe("Site Registry management gateway", () => {
 
   it("maps add previews and applies to canonical explicit modes", async () => {
     const gateway = createRegistryMutationGateway();
-    await gateway.plan({ operation: "add", siteId: "site-a", root: "D:/code/site-a", source: "manual" });
-    await gateway.apply({ operation: "add", siteId: "site-a", root: "D:/code/site-a", source: "manual" });
+    await gateway.plan({ operation: "add", siteId: "site-a", root: "C:/workspace/site-a", source: "manual" });
+    await gateway.apply({ operation: "add", siteId: "site-a", root: "C:/workspace/site-a", source: "manual" });
 
-    expect(sitesRegistryAddCommand).toHaveBeenNthCalledWith(1, expect.objectContaining({ format: "json", siteId: "site-a", root: "D:/code/site-a", apply: false, dryRun: true }), expect.any(Object));
-    expect(sitesRegistryAddCommand).toHaveBeenNthCalledWith(2, expect.objectContaining({ format: "json", siteId: "site-a", root: "D:/code/site-a", apply: true, dryRun: false }), expect.any(Object));
+    expect(sitesRegistryAddCommand).toHaveBeenNthCalledWith(1, expect.objectContaining({ format: "json", siteId: "site-a", root: "C:/workspace/site-a", apply: false, dryRun: true }), expect.any(Object));
+    expect(sitesRegistryAddCommand).toHaveBeenNthCalledWith(2, expect.objectContaining({ format: "json", siteId: "site-a", root: "C:/workspace/site-a", apply: true, dryRun: false }), expect.any(Object));
   });
 
   it("routes edits and lifecycle operations with revision and purge confirmation", async () => {
     const gateway = createRegistryMutationGateway();
-    await gateway.apply({ operation: "edit", reference: "legacy-alias", root: "D:/code/new", expectedRevision: 7 });
+    await gateway.apply({ operation: "edit", reference: "legacy-alias", root: "C:/workspace/new", expectedRevision: 7 });
     await gateway.plan({ operation: "retire", reference: "site-a", reason: "duplicate", expectedRevision: 8 });
     await gateway.apply({ operation: "restore", reference: "site-a", reason: "revalidated", expectedRevision: 9 });
     await gateway.apply({ operation: "purge", reference: "site-a", confirmSiteId: "site-a", expectedRevision: 10 });

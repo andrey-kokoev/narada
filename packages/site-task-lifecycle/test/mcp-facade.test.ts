@@ -3,7 +3,7 @@ import { createSiteTaskLifecycleMcpFacadeBinding } from '../src/index.js';
 
 describe('MCP facade binding', () => {
   it('describes package-local tools without admitting live registration', () => {
-    const binding = createSiteTaskLifecycleMcpFacadeBinding('D:\\code\\narada');
+    const binding = createSiteTaskLifecycleMcpFacadeBinding('C:\\workspace\\narada');
 
     expect(binding.schema).toBe('narada.site_task_lifecycle.mcp_facade_binding.v0');
     expect(binding.transport).toBe('descriptor_only');

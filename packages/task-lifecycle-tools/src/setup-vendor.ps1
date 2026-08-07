@@ -1,9 +1,9 @@
 # Setup vendor directory from Narada proper built packages
-# Run this after building @narada-core/task-governance in D:\code\narada
+# Run this after building @narada-core/task-governance in the Narada checkout.
 
 $ErrorActionPreference = "Stop"
 $vendor = Join-Path $PSScriptRoot "vendor"
-$srcRoot = "D:\code\narada"
+$srcRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..\..\..')).Path
 
 $pkgs = @(
     @{name="task-governance"; path="packages\task-governance"},

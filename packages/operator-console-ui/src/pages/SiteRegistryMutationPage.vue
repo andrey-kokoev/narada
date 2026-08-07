@@ -138,7 +138,7 @@ onUnmounted(() => {
             <div class="picker-grid">
               <label class="field">
                 <span>Find by ID, root, or alias</span>
-                <span class="input-with-icon"><Search :size="15" aria-hidden="true" /><input v-model="siteSearch" type="search" autocomplete="off" placeholder="smart-scheduling or D:/code" /></span>
+                <span class="input-with-icon"><Search :size="15" aria-hidden="true" /><input v-model="siteSearch" type="search" autocomplete="off" placeholder="smart-scheduling or C:/src" /></span>
               </label>
               <label class="field">
                 <span>Site record</span>
@@ -164,7 +164,7 @@ onUnmounted(() => {
               </label>
               <label class="field field-span-2">
                 <span>Site root folder</span>
-                <input v-model="draft.root" autocomplete="off" :placeholder="draft.variant === 'wsl' ? '/mnt/d/code/my-site' : 'D:/code/my-site'" @input="markDirty" />
+                <input v-model="draft.root" autocomplete="off" :placeholder="draft.variant === 'wsl' ? '/home/user/src/my-site' : 'C:/src/my-site'" @input="markDirty" />
                 <small>Use an absolute Windows, WSL, Linux, or Site URL root.</small>
                 <span v-if="validationErrors.root" class="field-error">{{ validationErrors.root }}</span>
               </label>

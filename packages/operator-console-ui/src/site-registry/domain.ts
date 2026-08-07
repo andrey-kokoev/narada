@@ -201,7 +201,7 @@ export function validateSiteRegistryMutation(
     if (!draft.root.trim()) {
       errors.root = 'Enter the absolute Site root folder.';
     } else if (!isAbsoluteSiteRoot(draft.root.trim())) {
-      errors.root = 'Enter an absolute root, such as D:/code/my-site or /home/andrey/my-site.';
+      errors.root = 'Enter an absolute root, such as C:/src/my-site or /home/user/src/my-site.';
     }
   }
   if (['retire', 'restore', 'purge'].includes(operation) && !draft.reason.trim()) {

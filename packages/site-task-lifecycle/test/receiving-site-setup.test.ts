@@ -38,7 +38,7 @@ const adapterConformance = buildTaskDbAdapterConformanceContract({
 describe('receiving-Site setup plan', () => {
   it('composes setup prerequisites without executing live registration or DB mutation', () => {
     const plan = buildReceivingSiteSetupPlan({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       siteId: 'site-alpha',
       initializedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
       roster: neutralRoster,
@@ -64,7 +64,7 @@ describe('receiving-Site setup plan', () => {
 
   it('builds a setup result that remains ready for admitted execution only', () => {
     const plan = buildReceivingSiteSetupPlan({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       siteId: 'site-alpha',
       initializedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
       roster: neutralRoster,
@@ -83,7 +83,7 @@ describe('receiving-Site setup plan', () => {
 
   it('rejects source Site state refs during setup planning', () => {
     expect(() => buildReceivingSiteSetupPlan({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       siteId: 'site-alpha',
       initializedBy: { identityId: 'site-alpha.Ada', role: 'architect' },
       roster: neutralRoster,
@@ -97,7 +97,7 @@ describe('receiving-Site setup plan', () => {
 
   it('rejects non-neutral local setup identities', () => {
     expect(() => buildReceivingSiteSetupPlan({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       siteId: 'site-alpha',
       initializedBy: { identityId: 'andrey-user.Kevin', role: 'architect' },
       roster: neutralRoster,

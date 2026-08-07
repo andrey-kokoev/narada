@@ -21,7 +21,7 @@ import type { WorkspaceLaunchAgentPlan, WorkspaceLaunchProcessLaunch } from '../
 const plan = {
   agent: 'sonar.resident',
   launch_session_id: 'launch-1',
-  site_root: 'D:/code/site',
+  site_root: 'C:/workspace/site',
 } as unknown as WorkspaceLaunchAgentPlan;
 
 describe('workspace launch execution boundaries', () => {
@@ -29,7 +29,7 @@ describe('workspace launch execution boundaries', () => {
     const candidate = {
       launch_session_id: 'launch-1',
       session_id: 'session-1',
-      site_root: 'D:/code/site',
+      site_root: 'C:/workspace/site',
       health_endpoint: 'http://127.0.0.1:1/health',
       health_status: 'starting',
     } as unknown as NarsSessionObservation;
@@ -70,7 +70,7 @@ describe('workspace launch execution boundaries', () => {
     const candidate = {
       launch_session_id: 'launch-1',
       session_id: 'session-1',
-      site_root: 'D:/code/site',
+      site_root: 'C:/workspace/site',
       health_endpoint: 'http://127.0.0.1:1/health',
       health_status: 'starting',
     } as unknown as NarsSessionObservation;
@@ -111,7 +111,7 @@ describe('workspace launch execution boundaries', () => {
       session_id: 'session-1',
       agent_id: 'sonar.architect',
       site_id: 'sonar',
-      site_root: 'D:/code/site',
+      site_root: 'C:/workspace/site',
       health_endpoint: 'http://127.0.0.1:1/health',
     } as unknown as NarsSessionObservation;
 
@@ -402,7 +402,7 @@ describe('workspace launch execution boundaries', () => {
       execution_authority: 'structured_argv',
       command: 'node',
       args: [],
-      cwd: 'D:/code/site',
+      cwd: 'C:/workspace/site',
       detached: true,
       stdio: 'ignore',
       windowsHide: true,

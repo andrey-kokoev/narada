@@ -294,7 +294,7 @@ describe('task create operator', () => {
   it('returns Windows path conversion guidance for native Windows --input-json paths', async () => {
     const result = await taskCreateCommand({
       cwd: tempDir,
-      inputJson: 'D:\\code\\narada\\task-input.json',
+      inputJson: 'C:\\workspace\\narada\\task-input.json',
       format: 'json',
     });
 

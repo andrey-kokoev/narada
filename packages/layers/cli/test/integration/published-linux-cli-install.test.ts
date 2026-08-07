@@ -205,7 +205,7 @@ test('published Linux CLI installs independently and reports the resident intell
     assertInstalledCliArtifact(installedCliRoot);
     assertPublishedAdmissionClosure(installedCliRoot);
     assert.notEqual(resolve(installedCliRoot), resolve(cliPackageRoot));
-    assert.doesNotMatch(readFileSync(join(installedCliRoot, 'package.json'), 'utf8'), /D:\\\\code\\\\narada/i);
+    assert.doesNotMatch(readFileSync(join(installedCliRoot, 'package.json'), 'utf8'), /C:\\\\workspace\\\\narada/i);
 
     const demo = run(process.execPath, [
       installedCliEntrypoint,

@@ -9,11 +9,11 @@ import {
 
 const options = {
   operatorSurface: 'agent-cli',
-  siteRoot: 'D:/code/example',
+  siteRoot: 'C:/workspace/example',
   agent: 'resident',
   targetSiteId: 'example',
   runtime: 'narada-agent-runtime-server',
-  workspaceRoot: 'D:/code/example',
+  workspaceRoot: 'C:/workspace/example',
   authority: 'local',
   mcpScope: 'local-site',
   enableNativeShell: false,
@@ -31,12 +31,12 @@ describe('workspace launch command specifications', () => {
 
   it('composes pnpm and node launch specs without losing runtime arguments', () => {
     const runtime = workspaceLaunchRuntimeCommandSpec(options, 'dry-run');
-    const pnpm = workspaceLaunchPnpmNaradaCommandSpec('D:/code/narada', runtime);
-    const node = workspaceLaunchNodeNaradaCommandSpec('D:/code/narada', runtime);
+    const pnpm = workspaceLaunchPnpmNaradaCommandSpec('C:/workspace/narada', runtime);
+    const node = workspaceLaunchNodeNaradaCommandSpec('C:/workspace/narada', runtime);
     const smoke = workspaceLaunchSmokeCommandSpec(runtime);
 
     expect(pnpm.executable).toBe('pnpm');
-    expect(workspaceLaunchCommandArgv(pnpm)).toEqual(expect.arrayContaining(['--dir', 'D:/code/narada', 'exec', 'narada', '--dry-run', '--format', 'json']));
+    expect(workspaceLaunchCommandArgv(pnpm)).toEqual(expect.arrayContaining(['--dir', 'C:/workspace/narada', 'exec', 'narada', '--dry-run', '--format', 'json']));
     expect(node.executable).toMatch(/node(?:\.exe)?$/i);
     expect(workspaceLaunchCommandArgv(node)).toEqual(expect.arrayContaining(['--dry-run', '--format', 'json']));
     expect(workspaceLaunchCommandArgv(smoke)[0]).toBe('narada');

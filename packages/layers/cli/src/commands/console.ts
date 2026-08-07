@@ -18,6 +18,7 @@ import {
 import { stopOperatorConsoleProjection } from './console-projection-lifecycle.js';
 import { focusOperatorConsoleOverlay, startOperatorConsoleOverlay } from '@narada-core/operator-console-overlay';
 import { createOperatorConsoleRemoteGateway, type OperatorConsoleRemoteGateway } from '@narada-core/operator-console-remote-gateway';
+import type { OverlayVisibilityPolicyInput } from '@narada-core/window-overlay-core';
 
 export interface ConsoleOptions {
   format?: string;
@@ -34,7 +35,7 @@ export interface ConsoleOverlayOptions extends ConsoleOptions {
   url?: string;
   title?: string;
   state_root?: string;
-  visibility_policy?: 'always' | 'windows-terminal';
+  visibility_policy?: OverlayVisibilityPolicyInput;
   refresh_seconds?: number;
 }
 

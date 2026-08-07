@@ -52,7 +52,7 @@ function makeCaller(overrides: AnyRecord = {}) {
         },
       },
     ],
-    siteRoot: 'D:/code/site-a',
+    siteRoot: 'C:/workspace/site-a',
     dispatchTool,
     refreshStore: () => false,
     jsonToolResult: (payload: AnyRecord, isError = false) => ({ payload, isError }),
@@ -75,12 +75,12 @@ test('validateTaskCreatePayload validates immutable create payload content', () 
 
 test('buildLifecycleTargetLocusStatus reports operator-stated root mismatch', () => {
   const status = buildLifecycleTargetLocusStatus({
-    siteRoot: 'D:/code/site-a',
-    env: { NARADA_TARGET_SITE_ROOT: 'D:/code/site-b' },
+    siteRoot: 'C:/workspace/site-a',
+    env: { NARADA_TARGET_SITE_ROOT: 'C:/workspace/site-b' },
   });
 
   assert.equal(status.status, 'operator_stated_locus_mismatch');
-  assert.equal(status.default_target_site_root, 'D:/code/site-a');
+  assert.equal(status.default_target_site_root, 'C:/workspace/site-a');
 });
 
 test('tool caller returns schema validation errors before dispatch', async () => {
@@ -94,7 +94,7 @@ test('tool caller returns schema validation errors before dispatch', async () =>
 });
 
 test('tool caller lets dry-run bridge mutations bypass locus mismatch', async () => {
-  const { caller } = makeCaller({ env: { NARADA_TARGET_SITE_ROOT: 'D:/code/site-b' } });
+  const { caller } = makeCaller({ env: { NARADA_TARGET_SITE_ROOT: 'C:/workspace/site-b' } });
 
   const result = await caller({ name: 'task_lifecycle_bridge_poll', arguments: { dry_run: true } });
 

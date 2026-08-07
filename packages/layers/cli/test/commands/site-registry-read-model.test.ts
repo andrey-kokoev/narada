@@ -25,14 +25,14 @@ describe("Site Registry read model", () => {
 
     await model.list();
     await model.show("legacy-alias");
-    await model.discoverPlan({ source: "filesystem", root: "D:/code", actor: "operator" });
+    await model.discoverPlan({ source: "filesystem", root: "C:/workspace", actor: "operator" });
 
     expect(sitesRegistryListCommand).toHaveBeenCalledWith({ format: "json" }, expect.any(Object));
     expect(sitesRegistryShowCommand).toHaveBeenCalledWith({ format: "json", reference: "legacy-alias" }, expect.any(Object));
     expect(sitesRegistryDiscoverCommand).toHaveBeenCalledWith({
       format: "json",
       source: "filesystem",
-      root: "D:/code",
+      root: "C:/workspace",
       actor: "operator",
       dryRun: true,
       apply: false,

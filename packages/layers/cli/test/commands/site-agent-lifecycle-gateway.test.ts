@@ -24,10 +24,10 @@ function launchRecord(configPath: string): WorkspaceLaunchRecord {
     title: 'Builder',
     role: 'builder',
     site: 'site',
-    narada_root: 'D:/code/narada',
-    site_root: 'D:/code/site',
-    workspace_root: 'D:/code/site',
-    launcher_path: 'D:/code/site/site.ps1',
+    narada_root: 'C:/workspace/narada',
+    site_root: 'C:/workspace/site',
+    workspace_root: 'C:/workspace/site',
+    launcher_path: 'C:/workspace/site/site.ps1',
     operator_surface: 'agent-cli',
     runtime: 'narada-agent-runtime-server',
     authority: 'auto',
@@ -78,7 +78,7 @@ describe('site-agent lifecycle gateway', () => {
     const requests: Array<{ path: string; request: Record<string, unknown> }> = [];
     const gateway = createSiteAgentLifecycleGateway({
       overview: { read: async () => overview('running') },
-      readLaunchRecords: async () => ({ records: [launchRecord('D:/code/site/agents.json')], siteCatalog: [] }),
+      readLaunchRecords: async () => ({ records: [launchRecord('C:/workspace/site/agents.json')], siteCatalog: [] }),
       appendControlRequest: async (path, request) => { requests.push({ path, request }); },
     });
 

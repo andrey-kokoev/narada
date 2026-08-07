@@ -299,4 +299,69 @@ describe("DefaultGraphAdapter", () => {
     expect(batch.next_cursor).toBe("fresh-cursor");
     expect(batch.events[0]?.message_id).toBe("msg-fresh");
   });
+
+  it("hydrates attachments with bounded concurrency", async () => {
+    const messages = Array.from({ length: 7 }, (_, index) => ({
+      id: `msg-attachment-${index}`,
+      changeKey: `ck-${index}`,
+      conversationId: `conv-${index}`,
+      subject: "attachment message",
+      parentFolderId: "folder-1",
+      isRead: false,
+      isDraft: false,
+      hasAttachments: true,
+      body: { contentType: "text", content: "hello" },
+    }));
+    let attachmentRequests = 0;
+    let maxAttachmentRequests = 0;
+
+    const client = new GraphHttpClient({
+      tokenProvider: new StaticBearerTokenProvider({ accessToken: "test-token" }),
+      fetchImpl: async (input) => {
+        const url = String(input);
+        if (url.includes("/messages/delta")) {
+          return new Response(JSON.stringify({
+            value: messages,
+            "@odata.deltaLink": "attachment-cursor",
+          }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+
+        if (url.includes("/attachments")) {
+          attachmentRequests += 1;
+          maxAttachmentRequests = Math.max(maxAttachmentRequests, attachmentRequests);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          attachmentRequests -= 1;
+          return new Response(JSON.stringify({
+            value: [{ id: `attachment-${attachmentRequests}` }],
+          }), { status: 200, headers: { "content-type": "application/json" } });
+        }
+
+        throw new Error(`Unexpected Graph URL: ${url}`);
+      },
+    });
+
+    const adapter = new DefaultGraphAdapter({
+      mailbox_id: "mailbox_primary",
+      user_id: "user@example.com",
+      client,
+      adapter_scope: {
+        mailbox_id: "mailbox_primary",
+        included_container_refs: ["folder-1"],
+        included_item_kinds: ["message"],
+        attachment_policy: "metadata_only",
+        body_policy: "text_only",
+      },
+      body_policy: "text_only",
+      attachment_policy: "metadata_only",
+      attachment_hydration_concurrency: 2,
+      include_headers: false,
+      normalize_folder_ref: normalizeFolderRef,
+      normalize_flagged: normalizeFlagged,
+    });
+
+    const batch = await adapter.fetch_since(null);
+
+    expect(batch.events).toHaveLength(messages.length);
+    expect(maxAttachmentRequests).toBe(2);
+  });
 });

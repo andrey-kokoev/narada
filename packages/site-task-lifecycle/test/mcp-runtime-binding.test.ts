@@ -23,7 +23,7 @@ const authorityBasis: McpRuntimeBindingAuthorityBasis = {
 describe('MCP runtime binding', () => {
   it('builds an adapter-bound runtime binding request without live registration', () => {
     const request = buildMcpRuntimeBindingRequest({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       authorityBasis,
     });
 
@@ -41,7 +41,7 @@ describe('MCP runtime binding', () => {
 
   it('builds a result that does not claim live registration', () => {
     const request = buildMcpRuntimeBindingRequest({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       authorityBasis,
     });
     const result = buildMcpRuntimeBindingResult(request, '2026-05-10T18:51:00.000Z');
@@ -54,7 +54,7 @@ describe('MCP runtime binding', () => {
 
   it('rejects live registration requests', () => {
     expect(() => buildMcpRuntimeBindingRequest({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       authorityBasis,
       liveRegistrationRequested: true,
     })).toThrow(LiveMcpRegistrationNotAdmittedError);
@@ -62,14 +62,14 @@ describe('MCP runtime binding', () => {
 
   it('rejects non-Narada-proper authority', () => {
     expect(() => buildMcpRuntimeBindingRequest({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       authorityBasis: { ...authorityBasis, siteId: 'andrey-user' },
     })).toThrow(McpRuntimeAuthorityError);
   });
 
   it('rejects non-neutral admitting identities', () => {
     expect(() => buildMcpRuntimeBindingRequest({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       authorityBasis: {
         ...authorityBasis,
         admittedBy: { identityId: 'andrey-user.Kevin', role: 'architect' },
@@ -79,7 +79,7 @@ describe('MCP runtime binding', () => {
 
   it('rejects denied source refs before runtime binding handoff', () => {
     expect(() => buildMcpRuntimeBindingRequest({
-      siteRoot: 'D:\\code\\narada',
+      siteRoot: 'C:\\workspace\\narada',
       authorityBasis,
       sourceImportRefs: ['C:\\Users\\Andrey\\Narada\\.ai\\task-lifecycle.db'],
     })).toThrow(DeniedSourceImportError);

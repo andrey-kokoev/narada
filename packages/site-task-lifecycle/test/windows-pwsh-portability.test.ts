@@ -21,7 +21,7 @@ describe('Windows PowerShell package portability', () => {
 
     expect(doc).toContain('Consume From Repo Package');
     expect(doc).toContain('Do Not Copy Live Site State');
-    expect(doc).toContain('D:\\code\\narada\\packages\\site-task-lifecycle');
+    expect(doc).toContain('C:\\workspace\\narada\\packages\\site-task-lifecycle');
     expect(doc).toContain('local concrete adapter outside `@narada-core/site-task-lifecycle`');
     expect(doc).toContain('It cannot claim live setup until the receiving Site admits and verifies its own initializer');
   });
@@ -77,8 +77,8 @@ describe('Windows PowerShell package portability', () => {
     expect(writeRequest.adapterDecision).toBe('adapter_interface_only');
     expect(writeRequest.operations).toHaveLength(3);
     expect(findDeniedSourceImports([
-      'D:\\code\\narada\\.ai\\task-lifecycle.db',
-      'D:\\code\\narada\\.ai\\mutation-evidence\\task_lifecycle\\mcp_582af2d48056b375.json',
+      'C:\\workspace\\narada\\.ai\\task-lifecycle.db',
+      'C:\\workspace\\narada\\.ai\\mutation-evidence\\task_lifecycle\\mcp_582af2d48056b375.json',
     ]).map((finding) => finding.reason)).toEqual([
       'source task lifecycle database',
       'source task lifecycle mutation evidence',

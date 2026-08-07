@@ -14,7 +14,7 @@ const runAgentStartCommandMock = vi.hoisted(() => vi.fn(() => ({
   schema: 'narada.agent_start.command_result.v0',
   status: 'success',
   mutation_performed: false,
-  site_root: 'D:/code/test-site',
+  site_root: 'C:/workspace/test-site',
   agent: 'test.agent',
   carrier: 'agent-cli',
   runtime: 'narada-agent-runtime-server',
@@ -133,10 +133,10 @@ async function tempRegistry(): Promise<string> {
         Agent: 'sonar.resident',
         Role: 'resident',
         Site: 'narada-sonar',
-        NaradaRoot: 'D:/code/narada.sonar',
-        SiteRoot: 'D:/code/narada.sonar',
-        WorkspaceRoot: 'D:/code/narada.sonar',
-        LauncherPath: 'D:/code/narada.sonar/narada-sonar.ps1',
+        NaradaRoot: 'C:/workspace/narada.sonar',
+        SiteRoot: 'C:/workspace/narada.sonar',
+        WorkspaceRoot: 'C:/workspace/narada.sonar',
+        LauncherPath: 'C:/workspace/narada.sonar/narada-sonar.ps1',
         OperatorSurface: 'agent-cli',
         Runtime: 'narada-agent-runtime-server',
       },
@@ -144,20 +144,20 @@ async function tempRegistry(): Promise<string> {
         Agent: 'smart-scheduling.resident',
         Role: 'resident',
         Site: 'smart-scheduling',
-        NaradaRoot: 'D:/code/smart-scheduling',
-        SiteRoot: 'D:/code/smart-scheduling/.narada',
-        WorkspaceRoot: 'D:/code/smart-scheduling',
-        LauncherPath: 'D:/code/smart-scheduling/narada-smart-scheduling.ps1',
+        NaradaRoot: 'C:/workspace/smart-scheduling',
+        SiteRoot: 'C:/workspace/smart-scheduling/.narada',
+        WorkspaceRoot: 'C:/workspace/smart-scheduling',
+        LauncherPath: 'C:/workspace/smart-scheduling/narada-smart-scheduling.ps1',
         OperatorSurface: 'codex',
       },
       {
         Agent: 'narada.architect',
         Role: 'architect',
         Site: 'narada',
-        NaradaRoot: 'D:/code/narada',
-        SiteRoot: 'D:/code/narada',
-        WorkspaceRoot: 'D:/code/narada',
-        LauncherPath: 'D:/code/narada/narada.ps1',
+        NaradaRoot: 'C:/workspace/narada',
+        SiteRoot: 'C:/workspace/narada',
+        WorkspaceRoot: 'C:/workspace/narada',
+        LauncherPath: 'C:/workspace/narada/narada.ps1',
         OperatorSurface: 'codex',
       },
     ],
@@ -173,10 +173,10 @@ function launchSelectionFixtureRecords(): WorkspaceLaunchRecord[] {
       title: 'Sonar Resident',
       role: 'resident',
       site: 'sonar',
-      narada_root: 'D:/code/narada.sonar',
-      site_root: 'D:/code/narada.sonar',
-      workspace_root: 'D:/code/narada.sonar',
-      launcher_path: 'D:/code/narada.sonar/narada-sonar.ps1',
+      narada_root: 'C:/workspace/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
+      workspace_root: 'C:/workspace/narada.sonar',
+      launcher_path: 'C:/workspace/narada.sonar/narada-sonar.ps1',
       operator_surface: 'agent-cli',
       runtime: 'narada-agent-runtime-server',
       enable_native_shell: false,
@@ -188,10 +188,10 @@ function launchSelectionFixtureRecords(): WorkspaceLaunchRecord[] {
       title: 'Sonar Architect',
       role: 'architect',
       site: 'sonar',
-      narada_root: 'D:/code/narada.sonar',
-      site_root: 'D:/code/narada.sonar',
-      workspace_root: 'D:/code/narada.sonar',
-      launcher_path: 'D:/code/narada.sonar/narada-sonar.ps1',
+      narada_root: 'C:/workspace/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
+      workspace_root: 'C:/workspace/narada.sonar',
+      launcher_path: 'C:/workspace/narada.sonar/narada-sonar.ps1',
       operator_surface: 'agent-web-ui',
       runtime: 'narada-agent-runtime-server',
       enable_native_shell: false,
@@ -203,10 +203,10 @@ function launchSelectionFixtureRecords(): WorkspaceLaunchRecord[] {
       title: 'Narada Architect',
       role: 'architect',
       site: 'narada',
-      narada_root: 'D:/code/narada',
-      site_root: 'D:/code/narada',
-      workspace_root: 'D:/code/narada',
-      launcher_path: 'D:/code/narada/narada.ps1',
+      narada_root: 'C:/workspace/narada',
+      site_root: 'C:/workspace/narada',
+      workspace_root: 'C:/workspace/narada',
+      launcher_path: 'C:/workspace/narada/narada.ps1',
       operator_surface: 'codex',
       runtime: 'codex',
       enable_native_shell: false,
@@ -231,10 +231,10 @@ describe('launcher workspace planning', () => {
       Agent: 'example.resident',
       Role: 'resident',
       Site: 'example',
-      NaradaRoot: 'D:/code/example',
-      SiteRoot: 'D:/code/example/.narada',
-      WorkspaceRoot: 'D:/code/example',
-      LauncherPath: 'D:/code/example/narada-example.ps1',
+      NaradaRoot: 'C:/workspace/example',
+      SiteRoot: 'C:/workspace/example/.narada',
+      WorkspaceRoot: 'C:/workspace/example',
+      LauncherPath: 'C:/workspace/example/narada-example.ps1',
     };
     const missingSurfacePath = join(dir, 'missing-surface.json');
     await writeFile(missingSurfacePath, JSON.stringify({ Agents: [base] }), 'utf8');
@@ -310,7 +310,7 @@ describe('launcher workspace planning', () => {
       authority_scope: { kind: 'site', site_id: 'sonar' },
       catalog: {
         store_kind: 'node:sqlite',
-        locator: join('D:/code/narada.sonar', '.ai', 'intelligence-registry.db'),
+        locator: join('C:/workspace/narada.sonar', '.ai', 'intelligence-registry.db'),
       },
       launcher_selection: false,
       authoritative_inputs: ['invocation-intent', 'catalog', 'materialized-policy', 'runtime-context'],
@@ -331,7 +331,7 @@ describe('launcher workspace planning', () => {
     expect(result.selected_agents[0].runtime_start_command).toEqual(expect.arrayContaining([
       'pnpm',
       '--dir',
-      'D:\\code\\narada',
+      'C:\\workspace\\narada',
       'exec',
       'narada',
       'operator-surface',
@@ -340,7 +340,7 @@ describe('launcher workspace planning', () => {
       'agent-cli',
       '--exec',
     ]));
-    expect(result.selected_agents[0].runtime_start_cwd).toBe('D:/code/narada.sonar');
+    expect(result.selected_agents[0].runtime_start_cwd).toBe('C:/workspace/narada.sonar');
     expect(result.selected_agents[0].wt_args).toEqual([]);
     expect(result.selected_agents[0].hidden_runtime_start_command[0]).toBe(process.execPath);
     expect(result.selected_agents[0].hidden_runtime_start_command[1]).toContain('packages');
@@ -352,7 +352,7 @@ describe('launcher workspace planning', () => {
       '--runtime',
       'narada-agent-runtime-server',
       '--workspace-root',
-      'D:/code/narada.sonar',
+      'C:/workspace/narada.sonar',
       '--launch-session-id',
       result.selected_agents[0].launch_session_id,
     ]));
@@ -364,7 +364,7 @@ describe('launcher workspace planning', () => {
       'start',
       'agent-cli',
       '--site-root',
-      'D:/code/narada.sonar',
+      'C:/workspace/narada.sonar',
       '--agent',
       'sonar.resident',
       '--runtime',
@@ -404,11 +404,11 @@ describe('launcher workspace planning', () => {
     tempDirs.push(dir);
     const registryPath = join(dir, 'agents.json');
     await writeFile(registryPath, JSON.stringify({
-      NaradaRoot: 'D:/code/narada',
-      SiteRoot: 'D:/code/narada',
-      WorkspaceRoot: 'D:/code/narada',
+      NaradaRoot: 'C:/workspace/narada',
+      SiteRoot: 'C:/workspace/narada',
+      WorkspaceRoot: 'C:/workspace/narada',
       McpScope: 'none',
-      Agents: [{ Agent: 'narada.architect', Role: 'architect', Site: 'narada', NaradaRoot: 'D:/code/narada', SiteRoot: 'D:/code/narada', WorkspaceRoot: 'D:/code/narada', LauncherPath: 'D:/code/narada/narada.ps1', OperatorSurface: 'codex', Runtime: 'codex' }],
+      Agents: [{ Agent: 'narada.architect', Role: 'architect', Site: 'narada', NaradaRoot: 'C:/workspace/narada', SiteRoot: 'C:/workspace/narada', WorkspaceRoot: 'C:/workspace/narada', LauncherPath: 'C:/workspace/narada/narada.ps1', OperatorSurface: 'codex', Runtime: 'codex' }],
     }), 'utf8');
 
     const plan = await workspaceLaunchPlanCommand({
@@ -500,8 +500,8 @@ describe('launcher workspace planning', () => {
       expect(result.selected_agents[0].runtime_start_execution_mode).toBe('hidden_detached');
       expect(result.hidden_runtime_launches[0]).toMatchObject({ posture: 'agent_runtime_server', windowsHide: true });
       expect(runAgentStartCommandMock).toHaveBeenCalledWith(expect.objectContaining({
-        siteRoot: 'D:/code/narada.sonar',
-        workspaceRoot: 'D:/code/narada.sonar',
+        siteRoot: 'C:/workspace/narada.sonar',
+        workspaceRoot: 'C:/workspace/narada.sonar',
         agent: 'sonar.resident',
         runtime: 'narada-agent-runtime-server',
         preflightOnly: true,
@@ -532,7 +532,7 @@ describe('launcher workspace planning', () => {
       schema: 'narada.agent_start.command_result.v0',
       status: 'failed',
       mutation_performed: false,
-      site_root: 'D:/code/narada.sonar',
+      site_root: 'C:/workspace/narada.sonar',
       agent: 'sonar.resident',
       carrier: 'agent-cli',
       runtime: 'narada-agent-runtime-server',
@@ -757,15 +757,15 @@ describe('launcher workspace planning', () => {
     await writeFile(registryPath, JSON.stringify({
       Site: 'sonar',
       McpScope: 'all',
-      NaradaRoot: 'D:/code/narada.sonar',
-      SiteRoot: 'D:/code/narada.sonar',
-      WorkspaceRoot: 'D:/code/narada.sonar',
+      NaradaRoot: 'C:/workspace/narada.sonar',
+      SiteRoot: 'C:/workspace/narada.sonar',
+      WorkspaceRoot: 'C:/workspace/narada.sonar',
       Agents: [
         {
           Agent: 'resident',
           Role: 'resident',
           Title: 'Sonar Resident',
-          LauncherPath: 'D:/code/narada.sonar/narada-sonar.ps1',
+          LauncherPath: 'C:/workspace/narada.sonar/narada-sonar.ps1',
           OperatorSurface: 'agent-cli',
           Runtime: 'narada-agent-runtime-server',
         },
@@ -803,16 +803,16 @@ describe('launcher workspace planning', () => {
     tempDirs.push(dir);
     const registryPath = join(dir, 'agents.json');
     await writeFile(registryPath, JSON.stringify({
-      NaradaRoot: 'D:/code/narada',
+      NaradaRoot: 'C:/workspace/narada',
       McpScope: 'all',
       Agents: [{
         Agent: 'smart-scheduling.resident',
         Role: 'resident',
         Title: 'Smart Scheduling Resident',
-        NaradaRoot: 'D:/code/smart-scheduling',
-        SiteRoot: 'D:/code/smart-scheduling/.narada',
-        WorkspaceRoot: 'D:/code/smart-scheduling',
-        LauncherPath: 'D:/code/smart-scheduling/narada-smart-scheduling.ps1',
+        NaradaRoot: 'C:/workspace/smart-scheduling',
+        SiteRoot: 'C:/workspace/smart-scheduling/.narada',
+        WorkspaceRoot: 'C:/workspace/smart-scheduling',
+        LauncherPath: 'C:/workspace/smart-scheduling/narada-smart-scheduling.ps1',
         OperatorSurface: 'agent-cli',
         Runtime: 'narada-agent-runtime-server',
       }],
@@ -1064,7 +1064,7 @@ describe('launcher workspace planning', () => {
     expect(sonar?.launch_runtime).toBe('narada-agent-runtime-server');
     expect(sonar?.launch_runtime_host).toBe('narada-agent-runtime-server');
     expect(sonar?.intelligence_selection_authority).toEqual(
-      expectedIntelligenceSelectionAuthority('sonar', 'D:/code/narada.sonar'),
+      expectedIntelligenceSelectionAuthority('sonar', 'C:/workspace/narada.sonar'),
     );
     expect(sonar?.selection_resolution.intelligence).toEqual(sonar?.intelligence_selection_authority);
     expect(sonar?.hidden_runtime_start_command).not.toContain('--intelligence-provider');
@@ -1073,7 +1073,7 @@ describe('launcher workspace planning', () => {
     expect(smartScheduling?.launch_runtime).toBe('codex');
     expect(smartScheduling?.launch_runtime_host).toBe('codex');
     expect(smartScheduling?.intelligence_selection_authority).toEqual(
-      expectedIntelligenceSelectionAuthority('smart-scheduling', 'D:/code/smart-scheduling/.narada'),
+      expectedIntelligenceSelectionAuthority('smart-scheduling', 'C:/workspace/smart-scheduling/.narada'),
     );
     expect(smartScheduling?.selection_resolution.intelligence).toEqual(smartScheduling?.intelligence_selection_authority);
     expect(smartScheduling?.wt_args.join(' ')).not.toContain('--intelligence-provider');
@@ -1094,7 +1094,7 @@ describe('launcher workspace planning', () => {
     const result = plan.result as { selected_agents: Array<{ intelligence_selection_authority: Record<string, unknown>; selection_resolution: { intelligence: unknown }; runtime_start_command: string[]; smoke_command: string[] }> };
     const selected = result.selected_agents[0];
     expect(selected.intelligence_selection_authority).toEqual(
-      expectedIntelligenceSelectionAuthority('sonar', 'D:/code/narada.sonar'),
+      expectedIntelligenceSelectionAuthority('sonar', 'C:/workspace/narada.sonar'),
     );
     expect(selected.selection_resolution.intelligence).toEqual(selected.intelligence_selection_authority);
     expect(selected).not.toHaveProperty('intelligence_provider');
@@ -1118,7 +1118,7 @@ describe('launcher workspace planning', () => {
       runtime: 'narada-agent-runtime-server',
     }, context);
     expect(plan.intelligence_selection_authority).toEqual(
-      expectedIntelligenceSelectionAuthority('sonar', 'D:/code/narada.sonar'),
+      expectedIntelligenceSelectionAuthority('sonar', 'C:/workspace/narada.sonar'),
     );
   });
 

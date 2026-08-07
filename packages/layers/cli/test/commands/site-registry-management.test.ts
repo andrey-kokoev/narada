@@ -23,7 +23,7 @@ function options<T extends Record<string, unknown>>(value: T): T & { format: "js
 }
 
 function createTempRoot(): string {
-  const root = join("D:\\code\\narada\\packages\\layers\\cli\\.tmp", `site-registry-management-${randomUUID()}`);
+  const root = join("C:\\workspace\\narada\\packages\\layers\\cli\\.tmp", `site-registry-management-${randomUUID()}`);
   mkdirSync(root, { recursive: true });
   return root;
 }

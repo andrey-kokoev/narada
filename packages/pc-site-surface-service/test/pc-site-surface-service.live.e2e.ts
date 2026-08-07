@@ -18,7 +18,7 @@ test('live PC Site runtime shares sessions, swaps generation without carrier res
   assert.equal(process.platform, 'win32', 'live PC Site surface-service E2E currently requires Windows');
   const { createNarsCapabilityGateway } = await import(new URL('../../nars-capability-gateway/src/capability-gateway.ts', import.meta.url).href);
   const siteRoot = resolve(process.env.NARADA_PC_SITE_ROOT ?? 'C:/Users/Andrey/Narada');
-  const mcpSurfacesRoot = resolve(process.env.NARADA_MCP_SURFACES_WORKSPACE_ROOT ?? 'D:/code/mcp-surfaces');
+  const mcpSurfacesRoot = resolve(process.env.NARADA_MCP_SURFACES_WORKSPACE_ROOT ?? 'C:/workspace/mcp-surfaces');
   const configuredNodePath = process.env.NARADA_PC_SITE_SURFACE_SERVICE_NODE_PATH;
   const commandOptions = {
     site_root: siteRoot,
