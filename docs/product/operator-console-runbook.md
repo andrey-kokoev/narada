@@ -135,7 +135,7 @@ The operator does not repair an assessment by editing SQLite or retrying until a
 
 ## Verification
 
-Run the focused checks from `D:\code\narada`:
+Run the focused checks from `<src-root>\narada`:
 
 ```powershell
 pnpm --filter @narada-core/operator-console-ui test

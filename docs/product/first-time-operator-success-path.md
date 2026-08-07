@@ -317,7 +317,7 @@ not_started
 
 Every step past `first_use_verified` is optional and requires explicit Operator action.
 
-Agent naming conventions: personae such as Kevin, Bob, Robin, and Stuart are callsigns mapped onto the role taxonomy (architect, builder, operator, resident), not roles of their own; the launch-registry `Role` field is optional. The canonical agent-id form is `<site-prefix>.<name>` (for example `andrey-user.resident`); sonar's bare names (`architect`, `builder`, `resident`, `operator` with `Site = "sonar"`) are a legacy exception, not a pattern to copy. The mcp-surfaces records intentionally use `WorkspaceRoot = D:\code` because those agents manage MCP surfaces across repositories. The retired v1 roster projection (`.ai/agents/roster.json`, pre-rename `narada-andrey.*` ids) is superseded by the launch registry; the task-roster crossing remains deferred.
+Agent naming conventions: personae such as Kevin, Bob, Robin, and Stuart are callsigns mapped onto the role taxonomy (architect, builder, operator, resident), not roles of their own; the launch-registry `Role` field is optional. The canonical agent-id form is `<site-prefix>.<name>` (for example `andrey-user.resident`); sonar's bare names (`architect`, `builder`, `resident`, `operator` with `Site = "sonar"`) are a legacy exception, not a pattern to copy. The mcp-surfaces records intentionally use `WorkspaceRoot = <src-root>` because those agents manage MCP surfaces across repositories. The retired v1 roster projection (`.ai/agents/roster.json`, pre-rename `narada-andrey.*` ids) is superseded by the launch registry; the task-roster crossing remains deferred.
 
 ### Deferred Expansion
 

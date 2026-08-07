@@ -43,7 +43,7 @@ SSE is not the required operator path for this proof. Local SSE plausibility is 
 
 ## Build And Deploy
 
-Run from `D:\code\narada`:
+Run from `<src-root>\narada`:
 
 ```text
 pnpm --filter @narada-core/agent-web-ui build
@@ -71,7 +71,7 @@ node packages/cloudflare-operator-projection/scripts/cloudflare-nars-web-project
 Example shape:
 
 ```text
-node packages/cloudflare-operator-projection/scripts/cloudflare-nars-web-projection-live-smoke.ts --live --cloudflare-api-base-url https://narada-operator-projection.andrei-kokoev.workers.dev --site-root D:\code\narada.sonar --site-id sonar --session carrier_... --expected-assets-manifest packages/cloudflare-operator-projection/public/narada-cloudflare-assets.json --projection-id proj_strict_live_nars_...
+node packages/cloudflare-operator-projection/scripts/cloudflare-nars-web-projection-live-smoke.ts --live --cloudflare-api-base-url https://narada-operator-projection.andrei-kokoev.workers.dev --site-root <src-root>\narada.sonar --site-id sonar --session carrier_... --expected-assets-manifest packages/cloudflare-operator-projection/public/narada-cloudflare-assets.json --projection-id proj_strict_live_nars_...
 ```
 
 ## Required Evidence

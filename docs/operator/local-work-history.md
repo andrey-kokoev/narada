@@ -13,14 +13,14 @@ User Site-owned policy and store. There is no host-wide capture policy.
 ## Enable A Site
 
 ```powershell
-narada history enable --site-root D:\code\my-site
-narada history start --site-root D:\code\my-site --background
-narada history status --site-root D:\code\my-site
+narada history enable --site-root <src-root>\my-site
+narada history start --site-root <src-root>\my-site --background
+narada history status --site-root <src-root>\my-site
 ```
 
 The policy is stored at
-`D:\code\my-site\.narada\local-history.json`; payloads remain under
-`D:\code\my-site\.narada\runtime\local-history`.
+`<src-root>\my-site\.narada\local-history.json`; payloads remain under
+`<src-root>\my-site\.narada\runtime\local-history`.
 
 For a Git-backed owner, `history enable` refuses until each artifact is covered
 by the ignore policy of the Git repository that owns its path. A Site store
@@ -51,9 +51,9 @@ and `--once` affect only the current daemon process.
 ## Inspect And Restore
 
 ```powershell
-narada history list --site-root D:\code\my-site
-narada history show <snapshot-id> --site-root D:\code\my-site
-narada history restore <snapshot-id> --site-root D:\code\my-site --confirm
+narada history list --site-root <src-root>\my-site
+narada history show <snapshot-id> --site-root <src-root>\my-site
+narada history restore <snapshot-id> --site-root <src-root>\my-site --confirm
 ```
 
 If the target changed since the selected snapshot, restore refuses with a
@@ -66,7 +66,7 @@ To make another Site discoverable from the User Site without moving its
 content:
 
 ```powershell
-narada history status --site-root D:\code\my-site --user-projection-root C:\Users\Andrey\Narada
+narada history status --site-root <src-root>\my-site --user-projection-root C:\Users\Andrey\Narada
 ```
 
 The projection contains metadata and snapshot pointers only. The owning Site

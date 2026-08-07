@@ -9,7 +9,7 @@ operational warnings as semantic failures.
 
 ## Current Local Inbox Doctor Findings
 
-`narada inbox doctor --format json` from `D:\code\narada` reported:
+`narada inbox doctor --format json` from `<src-root>\narada` reported:
 
 | Finding | Current value | Interpretation |
 | --- | --- | --- |

@@ -6,10 +6,10 @@ dashboard into Site authority.
 
 The first earned source is the Staccato operational dashboard:
 
-- `D:/code/staccato-elt/scripts/Build-NaradaStaccatoOpsPage.mjs`
-- `D:/code/staccato-elt/scripts/ops-dashboard-server.mjs`
-- `D:/code/staccato-elt/tests/build-narada-staccato-ops-page.test.mjs`
-- `D:/code/staccato-elt/tests/ops-dashboard-server.test.mjs`
+- `<src-root>/staccato-elt/scripts/Build-NaradaStaccatoOpsPage.mjs`
+- `<src-root>/staccato-elt/scripts/ops-dashboard-server.mjs`
+- `<src-root>/staccato-elt/tests/build-narada-staccato-ops-page.test.mjs`
+- `<src-root>/staccato-elt/tests/ops-dashboard-server.test.mjs`
 
 The Staccato implementation proves useful mechanics, but Staccato row providers
 remain Site-specific. This contract specifies the reusable shape for Narada

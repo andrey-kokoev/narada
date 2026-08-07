@@ -38,7 +38,7 @@ and operator recovery steps are in
 
 ## Focused Commands
 
-Run from `D:\code\narada`:
+Run from `<src-root>\narada`:
 
 ```powershell
 pnpm --filter @narada-core/operator-console-contract test
