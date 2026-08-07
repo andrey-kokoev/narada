@@ -4,7 +4,7 @@ Decision: `admitted_first_slice_local_json_store_mcp`
 
 Site: `narada-proper`
 
-Authority root: `D:\code\narada`
+Authority root: `<src-root>\narada`
 
 Carrier: `narada-proper.carrier.agent-context-memory.local-json-store.v0`
 

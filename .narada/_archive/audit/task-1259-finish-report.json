@@ -1,5 +1,5 @@
 {
-  "summary": "Materialized a real repo-local clickable Windows shortcut for Narada architect. The shortcut points to Start-NaradaArchitect.ps1, which verifies the crew launch intent sequence and durable launch request before starting Codex in D:\\code\\narada. Verification read back the .lnk target, arguments, and working directory; no Desktop/Start Menu placement, source Site import, operator-surface runtime copying, or native shell fallback was introduced.",
+  "summary": "Materialized a real repo-local clickable Windows shortcut for Narada architect. The shortcut points to Start-NaradaArchitect.ps1, which verifies the crew launch intent sequence and durable launch request before starting Codex in <src-root>\\narada. Verification read back the .lnk target, arguments, and working directory; no Desktop/Start Menu placement, source Site import, operator-surface runtime copying, or native shell fallback was introduced.",
   "changed_files": [
     "tools/operator-surface-carriers/windows-glue/Start-NaradaArchitect.ps1",
     "tools/operator-surface-carriers/windows-glue/New-NaradaArchitectShortcut.ps1",

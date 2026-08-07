@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0001",
   "increment": "live-execution-admission-recheck",
   "decision": "blocked",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260510_140632_853_e281b88c",
     "operator_chat:2026-05-10:approve-task-0001-live-admissions",

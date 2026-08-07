@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0004",
   "increment": "live-mcp-tool-binding",
   "decision": "admitted_minimal_source_increment",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     ".narada/audit/task-0003-live-setup-execution-audit.json",
     ".narada/admission/decisions/task-0004-live-mcp-tool-binding-admission.md"
@@ -53,12 +53,12 @@
       "summary": "Built CLI dist so node_modules/.bin/narada-mcp uses the new MCP tool binding."
     },
     {
-      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/list smoke",
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root <src-root>\\narada --site-id narada-proper tools/list smoke",
       "status": "passed",
       "summary": "tools/list includes site_task_lifecycle.plan_init."
     },
     {
-      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/call site_task_lifecycle.plan_init",
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root <src-root>\\narada --site-id narada-proper tools/call site_task_lifecycle.plan_init",
       "status": "passed",
       "summary": "Returned Narada proper task lifecycle paths with mutationAttempted=false, sourceStateImported=false, and packageExecutedSqliteMutation=false."
     }

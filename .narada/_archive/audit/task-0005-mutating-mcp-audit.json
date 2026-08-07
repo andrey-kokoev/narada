@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0005",
   "increment": "mutating-task-lifecycle-mcp-first-slice",
   "decision": "admitted_single_mutating_tool",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260510_142839_058_af43c473",
     ".narada/admission/decisions/task-0005-mutating-mcp-admission.md"
@@ -52,7 +52,7 @@
       "summary": "site-task-lifecycle typecheck passed; 11 test files and 39 tests passed."
     },
     {
-      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/list smoke",
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root <src-root>\\narada --site-id narada-proper tools/list smoke",
       "status": "passed",
       "summary": "tools/list includes site_task_lifecycle.admit_task."
     },

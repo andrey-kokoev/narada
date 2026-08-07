@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0001",
   "increment": "live-execution-missing-carriers-confirmation",
   "decision": "blocked",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260510_140852_490_878f49f4",
     "OSM:osm_20260510_140823_689_422deaad"

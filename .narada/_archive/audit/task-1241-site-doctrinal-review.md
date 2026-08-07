@@ -2,7 +2,7 @@
 
 ## Scope
 
-Review target: `D:\code\narada\.narada`.
+Review target: `<src-root>\narada\.narada`.
 
 Source plan: `.narada/audit/task-1239-doctrinal-review-plan.md`.
 
@@ -43,7 +43,7 @@ Recommended follow-up: reconcile `.narada/capabilities/mcp-surfaces.json` so the
 
 ## Coherent Postures Observed
 
-- `.narada/site.json` clearly declares `D:\code\narada` as the Windows-native Narada proper authority root and demotes `/home/andrey/src/narada` from prior canonical authority.
+- `.narada/site.json` clearly declares `<src-root>\narada` as the Windows-native Narada proper authority root and demotes `/home/andrey/src/narada` from prior canonical authority.
 - `.narada/site.json` preserves non-admissions for narada-andrey mutation authority, source Site runtime state import, runtime DB/task/inbox/roster/checkpoint/operator-surface/PC/secrets state import, raw WSL mutation authority, and unrecorded native shell fallback.
 - `.narada/crew/README.md` correctly frames crew entries as launch intents/templates rather than `.lnk` files or process-start side effects, and explicitly refuses direct substrate shortcut execution, native shell fallback, PC-locus mutation, operator-surface runtime copying, Windows shortcut creation, source Site runtime import, secrets, credentials, and implicit capability grants.
 - `.narada/inbox/README.md` and `.narada/inbox/external-handoff-protocol.md` preserve external packets as pending evidence rather than local truth.

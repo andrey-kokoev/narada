@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-12T10:42:41.4983100-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "source_context": "duty-loop continuation after reusable Site machinery extraction map coverage",
     "external_source_state_imported": false
   },

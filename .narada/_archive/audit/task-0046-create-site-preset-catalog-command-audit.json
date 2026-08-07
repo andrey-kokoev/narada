@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-12T11:23:52.8600574-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "source_context": "greenfield create-site CLI objective continuation",
     "external_source_state_imported": false
   },

@@ -5,8 +5,8 @@ Decision: admit and apply the Windows-native Site package/live-carrier set to Na
 Target locus:
 
 - Site id: `narada-proper`
-- Repo root: `D:\code\narada`
-- Site root: `D:\code\narada\.narada`
+- Repo root: `<src-root>\narada`
+- Site root: `<src-root>\narada\.narada`
 
 Authority basis: `narada_proper_self_adoption_task_1228`.
 

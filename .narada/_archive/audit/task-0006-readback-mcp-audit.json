@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0006",
   "increment": "readback-task-lifecycle-mcp",
   "decision": "admitted_non_mutating_readback_tool",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260510_143649_320_8a0032bf",
     ".narada/admission/decisions/task-0006-readback-mcp-admission.md"

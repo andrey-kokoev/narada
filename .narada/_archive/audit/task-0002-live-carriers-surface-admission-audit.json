@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0002",
   "increment": "live-carriers-and-mcp-surface-admission",
   "decision": "admitted_descriptor_only",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260510_141155_707_3ce3f401",
     ".narada/audit/task-0001-live-execution-missing-carriers-20260510.json",

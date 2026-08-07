@@ -29,15 +29,15 @@
       "result": "4 tests passed"
     },
     {
-      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode plan --site-root D:\\code\\narada --site-id narada",
+      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode plan --site-root <src-root>\\narada --site-id narada",
       "result": "planned projections for narada.architect and narada.builder; no refusals"
     },
     {
-      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode apply --site-root D:\\code\\narada --site-id narada --mutation-authorized",
+      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode apply --site-root <src-root>\\narada --site-id narada --mutation-authorized",
       "result": "applied projection JSON files under .crew/agent-shortcuts"
     },
     {
-      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode verify --site-root D:\\code\\narada --site-id narada",
+      "command": "node tools/operator-surface-carriers/agent-launch-affordance-materializer.mjs --mode verify --site-root <src-root>\\narada --site-id narada",
       "result": "verified; projection_count=2; missing_projection_files=[]"
     }
   ],

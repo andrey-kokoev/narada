@@ -15,11 +15,11 @@
       "result": "passed"
     },
     {
-      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode apply --mutation-authorized",
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root <src-root>\\narada --mode apply --mutation-authorized",
       "result": "passed"
     },
     {
-      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode verify",
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root <src-root>\\narada --mode verify",
       "result": "passed"
     }
   ],

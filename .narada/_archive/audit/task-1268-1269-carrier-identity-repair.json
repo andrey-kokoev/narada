@@ -3,7 +3,7 @@
   "repair_id": "repair_20260515_task_1268_1269_carrier_identity",
   "recorded_at": "2026-05-15T14:34:00.000Z",
   "target_locus": "narada-proper",
-  "target_root": "D:/code/narada",
+  "target_root": "<src-root>/narada",
   "operator_request": "repair",
   "problem": {
     "kind": "carrier_identity_misattribution",

@@ -99,4 +99,4 @@ Narada-andrey compatibility regression should remain narada-andrey-side evidence
 
 ## Missing Capability Before Implementation
 
-Narada proper still lacks a full admitted local task lifecycle substrate and a package implementation task surface. Implementation should wait until Narada proper admits a concrete package scaffold task or equivalent code-change locus. The current `D:\code\narada` path is temporary seed/intake evidence scope only unless separately admitted for package implementation.
+Narada proper still lacks a full admitted local task lifecycle substrate and a package implementation task surface. Implementation should wait until Narada proper admits a concrete package scaffold task or equivalent code-change locus. The current `<src-root>\narada` path is temporary seed/intake evidence scope only unless separately admitted for package implementation.

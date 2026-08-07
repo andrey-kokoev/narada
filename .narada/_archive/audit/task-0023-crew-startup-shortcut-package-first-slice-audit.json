@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-11T10:58:19.4270555-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "preceding_candidate": ".narada/admission/candidates/task-0022-crew-startup-shortcut-capability-candidate.md",
     "capability_id": "narada-proper.capability.crew-startup-shortcut.v0",
     "source_ref": "env_f2c20035-bec3-4790-b223-3fccebc6de24"

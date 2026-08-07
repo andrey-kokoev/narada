@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0001",
   "carrier_id": "narada-proper.carrier.task-0001.package-implementation.v0",
   "increment": "site-task-lifecycle-admission-contract",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260509_234431_008_d5058248",
     "C:\\Users\\Andrey\\Narada\\kb\\proposals\\site-task-lifecycle-first-slice-handoff.md"

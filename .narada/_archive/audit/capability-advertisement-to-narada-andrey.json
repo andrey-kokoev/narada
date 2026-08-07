@@ -21,7 +21,7 @@
     "pnpm --dir packages/crew-startup-shortcut test",
     "pnpm --dir packages/crew-startup-shortcut typecheck",
     "pnpm --dir packages/crew-startup-shortcut build",
-    "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode verify"
+    "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root <src-root>\\narada --mode verify"
   ],
   "not_claimed": [
     "Windows .lnk creation",

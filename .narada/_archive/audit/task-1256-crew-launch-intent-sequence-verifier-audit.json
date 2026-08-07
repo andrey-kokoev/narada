@@ -18,7 +18,7 @@
       "evidence": "3 tests passed; verifier accepts a read-only sequence and refuses direct launch execution plus missing required MCP tools."
     },
     {
-      "command": "node tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs --site-root D:\\\\code\\\\narada",
+      "command": "node tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs --site-root <src-root>\\\\narada",
       "result": "passed",
       "evidence": "status=verified for .narada/crew/architect.launch-intent-sequence.json; launch_focus_bind_execution=blocked_without_separate_admitted_carrier."
     }

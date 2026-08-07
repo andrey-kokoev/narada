@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-11T23:40:36.2930576-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "builds_on": "narada-proper.task-0027",
     "source_evidence": [
       "C:\\Users\\Andrey\\Narada\\tools\\mcp-servers\\test\\test-mcp-server.mjs",

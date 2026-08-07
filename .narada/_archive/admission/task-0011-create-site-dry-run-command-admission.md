@@ -9,7 +9,7 @@ Source request:
 
 Authority basis:
 - Operator accepted task-0010 design as complete and requested the recommended first implementation slice.
-- Mutation root remains Narada proper repo authority at `D:\code\narada`.
+- Mutation root remains Narada proper repo authority at `<src-root>\narada`.
 - This task mutates only repo CLI source/tests and Narada proper `.narada` evidence.
 
 Admitted changed-file scope:

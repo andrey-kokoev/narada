@@ -3,9 +3,9 @@
   "carrier_id": "narada-proper.carrier.task-0001.package-implementation.v0",
   "task_surface_id": "narada-proper.task-0001",
   "authority_surface_id": "narada-proper.surface.package-implementation-task.v0",
-  "admitted_root": "D:\\code\\narada",
+  "admitted_root": "<src-root>\\narada",
   "authority_verification": {
-    "authority_clone_path": "D:\\code\\narada\\.ai\\authority-clone.json",
+    "authority_clone_path": "<src-root>\\narada\\.ai\\authority-clone.json",
     "site_id": "narada-proper",
     "canonical_authority_root": "/home/andrey/src/narada",
     "fallback_root_admission": ".narada/admission/decisions/task-0001-execution-carrier-admission.md",

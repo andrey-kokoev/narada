@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0003",
   "increment": "live-setup-execution",
   "decision": "admitted_partial_live_execution_increment",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260510_141620_083_98aa2fc4",
     ".narada/admission/decisions/task-0003-live-setup-execution-admission.md",
@@ -49,7 +49,7 @@
       "summary": "Readback returned 3 evidence refs and 1 admission event."
     },
     {
-      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root D:\\code\\narada --site-id narada-proper tools/list smoke",
+      "command": "node_modules\\.bin\\narada-mcp.cmd --site-root <src-root>\\narada --site-id narada-proper tools/list smoke",
       "status": "passed",
       "summary": "Generic Narada MCP transport responded and listed narada_site_context; site_task_lifecycle.plan_init was missing."
     },

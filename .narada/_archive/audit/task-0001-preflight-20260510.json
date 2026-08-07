@@ -6,8 +6,8 @@
   "preflight_status": "complete_waiting_for_go",
   "recorded_at": "2026-05-10",
   "inbound_osm": "osm_20260509_233333_816_c4f09608",
-  "admitted_root": "D:\\code\\narada",
-  "current_root_path": "D:\\code\\narada",
+  "admitted_root": "<src-root>\\narada",
+  "current_root_path": "<src-root>\\narada",
   "head": "603d4b3242cd6fe8e2ff64f745bad4b8074628c7",
   "package_exists": {
     "path": "packages/site-task-lifecycle",

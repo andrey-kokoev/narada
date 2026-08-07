@@ -5,7 +5,7 @@
   "title": "Windows PowerShell package portability for Site task lifecycle first slice",
   "source_ref": "OSM:osm_20260510_185330_862_8db62965",
   "clarification_ref": "OSM:osm_20260510_185641_831_2f524224",
-  "authority_root": "D:\\code\\narada",
+  "authority_root": "<src-root>\\narada",
   "checkpoint": ".narada/checkpoints/2026-05-10-task-0008-agent-thread-checkpoint.md",
   "decision_path": ".narada/admission/decisions/task-0008-windows-pwsh-package-portability-admission.md",
   "changed_files": [

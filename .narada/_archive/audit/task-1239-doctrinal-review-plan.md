@@ -8,8 +8,8 @@ This plan is an execution guide, not a review finding. Review conclusions belong
 
 ## Target Locus
 
-- Authority root: `D:\code\narada`
-- Site root: `D:\code\narada\.narada`
+- Authority root: `<src-root>\narada`
+- Site root: `<src-root>\narada\.narada`
 - Authority basis: `.narada/site.json` records Windows-native Narada proper authority for repo, package, task, inbox, admission, capability, and `.narada` Site substrate mutations through governed tasks and evidence.
 
 ## Doctrine Lenses

@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-11T23:27:18.6862362-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "source_envelope": "env_62d32705-0386-4820-8013-47a70cfbc8dd",
     "source_artifact": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\narada-proper-windows-machinery-capability-exchange-offer.md",
     "source_task": "narada-andrey task #611",

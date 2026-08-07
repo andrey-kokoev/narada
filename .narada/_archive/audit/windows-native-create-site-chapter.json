@@ -1,7 +1,7 @@
 {
   "chapter": "Windows Native Create Site",
   "created_at": "2026-05-12T19:40:00.000Z",
-  "authority_root": "D:\\code\\narada",
+  "authority_root": "<src-root>\\narada",
   "posture": "windows_native_greenfield_site_creation",
   "active_tasks": [1224, 1225, 1226, 1227],
   "source_task_map": [

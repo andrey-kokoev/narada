@@ -6,7 +6,7 @@ Admitted: bounded Operator Surface delivery from `narada-andrey.Kevin` to `narad
 
 ## Authority Basis
 
-- Target work substrate: Narada proper, Windows embodiment `D:\code\narada`.
+- Target work substrate: Narada proper, Windows embodiment `<src-root>\narada`.
 - Target runtime locus: `narada`.
 - Receiving surface: `narada.architect`, resolved locally to identity `architect`.
 - Sender evidence: `narada-andrey.Kevin` as external sender identity. This admission allows delivery to the receiving Operator Surface; it does not admit sender authority over Narada proper state.

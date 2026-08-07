@@ -22,7 +22,7 @@
       "result": "passed"
     },
     {
-      "command": "node tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs --site-root D:\\code\\narada",
+      "command": "node tools/operator-surface-carriers/crew-launch-intent-sequence-verifier.mjs --site-root <src-root>\\narada",
       "result": "passed"
     }
   ],

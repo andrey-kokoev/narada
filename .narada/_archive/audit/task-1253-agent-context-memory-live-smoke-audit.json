@@ -25,7 +25,7 @@
       "result": "passed"
     },
     {
-      "command": "node_modules\\\\.bin\\\\narada-mcp.cmd --site-root D:\\\\code\\\\narada --site-id narada-proper tools/list via JSON-RPC stdin",
+      "command": "node_modules\\\\.bin\\\\narada-mcp.cmd --site-root <src-root>\\\\narada --site-id narada-proper tools/list via JSON-RPC stdin",
       "result": "passed: tools/list includes agent_context_memory.plan_hydration, agent_context_memory.record_checkpoint, and agent_context_memory.read_checkpoint_summary"
     },
     {

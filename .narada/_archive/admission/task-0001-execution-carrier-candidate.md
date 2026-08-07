@@ -22,13 +22,13 @@ Preferred root:
 
 Fallback root only if separately and explicitly admitted:
 
-- `D:\code\narada`
+- `<src-root>\narada`
 
 Admitted root for this carrier and task:
 
-- `D:\code\narada`
+- `<src-root>\narada`
 
-This is an explicit operator-authorized fallback root admission for `narada-proper.carrier.task-0001.package-implementation.v0` and `narada-proper.task-0001` only. It does not broadly admit `D:\code\narada` for other Narada proper implementation writes.
+This is an explicit operator-authorized fallback root admission for `narada-proper.carrier.task-0001.package-implementation.v0` and `narada-proper.task-0001` only. It does not broadly admit `<src-root>\narada` for other Narada proper implementation writes.
 
 ## Mechanical Authority Verification
 
@@ -64,7 +64,7 @@ Allowed write paths must remain within:
 Denied:
 
 - raw WSL crossing as an authority shortcut;
-- treating `D:\code\narada` seed/intake admission as package implementation admission;
+- treating `<src-root>\narada` seed/intake admission as package implementation admission;
 - copying `C:\Users\Andrey\Narada\.ai\` or any narada-andrey runtime database;
 - copying narada-andrey task history, inbox history, rosters, checkpoints, operator-surface bindings, PC runtime data, or secrets;
 - writing Narada proper runtime `.ai` task/inbox/roster/checkpoint state as part of task-0001 implementation;
@@ -148,6 +148,6 @@ Handoff payload must include:
 
 Carrier admission in this session: `admitted`.
 
-Mutation mechanism: bounded Codex file edits and bounded verification commands from `D:\code\narada`, constrained by this carrier's changed-file scope and audit/closeout requirements.
+Mutation mechanism: bounded Codex file edits and bounded verification commands from `<src-root>\narada`, constrained by this carrier's changed-file scope and audit/closeout requirements.
 
 Execution has not started.

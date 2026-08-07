@@ -2,7 +2,7 @@
 
 Decision: admitted.
 
-Admitted root: `D:\code\narada`.
+Admitted root: `<src-root>\narada`.
 
 Authority basis:
 - `OSM:osm_20260510_191344_269_1cc2f2f2`.

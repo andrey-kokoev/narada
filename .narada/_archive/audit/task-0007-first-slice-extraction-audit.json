@@ -4,7 +4,7 @@
   "task_id": "narada-proper.task-0007",
   "title": "Stabilize proven first-slice Site task lifecycle extraction",
   "source_ref": "OSM:osm_20260510_183851_655_98580115",
-  "authority_root": "D:\\code\\narada",
+  "authority_root": "<src-root>\\narada",
   "decision_path": ".narada/admission/decisions/task-0007-first-slice-extraction-admission.md",
   "changed_files": [
     ".narada/tasks/task-0007-first-slice-extraction-stabilization.md",

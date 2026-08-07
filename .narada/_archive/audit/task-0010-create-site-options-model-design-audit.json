@@ -5,7 +5,7 @@
   "title": "Create-Site option model and UX design",
   "source_ref": "OSM:osm_20260510_192056_073_3aec7e63",
   "correction_ref": "OSM:osm_20260510_192413_542_c3b0ffa7",
-  "authority_root": "D:\\code\\narada",
+  "authority_root": "<src-root>\\narada",
   "decision_path": ".narada/admission/decisions/task-0010-create-site-options-model-design-admission.md",
   "artifact_paths": [
     "docs/product/create-site-options-model.md",

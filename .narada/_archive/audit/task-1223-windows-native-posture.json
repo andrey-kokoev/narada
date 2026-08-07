@@ -3,7 +3,7 @@
   "task_id": "20260512-1223-migrate-narada-proper-to-windows-native-setup-posture",
   "decision": "windows_native_setup_posture_admitted",
   "operator_instruction": "migrate fully to windows-native set up",
-  "active_root": "D:\\code\\narada",
+  "active_root": "<src-root>\\narada",
   "supersedes_for_current_work": [
     "task:1211",
     "ee-mcp.windows-powershell-from-wsl prerequisite"

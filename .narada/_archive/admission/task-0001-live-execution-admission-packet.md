@@ -49,7 +49,7 @@ Refusal conditions:
 - Target root is not admitted for writes.
 - Initializer options include source Site DB/history/state.
 - Local identities are non-neutral or identity-specific to narada-andrey.
-- Execution would mutate `D:\code\narada` outside the admitted receiving Site scope.
+- Execution would mutate `<src-root>\narada` outside the admitted receiving Site scope.
 
 Rollback posture:
 

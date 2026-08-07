@@ -23,7 +23,7 @@
       "result": "json valid"
     }
   ],
-  "terminal_claim": ".narada/site.json and .ai/authority-clone.json now record D:\\code\\narada as the operator-admitted Windows-native Narada proper authority root for governed Narada proper work.",
+  "terminal_claim": ".narada/site.json and .ai/authority-clone.json now record <src-root>\\narada as the operator-admitted Windows-native Narada proper authority root for governed Narada proper work.",
   "not_claimed": [
     "narada-andrey mutation authority over Narada proper",
     "source Site runtime state import",

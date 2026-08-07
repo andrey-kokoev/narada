@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-11T11:30:59.4908227-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "upstream_evidence": [
       "C:\\Users\\Andrey\\Narada\\kb\\operations\\greenfield-create-site-live-carriers.md",
       "C:\\Users\\Andrey\\Narada\\tools\\site-init\\site-live-carriers.mjs",

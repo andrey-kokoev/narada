@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-12T12:16:10.7978077-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "source_context": "operator identified root config.json as wrong Narada Site config locus",
     "external_source_state_imported": false
   },
@@ -36,8 +36,8 @@
     }
   ],
   "implementation": {
-    "default_operation_config_path": "D:\\code\\narada\\config.json",
-    "narada_site_config_path": "D:\\code\\narada\\.narada\\site.json",
+    "default_operation_config_path": "<src-root>\\narada\\config.json",
+    "narada_site_config_path": "<src-root>\\narada\\.narada\\site.json",
     "behavior": "When the default operation config is absent and .narada/site.json exists beside it, doctor reports Narada Site seed posture instead of failing on the legacy operation config path.",
     "legacy_operation_config_preserved": true,
     "source_state_imported": false
@@ -59,7 +59,7 @@
     {
       "command": "narada doctor --format json",
       "result": "passed",
-      "evidence": "status=healthy; config_path=D:\\code\\narada\\.narada\\site.json; pass=7 fail=0 warn=0"
+      "evidence": "status=healthy; config_path=<src-root>\\narada\\.narada\\site.json; pass=7 fail=0 warn=0"
     },
     {
       "command": "narada --version",

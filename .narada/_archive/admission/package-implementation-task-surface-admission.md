@@ -27,7 +27,7 @@ The surface is admitted under Narada proper `.narada` seed/intake authority. It 
 No implementation root is admitted by this surface admission:
 
 - `/home/andrey/src/narada`: canonical authority root, still not reached through an admitted carrier.
-- `D:\code\narada`: seed/intake evidence root only, not package implementation root.
+- `<src-root>\narada`: seed/intake evidence root only, not package implementation root.
 
 ## Changed-File Scope
 

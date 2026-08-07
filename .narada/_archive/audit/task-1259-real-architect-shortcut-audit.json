@@ -18,8 +18,8 @@
   "shortcut": {
     "path": ".crew/agent-shortcuts/Narada Architect (codex).lnk",
     "target_path": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
-    "arguments": "-NoExit -ExecutionPolicy Bypass -File \"D:\\code\\narada\\tools\\operator-surface-carriers\\windows-glue\\Start-NaradaArchitect.ps1\"",
-    "working_directory": "D:\\code\\narada"
+    "arguments": "-NoExit -ExecutionPolicy Bypass -File \"<src-root>\\narada\\tools\\operator-surface-carriers\\windows-glue\\Start-NaradaArchitect.ps1\"",
+    "working_directory": "<src-root>\\narada"
   },
   "verification": [
     {
@@ -43,7 +43,7 @@
       "evidence": ".narada/crew/launch-executions/20260512T235426-narada-architect-launch-evidence.json"
     }
   ],
-  "terminal_claim": "Narada proper has a repo-local clickable Windows shortcut that preflights the architect launch intent sequence and then starts Codex in D:\\code\\narada.",
+  "terminal_claim": "Narada proper has a repo-local clickable Windows shortcut that preflights the architect launch intent sequence and then starts Codex in <src-root>\\narada.",
   "not_claimed": [
     "Desktop shortcut placement",
     "Start Menu shortcut placement",

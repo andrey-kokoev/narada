@@ -3,7 +3,7 @@
   "task_id": "narada-proper.task-0001",
   "increment": "live-execution-admission-decision",
   "decision": "blocked",
-  "root": "D:\\code\\narada",
+  "root": "<src-root>\\narada",
   "source_evidence": [
     "OSM:osm_20260510_140315_296_726d772e",
     ".narada/admission/candidates/task-0001-live-execution-admission-packet.md"

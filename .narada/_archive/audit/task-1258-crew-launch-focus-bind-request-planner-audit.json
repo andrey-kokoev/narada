@@ -20,12 +20,12 @@
       "evidence": "4 tests passed: plan, authority-gated apply, direct side-effect refusal, and failed sequence verification refusal."
     },
     {
-      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode apply --mutation-authorized",
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root <src-root>\\narada --mode apply --mutation-authorized",
       "result": "passed",
       "evidence": "Created .narada/crew/launch-requests/narada-proper.crew.architect.startup-request.v0.launch-focus-bind-request.v0.json with status awaiting_admitted_carrier."
     },
     {
-      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root D:\\code\\narada --mode verify",
+      "command": "node tools/operator-surface-carriers/crew-launch-focus-bind-request-planner.mjs --site-root <src-root>\\narada --mode verify",
       "result": "passed",
       "evidence": "Verified the request artifact exists and preserves no-launch/no-runtime-mutation posture."
     }

@@ -2,7 +2,7 @@
 
 Decision: admitted.
 
-Admitted root: `D:\code\narada` as the explicit task-0007 Narada proper implementation root under the already admitted task-0001 carrier lineage.
+Admitted root: `<src-root>\narada` as the explicit task-0007 Narada proper implementation root under the already admitted task-0001 carrier lineage.
 
 Authority basis:
 - Operator request `OSM:osm_20260510_183851_655_98580115`.

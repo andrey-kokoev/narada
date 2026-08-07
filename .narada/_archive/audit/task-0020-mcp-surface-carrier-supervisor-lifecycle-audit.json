@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-11T11:02:09.1591112-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "capability_id": "narada-proper.capability.mcp-surface-carrier-supervisor-lifecycle.v0",
     "candidate_path": ".narada/admission/candidates/task-0020-mcp-surface-carrier-supervisor-lifecycle-candidate.md",
     "source_refs": [

@@ -2,7 +2,7 @@
 
 ## Scope
 
-Review target: `D:\code\narada\packages`.
+Review target: `<src-root>\narada\packages`.
 
 Source plan: `.narada/audit/task-1239-doctrinal-review-plan.md`.
 

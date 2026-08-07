@@ -4,7 +4,7 @@ Decision: Narada proper proceeds on a Windows-native setup path for current work
 
 Authority basis:
 - Operator instruction on 2026-05-12: migrate fully to a Windows-native setup.
-- Current admitted embodiment root is `D:\code\narada`.
+- Current admitted embodiment root is `<src-root>\narada`.
 - `.narada/site.json` records this Windows path as the active admitted path for the seed/intake/buildout work already performed here.
 
 Consequences:

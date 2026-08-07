@@ -8,7 +8,7 @@
     "User Site task #552",
     "CPY observation env_c3abf79a-0e51-48a1-a437-f82312567d33"
   ],
-  "authority_root": "D:\\code\\narada",
+  "authority_root": "<src-root>\\narada",
   "decision_path": ".narada/admission/decisions/task-0009-agent-context-memory-package-extraction-admission.md",
   "changed_files": [
     ".narada/tasks/task-0009-agent-context-memory-package-extraction.md",

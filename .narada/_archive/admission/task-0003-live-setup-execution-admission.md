@@ -12,7 +12,7 @@ Admit a bounded live execution increment under Narada proper authority.
 
 Admitted:
 
-- initializer execution under `D:\code\narada`;
+- initializer execution under `<src-root>\narada`;
 - concrete adapter activation using Windows `sqlite3.exe` outside `@narada-core/site-task-lifecycle`;
 - DB mutation through that adapter into `.ai/task-lifecycle.db`;
 - file-backed MCP capability evidence plus transport smoke test of the available `narada-mcp` facade.
@@ -38,7 +38,7 @@ Concrete adapter command surface inside the harness:
 
 MCP smoke command:
 
-`node_modules\.bin\narada-mcp.cmd --site-root D:\code\narada --site-id narada-proper`
+`node_modules\.bin\narada-mcp.cmd --site-root <src-root>\narada --site-id narada-proper`
 
 ## Evidence Required
 

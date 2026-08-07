@@ -6,8 +6,8 @@
   "decision": "admitted_and_applied_target_local_self_adoption",
   "target_locus": {
     "site_id": "narada-proper",
-    "site_root": "D:\\code\\narada\\.narada",
-    "repo_root": "D:\\code\\narada"
+    "site_root": "<src-root>\\narada\\.narada",
+    "repo_root": "<src-root>\\narada"
   },
   "authority_basis": "narada_proper_self_adoption_task_1228",
   "carrier_sequence": [

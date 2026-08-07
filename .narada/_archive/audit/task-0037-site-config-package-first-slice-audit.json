@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-12T10:00:24.9999898-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "source_handoff": "C:\\Users\\Andrey\\Narada\\kb\\proposals\\reusable-narada-site-machinery-extraction-map-20260507.md",
     "source_task": "#445",
     "external_evidence_only": true

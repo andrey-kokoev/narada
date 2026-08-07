@@ -20,20 +20,20 @@ Mechanical check result: not reachable from this carrier; the WSL command timed 
 
 Admitted fallback root:
 
-- `D:\code\narada`
+- `<src-root>\narada`
 
 Authority basis for fallback admission:
 
-- Operator explicitly authorized admitting the execution-carrier candidate and allowed `D:\code\narada` as fallback if it is the only reachable root.
-- `D:\code\narada\.ai\authority-clone.json` identifies this clone as `site_id: narada-proper` and records canonical `authority_root: /home/andrey/src/narada`.
+- Operator explicitly authorized admitting the execution-carrier candidate and allowed `<src-root>\narada` as fallback if it is the only reachable root.
+- `<src-root>\narada\.ai\authority-clone.json` identifies this clone as `site_id: narada-proper` and records canonical `authority_root: /home/andrey/src/narada`.
 - This admission is limited to `narada-proper.carrier.task-0001.package-implementation.v0` and `narada-proper.task-0001`.
 
 ## Mutation Mechanism
 
 Admitted mutation mechanism:
 
-- bounded Codex file edits from `D:\code\narada`;
-- bounded shell verification commands from `D:\code\narada`;
+- bounded Codex file edits from `<src-root>\narada`;
+- bounded shell verification commands from `<src-root>\narada`;
 - all writes constrained to the changed-file scope in the carrier candidate;
 - all results handed back to `.narada/surfaces/package-implementation-task-surface.md`, `.narada/admission/admission-ledger.jsonl`, and `.narada/tasks/task-0001-site-task-lifecycle-first-slice.md`.
 

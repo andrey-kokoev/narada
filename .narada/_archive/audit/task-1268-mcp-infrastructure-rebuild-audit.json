@@ -3,7 +3,7 @@
   "task_number": 1268,
   "source_directive": ".narada/inbox/external-handoffs/20260515-operator-directive-mcp-infrastructure-rebuild.md",
   "target_locus": "narada-proper",
-  "target_root": "D:/code/narada",
+  "target_root": "<src-root>/narada",
   "implemented_at": "2026-05-15T13:55:00.000Z",
   "new_agent_facing_surface": {
     "surface_id": "narada-proper.surface.agent-facing-mcp.v1",

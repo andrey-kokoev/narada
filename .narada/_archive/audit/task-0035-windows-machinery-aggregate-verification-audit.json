@@ -6,7 +6,7 @@
   "status": "completed",
   "recorded_at": "2026-05-11T23:48:14.1347047-05:00",
   "authority_basis": {
-    "authority_root": "D:\\code\\narada",
+    "authority_root": "<src-root>\\narada",
     "builds_on": [
       "narada-proper.task-0027",
       "narada-proper.task-0028",

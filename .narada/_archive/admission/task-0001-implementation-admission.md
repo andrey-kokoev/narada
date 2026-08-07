@@ -12,22 +12,22 @@ Recorded: 2026-05-10
 Neither root is admitted for task-0001 implementation yet.
 
 - Canonical authority root: `/home/andrey/src/narada`
-- Temporary Windows seed/intake root: `D:\code\narada`
+- Temporary Windows seed/intake root: `<src-root>\narada`
 
 `/home/andrey/src/narada` remains the canonical Narada proper mutation authority root declared in `.ai/authority-clone.json`, but it is not reachable from this carrier.
 
-`D:\code\narada` was admitted only for the minimal `.narada` seed/intake work. That admission does not extend to package implementation.
+`<src-root>\narada` was admitted only for the minimal `.narada` seed/intake work. That admission does not extend to package implementation.
 
 ## 2. Why No Root Is Authoritative Enough For Writes Yet
 
 `/home/andrey/src/narada` would be authoritative enough for writes if reachable because it is the declared Narada proper authority clone. Current carrier evidence shows it is not reachable: `wsl.exe -e bash -lc "cd /home/andrey/src/narada && pwd"` timed out during this decision check.
 
-`D:\code\narada` is mechanically writable in this carrier, but its authority admission is limited by `.narada/site.json` to temporary seed/intake evidence scope. No Narada proper authority record currently admits it for package source implementation.
+`<src-root>\narada` is mechanically writable in this carrier, but its authority admission is limited by `.narada/site.json` to temporary seed/intake evidence scope. No Narada proper authority record currently admits it for package source implementation.
 
 Therefore implementation writes are blocked until one of these occurs:
 
 - `/home/andrey/src/narada` becomes reachable from the active carrier; or
-- the operator explicitly admits `D:\code\narada` for task-0001 package implementation, not just seed/intake work.
+- the operator explicitly admits `<src-root>\narada` for task-0001 package implementation, not just seed/intake work.
 
 ## 3. Changed-File Scope If Later Admitted
 
@@ -75,4 +75,4 @@ Implementation closeout must include proof that:
 
 Implementation decision: `blocked`.
 
-Reason: canonical authority root is currently unreachable, and the temporary `D:\code\narada` admission is seed/intake only. No task-0001 package implementation writes are admitted yet.
+Reason: canonical authority root is currently unreachable, and the temporary `<src-root>\narada` admission is seed/intake only. No task-0001 package implementation writes are admitted yet.
