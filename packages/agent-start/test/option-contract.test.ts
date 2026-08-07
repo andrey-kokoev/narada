@@ -218,9 +218,9 @@ test('agent-start restamps launch ownership for the runtime child process', () =
     carrierSessionId: 'carrier-test',
     targetSiteId: 'sonar',
     operatorSurfaceKind: 'agent-cli',
-    environmentSiteRoot: 'D:/code/narada.sonar',
-    workspaceRoot: 'D:/code/narada.sonar',
-    dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    environmentSiteRoot: 'C:/workspace/narada.sonar',
+    workspaceRoot: 'C:/workspace/narada.sonar',
+    dbPath: 'C:/workspace/narada.sonar/.ai/state/agent-context.sqlite',
     siteConfig: { mcp_scope: 'none' },
     runtimeProcessCreatorPid: 222,
     runtimeProcessRole: 'runtime_server',
@@ -742,9 +742,9 @@ test('runtime spawn environment carries site-qualified identity binding lossless
     targetSiteId: 'sonar',
     agentIdentityRef,
     operatorSurfaceKind: 'agent-web-ui',
-    environmentSiteRoot: 'D:/code/narada.sonar',
-    workspaceRoot: 'D:/code/narada.sonar',
-    dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    environmentSiteRoot: 'C:/workspace/narada.sonar',
+    workspaceRoot: 'C:/workspace/narada.sonar',
+    dbPath: 'C:/workspace/narada.sonar/.ai/state/agent-context.sqlite',
     siteConfig: { schema: 'narada.nars.site_config.v1', site_id: 'sonar' },
   });
 
@@ -752,7 +752,7 @@ test('runtime spawn environment carries site-qualified identity binding lossless
   assert.equal(env.NARADA_AGENT_ROLE, 'resident');
   assert.equal(env.NARADA_SITE_ID, 'sonar');
   assert.equal(env.NARADA_OPERATOR_SURFACE_KIND, 'agent-web-ui');
-  assert.equal(env.NARADA_SITE_ROOT, 'D:/code/narada.sonar');
+  assert.equal(env.NARADA_SITE_ROOT, 'C:/workspace/narada.sonar');
   assert.equal(env.NARADA_INTELLIGENCE_PROVIDER, undefined);
   assert.equal(env.NARADA_AI_MODEL, undefined);
   assert.equal(env.KIMI_CODE_MODEL, undefined);
@@ -779,9 +779,9 @@ test('runtime spawn environment carries the admitted session-authority lease', (
     carrierSessionId: 'carrier_test',
     targetSiteId: 'sonar',
     operatorSurfaceKind: 'agent-web-ui',
-    environmentSiteRoot: 'D:/code/narada.sonar',
-    workspaceRoot: 'D:/code/narada.sonar',
-    dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    environmentSiteRoot: 'C:/workspace/narada.sonar',
+    workspaceRoot: 'C:/workspace/narada.sonar',
+    dbPath: 'C:/workspace/narada.sonar/.ai/state/agent-context.sqlite',
     siteConfig: { schema: 'narada.nars.site_config.v1', site_id: 'sonar' },
   });
 
@@ -1122,9 +1122,9 @@ test('NARS process projection carries launch context and rejects inherited conte
     carrierSessionId: 'carrier_context',
     targetSiteId: 'sonar',
     operatorSurfaceKind: 'agent-cli',
-    environmentSiteRoot: 'D:/code/narada.sonar',
-    workspaceRoot: 'D:/code/narada.sonar',
-    dbPath: 'D:/code/narada.sonar/.ai/state/agent-context.sqlite',
+    environmentSiteRoot: 'C:/workspace/narada.sonar',
+    workspaceRoot: 'C:/workspace/narada.sonar',
+    dbPath: 'C:/workspace/narada.sonar/.ai/state/agent-context.sqlite',
     siteConfig: { schema: 'narada.nars.site_config.v1', site_id: 'sonar' },
     intelligenceEnvironment,
   });
