@@ -14,6 +14,8 @@ param(
   [string[]]$Agent,
   [string[]]$OperatorSurface,
   [string]$Runtime,
+  [ValidateSet('node', 'bun', 'rust')]
+  [string]$RuntimeEngine,
   [ValidateSet('all', 'host', 'user-site', 'local-site', 'none')]
   [string]$McpScope = 'all',
   [string]$RegistryPath,
@@ -49,6 +51,7 @@ foreach ($value in @($ConfigPath)) { if ($value) { $args += @('--config-path', $
 if ($RegistryPath) { $args += @('--registry-path', $RegistryPath) }
 if ($Format) { $args += @('--format', $Format) }
 if ($Runtime) { $args += @('--runtime', $Runtime) }
+if ($RuntimeEngine) { $args += @('--runtime-engine', $RuntimeEngine) }
 if ($McpScope) { $args += @('--mcp-scope', $McpScope) }
 if ($ResultPath) { $args += @('--result-path', $ResultPath) }
 foreach ($value in @($Site)) { if ($value) { $args += @('--site', $value) } }

@@ -20,6 +20,9 @@ param(
 
   [string]$Runtime,
 
+  [ValidateSet('node', 'bun', 'rust')]
+  [string]$RuntimeEngine,
+
   [ValidateSet('all', 'host', 'user-site', 'local-site', 'none')]
   [string]$McpScope = 'all',
 
@@ -377,6 +380,11 @@ function Invoke-NaradaWorkspaceLaunch {
   if ($Runtime) {
     $cliArgs.Add('--runtime')
     $cliArgs.Add($Runtime)
+  }
+
+  if ($RuntimeEngine) {
+    $cliArgs.Add('--runtime-engine')
+    $cliArgs.Add($RuntimeEngine)
   }
 
   if ($McpScope) {

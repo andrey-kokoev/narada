@@ -43,6 +43,7 @@ describe('workspace launch module boundaries', () => {
       const source = readFileSync(resolve(assetsRoot, entry), 'utf8');
       expect(source, entry).not.toContain('IntelligenceProvider');
       expect(source, entry).not.toContain('--intelligence-provider');
+      expect(source, entry).toContain('--runtime-engine');
     }
   });
 

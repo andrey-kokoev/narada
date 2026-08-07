@@ -93,6 +93,8 @@ engine choice must not change session authority, lifecycle, health/events, MCP,
 or provider-selection semantics. The canonical `launcher workspace-plan`,
 `launcher workspace-launch`, and `operator-surface runtime start` commands
 carry this choice; registry records may persist it as `RuntimeEngine`.
+The Windows workspace launcher assets expose the same choice as
+`-RuntimeEngine`.
 
 Load-bearing boundaries:
 
