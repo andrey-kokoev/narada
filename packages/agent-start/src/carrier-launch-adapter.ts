@@ -548,6 +548,7 @@ function runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcess
 export function buildNarsLaunchPacket(carrierName: any, {
   processExecPath,
   runtimeEngineKind = 'node',
+  runtimeProfileKind = null,
   runtimeEngineCommand = null,
   carrierSessionRegistration,
   targetSiteId,
@@ -579,6 +580,7 @@ export function buildNarsLaunchPacket(carrierName: any, {
       runtime_kind: matrixRow.runtime_host_kind,
     },
     runtime_engine_kind: runtimeEngineKind,
+     runtime_profile_kind: runtimeProfileKind,
     command: runtimeEngineCommand ?? processExecPath,
     session_dir: dirname(siteCarrierControlPath(sessionId)),
     control_path: siteCarrierControlPath(sessionId),

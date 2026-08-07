@@ -53,6 +53,7 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -713,6 +714,7 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -1373,6 +1375,7 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -2033,6 +2036,7 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -2693,6 +2697,7 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -3353,6 +3358,7 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -4029,6 +4035,7 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -4689,6 +4696,7 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -5349,6 +5357,7 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -6009,6 +6018,7 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
     runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_profile_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;

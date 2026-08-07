@@ -15,6 +15,7 @@
  *
  * Usage:
  *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
+ *   runtime profile selection: --runtime-profile <native|bun|node-compat> (or NARADA_RUNTIME_PROFILE); --runtime-engine remains a compatibility override.
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -31,6 +32,7 @@ import {
   resolveOperatorSurfaceRuntimeSelection,
 } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
 import { resolveRuntimeEngineSelection } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
+import { resolveRuntimeProfileSelection } from '@narada-core/operator-surface-runtime-contract/runtime-profile-selection';
 import {
   carrierControlPath,
   carrierSessionPath,
@@ -144,6 +146,8 @@ const mcpFabricModulePath: any = existsSync(localMcpFabricModulePath)
 const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex }: any = await import(pathToFileURL(mcpFabricModulePath).href);
 const runtimeInput: any = args.runtime ?? null;
 const runtimeEngineInput: any = args.runtime_engine ?? null;
+const runtimeProfileInput: any = args.runtime_profile ?? null;
+const runtimeProfileEnvironment: any = process.env.NARADA_RUNTIME_PROFILE ?? null;
 const runtimeEngineEnvironment: any = process.env.NARADA_RUNTIME_ENGINE ?? null;
 const jsonOutput: any = !!args.json;
 const jsonOutputFile: any = args.json_output_file ? resolve(String(args.json_output_file)) : null;
@@ -284,6 +288,16 @@ async function failRuntimeEngineRefusal(refusal: any) : Promise<any>{
   }
   process.exit(1);
 }
+async function failRuntimeProfileRefusal(refusal: any) : Promise<any>{
+  writeFailureArtifact(refusal);
+  if (jsonOutput) {
+    await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
+  } else {
+    console.error(`[FAIL] ${refusal.reason_code}: ${refusal.candidate_runtime_profile ?? ''}`);
+    if (refusal.reason) console.error(refusal.reason);
+  }
+  process.exit(1);
+}
 
 async function failToolFabricRefusal(error: any) : Promise<any>{
   const reasonCode: any = error instanceof McpFabricError ? error.code : 'mcp_fabric_unavailable';
@@ -390,9 +404,20 @@ if (runtimeResolution.status === 'refused') {
 }
 const runtime: any = runtimeResolution.runtime_substrate_kind;
 const carrier: any = runtimeResolution.carrier_kind;
+const runtimeProfileResolution: any = resolveRuntimeProfileSelection({
+  value: runtimeProfileInput,
+  environmentValue: runtimeProfileEnvironment,
+  runtimeEngineValue: runtimeEngineInput,
+  runtimeEngineEnvironmentValue: runtimeEngineEnvironment,
+  applicable: runtime === 'narada-agent-runtime-server',
+});
+if (runtimeProfileResolution.status === 'refused') {
+  await failRuntimeProfileRefusal(runtimeProfileResolution);
+}
 const runtimeEngineResolution: any = resolveRuntimeEngineSelection({
   value: runtimeEngineInput,
   environmentValue: runtimeEngineEnvironment,
+  defaultEngine: runtimeProfileResolution.runtime_engine_kind,
   applicable: runtime === 'narada-agent-runtime-server',
 });
 if (runtimeEngineResolution.status === 'refused') {
@@ -415,6 +440,7 @@ if (Object.hasOwn(args, 'intelligence_provider')) {
 
 if (!identity) {
   console.error('Usage: node start-agent.ts <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--resume-session <session-id>] [--carrier-session-id <session-id>] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
+  console.error('Runtime profile: --runtime-profile <native|bun|node-compat> (or NARADA_RUNTIME_PROFILE); --runtime-engine remains a compatibility override.');
   process.exit(1);
 }
 
@@ -712,6 +738,7 @@ try {
     carrier,
     runtime,
     runtimeEngineKind: runtimeEngine,
+    runtimeProfileKind: runtimeProfileResolution.runtime_profile_kind,
     startResult,
     sessionId: plannedCarrierSessionId,
     dryRun: carrierSessionPlanOnly,
@@ -859,6 +886,7 @@ function materializeCarrierSessionRecord({ identity, carrier, runtime, startResu
     identity,
     carrier,
     runtime,
+    runtimeProfileKind: runtimeProfileResolution.runtime_profile_kind,
     runtimeEngineKind: runtimeEngine,
     startResult,
     sessionId,
@@ -1536,6 +1564,7 @@ const spawnEnvironmentDelta: any = buildCarrierSpawnEnvironmentDelta({
   runtimeProcessRole: 'runtime_server',
 });
 const narsLaunch: any = buildNarsLaunchPacket(carrier, {
+  runtimeProfileKind: runtimeProfileResolution.runtime_profile_kind,
   processExecPath: process.execPath,
   runtimeEngineKind: runtimeEngine,
   runtimeEngineCommand: runtimeEngineCommand(),
@@ -1566,6 +1595,8 @@ const output: any = {
   runtime_engine_kind: runtimeEngine,
   runtime_engine_availability: runtimeEngineAvailabilityStatus,
   runtime_engine_selection: runtimeEngineResolution,
+  runtime_profile_kind: runtimeProfileResolution.runtime_profile_kind,
+  runtime_profile_selection: runtimeProfileResolution,
   intelligence_kernel_kind: intelligenceKernelKind,
   target_site_id: targetSiteId,
   target_site_root: targetSiteRoot,
@@ -1580,6 +1611,7 @@ const output: any = {
   runtime_resolution: {
     ...runtimeResolution,
     intelligence_kernel_kind: intelligenceKernelKind,
+    runtime_profile_kind: runtimeProfileResolution.runtime_profile_kind,
     runtime_engine_kind: runtimeEngine,
   },
   tool_fabric_adapter_contract_schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,

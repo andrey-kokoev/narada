@@ -27,6 +27,8 @@ type LauncherContractInput = AgentStartResultV0 & {
   runtime_host_kind?: unknown;
   runtime_substrate_kind?: unknown;
   runtime_engine_kind?: unknown;
+  runtime_profile_kind?: unknown;
+  runtime_profile_selection?: OptionalRecord;
   operator_surface_kind?: unknown;
   launch_selection_kind?: unknown;
   carrier_kind?: unknown;
@@ -205,6 +207,8 @@ function buildLauncherContracts(result: AgentStartResultV0) : any{
       carrier_implementation_kind: carrierImplementationKind,
       runtime_substrate_kind: input.runtime_substrate_kind ?? null,
       runtime_engine_kind: input.runtime_engine_kind ?? null,
+       runtime_profile_kind: input.runtime_profile_kind ?? null,
+       runtime_profile_selection: input.runtime_profile_selection ?? null,
       runtime_contract_schema: input.runtime_contract_schema ?? null,
       selection_source: input.runtime_resolution ?? null,
     },
@@ -246,6 +250,8 @@ function buildLauncherContracts(result: AgentStartResultV0) : any{
       runtime: input.runtime ?? null,
       runtime_substrate_kind: input.runtime_substrate_kind ?? null,
       runtime_engine_kind: input.runtime_engine_kind ?? null,
+       runtime_profile_kind: input.runtime_profile_kind ?? null,
+       runtime_profile_selection: input.runtime_profile_selection ?? null,
       runtime_authority_selection: input.runtime_authority_selection ?? null,
       intelligence_selection_authority: input.intelligence_selection_authority ?? null,
       mcp_scope: input.mcp_scope?.requested ?? null,

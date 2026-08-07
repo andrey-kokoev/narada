@@ -380,6 +380,13 @@ test('agent-start output bundles first-class launcher contracts without launch-t
   expectLauncherContracts(output);
 });
 
+test('runtime-engine remains a compatibility selector for the native profile layer', () => {
+  const output: any = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--runtime-engine', 'bun', '--mcp-scope', 'none']);
+  assert.equal(output.runtime_engine_kind, 'bun');
+  assert.equal(output.runtime_profile_kind, 'bun');
+  assert.equal(output.runtime_profile_selection.source_field, 'runtime_engine');
+});
+
 test('db option materializes the requested agent-context db path', () => {
   const dbPath: any = join(naradaProperRoot, '.ai', 'state', 'option-contract-agent-context.sqlite');
   const output: any = runOk(['--carrier', 'agent-cli', '--runtime', 'narada-agent-runtime-server', '--db', dbPath]);

@@ -125,9 +125,21 @@ export function resolveRuntimeProfileSelection({
   const environmentEngine = typeof runtimeEngineEnvironmentValue === 'string' && runtimeEngineEnvironmentValue.trim()
     ? String(runtimeEngineEnvironmentValue).trim().toLowerCase()
     : null;
+  const suppliedEngine = explicitEngine ?? environmentEngine;
   const compatibilityProfile = runtimeProfileForEngine(explicitEngine ?? environmentEngine);
   const candidate = explicitProfile ?? environmentProfile ?? compatibilityProfile ?? normalizeRuntimeProfile(defaultProfile);
 
+  if (suppliedEngine && !admittedRuntimeEngines.includes(suppliedEngine)) {
+    return {
+      schema: 'narada.runtime_engine.v1',
+      status: 'refused',
+      reason_code: 'runtime_engine_unsupported',
+      candidate_runtime_engine: suppliedEngine,
+      admitted_runtime_engines: [...admittedRuntimeEngines],
+      reason: 'runtime_engine is not admitted by narada.runtime_engine.v1',
+      required_next_step: 'Use --runtime-profile native, --runtime-profile bun, or --runtime-profile node-compat.',
+    };
+  }
   if (!applicable && (explicitProfile || environmentProfile || explicitEngine || environmentEngine)) {
     return runtimeProfileRefusal(candidate, {
       reasonCode: 'runtime_profile_surface_unsupported',
@@ -141,7 +153,6 @@ export function resolveRuntimeProfileSelection({
 
   const definition = runtimeProfileDefinition(candidate) as JsonRecord;
   const selectedEngine = definition.runtime_engine_kind;
-  const suppliedEngine = explicitEngine ?? environmentEngine;
   if (suppliedEngine && suppliedEngine !== selectedEngine) {
     return runtimeProfileRefusal(candidate, {
       reasonCode: 'runtime_profile_engine_conflict',

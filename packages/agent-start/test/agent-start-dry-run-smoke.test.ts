@@ -54,6 +54,8 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
   assert.equal(launch.carrier_kind, 'agent-cli');
   assert.equal(launch.runtime_substrate_kind, 'narada-agent-runtime-server');
   assert.equal(launch.runtime_engine_kind, 'rust');
+  assert.equal(launch.runtime_profile_kind, 'native');
+  assert.equal(launch.runtime_profile_selection.runtime_engine_kind, 'rust');
   assert.equal(launch.runtime_engine_selection.runtime_engine_kind, 'rust');
   assert.equal(launch.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(launch.required_environment.NARADA_AGENT_ID, 'narada.architect');
@@ -77,7 +79,7 @@ test('agent-start dry-run selects the Bun runtime engine without changing the NA
     'agent-cli',
     '--runtime',
     'narada-agent-runtime-server',
-    '--runtime-engine',
+    '--runtime-profile',
     'bun',
     '--dry-run',
     '--json',
@@ -97,7 +99,9 @@ test('agent-start dry-run selects the Bun runtime engine without changing the NA
   assert.equal(launch.status, 'dry_run');
   assert.equal(launch.runtime_substrate_kind, 'narada-agent-runtime-server');
   assert.equal(launch.runtime_engine_kind, 'bun');
-  assert.equal(launch.runtime_engine_selection.source_field, 'runtime_engine');
+  assert.equal(launch.runtime_engine_selection.source_field, 'default');
   assert.equal(launch.nars_launch.runtime_engine_kind, 'bun');
   assert.equal(launch.carrier_session.record.runtime_engine_kind, 'bun');
+  assert.equal(launch.runtime_profile_kind, 'bun');
+  assert.equal(launch.runtime_profile_selection.source_field, 'runtime_profile');
 });

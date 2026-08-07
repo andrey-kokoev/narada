@@ -87,6 +87,8 @@ test('accepts canonical materialized results and preserves additive fields', () 
     status: 'materialized',
     identity: 'sonar.resident',
     runtime: 'narada-agent-runtime-server',
+    runtime_profile_kind: 'native',
+    runtime_profile_selection: { runtime_profile_kind: 'native', runtime_engine_kind: 'rust' },
     agent_start_event: 'evt_contract',
     handoff: { session_ref: { id: 'carrier_contract', kind: 'nars' } },
     nars_launch: { nars_session_id: 'carrier_contract' },
@@ -107,6 +109,8 @@ test('accepts canonical materialized results and preserves additive fields', () 
   const contracts: any = buildLauncherContractsFromAgentStartResult(result);
   assert.deepEqual(contracts.launch_result_artifact.session_ref, { id: 'carrier_contract', kind: 'nars' });
   assert.equal(contracts.launch_result_artifact.nars_session_id, 'carrier_contract');
+  assert.equal(contracts.authority_runtime_host_selection.runtime_profile_kind, 'native');
+  assert.equal(contracts.authority_runtime_host_selection.runtime_profile_selection.runtime_engine_kind, 'rust');
 });
 
 test('publishes only validated launch results through an atomic final path', () => {

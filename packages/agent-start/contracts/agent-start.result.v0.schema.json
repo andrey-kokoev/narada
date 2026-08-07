@@ -29,6 +29,17 @@
             }
           ]
         },
+        "runtime_profile_kind": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "runtime_engine_availability": {
           "anyOf": [
             {
@@ -746,6 +757,17 @@
           "minLength": 1
         },
         "runtime_engine_kind": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime_profile_kind": {
           "anyOf": [
             {
               "type": "string",
