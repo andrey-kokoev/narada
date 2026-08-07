@@ -2491,6 +2491,19 @@ fn normalize_input_value(input: &Value) -> Result<Value, CoreError> {
         .and_then(Value::as_object)
         .cloned()
         .unwrap_or_default();
+    // Match the carrier queue's metadata precedence: params metadata is the
+    // base, while top-level metadata wins.  Observer metadata also determines
+    // the source when a caller omitted an explicit source.
+    let mut metadata = params
+        .get("metadata")
+        .and_then(Value::as_object)
+        .cloned()
+        .unwrap_or_default();
+    if let Some(input_metadata) = normalized.get("metadata").and_then(Value::as_object) {
+        for (key, value) in input_metadata {
+            metadata.insert(key.clone(), value.clone());
+        }
+    }
     let content = normalized
         .get("content")
         .or_else(|| params.get("content"))
@@ -2513,7 +2526,12 @@ fn normalize_input_value(input: &Value) -> Result<Value, CoreError> {
                 .get("delivery_mode")
                 .or_else(|| params.get("delivery_mode"))
                 .and_then(Value::as_str);
-            if source_kind == Some("system") {
+            let observer_metadata = metadata
+                .get("observer")
+                .is_some_and(|value| !value.is_null() && value != &Value::Bool(false));
+            if observer_metadata {
+                Some("observer".to_string())
+            } else if source_kind == Some("system") {
                 Some("system_directive".to_string())
             } else if delivery_mode == Some("admit_after_active_turn") {
                 Some("operator_steering".to_string())
@@ -2590,6 +2608,16 @@ fn normalize_input_value(input: &Value) -> Result<Value, CoreError> {
         .or_else(|| params.get("request_id"))
         .cloned()
         .unwrap_or(Value::Null);
+    let authority_ref = normalized
+        .get("authority_ref")
+        .or_else(|| params.get("authority_ref"))
+        .cloned()
+        .unwrap_or(Value::Null);
+    let directive_id = normalized
+        .get("directive_id")
+        .or_else(|| params.get("directive_id"))
+        .cloned()
+        .unwrap_or(Value::Null);
     let idempotency_key = normalized
         .get("idempotency_key")
         .or_else(|| params.get("idempotency_key"))
@@ -2621,27 +2649,35 @@ fn normalize_input_value(input: &Value) -> Result<Value, CoreError> {
     );
     normalized.insert("created_at".to_string(), json!(received_at));
     normalized.insert("received_at".to_string(), json!(received_at));
-    normalized.insert(
-        "authority_ref".to_string(),
-        normalized
-            .get("authority_ref")
-            .or_else(|| params.get("authority_ref"))
-            .cloned()
-            .unwrap_or(Value::Null),
-    );
-    normalized.insert(
-        "directive_id".to_string(),
-        normalized
-            .get("directive_id")
-            .or_else(|| params.get("directive_id"))
-            .cloned()
-            .unwrap_or(Value::Null),
-    );
+    normalized.insert("authority_ref".to_string(), authority_ref);
+    normalized.insert("directive_id".to_string(), directive_id.clone());
     normalized.insert("request_id".to_string(), request_id);
     normalized.insert(
         "idempotency_key".to_string(),
         idempotency_key.map(Value::String).unwrap_or(Value::Null),
     );
+    metadata.insert("input_source".to_string(), json!(source));
+    if source_kind == "system" && !directive_id.is_null() {
+        metadata.insert(
+            "directive_provenance".to_string(),
+            json!({ "kind": "system_directive" }),
+        );
+    } else if source == "operator_directive" {
+        metadata.insert(
+            "directive_provenance".to_string(),
+            json!({ "kind": "explicit_operator_directive_surface" }),
+        );
+    } else if source == "observer" && !metadata.contains_key("observer") {
+        metadata.insert(
+            "observer".to_string(),
+            json!({
+                "role": "observer",
+                "rule_id": normalized.get("rule_id").cloned().unwrap_or_else(|| json!("manual-observer-interjection")),
+                "visibility": normalized.get("visibility").cloned().unwrap_or_else(|| json!("operator_visible")),
+            }),
+        );
+    }
+    normalized.insert("metadata".to_string(), Value::Object(metadata));
     normalized.insert("admission_state".to_string(), json!("accepted"));
     Ok(Value::Object(normalized))
 }
@@ -3657,6 +3693,22 @@ mod tests {
             .unwrap()
             .to_string();
         assert!(core.release_held_input(&input_id).unwrap());
+        core.drain_once("echo").unwrap();
+        assert_eq!(core.pending_count(), 0);
+
+        core.enqueue(json!({
+            "content": "observer input",
+            "params": { "metadata": { "observer": { "rule_id": "watch" } } }
+        }))
+        .unwrap();
+        let observer = core.queue_items().last().cloned().unwrap();
+        assert_eq!(observer["source"], "observer");
+        assert_eq!(observer["source_kind"], "agent");
+        assert_eq!(observer["delivery_mode"], "admit_after_active_turn");
+        assert_eq!(
+            core.queue_snapshot()["pending"][0]["metadata"]["input_source"],
+            "observer"
+        );
         core.drain_once("echo").unwrap();
         assert_eq!(core.pending_count(), 0);
 
