@@ -291,3 +291,109 @@ test('Rust supervisor preserves the TypeScript supervisor turn/admission contrac
     await rm(rustRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
+
+test('Rust and TypeScript preserve the terminal outcome matrix', {
+  skip: !existsSync(nativeBinary),
+  timeout: 60_000,
+}, async () => {
+  const modes = ['echo', 'refused', 'blocked', 'failed', 'interrupted'] as const;
+  const summarize = (events: Record<string, any>[], inputId: string) => ({
+    turn: events
+      .filter((event) => event.event === 'turn_lifecycle_transition' && event.turn_id === inputId)
+      .map((event) => event.turn_state),
+    terminal: events
+      .filter((event) => event.event === 'input_event_completed' && (event.input_event_id ?? event.event_id) === inputId)
+      .map((event) => event.terminal_state),
+    pending: events
+      .filter((event) => event.event === 'session_recovery')
+      .at(-1)?.operator_input_queue?.pending_count ?? null,
+  });
+
+  for (const mode of modes) {
+    const inputId = `input_matrix_${mode}`;
+    const tsRoot = await mkdtemp(join(tmpdir(), `narada-outcome-ts-${mode}-`));
+    const rustRoot = await mkdtemp(join(tmpdir(), `narada-outcome-rust-${mode}-`));
+    try {
+      const tsEventsPath = join(tsRoot, 'events.jsonl');
+      const ts = createNarsSessionSupervisor({
+        sessionCoreOptions: {
+          sessionId: `matrix-ts-${mode}`,
+          agentId: 'matrix-agent',
+          sessionPath: join(tsRoot, 'session.json'),
+          eventsPath: tsEventsPath,
+          siteRoot: tsRoot,
+        },
+        carrier: {
+          runTurn: async (context, eventSink) => {
+            if (mode === 'echo') {
+              await eventSink({ kind: 'assistant_message', turn_id: context.turnId, content: 'matrix' });
+              return { content: 'matrix' };
+            }
+            return { terminal_state: mode, error: `matrix_${mode}` };
+          },
+        },
+      });
+      ts.start();
+      await ts.submit({ event_id: inputId, content: 'matrix' });
+      await ts.close();
+      const tsEvents = readFileSync(tsEventsPath, 'utf8')
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, any>);
+      const tsSummary = {
+        ...summarize(tsEvents, inputId),
+        pending: ts.recovery().operator_input_queue.pending_count,
+      };
+
+      const child = spawn(nativeBinary, [
+        '--raw-jsonl', '--no-health', '--no-events', '--identity', 'matrix-agent', '--session', `matrix-rust-${mode}`,
+      ], {
+        cwd: packageRoot,
+        env: {
+          ...process.env,
+          NARADA_AGENT_ID: 'matrix-agent',
+          NARADA_SITE_ROOT: rustRoot,
+          NARADA_RUNTIME_ENGINE: 'rust',
+          NARADA_NATIVE_PROVIDER_MODE: mode,
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+      let stdout = '';
+      let stderr = '';
+      child.stdout.setEncoding('utf8');
+      child.stderr.setEncoding('utf8');
+      child.stdout.on('data', (chunk) => { stdout += String(chunk); });
+      child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+      child.stdin.end([
+        { id: inputId, method: 'session.submit', params: { content: 'matrix' } },
+        { id: `recovery-${mode}`, method: 'session.recovery', params: {} },
+        { id: `close-${mode}`, method: 'session.close', params: {} },
+      ].map((request) => JSON.stringify(request)).join('\n') + '\n');
+      const exitCode = await new Promise<number>((resolve, reject) => {
+        const timer = setTimeout(() => { child.kill(); reject(new Error(`outcome_matrix_timeout:${mode}:${stderr.slice(-400)}`)); }, 20_000);
+        child.once('error', reject);
+        child.once('close', (code) => { clearTimeout(timer); resolve(code ?? 1); });
+      });
+      assert.equal(exitCode, 0, `${mode}: ${stderr}`);
+      const rustEvents = stdout.trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line) as Record<string, any>);
+      const rustEventsPath = join(rustRoot, '.narada', 'crew', 'nars-sessions', `matrix-rust-${mode}`, 'events.jsonl');
+      const rustJournal = readFileSync(rustEventsPath, 'utf8')
+        .trim()
+        .split(/\r?\n/)
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as Record<string, any>);
+      const rustSummary = {
+        ...summarize(rustJournal, inputId),
+        pending: summarize(rustEvents, inputId).pending,
+      };
+      assert.deepEqual(rustSummary.turn, tsSummary.turn, mode);
+      assert.deepEqual(rustSummary.terminal, tsSummary.terminal, mode);
+      assert.equal(rustSummary.pending, tsSummary.pending, mode);
+    } finally {
+      await rm(tsRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+      await rm(rustRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    }
+  }
+});
