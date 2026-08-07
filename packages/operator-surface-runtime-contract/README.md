@@ -15,6 +15,8 @@ Standalone PowerShell projections must read `runtime-substrate-kinds.json` throu
 
 Runtime adapter entrypoints have the same fail-closed boundary: every launch selection must resolve to a canonical matrix row before adapter metadata, executable commands, or spawn arguments are produced. An unknown selection is refused as `carrier_launch_matrix_row_missing:<selection>`; that diagnostic remains versioned compatibility evidence and must never receive an ambient or substrate-native fallback contract.
 
+The process substrate is a separate dimension from the carrier/runtime-host selection. `runtime-engines.json` admits `node`, `bun`, and `rust` under `narada.runtime_engine.v1`; launchers should persist it as `runtime_engine_kind` and must not overload `runtime_substrate_kind` with these values.
+
 `defaultRuntimeForOperatorSurface()` is matrix-backed as well: it derives the row's
 runtime substrate and refuses unknown launch selections instead of returning
 an unadmitted runtime name.

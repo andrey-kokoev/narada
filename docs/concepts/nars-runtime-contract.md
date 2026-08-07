@@ -76,6 +76,22 @@ operator / automation caller
   -> governed MCP/tool surfaces
 ```
 
+### Process runtime engine
+
+The carrier/runtime-host kind and the process engine are separate contract
+dimensions. `runtime_substrate_kind` continues to identify the NARS host or
+carrier (`narada-agent-runtime-server`, `codex`, and so on). A NARS launch may
+select `runtime_engine_kind` as `node`, `bun`, or `rust` through
+`--runtime-engine`; the selected value is persisted in launch evidence and the
+NARS `session_started`/session-index projections.
+
+`node` remains the default direct engine. `bun` runs the same NARS JavaScript
+entrypoint through Bun. `rust` currently owns the native process boundary and
+delegates unported intelligence/provider/runtime components to the Node
+entrypoint through the same arguments, environment, and stdio contract. The
+engine choice must not change session authority, lifecycle, health/events, MCP,
+or provider-selection semantics.
+
 Load-bearing boundaries:
 
 | Layer | Owns | Does not own |
@@ -513,7 +529,7 @@ The former `agent-cli` runtime-server adapter has been removed. Reintroduction r
 | Web projection | `@narada-core/agent-web-ui` | correctly owned | package metadata declares web projection ownership and excludes runtime dependency construction/provider execution/MCP hosting | low |
 | Launch planning and selector UX | `@narada-core/cli` with User Site PowerShell shim | already correctly owned | workspace launcher invokes Narada CLI; PS1 shim owns Windows convenience only | low |
 | Direct `agent-cli` runtime/server mode | none; removed | already correctly owned | `agent-cli` reports that non-server conversation runtime has been removed; NARS is the runtime path | low |
-| `agent-cli` runtime ownership | `@narada-core/agent-runtime-server` | correctly narrowed | separate `D:/code/agent-cli` is a client/projection package with no carrier-runtime, provider-runtime, or MCP-hosting dependency; it attaches to an existing NARS session | low |
+| `agent-cli` runtime ownership | `@narada-core/agent-runtime-server` | correctly narrowed | separate `<src-root>/agent-cli` is a client/projection package with no carrier-runtime, provider-runtime, or MCP-hosting dependency; it attaches to an existing NARS session | low |
 
 Fast verification should use focused package tests that do not create a real
 Windows launch chain:
@@ -575,7 +591,7 @@ The per-session discovery projection has schema `narada.nars.session_index_recor
   "projection_generated_at": "2026-06-23T00:00:00.000Z",
   "agent_id": "sonar.resident",
   "site_id": "sonar",
-  "site_root": "D:/code/narada.sonar",
+  "site_root": "<src-root>/narada.sonar",
   "runtime_kind": "narada-agent-runtime-server",
   "session_dir": "<siteAuthorityRoot>/crew/nars-sessions/carrier_...",
   "session_path": ".../session.jsonl",
@@ -609,7 +625,7 @@ Its schema is `narada.nars.session_index.v1`. It is a summary projection and poi
 ```json
 {
   "schema": "narada.nars.session_index.v1",
-  "site_root": "D:/code/narada.sonar",
+  "site_root": "<src-root>/narada.sonar",
   "generated_at": "2026-06-23T00:00:05.000Z",
   "sessions": [
     {
@@ -707,7 +723,7 @@ The public response schema is `narada.nars.health.v1`:
   "generated_at": "2026-07-10T00:00:00.000Z",
   "agent_id": "narada.test",
   "session_id": "session_...",
-  "site_root": "D:/code/narada.test",
+  "site_root": "<src-root>/narada.test",
   "runtime": "narada-agent-runtime-server",
   "runtime_mode": "server",
   "health_endpoint": "http://127.0.0.1:0/health",
@@ -723,7 +739,7 @@ The public response schema is `narada.nars.health.v1`:
     "runtime_fault_count": 0
   },
   "heartbeat": {
-    "path": "D:/code/narada.test/.narada/crew/nars-sessions/session_.../heartbeat.json",
+    "path": "<src-root>/narada.test/.narada/crew/nars-sessions/session_.../heartbeat.json",
     "last_written_at": null,
     "age_ms": null,
     "freshness": "missing"
@@ -1009,7 +1025,7 @@ Delegated workers that need a durable Narada-bound agent session should target N
 ```json
 {
   "runtime": "narada-agent-runtime-server",
-  "site_root": "D:/code/narada.sonar",
+  "site_root": "<src-root>/narada.sonar",
   "provider": "codex-subscription"
 }
 ```
@@ -1089,6 +1105,8 @@ Expected coverage:
 - package exports and binary ownership for `@narada-core/agent-runtime-server`;
 - `agent-start` resolves `narada-agent-runtime-server` from the package bin;
 - startup event id and session id propagate to the runtime server boundary;
+- `runtime-engine-boundary-benchmark` reports bounded Node/Bun/Rust process-boundary measurements;
+- runtime-engine conformance tests prove that Rust changes only the process boundary and preserves the NARS host contract;
 - Site MCP fabric is isolated from global/user Codex config;
 - projected terminal input maps ordinary text, slash commands, and JSON frames correctly;
 - command help/dispatch comes from a shared command contract;

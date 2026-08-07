@@ -12,12 +12,17 @@
       "types": "./dist/operator-surface-runtime-selection.d.ts",
       "import": "./dist/operator-surface-runtime-selection.js"
     },
+    "./runtime-engine-selection": {
+      "types": "./dist/runtime-engine-selection.d.ts",
+      "import": "./dist/runtime-engine-selection.js"
+    },
     "./launch-slice": "./contracts/launch-slice.json",
     "./operator-surface-launch-matrix": "./contracts/operator-surface-launch-matrix.json",
     "./operator-journey-matrix": "./contracts/operator-journey-matrix.json",
     "./mcp-runtime": "./contracts/mcp-runtime.json",
     "./terminal-runtime": "./contracts/terminal-runtime.json",
     "./runtime-substrate-kinds": "./contracts/runtime-substrate-kinds.json",
+    "./runtime-engines": "./contracts/runtime-engines.json",
     "./boolean-values": "./contracts/boolean-values.json"
   },
   "scripts": {

@@ -53,10 +53,51 @@ test('agent-start dry-run emits coherent agent-cli/NARS launch JSON', () => {
   assert.equal(launch.identity, 'narada.architect');
   assert.equal(launch.carrier_kind, 'agent-cli');
   assert.equal(launch.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(launch.runtime_engine_kind, 'node');
+  assert.equal(launch.runtime_engine_selection.runtime_engine_kind, 'node');
   assert.equal(launch.tool_fabric_adapter_kind, 'narada-agent-runtime-server-mcp-client');
   assert.equal(launch.required_environment.NARADA_AGENT_ID, 'narada.architect');
   assert.equal(launch.intelligence_selection_authority.launcher_selection, false);
   assert.equal(launch.required_environment.NARADA_INTELLIGENCE_PROVIDER, undefined);
   assert.equal(launch.required_environment.NARADA_AI_MODEL, undefined);
   assert.equal(launch.required_environment.CLOUDFLARE_CARRIER_AI_MODEL, undefined);
+});
+
+test('agent-start dry-run selects the Bun runtime engine without changing the NARS host contract', () => {
+  const result: any = runHiddenPostureCommandSync(process.execPath, [
+    '--import',
+    tsxLoaderPath,
+    resolve(packageRoot, 'src', 'narada-agent-start.ts'),
+    'narada.architect',
+    '--site-root',
+    naradaProperRoot,
+    '--target-site-root',
+    naradaProperRoot,
+    '--carrier',
+    'agent-cli',
+    '--runtime',
+    'narada-agent-runtime-server',
+    '--runtime-engine',
+    'bun',
+    '--dry-run',
+    '--json',
+  ], {
+    cwd: packageRoot,
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      NARADA_RUNTIME_ENGINE: undefined,
+      NARADA_INTELLIGENCE_PROVIDER: 'codex-subscription',
+    },
+    posture: 'test_child',
+  });
+
+  assert.equal(result.status, 0, result.stderr || result.stdout);
+  const launch: any = parseJsonOutput(result.stdout);
+  assert.equal(launch.status, 'dry_run');
+  assert.equal(launch.runtime_substrate_kind, 'narada-agent-runtime-server');
+  assert.equal(launch.runtime_engine_kind, 'bun');
+  assert.equal(launch.runtime_engine_selection.source_field, 'runtime_engine');
+  assert.equal(launch.nars_launch.runtime_engine_kind, 'bun');
+  assert.equal(launch.carrier_session.record.runtime_engine_kind, 'bun');
 });

@@ -50,6 +50,7 @@ export function createNarsRuntimeContext({
   eventsPath = null,
   intelligence = null,
   intelligenceKernelKind = null,
+  runtimeEngineKind: directRuntimeEngineKind = null,
   executionPolicy: directExecutionPolicy = null,
   execution_policy: directExecutionPolicySnake = null,
   invocationSettings = {},
@@ -105,6 +106,9 @@ export function createNarsRuntimeContext({
       ?? intelligence?.kernelKind
       ?? process.env.NARADA_INTELLIGENCE_KERNEL,
   );
+  const runtimeEngineKind = optionalString(directRuntimeEngineKind)
+    ?? optionalString(process.env.NARADA_RUNTIME_ENGINE)
+    ?? 'node';
   const normalizedIntelligence: any = intelligence == null
     ? null
     : {
@@ -130,6 +134,8 @@ export function createNarsRuntimeContext({
     intelligence: frozenIntelligenceContext(normalizedIntelligence),
     intelligenceKernelKind: resolvedIntelligenceKernelKind,
     intelligence_kernel_kind: resolvedIntelligenceKernelKind,
+    runtimeEngineKind,
+    runtime_engine_kind: runtimeEngineKind,
     executionPolicy,
     execution_policy: executionPolicy,
     // Compatibility projection. New callers must use executionPolicy; this

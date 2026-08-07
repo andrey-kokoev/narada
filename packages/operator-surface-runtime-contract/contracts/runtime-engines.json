@@ -1,0 +1,24 @@
+{
+  "schema": "narada.runtime_engine.v1",
+  "admitted_runtime_engines": [
+    "node",
+    "bun",
+    "rust"
+  ],
+  "default_runtime_engine": "node",
+  "engine_profiles": {
+    "node": {
+      "execution_kind": "direct",
+      "entrypoint_kind": "javascript_module"
+    },
+    "bun": {
+      "execution_kind": "direct",
+      "entrypoint_kind": "javascript_module"
+    },
+    "rust": {
+      "execution_kind": "native_bridge",
+      "entrypoint_kind": "native_binary",
+      "delegation_posture": "delegates_unsupported_runtime_components_to_node"
+    }
+  }
+}

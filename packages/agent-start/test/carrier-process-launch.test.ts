@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { resolveAgentStartExecutionPosture, spawnCarrierProcessAndExit, waitForEnterBeforeCarrier } from '../src/carrier-process-launch.js';
+import { buildCarrierSpawnArgs, resolveCarrierCommand } from '../src/carrier-launch-adapter.js';
 
 test('NARS exec without wait selects hidden detached start posture', () => {
   const posture: any = resolveAgentStartExecutionPosture({
@@ -18,6 +19,52 @@ test('NARS exec without wait selects hidden detached start posture', () => {
   assert.deepEqual(posture.detach_refusal_reasons, []);
   assert.equal(posture.detach_decision.selected, true);
   assert.equal(posture.detach_decision.hidden_posture, 'agent_runtime_server');
+});
+
+test('runtime engine selection changes only the NARS process boundary', () => {
+  const common: any = {
+    agentTuiCarrier: 'agent-tui',
+    identity: 'sonar.resident',
+    yoloFlag: false,
+    enableNativeShellFlag: false,
+    processPlatform: 'win32',
+    runtimeEngineCommand: 'C:/narada/narada-agent-runtime-server-rust.exe',
+    codexCliScriptPath: () => 'codex.cmd',
+    codexMcpServerDefinitions: () => [],
+    agentRuntimeServerScriptPath: () => 'C:/narada/agent-runtime-server.mjs',
+    agentCliSessionName: (identity: any) => identity,
+    carrierSessionRegistration: { carrier_session_id: 'carrier_test' },
+    sessionSiteRoot: 'C:/site',
+    naradaPackageRoot: () => 'C:/narada',
+    siteCarrierControlPath: () => 'C:/site/control.jsonl',
+    siteCarrierSessionPath: () => 'C:/site/session.jsonl',
+    agentTuiRuntimeLoop: false,
+    agentTuiMaxSteps: null,
+    agentTuiInteractiveLoopMaxSteps: null,
+    piCliScriptPath: () => 'pi.js',
+    rootDir: 'C:/site',
+    piProvider: 'openai-codex',
+    piModel: 'gpt-5.5',
+    claudeCodeMcpConfig: () => ({}),
+    claudeCodeModel: 'sonnet',
+    runtimeAuthority: 'read',
+  };
+
+  const rustArgs = buildCarrierSpawnArgs('agent-cli', { ...common, runtimeEngineKind: 'rust' });
+  assert.deepEqual(rustArgs.slice(0, 4), ['--identity', 'sonar.resident', '--session', 'carrier_test']);
+  assert.equal(rustArgs.includes('agent-runtime-server.mjs'), false);
+
+  const nodeArgs = buildCarrierSpawnArgs('agent-cli', { ...common, runtimeEngineKind: 'node' });
+  assert.equal(nodeArgs[0], 'C:/narada/agent-runtime-server.mjs');
+  assert.deepEqual(nodeArgs.slice(1, 5), ['--identity', 'sonar.resident', '--session', 'carrier_test']);
+
+  assert.equal(resolveCarrierCommand('agent-cli', {
+    agentTuiCarrier: 'agent-tui',
+    processPlatform: 'win32',
+    processExecPath: 'node.exe',
+    runtimeEngineKind: 'rust',
+    runtimeEngineCommand: common.runtimeEngineCommand,
+  }), common.runtimeEngineCommand);
 });
 
 test('wait and explicit visible terminal refuse hidden detached start posture', () => {
@@ -50,7 +97,7 @@ test('hidden detached carrier start uses hidden process posture and exits parent
     spawnCarrierProcessAndExit({
       command: 'node',
       args: ['runtime.js'],
-      cwd: 'D:/code/site',
+      cwd: 'C:/workspace/site',
       env: { NARADA_AGENT_ID: 'site.resident' },
       executionMode: 'hidden_detached',
       hiddenOutputFiles: {
@@ -76,7 +123,7 @@ test('hidden detached carrier start uses hidden process posture and exits parent
     assert.equal(calls.length, 1);
     assert.equal(calls[0].command, 'node');
     assert.deepEqual(calls[0].args, ['runtime.js']);
-    assert.equal(calls[0].options.cwd, 'D:/code/site');
+    assert.equal(calls[0].options.cwd, 'C:/workspace/site');
     assert.equal(calls[0].options.detached, true);
     assert.equal(calls[0].options.stdio[0], 'ignore');
     assert.equal(typeof calls[0].options.stdio[1], 'number');
@@ -96,7 +143,7 @@ test('hidden detached carrier start requires output file locations', () => {
   spawnCarrierProcessAndExit({
     command: 'node',
     args: ['runtime.js'],
-    cwd: 'D:/code/site',
+    cwd: 'C:/workspace/site',
     env: { NARADA_AGENT_ID: 'site.resident' },
     executionMode: 'hidden_detached',
     spawnOptions: {
@@ -124,7 +171,7 @@ test('hidden detached carrier start reports asynchronous spawn errors before par
     spawnCarrierProcessAndExit({
       command: 'missing-runtime',
       args: [],
-      cwd: 'D:/code/site',
+      cwd: 'C:/workspace/site',
       env: { NARADA_AGENT_ID: 'site.resident' },
       executionMode: 'hidden_detached',
       hiddenOutputFiles: {

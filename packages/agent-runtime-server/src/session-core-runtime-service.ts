@@ -883,6 +883,7 @@ export function createSessionCoreRuntimeService({
     const sessionStartedEvent: any = supervisor.core.appendEvent({
       event: 'session_started',
       runtime: 'narada-agent-runtime-server',
+      runtime_engine_kind: runtimeContext.runtimeEngineKind ?? process.env.NARADA_RUNTIME_ENGINE ?? 'node',
       transport: 'jsonl_stdio',
       runtime_contract: 'nars_session_core_control.v1',
       runtime_origin: 'local',

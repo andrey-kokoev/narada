@@ -122,6 +122,7 @@ export function buildCarrierSpawnArgs(carrierName: any, {
   yoloFlag,
   enableNativeShellFlag,
   processPlatform,
+  runtimeEngineKind = 'node',
   codexCliScriptPath,
   codexMcpServerDefinitions,
   agentRuntimeServerScriptPath,
@@ -163,8 +164,7 @@ export function buildCarrierSpawnArgs(carrierName: any, {
 
   if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) {
     const sessionId: any = carrierSessionRegistration?.carrier_session_id ?? agentCliSessionName(identity);
-    return [
-      agentRuntimeServerScriptPath(),
+    const runtimeArgs: any[] = [
       '--identity',
       identity,
       '--session',
@@ -176,6 +176,9 @@ export function buildCarrierSpawnArgs(carrierName: any, {
       '--authority',
       runtimeAuthority ?? 'read',
     ];
+    return runtimeEngineKind === 'rust'
+      ? runtimeArgs
+      : [agentRuntimeServerScriptPath(), ...runtimeArgs];
   }
 
   if (carrierName === agentTuiCarrier) {
@@ -259,6 +262,8 @@ export function resolveCarrierCommand(carrierName: any, {
   agentTuiCarrier,
   processPlatform,
   processExecPath,
+  runtimeEngineKind = 'node',
+  runtimeEngineCommand = null,
   stableNodeCommand,
   defaultClaudeCodeCommand,
   claudeCodeCommand,
@@ -267,7 +272,9 @@ export function resolveCarrierCommand(carrierName: any, {
   const launchSelectionKind: any = carrierName === agentTuiCarrier ? 'agent-tui' : carrierName;
   const matrixRow: any = requireCarrierLaunchMatrixRow(launchSelectionKind);
   if (processPlatform === 'win32' && carrierName === 'codex') return processExecPath;
-  if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) return processExecPath;
+  if (matrixRow.runtime_host_kind === NARADA_AGENT_RUNTIME_SERVER_KIND) {
+    return runtimeEngineCommand ?? (runtimeEngineKind === 'node' ? processExecPath : runtimeEngineKind);
+  }
   if (carrierName === agentTuiCarrier) return 'cargo';
   if (carrierName === 'pi') return stableNodeCommand();
   if (carrierName === 'claude-code') return claudeCodeCommand ?? defaultClaudeCodeCommand;
@@ -540,6 +547,8 @@ function runtimeProcessOwnershipEnvironment({ processEnvironment, runtimeProcess
 
 export function buildNarsLaunchPacket(carrierName: any, {
   processExecPath,
+  runtimeEngineKind = 'node',
+  runtimeEngineCommand = null,
   carrierSessionRegistration,
   targetSiteId,
   sessionSiteRoot,
@@ -569,7 +578,8 @@ export function buildNarsLaunchPacket(carrierName: any, {
       entrypoint: 'narada-agent-runtime-server',
       runtime_kind: matrixRow.runtime_host_kind,
     },
-    command: processExecPath,
+    runtime_engine_kind: runtimeEngineKind,
+    command: runtimeEngineCommand ?? processExecPath,
     session_dir: dirname(siteCarrierControlPath(sessionId)),
     control_path: siteCarrierControlPath(sessionId),
     session_path: siteCarrierSessionPath(sessionId),

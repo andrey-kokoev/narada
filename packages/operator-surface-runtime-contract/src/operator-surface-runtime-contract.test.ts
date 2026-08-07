@@ -6,6 +6,7 @@ import {
   loadOperatorSurfaceLaunchMatrixContract,
   loadMcpRuntimeContract,
   loadRuntimeBooleanValuesContract,
+  loadRuntimeEnginesContract,
   loadRuntimeSubstrateKindsContract,
   loadTerminalRuntimeContract,
 } from './operator-surface-runtime-contract.js';
@@ -21,6 +22,11 @@ import {
   operatorSurfaceKindsForRuntimeHost,
   resolveOperatorSurfaceRuntimeSelection,
 } from './operator-surface-runtime-selection.js';
+import {
+  ADMITTED_RUNTIME_ENGINES,
+  DEFAULT_RUNTIME_ENGINE,
+  resolveRuntimeEngineSelection,
+} from './runtime-engine-selection.js';
 import { buildCarrierConformanceMatrix } from '../../../tools/operator-surface-carriers/carrier-conformance-matrix.js';
 
 test('launch slice contract identifies the admitted carrier runtime', () => {
@@ -347,4 +353,34 @@ test('runtime boolean values contract defines shared env flag vocabulary', () =>
   assert.equal(contract.schema, 'narada.carrier.runtime_boolean_values.v1');
   assert.deepEqual(contract.truthy, ['1', 'true', 'on', 'yes']);
   assert.deepEqual(contract.falsey, ['0', 'false', 'off', 'no']);
+});
+
+test('runtime engine contract keeps process substrate separate from carrier substrate', () => {
+  const contract = loadRuntimeEnginesContract();
+  assert.equal(contract.schema, 'narada.runtime_engine.v1');
+  assert.deepEqual(contract.admitted_runtime_engines, ['node', 'bun', 'rust']);
+  assert.equal(contract.default_runtime_engine, 'node');
+  assert.deepEqual([...ADMITTED_RUNTIME_ENGINES], contract.admitted_runtime_engines);
+  assert.equal(DEFAULT_RUNTIME_ENGINE, 'node');
+
+  const defaultSelection = resolveRuntimeEngineSelection();
+  assert.equal(defaultSelection.status, 'accepted');
+  assert.equal(defaultSelection.runtime_engine_kind, 'node');
+  assert.equal(defaultSelection.source_field, 'default');
+
+  const bunSelection = resolveRuntimeEngineSelection({ value: 'BUN' });
+  assert.equal(bunSelection.status, 'accepted');
+  assert.equal(bunSelection.runtime_engine_kind, 'bun');
+
+  const rustSelection = resolveRuntimeEngineSelection({ value: 'rust' });
+  assert.equal(rustSelection.status, 'accepted');
+  assert.equal(rustSelection.runtime_engine_profile.execution_kind, 'native_bridge');
+
+  const refused = resolveRuntimeEngineSelection({ value: 'deno' });
+  assert.equal(refused.status, 'refused');
+  assert.equal(refused.reason_code, 'runtime_engine_unsupported');
+
+  const nonNars = resolveRuntimeEngineSelection({ value: 'bun', applicable: false });
+  assert.equal(nonNars.status, 'refused');
+  assert.equal(nonNars.reason_code, 'runtime_engine_surface_unsupported');
 });

@@ -15,6 +15,7 @@ function startedEvent(sessionsRoot: string, sessionId: string, startedAt: string
   const sessionDir = join(sessionsRoot, sessionId);
   return {
     event: 'session_started',
+    runtime_engine_kind: 'rust',
     session_id: sessionId,
     agent_id: `sonar.${sessionId}`,
     site_id: 'sonar',
@@ -68,6 +69,7 @@ test('session start updates the aggregate index incrementally', () => {
     assert.ok(first);
     assert.equal(first.index.maintenance, 'incremental_rebuildable_v1');
     assert.equal(first.index.session_count, 1);
+    assert.equal(first.record.runtime_engine_kind, 'rust');
 
     const second = writeNarsSessionStartedIndex({
       sessionStartedEvent: startedEvent(sessionsRoot, 'session-2', '2026-07-11T00:01:00.000Z'),

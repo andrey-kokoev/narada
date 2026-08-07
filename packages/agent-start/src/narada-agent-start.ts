@@ -14,7 +14,7 @@
  * with NARADA_AGENT_ID and NARADA_AGENT_START_EVENT_ID in the environment.
  *
  * Usage:
- *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
+ *   narada-agent-start <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--carrier-session-id <session-id>]
  */
 
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -30,6 +30,7 @@ import {
   AGENT_CLI_OPERATOR_SURFACE_KIND,
   resolveOperatorSurfaceRuntimeSelection,
 } from '@narada-core/operator-surface-runtime-contract/operator-surface-runtime-selection';
+import { resolveRuntimeEngineSelection } from '@narada-core/operator-surface-runtime-contract/runtime-engine-selection';
 import {
   carrierControlPath,
   carrierSessionPath,
@@ -142,6 +143,8 @@ const mcpFabricModulePath: any = existsSync(localMcpFabricModulePath)
   : packagedMcpFabricModulePath;
 const { McpFabricError, loadSiteMcpFabric, mcpServerNames, projectFabricForAgentTui, projectFabricForClaudeCode, projectFabricForCodex }: any = await import(pathToFileURL(mcpFabricModulePath).href);
 const runtimeInput: any = args.runtime ?? null;
+const runtimeEngineInput: any = args.runtime_engine ?? null;
+const runtimeEngineEnvironment: any = process.env.NARADA_RUNTIME_ENGINE ?? null;
 const jsonOutput: any = !!args.json;
 const jsonOutputFile: any = args.json_output_file ? resolve(String(args.json_output_file)) : null;
 const operatorSurfaceInput: any = args.operator_surface ?? null;
@@ -271,6 +274,17 @@ async function failRuntimeRefusal(refusal: any) : Promise<any>{
   process.exit(1);
 }
 
+async function failRuntimeEngineRefusal(refusal: any) : Promise<any>{
+  writeFailureArtifact(refusal);
+  if (jsonOutput) {
+    await writeStdout(`${JSON.stringify(refusal, null, 2)}\n`);
+  } else {
+    console.error(`[FAIL] ${refusal.reason_code}: ${refusal.candidate_runtime_engine ?? ''}`);
+    if (refusal.reason) console.error(refusal.reason);
+  }
+  process.exit(1);
+}
+
 async function failToolFabricRefusal(error: any) : Promise<any>{
   const reasonCode: any = error instanceof McpFabricError ? error.code : 'mcp_fabric_unavailable';
   const refusal: any = {
@@ -376,6 +390,17 @@ if (runtimeResolution.status === 'refused') {
 }
 const runtime: any = runtimeResolution.runtime_substrate_kind;
 const carrier: any = runtimeResolution.carrier_kind;
+const runtimeEngineResolution: any = resolveRuntimeEngineSelection({
+  value: runtimeEngineInput,
+  environmentValue: runtimeEngineEnvironment,
+  applicable: runtime === 'narada-agent-runtime-server',
+});
+if (runtimeEngineResolution.status === 'refused') {
+  await failRuntimeEngineRefusal(runtimeEngineResolution);
+}
+const runtimeEngine: any = runtime === 'narada-agent-runtime-server'
+  ? runtimeEngineResolution.runtime_engine_kind
+  : null;
 const runtimeAuthoritySelection: any = resolveRuntimeAuthority(args.authority, carrier);
 if (Object.hasOwn(args, 'intelligence_provider')) {
   await failLegacyIntelligenceSelection({
@@ -389,7 +414,7 @@ if (Object.hasOwn(args, 'intelligence_provider')) {
 }
 
 if (!identity) {
-  console.error('Usage: node start-agent.ts <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--resume-session <session-id>] [--carrier-session-id <session-id>] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
+  console.error('Usage: node start-agent.ts <identity> [--operator-surface <surface>] [--carrier <legacy-carrier>] [--runtime <runtime>] [--runtime-engine <node|bun|rust>] [--authority <auto|read|write>] [--db <path>] [--json] [--preflight-only] [--dry-run] [--exec] [--resume-session <session-id>] [--carrier-session-id <session-id>] [--wait] [--visible-runtime-terminal] [--yolo] [--enable-native-shell] [--strict-mcp-registry] [--target-site-id <site-id>] [--target-site-root <path>] [--workspace-root <path>]');
   process.exit(1);
 }
 
@@ -686,6 +711,7 @@ try {
     identity,
     carrier,
     runtime,
+    runtimeEngineKind: runtimeEngine,
     startResult,
     sessionId: plannedCarrierSessionId,
     dryRun: carrierSessionPlanOnly,
@@ -727,6 +753,26 @@ function agentRuntimeServerScriptPath() : any{
   return existsSync(plainNodeWrapper)
     ? plainNodeWrapper
     : resolveNaradaPackageBin('@narada-core/agent-runtime-server', 'narada-agent-runtime-server');
+}
+
+function agentRuntimeRustBinaryPath() : any{
+  const packageRoot: any = naradaPackageRoot('@narada-core/agent-runtime-server');
+  const binaryName: any = process.platform === 'win32'
+    ? 'narada-agent-runtime-server-rust.exe'
+    : 'narada-agent-runtime-server-rust';
+  return join(packageRoot, 'native', 'target', 'release', binaryName);
+}
+
+function runtimeEngineCommand() : any{
+  if (runtimeEngine === 'bun') return process.env.NARADA_BUN_COMMAND ?? 'bun';
+  if (runtimeEngine === 'rust') return process.env.NARADA_RUST_RUNTIME_COMMAND ?? agentRuntimeRustBinaryPath();
+  return process.execPath;
+}
+
+function runtimeEngineAvailability() : any{
+  if (runtimeEngine !== 'rust') return runtimeEngine ? 'external_command' : null;
+  if (process.env.NARADA_RUST_RUNTIME_COMMAND) return 'external_command';
+  return existsSync(agentRuntimeRustBinaryPath()) ? 'available' : 'not_built';
 }
 
 function agentCliSessionName(identityName: any) : any{
@@ -799,6 +845,8 @@ function resolveCarrierExecutableCommand(carrierName: any) : any{
     agentTuiCarrier: AGENT_TUI_CARRIER,
     processPlatform: process.platform,
     processExecPath: process.execPath,
+    runtimeEngineKind: runtimeEngine,
+    runtimeEngineCommand: runtimeEngineCommand(),
     stableNodeCommand,
     defaultClaudeCodeCommand: DEFAULT_CLAUDE_CODE_COMMAND,
     claudeCodeCommand: process.env.NARADA_CLAUDE_CODE_COMMAND,
@@ -811,6 +859,7 @@ function materializeCarrierSessionRecord({ identity, carrier, runtime, startResu
     identity,
     carrier,
     runtime,
+    runtimeEngineKind: runtimeEngine,
     startResult,
     sessionId,
     dryRun,
@@ -1223,6 +1272,7 @@ function buildSpawnArgs(carrierName: any, identity: any, carrierSessionRegistrat
     yoloFlag,
     enableNativeShellFlag,
     processPlatform: process.platform,
+    runtimeEngineKind: runtimeEngine,
     codexCliScriptPath,
     codexMcpServerDefinitions,
     agentRuntimeServerScriptPath,
@@ -1367,6 +1417,18 @@ if (carrier !== 'kimi' && carrier !== 'opencode') {
 
 const spawnArgs: any = buildSpawnArgs(carrier, identity, carrierSessionRegistration);
 const toolFabricAdapter: any = resolveToolFabricAdapter(carrier, runtime);
+const runtimeEngineAvailabilityStatus: any = runtimeEngineAvailability();
+if (execFlag && !dryRun && runtimeEngine === 'rust' && runtimeEngineAvailabilityStatus === 'not_built') {
+  await failRuntimeEngineRefusal({
+    schema: 'narada.runtime_engine.v1',
+    status: 'refused',
+    reason_code: 'runtime_engine_unavailable',
+    candidate_runtime_engine: 'rust',
+    admitted_runtime_engines: ['node', 'bun', 'rust'],
+    reason: 'The Rust NARS runtime bridge has not been built for this checkout.',
+    required_next_step: 'Run cargo build --release --manifest-path packages/agent-runtime-server/native/Cargo.toml, then retry.',
+  });
+}
 const execCommand: any = [resolveCarrierExecutableCommand(carrier), ...spawnArgs.map(shellQuote)].join(' ');
 const agentStartExecutionPosture: any = resolveAgentStartExecutionPosture({
   runtime,
@@ -1384,6 +1446,13 @@ const hiddenRuntimeOutputFiles: any = agentStartExecutionPosture.agent_start_exe
 const carrierEnvironment: any = {
   ...(carrierSessionRegistration.environment ?? {}),
   NARADA_RUNTIME_AUTHORITY: runtimeAuthoritySelection.effective,
+  ...(carrier === 'agent-cli' || carrier === 'agent-web-ui' || carrier === AGENT_TUI_CARRIER || carrier === AGENT_PI_TUI_CARRIER
+    ? {
+        NARADA_RUNTIME_ENGINE: runtimeEngine,
+        NARADA_RUNTIME_SERVER_SCRIPT: agentRuntimeServerScriptPath(),
+        ...(runtimeEngine === 'rust' ? { NARADA_RUNTIME_NODE_COMMAND: process.execPath } : {}),
+      }
+    : {}),
   ...(sessionAuthorityAdmission ? buildSessionAuthorityEnvironment(sessionAuthorityAdmission) : {}),
 };
 const agentTuiEnvironment: any = agentTuiTerminalEnvironment();
@@ -1468,6 +1537,8 @@ const spawnEnvironmentDelta: any = buildCarrierSpawnEnvironmentDelta({
 });
 const narsLaunch: any = buildNarsLaunchPacket(carrier, {
   processExecPath: process.execPath,
+  runtimeEngineKind: runtimeEngine,
+  runtimeEngineCommand: runtimeEngineCommand(),
   carrierSessionRegistration,
   targetSiteId,
   sessionSiteRoot,
@@ -1492,6 +1563,9 @@ const output: any = {
   carrier_kind: carrier,
   launch_selection_kind: runtimeResolution.launch_selection_kind,
   runtime_substrate_kind: runtime,
+  runtime_engine_kind: runtimeEngine,
+  runtime_engine_availability: runtimeEngineAvailabilityStatus,
+  runtime_engine_selection: runtimeEngineResolution,
   intelligence_kernel_kind: intelligenceKernelKind,
   target_site_id: targetSiteId,
   target_site_root: targetSiteRoot,
@@ -1503,7 +1577,11 @@ const output: any = {
   wait: waitFlag,
   visible_runtime_terminal: visibleRuntimeTerminalFlag,
   yolo: yoloFlag,
-  runtime_resolution: { ...runtimeResolution, intelligence_kernel_kind: intelligenceKernelKind },
+  runtime_resolution: {
+    ...runtimeResolution,
+    intelligence_kernel_kind: intelligenceKernelKind,
+    runtime_engine_kind: runtimeEngine,
+  },
   tool_fabric_adapter_contract_schema: TOOL_FABRIC_ADAPTER_CONTRACT_SCHEMA,
   admitted_tool_fabric_adapter_kinds: [...ADMITTED_TOOL_FABRIC_ADAPTER_KINDS],
   tool_fabric_adapter: toolFabricAdapter,

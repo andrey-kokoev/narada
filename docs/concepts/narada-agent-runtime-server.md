@@ -51,6 +51,11 @@ same Agent Session
 - authority collapse
 ```
 
+The process engine is an implementation parameter, not part of that semantic
+definition. A NARS session may run its host through Node, Bun, or a Rust native
+bridge while retaining the same session identity, control protocol, lifecycle,
+health/events, MCP mediation, and authority boundaries.
+
 ## Canonical Name
 
 Prefer **Narada Agent Runtime Server** when naming the concept.

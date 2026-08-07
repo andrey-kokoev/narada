@@ -69,6 +69,7 @@ export interface NarsSessionIndexRecord {
   record_path?: string | null;
   heartbeat_path?: string | null;
   runtime_kind?: string | null;
+  runtime_engine_kind?: string | null;
   site_id_source?: string | null;
   launch_session_id?: string | null;
   process_ownership?: NarsSessionProcessOwnership | null;
@@ -457,6 +458,7 @@ function buildSessionIndexRecord({ sessionStartedEvent, sessionPath, siteRoot, p
       : NARS_SESSION_SITE_ID_SOURCE.DERIVED_FROM_SITE_ROOT_OR_AGENT_ID,
     site_root: resolvedSiteRoot || null,
     runtime_kind: sessionStartedEvent.runtime ?? sessionStartedEvent.runtime_substrate_kind ?? 'narada-agent-runtime-server',
+    runtime_engine_kind: normalizeOptionalString(sessionStartedEvent.runtime_engine_kind),
     launch_operator_surface_kind: sessionStartedEvent.launch_operator_surface_kind ?? sessionStartedEvent.operator_surface_kind ?? null,
     session_dir: paths.session_dir,
     session_path: sessionPath ?? sessionStartedEvent.session_path ?? null,
@@ -523,6 +525,7 @@ function toAggregateEntry(record: Record<string, unknown>): NarsSessionIndexReco
     authority_runtime_host: normalizeAuthorityRuntimeHost(record.authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_AUTHORITY_METADATA),
     authority_epoch: normalizeAuthorityEpoch(record.authority_epoch, null),
     runtime_origin: runtimeOriginFromAuthorityHost(normalizeAuthorityRuntimeHost(record.authority_runtime_host, NARS_SESSION_AUTHORITY_RUNTIME_HOST.UNKNOWN_AUTHORITY_METADATA)) ?? null,
+    runtime_engine_kind: normalizeOptionalString(record.runtime_engine_kind),
     runtime_surface_contract: record.runtime_surface_contract ?? null,
     authority_runtime_id: normalizeOptionalString(record.authority_runtime_id),
     authority_transition_state: normalizeAuthorityTransitionState(record.authority_transition_state),

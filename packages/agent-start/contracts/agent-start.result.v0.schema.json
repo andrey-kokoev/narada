@@ -18,6 +18,28 @@
           "type": "string",
           "minLength": 1
         },
+        "runtime_engine_kind": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime_engine_availability": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "agent_start_event": {
           "type": "string",
           "minLength": 1
@@ -722,6 +744,28 @@
         "runtime": {
           "type": "string",
           "minLength": 1
+        },
+        "runtime_engine_kind": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runtime_engine_availability": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "agent_start_event": {
           "type": "string",

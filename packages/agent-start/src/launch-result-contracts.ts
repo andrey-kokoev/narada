@@ -26,6 +26,7 @@ type LauncherContractInput = AgentStartResultV0 & {
   nars_events?: OptionalRecord;
   runtime_host_kind?: unknown;
   runtime_substrate_kind?: unknown;
+  runtime_engine_kind?: unknown;
   operator_surface_kind?: unknown;
   launch_selection_kind?: unknown;
   carrier_kind?: unknown;
@@ -150,6 +151,7 @@ export function buildRuntimeHealthPosture(result: AgentStartResultV0) : any{
     carrier_kind: input.carrier_kind ?? null,
     carrier_implementation_kind: input.carrier_implementation_kind ?? null,
     runtime_substrate_kind: input.runtime_substrate_kind ?? null,
+    runtime_engine_kind: input.runtime_engine_kind ?? null,
     status: input.exec && !input.dry_run ? 'projected_for_runtime' : 'projected_for_launch',
     dimensions: {
       health: health ? {
@@ -202,6 +204,7 @@ function buildLauncherContracts(result: AgentStartResultV0) : any{
       carrier_kind: input.carrier_kind ?? null,
       carrier_implementation_kind: carrierImplementationKind,
       runtime_substrate_kind: input.runtime_substrate_kind ?? null,
+      runtime_engine_kind: input.runtime_engine_kind ?? null,
       runtime_contract_schema: input.runtime_contract_schema ?? null,
       selection_source: input.runtime_resolution ?? null,
     },
@@ -242,6 +245,7 @@ function buildLauncherContracts(result: AgentStartResultV0) : any{
       carrier_implementation_kind: carrierImplementationKind,
       runtime: input.runtime ?? null,
       runtime_substrate_kind: input.runtime_substrate_kind ?? null,
+      runtime_engine_kind: input.runtime_engine_kind ?? null,
       runtime_authority_selection: input.runtime_authority_selection ?? null,
       intelligence_selection_authority: input.intelligence_selection_authority ?? null,
       mcp_scope: input.mcp_scope?.requested ?? null,

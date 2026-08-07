@@ -52,6 +52,8 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -710,6 +712,8 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -1368,6 +1372,8 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -2026,6 +2032,8 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -2684,6 +2692,8 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -3342,6 +3352,8 @@ export declare const AgentStartResultV0Schema: z.ZodUnion<[z.ZodObject<{
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -4016,6 +4028,8 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -4674,6 +4688,8 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -5332,6 +5348,8 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;
@@ -5990,6 +6008,8 @@ export declare function parseAgentStartResultV0(value: unknown): z.SafeParseRetu
     schema: z.ZodLiteral<"narada.agent_start.result.v0">;
     identity: z.ZodOptional<z.ZodString>;
     runtime: z.ZodOptional<z.ZodString>;
+    runtime_engine_kind: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    runtime_engine_availability: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     agent_start_event: z.ZodOptional<z.ZodString>;
     target_site_id: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     target_site_root: z.ZodOptional<z.ZodString>;

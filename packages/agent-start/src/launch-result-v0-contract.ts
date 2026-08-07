@@ -41,6 +41,8 @@ const commonResultShape = {
   schema: z.literal(AGENT_START_RESULT_SCHEMA),
   identity: nonEmptyString.optional(),
   runtime: nonEmptyString.optional(),
+  runtime_engine_kind: optionalString,
+  runtime_engine_availability: optionalString,
   agent_start_event: nonEmptyString.optional(),
   target_site_id: nonEmptyString.nullable().optional(),
   target_site_root: nonEmptyString.optional(),
