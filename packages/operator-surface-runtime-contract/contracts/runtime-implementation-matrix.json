@@ -1,0 +1,105 @@
+{
+  "schema": "narada.runtime_implementation_matrix.v1",
+  "runtime_engine_kinds": [
+    "node",
+    "bun",
+    "rust"
+  ],
+  "implementation_statuses": [
+    "admitted",
+    "experimental",
+    "unavailable"
+  ],
+  "rows": [
+    {
+      "component_kind": "nars-runtime",
+      "package": "@narada-core/agent-runtime-server",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["runtime-engine-contract", "nars-conformance-tests"] },
+        "bun": { "status": "admitted", "evidence": ["runtime-engine-contract", "nars-conformance-tests"] },
+        "rust": { "status": "admitted", "evidence": ["native-session-core", "nars-conformance-tests", "runtime-benchmark"] }
+      }
+    },
+    {
+      "component_kind": "mcp-runtime-proxy",
+      "package": "@narada-core/mcp-runtime-proxy",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["proxy-protocol-tests", "runtime-benchmark"] },
+        "bun": { "status": "admitted", "evidence": ["proxy-protocol-tests", "runtime-benchmark"] },
+        "rust": { "status": "admitted", "evidence": ["native-proxy-artifact", "native-proxy-tests", "runtime-benchmark"] }
+      }
+    },
+    {
+      "component_kind": "filesystem-mcp",
+      "package": "@narada-core/local-filesystem-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "rust",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["filesystem-protocol-tests", "filesystem-benchmark"] },
+        "bun": { "status": "admitted", "evidence": ["filesystem-protocol-tests", "filesystem-benchmark"] },
+        "rust": { "status": "admitted", "evidence": ["native-filesystem-applet", "filesystem-benchmark"] }
+      }
+    },
+    {
+      "component_kind": "agent-context-mcp",
+      "package": "@narada-core/agent-context-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "bun",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests"] },
+        "rust": { "status": "unavailable", "evidence": [] }
+      }
+    },
+    {
+      "component_kind": "mcp-loader-mcp",
+      "package": "@narada-core/mcp-loader-mcp",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "bun",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests"] },
+        "rust": { "status": "unavailable", "evidence": [] }
+      }
+    },
+    {
+      "component_kind": "mcp-registrar",
+      "package": "@narada-core/mcp-registrar",
+      "required": true,
+      "profile_runtime_engine_kinds": {
+        "native": "bun",
+        "bun": "bun",
+        "node-compat": "node"
+      },
+      "implementations": {
+        "node": { "status": "admitted", "evidence": ["package-node-tests"] },
+        "bun": { "status": "admitted", "evidence": ["package-bun-tests"] },
+        "rust": { "status": "unavailable", "evidence": [] }
+      }
+    }
+  ]
+}

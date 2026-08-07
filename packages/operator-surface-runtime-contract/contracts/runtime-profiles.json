@@ -1,0 +1,26 @@
+{
+  "schema": "narada.runtime_profile.v1",
+  "admitted_runtime_profiles": [
+    "native",
+    "bun",
+    "node-compat"
+  ],
+  "default_runtime_profile": "native",
+  "profile_definitions": {
+    "native": {
+      "runtime_engine_kind": "rust",
+      "matrix_profile_kind": "native",
+      "description": "Rust-native runtime host and native MCP applets where admitted; Bun carries JavaScript-only surfaces."
+    },
+    "bun": {
+      "runtime_engine_kind": "bun",
+      "matrix_profile_kind": "bun",
+      "description": "Bun JavaScript runtime for the NARS host and JavaScript MCP surfaces."
+    },
+    "node-compat": {
+      "runtime_engine_kind": "node",
+      "matrix_profile_kind": "node-compat",
+      "description": "Node.js compatibility runtime for the NARS host and JavaScript MCP surfaces."
+    }
+  }
+}

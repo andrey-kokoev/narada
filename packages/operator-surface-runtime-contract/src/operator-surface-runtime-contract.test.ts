@@ -7,6 +7,8 @@ import {
   loadMcpRuntimeContract,
   loadRuntimeBooleanValuesContract,
   loadRuntimeEnginesContract,
+  loadRuntimeImplementationMatrixContract,
+  loadRuntimeProfilesContract,
   loadRuntimeSubstrateKindsContract,
   loadTerminalRuntimeContract,
 } from './operator-surface-runtime-contract.js';
@@ -384,4 +386,59 @@ test('runtime engine contract keeps process substrate separate from carrier subs
   const nonNars = resolveRuntimeEngineSelection({ value: 'bun', applicable: false });
   assert.equal(nonNars.status, 'refused');
   assert.equal(nonNars.reason_code, 'runtime_engine_surface_unsupported');
+});
+import {
+  ADMITTED_RUNTIME_PROFILES,
+  DEFAULT_RUNTIME_PROFILE,
+  resolveRuntimeProfileSelection,
+  runtimeProfileImplementationMatrix,
+} from './runtime-profile-selection.js';
+
+test('runtime profiles expose coherent user choices over the implementation matrix', () => {
+  const profiles = loadRuntimeProfilesContract();
+  const matrix = loadRuntimeImplementationMatrixContract();
+  assert.equal(profiles.schema, 'narada.runtime_profile.v1');
+  assert.deepEqual(profiles.admitted_runtime_profiles, ['native', 'bun', 'node-compat']);
+  assert.equal(profiles.default_runtime_profile, 'native');
+  assert.deepEqual([...ADMITTED_RUNTIME_PROFILES], profiles.admitted_runtime_profiles);
+  assert.equal(DEFAULT_RUNTIME_PROFILE, 'native');
+  assert.equal(matrix.schema, 'narada.runtime_implementation_matrix.v1');
+  assert.ok(matrix.rows.length >= 6);
+
+  const nativeSelection = resolveRuntimeProfileSelection();
+  assert.equal(nativeSelection.status, 'accepted');
+  assert.equal(nativeSelection.runtime_profile_kind, 'native');
+  assert.equal(nativeSelection.runtime_engine_kind, 'rust');
+  assert.equal(nativeSelection.source_field, 'default');
+  const nativeMatrix = runtimeProfileImplementationMatrix('native');
+  assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'nars-runtime')?.runtime_engine_kind, 'rust');
+  assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'agent-context-mcp')?.runtime_engine_kind, 'bun');
+
+  const bunSelection = resolveRuntimeProfileSelection({ value: 'BUN' });
+  assert.equal(bunSelection.status, 'accepted');
+  assert.equal(bunSelection.runtime_profile_kind, 'bun');
+  assert.equal(bunSelection.runtime_engine_kind, 'bun');
+  assert.equal(bunSelection.source_field, 'runtime_profile');
+
+  const nodeSelection = resolveRuntimeProfileSelection({ environmentValue: 'node-compat' });
+  assert.equal(nodeSelection.status, 'accepted');
+  assert.equal(nodeSelection.runtime_profile_kind, 'node-compat');
+  assert.equal(nodeSelection.runtime_engine_kind, 'node');
+  assert.equal(nodeSelection.source_field, 'environment');
+
+  const legacySelection = resolveRuntimeProfileSelection({ runtimeEngineValue: 'bun' });
+  assert.equal(legacySelection.status, 'accepted');
+  assert.equal(legacySelection.runtime_profile_kind, 'bun');
+  assert.equal(legacySelection.source_field, 'runtime_engine');
+
+  const conflict = resolveRuntimeProfileSelection({ value: 'native', runtimeEngineValue: 'bun' });
+  assert.equal(conflict.status, 'refused');
+  assert.equal(conflict.reason_code, 'runtime_profile_engine_conflict');
+
+  const refused = resolveRuntimeProfileSelection({ value: 'deno' });
+  assert.equal(refused.status, 'refused');
+  assert.equal(refused.reason_code, 'runtime_profile_unsupported');
+
+  const nonNars = resolveRuntimeProfileSelection({ value: 'bun', applicable: false });
+  assert.equal(nonNars.status, 'refused');
 });

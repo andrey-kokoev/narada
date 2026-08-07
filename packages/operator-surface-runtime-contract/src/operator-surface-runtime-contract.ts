@@ -30,6 +30,14 @@ export function loadRuntimeEnginesContract(url: URL = new URL('../contracts/runt
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')) as JsonRecord);
 }
 
+export function loadRuntimeProfilesContract(url: URL = new URL('../contracts/runtime-profiles.json', import.meta.url)): Readonly<JsonRecord> {
+  return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')) as JsonRecord);
+}
+
+export function loadRuntimeImplementationMatrixContract(url: URL = new URL('../contracts/runtime-implementation-matrix.json', import.meta.url)): Readonly<JsonRecord> {
+  return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')) as JsonRecord);
+}
+
 export function loadRuntimeBooleanValuesContract(url: URL = new URL('../contracts/boolean-values.json', import.meta.url)): Readonly<JsonRecord> {
   return Object.freeze(JSON.parse(readFileSync(url, 'utf-8')) as JsonRecord);
 }
