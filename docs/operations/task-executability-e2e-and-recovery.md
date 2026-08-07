@@ -23,7 +23,7 @@ The deterministic command is therefore the closure gate for executable-path and 
 
 ## Deterministic Proof
 
-Run from `D:\\code\\mcp-surfaces`:
+Run from `<src-root>\\mcp-surfaces`:
 
 ```powershell
 pnpm --filter @narada-core/site-loop-mcp test:e2e:task-executability

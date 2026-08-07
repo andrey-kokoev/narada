@@ -333,7 +333,7 @@
       {
         "check": "osm-send-permission-policy.test.mjs",
         "status": "historical_invalidated",
-        "observed": "The operator-surface server imports missing D:\\code\\narada\\packages\\site-common-tools\\compat\\mcp-payload-file.legacy-site.mjs.",
+        "observed": "The operator-surface server imports missing <src-root>\\narada\\packages\\site-common-tools\\compat\\mcp-payload-file.legacy-site.mjs.",
         "matrix_consequence": "Fresh post-restart run passed; retain as runtime-freshness evidence.",
         "invalidated_by": "934284a5-2817-46de-be0b-5595ea99cf4f"
       },
