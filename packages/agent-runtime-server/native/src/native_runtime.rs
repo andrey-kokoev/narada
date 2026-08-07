@@ -882,15 +882,22 @@ impl NativeRuntime {
     }
 
     fn cancel(&mut self, request_id: Option<String>) -> Result<Vec<Value>, String> {
-        let mut output = self.supervisor.cancel(Value::Null).map_err(core_error)?;
-        let mut event = map_event("session_cancel");
-        put(&mut event, "request_id", request_id);
-        output.push(
-            self.supervisor
-                .core_mut()
-                .append_event(Value::Object(event))
-                .map_err(core_error)?,
-        );
+        let mut output = self
+            .supervisor
+            .cancel(json!({ "request_id": request_id.clone() }))
+            .map_err(core_error)?;
+        let cancelled = output
+            .iter()
+            .rev()
+            .find(|event| event["event"] == "session_cancel")
+            .and_then(|event| event.get("cancelled"))
+            .cloned()
+            .unwrap_or(Value::Bool(false));
+        output.push(json!({
+            "event": "session_cancel",
+            "request_id": request_id,
+            "cancelled": cancelled,
+        }));
         Ok(output)
     }
 
@@ -1164,6 +1171,30 @@ mod tests {
                 && event["payload"]["event"] == "session_control_accepted"
                 && event["cursor"]["namespace"] == "durable"
         }));
+        let cancel = runtime
+            .handle(json!({
+                "id": "cancel-1",
+                "method": "session.cancel",
+                "params": {}
+            }))
+            .unwrap();
+        assert!(cancel
+            .iter()
+            .any(|event| event["event"] == "session_cancel"));
+        let durable = runtime
+            .supervisor
+            .core()
+            .events_page_contract(&json!({ "view": "raw", "limit": 100 }))
+            .unwrap();
+        assert_eq!(
+            durable["events"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .filter(|event| event["event"] == "session_cancel")
+                .count(),
+            1
+        );
         runtime.close(None).unwrap();
         let _ = fs::remove_dir_all(root);
     }
