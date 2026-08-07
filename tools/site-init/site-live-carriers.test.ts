@@ -196,8 +196,8 @@ test('MCP registration carrier admits policy write roots for bounded local surfa
       name: 'narada-test-local-filesystem',
       transport: 'stdio',
       command: 'node',
-      args: ['D:/code/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js', '--mode', 'write'],
-      entrypoint: 'D:/code/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js',
+      args: ['C:/workspace/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js', '--mode', 'write'],
+      entrypoint: 'C:/workspace/mcp-surfaces/packages/local-filesystem-mcp/dist/src/main.js',
       surface_class: 'site_local_policy_gated_filesystem_write',
     }],
   }));

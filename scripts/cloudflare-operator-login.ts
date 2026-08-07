@@ -208,7 +208,7 @@ function loadLocalEnv(pathUrl: any) {
 }
 
 function defaultCookieFile() {
-  return 'D:\\code\\narada\\.narada\\auth\\cloudflare-operator-session.json';
+  return join(fileURLToPath(repoRoot), '.narada', 'auth', 'cloudflare-operator-session.json');
 }
 
 function option(name: any) {
