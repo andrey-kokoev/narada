@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -85,8 +85,33 @@ export function writeOperatorInputQueueState(path: string | null | undefined, st
   mkdirSync(dirname(path), { recursive: true });
   const tmpPath = `${path}.${process.pid}.${randomUUID()}.tmp`;
   writeFileSync(tmpPath, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-  renameSync(tmpPath, path);
+  try {
+    renameWithWindowsRetry(tmpPath, path);
+  } finally {
+    if (existsSync(tmpPath)) {
+      try { unlinkSync(tmpPath); } catch { /* the successful rename removed it */ }
+    }
+  }
   return { ...next, path, corrupt: false };
+}
+
+/**
+ * Antivirus/indexer handles can transiently hold the destination on Windows.
+ * Keep the atomic replacement contract, but bound the retry rather than
+ * turning a short-lived EPERM into a queue persistence failure.
+ */
+function renameWithWindowsRetry(tmpPath: string, targetPath: string): void {
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      renameSync(tmpPath, targetPath);
+      return;
+    } catch (error) {
+      const code = isRecord(error) ? String(error.code ?? '') : '';
+      if (!['EPERM', 'EACCES', 'EBUSY'].includes(code) || attempt === 3) throw error;
+      const wait = new Int32Array(new SharedArrayBuffer(4));
+      Atomics.wait(wait, 0, 0, 1 << attempt);
+    }
+  }
 }
 
 export function emptyOperatorInputQueueState({ path = null, corrupt = false }: { path?: string | null; corrupt?: boolean } = {}): NarsOperatorInputQueueState {

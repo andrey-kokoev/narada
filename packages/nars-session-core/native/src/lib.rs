@@ -2701,12 +2701,41 @@ fn write_json_atomic(path: &Path, value: &Value) -> Result<(), CoreError> {
     file.flush()
         .map_err(|error| CoreError(format!("runtime_atomic_flush_failed:{error}")))?;
     drop(file);
-    if path.exists() {
-        fs::remove_file(path)
-            .map_err(|error| CoreError(format!("runtime_atomic_replace_failed:{error}")))?;
+    let mut renamed = false;
+    for attempt in 0..4 {
+        match fs::rename(&temporary, path) {
+            Ok(()) => {
+                renamed = true;
+                break;
+            }
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    std::io::ErrorKind::PermissionDenied | std::io::ErrorKind::AlreadyExists
+                ) =>
+            {
+                if attempt < 3 {
+                    std::thread::sleep(std::time::Duration::from_millis(1 << attempt));
+                } else {
+                    break;
+                }
+            }
+            Err(error) => {
+                return Err(CoreError(format!("runtime_atomic_rename_failed:{error}")));
+            }
+        }
     }
-    fs::rename(&temporary, path)
-        .map_err(|error| CoreError(format!("runtime_atomic_rename_failed:{error}")))
+    if !renamed {
+        // Some Windows filesystems do not implement replacement on rename.
+        // Keep this compatibility fallback bounded and only after retries.
+        if path.exists() {
+            fs::remove_file(path)
+                .map_err(|error| CoreError(format!("runtime_atomic_replace_failed:{error}")))?;
+        }
+        fs::rename(&temporary, path)
+            .map_err(|error| CoreError(format!("runtime_atomic_rename_failed:{error}")))?;
+    }
+    Ok(())
 }
 
 fn merge_object(target: &mut Value, additions: Value) {
