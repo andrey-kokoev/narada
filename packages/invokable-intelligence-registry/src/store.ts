@@ -1,6 +1,6 @@
 /**
  * Portable registry storage contract. One interface, two embodiments:
- * node:sqlite (local) and Cloudflare D1 (remote). Reads are deterministic
+ * runtime-neutral SQLite (local) and Cloudflare D1 (remote). Reads are deterministic
  * (id-ordered) and never merge authority loci implicitly — locus is always
  * an explicit column and filter.
  */

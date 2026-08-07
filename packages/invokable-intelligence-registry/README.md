@@ -1,8 +1,9 @@
 # @narada-core/invokable-intelligence-registry
 
 Portable persistence for the invokable-intelligence ontology (#2181).
-One storage contract, two embodiments — `node:sqlite` for local authority
-loci and Cloudflare D1 for remote ones — over a normalized relational
+One storage contract, two embodiments — the runtime-neutral local SQLite
+adapter (Node uses `node:sqlite`, Bun uses `bun:sqlite`) and Cloudflare D1 —
+over a normalized relational
 schema, with a shared conformance suite both adapters must pass.
 
 Built on `@narada-core/invokable-intelligence-contract` (#2180): every write
@@ -12,7 +13,7 @@ is validated against the contract before it touches the store.
 
 - **One core, two thin adapters.** All behavior lives in
   `RegistryStoreCore` over a minimal `SqlExecutor` surface
-  (`run`/`get`/`all`/`transact`). The node:sqlite adapter transacts with
+  (`run`/`get`/`all`/`transact`). The local SQLite adapter transacts with
   `BEGIN IMMEDIATE`; the D1 adapter transacts with `batch()`. Behavior
   cannot drift between embodiments because there is only one
   implementation.
@@ -58,10 +59,10 @@ import { SqliteRegistryStore, D1RegistryStore, createFakeD1 } from "@narada-core
 
 const local = await SqliteRegistryStore.open(".ai/intelligence-registry.db");
 const remote = await D1RegistryStore.open(env.INTELLIGENCE_REGISTRY_DB); // D1 binding
-const testStore = await D1RegistryStore.open(createFakeD1(":memory:"));  // D1 API over node:sqlite
+const testStore = await D1RegistryStore.open(createFakeD1(":memory:"));  // D1 API over local SQLite
 ```
 
-`createFakeD1` wraps node:sqlite with the D1 binding API so the D1
+`createFakeD1` wraps local SQLite with the D1 binding API so the D1
 adapter runs the full conformance suite without miniflare/Wrangler; it
 is exported for downstream packages' tests (e.g. the carrier in #2185).
 

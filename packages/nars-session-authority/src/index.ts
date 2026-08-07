@@ -10,7 +10,7 @@ process.emitWarning = (warning: any, ...args: any[]) => {
   if (args[0] === 'ExperimentalWarning' && String(warning).includes('SQLite')) return;
   return originalEmitWarning.call(process, warning, ...args);
 };
-const { DatabaseSync } = await import('node:sqlite');
+const { DatabaseSync } = await import('@narada-core/sqlite');
 process.emitWarning = originalEmitWarning;
 
 export const SESSION_AUTHORITY_SCHEMA = 'narada.nars.session_authority.v1';

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { once } from 'node:events';
 import { existsSync } from 'node:fs';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,6 +20,8 @@ const nativeBinary = join(
   'release',
   process.platform === 'win32' ? 'narada-agent-runtime-server-rust.exe' : 'narada-agent-runtime-server-rust',
 );
+const bunCommand = process.env.NARADA_BUN_COMMAND ?? 'bun';
+const bunAvailable = spawnSync(bunCommand, ['--version'], { stdio: 'ignore', windowsHide: true }).status === 0;
 
 const requests = [
   { id: 'health-1', method: 'session.health', params: {} },
@@ -27,6 +29,7 @@ const requests = [
   { id: 'legacy-1', method: 'session.resume', params: {} },
   { id: 'close-1', method: 'session.close', params: {} },
 ];
+type Engine = 'node' | 'bun' | 'rust';
 
 async function seedIntelligenceRegistry(siteRoot: string): Promise<string> {
   const dbPath = join(siteRoot, '.ai', 'intelligence-registry.db');
@@ -96,7 +99,7 @@ async function seedIntelligenceRegistry(siteRoot: string): Promise<string> {
   return dbPath;
 }
 
-function runtimeEnvironment(siteRoot: string, dbPath: string, engine: 'node' | 'rust'): NodeJS.ProcessEnv {
+function runtimeEnvironment(siteRoot: string, dbPath: string, engine: Engine): NodeJS.ProcessEnv {
   return {
     ...process.env,
     NARADA_SITE_ROOT: siteRoot,
@@ -130,13 +133,17 @@ function runtimeEnvironment(siteRoot: string, dbPath: string, engine: 'node' | '
   };
 }
 
-async function runEngine(engine: 'node' | 'rust'): Promise<Record<string, any>[]> {
+async function runEngine(engine: Engine): Promise<Record<string, any>[]> {
   const siteRoot = await mkdtemp(join(tmpdir(), `narada-runtime-engine-${engine}-`));
   try {
     const dbPath = await seedIntelligenceRegistry(siteRoot);
-    const command = engine === 'node' ? process.execPath : nativeBinary;
+    const command = engine === 'node'
+      ? process.execPath
+      : engine === 'bun'
+        ? bunCommand
+        : nativeBinary;
     const args = [
-      ...(engine === 'node' ? [runtimeEntrypoint] : []),
+      ...(engine === 'rust' ? [] : [runtimeEntrypoint]),
       '--raw-jsonl',
       '--no-health',
       '--no-events',
@@ -189,13 +196,19 @@ function semanticTrace(events: Record<string, any>[]): Record<string, any>[] {
   }));
 }
 
-test('Rust runs the real NARS entrypoint with Node-equivalent session authority and control semantics', {
-  skip: !existsSync(nativeBinary),
+test('Node, Bun, and Rust run the real NARS entrypoint with equivalent session authority and control semantics', {
+  skip: !existsSync(nativeBinary) || !bunAvailable,
   timeout: 45_000,
 }, async () => {
-  const [nodeEvents, rustEvents] = await Promise.all([runEngine('node'), runEngine('rust')]);
+  const [nodeEvents, bunEvents, rustEvents] = await Promise.all([
+    runEngine('node'),
+    runEngine('bun'),
+    runEngine('rust'),
+  ]);
   assert.deepEqual(semanticTrace(rustEvents), semanticTrace(nodeEvents));
+  assert.deepEqual(semanticTrace(bunEvents), semanticTrace(nodeEvents));
   assert.equal(nodeEvents[0]?.runtime_engine_kind, 'node');
+  assert.equal(bunEvents[0]?.runtime_engine_kind, 'bun');
   assert.equal(rustEvents[0]?.runtime_engine_kind, 'rust');
   assert.equal(rustEvents[0]?.event, 'session_started');
   assert.equal(rustEvents[0]?.mcp_scope, 'none');

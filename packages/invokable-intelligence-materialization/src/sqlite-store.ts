@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync } from "@narada-core/sqlite";
 import { MaterializationStoreCore } from "./core.js";
 import type { MaterializationMutationResult, MaterializationSqlExecutor, MaterializationSqlStatement } from "./store.js";
 

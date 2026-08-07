@@ -1,6 +1,6 @@
 /**
  * Versioned relational schema for the intelligence registry. Portable
- * across node:sqlite and Cloudflare D1 (both SQLite dialects): positional
+ * across local SQLite and Cloudflare D1 (both SQLite dialects): positional
  * params only, no RETURNING, no engine-specific features.
  */
 

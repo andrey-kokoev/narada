@@ -86,7 +86,9 @@ select `runtime_engine_kind` as `node`, `bun`, or `rust` through
 NARS `session_started`/session-index projections.
 
 `node` remains the default direct engine. `bun` runs the same NARS JavaScript
-entrypoint through Bun. `rust` currently owns the native process boundary and
+entrypoint through Bun; local SQLite authority uses the conditional
+`@narada-core/sqlite` adapter so the session does not depend on `node:sqlite`.
+`rust` currently owns the native process boundary and
 delegates unported intelligence/provider/runtime components to the Node
 entrypoint through the same arguments, environment, and stdio contract. The
 engine choice must not change session authority, lifecycle, health/events, MCP,
@@ -1111,7 +1113,7 @@ Expected coverage:
 - startup event id and session id propagate to the runtime server boundary;
 - `runtime-engine-boundary-benchmark` reports bounded Node/Bun/Rust process-boundary measurements;
 - `runtime-engine-protocol-conformance.test.ts` compares the Node/Rust lifecycle, control, health, and MCP frame sequence;
-- `runtime-engine-nars-conformance.test.ts` runs the built NARS entrypoint through Node and the Rust bridge and compares the real session authority/control trace;
+- `runtime-engine-nars-conformance.test.ts` runs the built NARS entrypoint through Node, Bun, and the Rust bridge and compares the real session authority/control trace;
 - runtime-engine conformance tests prove that Rust changes only the process boundary and preserves the NARS host contract;
 - Site MCP fabric is isolated from global/user Codex config;
 - projected terminal input maps ordinary text, slash commands, and JSON frames correctly;

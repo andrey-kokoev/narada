@@ -25,6 +25,9 @@
   "engines": {
     "node": ">=22.0.0"
   },
+  "dependencies": {
+    "@narada-core/sqlite": "workspace:*"
+  },
   "files": [
     "dist/"
   ]

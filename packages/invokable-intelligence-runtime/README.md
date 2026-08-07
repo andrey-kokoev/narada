@@ -56,7 +56,7 @@ model, endpoint, thinking level, or route.
 identity at session startup:
 
 ```
-NARADA_INTELLIGENCE_REGISTRY_DB   registry db path (node:sqlite store)
+NARADA_INTELLIGENCE_REGISTRY_DB   registry db path (runtime-neutral SQLite store)
 NARADA_INTELLIGENCE_TARGET_SITE   e.g. site:thoughts-project
 NARADA_INTELLIGENCE_USER_SITE     e.g. site:andrey-user
 NARADA_INTELLIGENCE_HOST_SITE     e.g. site:andrey-pc

@@ -1,6 +1,6 @@
 /**
  * Shared registry implementation over a SqlExecutor. All store behavior
- * lives here so the node:sqlite and D1 adapters cannot drift apart.
+ * lives here so the local SQLite and D1 adapters cannot drift apart.
  */
 
 import {
