@@ -88,11 +88,13 @@ NARS `session_started`/session-index projections.
 `node` remains the default direct engine. `bun` runs the same NARS JavaScript
 entrypoint through Bun; local SQLite authority uses the conditional
 `@narada-core/sqlite` adapter so the session does not depend on `node:sqlite`.
-`rust` owns the NARS session-core and session-authority paths natively: durable
-session events, lifecycle, input admission, heartbeat/recovery projection, and
-the SQLite authority lease. Provider execution and MCP dispatch remain explicit
-adapter boundaries until their native implementations exist; a native Rust
-session must not delegate session authority or persistence to Node. The engine
+`rust` owns the NARS session-core and session-authority paths natively: the
+Rust session supervisor and core own start/replay, durable session events,
+lifecycle, turn coordination, input admission, cancellation intent,
+heartbeat/recovery projection, and the SQLite authority lease. Provider
+execution and MCP dispatch remain explicit adapter boundaries until their
+native implementations exist; a native Rust session must not delegate
+session authority or persistence to Node. The engine
 choice must not change session authority, lifecycle, health/events, MCP, or
 provider-selection semantics. The canonical `launcher workspace-plan`,
 `launcher workspace-launch`, and `operator-surface runtime start` commands
@@ -107,7 +109,7 @@ Load-bearing boundaries:
 | Launcher planner | Selecting agents, Sites, runtime choice, and launch packet validation. | Provider execution, conversation state, tool execution. |
 | `@narada-core/agent-start` | Identity/session/event creation, Site MCP fabric validation, provider selection, credential projection, launch result materialization. | Runtime protocol, slash command semantics, provider turn loop. |
 | `@narada-core/agent-runtime-server` | Stable machine-addressable session entrypoint, transport projection, and supervision of one session-core instance. | Session persistence internals, provider credentials, task truth, external effect authority. |
-| `@narada-core/nars-session-core` | Session and turn lifecycle, durable event journal, artifacts, input queue state, health, and recovery. | Provider turns, MCP transport, effect admission, client rendering. |
+| `@narada-core/nars-session-core` | Rust/TypeScript session supervisor and core: session and turn lifecycle, durable event journal, artifacts, input queue state, health, and recovery. | Provider turns, MCP transport, effect admission, client rendering. |
 | `@narada-core/nars-capability-gateway` | MCP hosting, gateway lifecycle, explicit capability admission, and tool execution lifecycle/evidence. | Session lifecycle, provider turns, effect confirmation. |
 | `@narada-core/nars-client-projection-contract` | Client projection capability sets, attach command registry, projection command method aliases, and shared operator command/help projection for NARS clients. | Carrier protocol schema validation, runtime session execution, or browser/terminal rendering. |
 | `@narada-core/carrier-protocol` | Carrier request/event vocabulary, schema helpers, input admission classification, and runtime event classification. | Client attach command rendering or client-specific capability lists. |

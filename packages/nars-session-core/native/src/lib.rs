@@ -10,6 +10,10 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::time::{SystemTime, UNIX_EPOCH};
 use uuid::Uuid;
 
@@ -18,6 +22,7 @@ pub mod authority_transition;
 pub mod event_hub;
 pub mod recovery_attempt;
 pub mod session_index;
+pub mod supervisor;
 pub mod surface_attachment;
 
 pub const SESSION_LIFECYCLE_SCHEMA: &str = "narada.nars.session_lifecycle_state.v1";
@@ -72,8 +77,10 @@ pub fn is_terminal_recovery(state: &str) -> bool {
 impl std::error::Error for CoreError {}
 
 /// The native core owns turn admission and terminal state transitions; a
-/// provider adapter contributes only this terminal observation.  Provider
-/// execution and MCP effects stay outside this crate.
+/// provider adapter contributes only the observation of an admitted turn.
+/// `Failed`/`Interrupted` are explicit terminal outcomes; `Error` represents
+/// an adapter failure without a terminal result and remains replayable.
+/// Provider execution and MCP effects stay outside this crate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ProviderOutcome {
     Completed(String),
@@ -81,10 +88,58 @@ pub enum ProviderOutcome {
     Refused(String),
     Failed(String),
     Interrupted(String),
+    /// The adapter could not return a terminal result (for example an
+    /// aborted provider request).  The supervisor keeps this input durable
+    /// for replay, matching the TypeScript supervisor's thrown-error path.
+    Error(String),
+}
+
+/// Cooperative cancellation shared by the Rust supervisor and a provider
+/// adapter.  The supervisor owns the lifecycle; an adapter may poll this
+/// token while performing provider work and return `Interrupted` promptly.
+#[derive(Debug, Clone, Default)]
+pub struct CancellationToken(Arc<AtomicBool>);
+
+impl CancellationToken {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::Release);
+    }
+
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::Acquire)
+    }
+}
+
+/// Context supplied by the Rust-owned session supervisor to a provider
+/// adapter.  The adapter may execute provider calls or MCP effects, but it
+/// does not own NARS lifecycle, queue, journal, or authority semantics.
+pub struct ProviderTurnContext<'a> {
+    pub input: &'a Value,
+    pub turn_id: &'a str,
+    pub input_event_id: &'a str,
+    pub recovery_replay: bool,
+    pub recovery_attempt_id: Option<&'a str>,
+    pub cancellation: CancellationToken,
 }
 
 pub trait NarsProviderAdapter {
     fn run_turn(&mut self, input: &Value) -> ProviderOutcome;
+
+    /// Extended adapter boundary used by the native supervisor.  Existing
+    /// adapters remain source-compatible through the terminal-only default;
+    /// richer adapters can publish carrier/tool/assistant events through the
+    /// supplied sink without taking ownership of the durable journal.
+    fn run_turn_with_context(
+        &mut self,
+        context: ProviderTurnContext<'_>,
+        _event_sink: &mut dyn FnMut(Value) -> Result<(), CoreError>,
+    ) -> Result<ProviderOutcome, CoreError> {
+        Ok(self.run_turn(context.input))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -974,6 +1029,28 @@ impl SessionCore {
         &mut self,
         adapter: &mut dyn NarsProviderAdapter,
     ) -> Result<Vec<Value>, CoreError> {
+        let cancellation = CancellationToken::new();
+        let mut event_sink = |_event: Value| -> Result<(), CoreError> { Ok(()) };
+        self.drain_once_with_adapter_and_context(
+            adapter,
+            false,
+            None,
+            cancellation,
+            &mut event_sink,
+        )
+    }
+
+    /// Drain one queue item under the Rust-owned supervisor context.  The
+    /// provider remains an adapter, but lifecycle, admission, journal, turn
+    /// transitions, and terminalization remain owned here.
+    pub fn drain_once_with_adapter_and_context(
+        &mut self,
+        adapter: &mut dyn NarsProviderAdapter,
+        recovery_replay: bool,
+        recovery_attempt_id: Option<&str>,
+        cancellation: CancellationToken,
+        event_sink: &mut dyn FnMut(Value) -> Result<(), CoreError>,
+    ) -> Result<Vec<Value>, CoreError> {
         let Some(input) = self.pending.first().cloned() else {
             return Ok(Vec::new());
         };
@@ -1066,10 +1143,7 @@ impl SessionCore {
             .and_then(Value::as_str)
             .unwrap_or_default()
             .to_string();
-        if matches!(
-            current_turn_state.as_str(),
-            "completed" | "blocked" | "refused"
-        ) {
+        if is_terminal_turn(&current_turn_state) {
             let terminal = self
                 .turns
                 .get(&event_id)
@@ -1100,58 +1174,120 @@ impl SessionCore {
             "evaluating",
             json!({ "observed_event": "input_event_started" }),
         )?;
-        let terminal = match adapter.run_turn(&input) {
-            ProviderOutcome::Completed(response_content) => {
-                events.push(self.append_event(json!({ "event": "assistant_message", "turn_id": event_id, "input_event_id": event_id, "content": response_content }))?);
-                self.transition_turn(
-                    &event_id,
-                    "reconciling",
-                    json!({ "observed_event": "assistant_message" }),
-                )?;
-                self.transition_turn(
-                    &event_id,
-                    "completed",
-                    json!({ "terminal_status": "completed" }),
-                )?;
-                "completed"
+        let provider_start_sequence = self.journal.next_sequence();
+        let context = ProviderTurnContext {
+            input: &input,
+            turn_id: &event_id,
+            input_event_id: &event_id,
+            recovery_replay,
+            recovery_attempt_id,
+            cancellation: cancellation.clone(),
+        };
+        let cancellation_requested = cancellation.is_cancelled();
+        let outcome = if cancellation.is_cancelled() {
+            ProviderOutcome::Interrupted("provider_request_cancelled".to_string())
+        } else {
+            let mut sink = |event: Value| -> Result<(), CoreError> {
+                let published = self.append_event(event)?;
+                self.observe_turn_event(&published)?;
+                event_sink(published)
+            };
+            match adapter.run_turn_with_context(context, &mut sink) {
+                Ok(outcome) => outcome,
+                Err(error) => ProviderOutcome::Error(error.0),
             }
-            ProviderOutcome::Refused(reason) => {
-                self.transition_turn(
-                    &event_id,
-                    "refused",
-                    json!({ "reason": reason, "terminal_status": "refused" }),
-                )?;
-                "refused"
-            }
-            ProviderOutcome::Failed(error) => {
-                self.transition_turn(
-                    &event_id,
-                    "failed",
-                    json!({ "error": error, "terminal_status": "failed" }),
-                )?;
-                "failed"
-            }
-            ProviderOutcome::Interrupted(reason) => {
-                self.transition_turn(
-                    &event_id,
-                    "interrupted",
-                    json!({ "reason": reason, "terminal_status": "interrupted" }),
-                )?;
-                "interrupted"
-            }
-            ProviderOutcome::Blocked(reason) => {
-                events.push(self.append_event(json!({ "event": "turn_blocked", "turn_id": event_id, "reason": reason, "terminal_state": "blocked" }))?);
-                self.transition_turn(
-                    &event_id,
-                    "blocked",
-                    json!({ "reason": reason, "terminal_status": "blocked" }),
-                )?;
-                "blocked"
+        };
+        events.extend(self.events_after(provider_start_sequence));
+        let adapter_error = matches!(&outcome, ProviderOutcome::Error(_));
+        let current_after_events = self
+            .turns
+            .get(&event_id)
+            .and_then(|turn| turn.get("turn_state"))
+            .and_then(Value::as_str)
+            .unwrap_or_default()
+            .to_string();
+        let event_interrupted = current_after_events == "interrupted";
+        let terminal = if is_terminal_turn(&current_after_events) {
+            current_after_events
+        } else {
+            match outcome {
+                ProviderOutcome::Completed(response_content) => {
+                    if current_after_events != "reconciling" {
+                        events.push(self.append_event(json!({ "event": "assistant_message", "turn_id": event_id, "input_event_id": event_id, "content": response_content }))?);
+                        self.transition_turn(
+                            &event_id,
+                            "reconciling",
+                            json!({ "observed_event": "assistant_message" }),
+                        )?;
+                    }
+                    self.transition_turn(
+                        &event_id,
+                        "completed",
+                        json!({ "terminal_status": "completed" }),
+                    )?;
+                    "completed".to_string()
+                }
+                ProviderOutcome::Refused(reason) => {
+                    self.transition_turn(
+                        &event_id,
+                        "refused",
+                        json!({ "reason": reason, "terminal_status": "refused" }),
+                    )?;
+                    "refused".to_string()
+                }
+                ProviderOutcome::Failed(error) => {
+                    self.transition_turn(
+                        &event_id,
+                        "failed",
+                        json!({ "error": error, "terminal_status": "failed" }),
+                    )?;
+                    "failed".to_string()
+                }
+                ProviderOutcome::Interrupted(reason) => {
+                    self.transition_turn(
+                        &event_id,
+                        "interrupted",
+                        json!({ "reason": reason, "terminal_status": "interrupted" }),
+                    )?;
+                    "interrupted".to_string()
+                }
+                ProviderOutcome::Error(error) => {
+                    let interrupted = error.to_ascii_lowercase().contains("abort")
+                        || error.to_ascii_lowercase().contains("cancel")
+                        || error.to_ascii_lowercase().contains("interrupt");
+                    if interrupted {
+                        self.transition_turn(
+                            &event_id,
+                            "interrupted",
+                            json!({ "error": error, "terminal_status": "interrupted" }),
+                        )?;
+                        "interrupted".to_string()
+                    } else {
+                        self.transition_turn(
+                            &event_id,
+                            "failed",
+                            json!({ "error": error, "terminal_status": "failed" }),
+                        )?;
+                        "failed".to_string()
+                    }
+                }
+                ProviderOutcome::Blocked(reason) => {
+                    events.push(self.append_event(json!({ "event": "turn_blocked", "turn_id": event_id, "reason": reason, "terminal_state": "blocked" }))?);
+                    self.transition_turn(
+                        &event_id,
+                        "blocked",
+                        json!({ "reason": reason, "terminal_status": "blocked" }),
+                    )?;
+                    "blocked".to_string()
+                }
             }
         };
         events.push(self.append_event(json!({ "event": "input_event_completed", "input_event_id": event_id, "event_id": event_id, "request_id": input.get("request_id"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted", "terminal_state": terminal, "idempotency_key": input.get("idempotency_key") }))?);
         events.push(self.append_event(json!({ "event": "input_completed", "input_event_id": event_id, "request_id": input.get("request_id"), "terminal_state": terminal, "idempotency_key": input.get("idempotency_key"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted" }))?);
-        self.pending.remove(0);
+        let recoverable = adapter_error || cancellation_requested || event_interrupted;
+        if !recoverable {
+            self.pending.remove(0);
+        }
         self.admission
             .insert(event_id.clone(), "admitted".to_string());
         if let Some(key) = string_field(&input, "idempotency_key") {
@@ -1159,7 +1295,11 @@ impl SessionCore {
                 record["terminal_state"] = json!(terminal);
             }
         }
-        self.persist_queue("completed")?;
+        self.persist_queue(if recoverable {
+            "recoverable"
+        } else {
+            "completed"
+        })?;
         Ok(events)
     }
 
@@ -1567,24 +1707,35 @@ impl SessionCore {
     }
 
     pub fn cancel(&mut self) -> Result<Vec<Value>, CoreError> {
+        self.cancel_with_evidence(Value::Null)
+    }
+
+    pub fn cancel_with_evidence(&mut self, evidence: Value) -> Result<Vec<Value>, CoreError> {
         let mut events = Vec::new();
         let cancelled = self.active_turn_id.clone();
-        events.push(self.append_event(
-            json!({ "event": "session_turn_cancel_requested", "turn_id": cancelled }),
-        )?);
+        let mut requested = json!({
+            "event": "session_turn_cancel_requested",
+            "turn_id": cancelled,
+        });
+        merge_object(&mut requested, evidence.clone());
+        events.push(self.append_event(requested)?);
         if let Some(turn_id) = cancelled.as_deref() {
-            self.transition_turn(
-                turn_id,
-                "interrupted",
-                json!({ "reason": "session_cancel", "terminal_status": "interrupted" }),
-            )?;
-            events.push(
-                self.append_event(json!({ "event": "interrupt_requested", "turn_id": turn_id }))?,
-            );
+            let mut transition = json!({
+                "reason": "session_cancel",
+                "terminal_status": "interrupted",
+            });
+            merge_object(&mut transition, evidence.clone());
+            self.transition_turn(turn_id, "interrupted", transition)?;
+            let mut interrupt = json!({ "event": "interrupt_requested", "turn_id": turn_id });
+            merge_object(&mut interrupt, evidence.clone());
+            events.push(self.append_event(interrupt)?);
         }
-        events.push(self.append_event(
-            json!({ "event": "session_cancel", "cancelled": cancelled.is_some() }),
-        )?);
+        let mut completed = json!({
+            "event": "session_cancel",
+            "cancelled": cancelled.is_some(),
+        });
+        merge_object(&mut completed, evidence);
+        events.push(self.append_event(completed)?);
         Ok(events)
     }
 
@@ -1610,7 +1761,7 @@ impl SessionCore {
         // TypeScript supervisor would establish before finalizing the queue.
         let had_active_turn = self.turn_is_running();
         if had_active_turn {
-            events.extend(self.cancel()?);
+            events.extend(self.cancel_with_evidence(evidence.clone())?);
         }
         if self.shutdown_state == "idle" {
             let next = if had_active_turn {
@@ -2198,9 +2349,16 @@ impl SessionCore {
         let completed: BTreeSet<String> = events
             .iter()
             .filter(|event| {
-                matches!(
-                    string_field(event, "event").as_deref(),
-                    Some("input_event_completed") | Some("input_abandoned_on_session_end")
+                if string_field(event, "event").as_deref() == Some("input_abandoned_on_session_end")
+                {
+                    return true;
+                }
+                if string_field(event, "event").as_deref() != Some("input_event_completed") {
+                    return false;
+                }
+                !matches!(
+                    string_field(event, "terminal_state").as_deref(),
+                    Some("failed" | "interrupted")
                 )
             })
             .filter_map(|event| {
@@ -3183,6 +3341,7 @@ impl NarsProviderAdapter for ModeProvider {
             "echo" => ProviderOutcome::Completed(format!("native-rust: {content}")),
             "refused" => ProviderOutcome::Refused("native_provider_adapter_refused".to_string()),
             "failed" => ProviderOutcome::Failed("native_provider_adapter_failed".to_string()),
+            "error" => ProviderOutcome::Error("native_provider_adapter_error".to_string()),
             "interrupted" => {
                 ProviderOutcome::Interrupted("native_provider_adapter_interrupted".to_string())
             }

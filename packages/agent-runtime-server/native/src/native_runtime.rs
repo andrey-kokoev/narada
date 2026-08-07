@@ -1,6 +1,7 @@
 use narada_nars_session_authority::AuthorityBinding;
 use narada_nars_session_core::{
-    session_index, CoreError, NarsProviderAdapter, ProviderOutcome, SessionCore, SessionCoreConfig,
+    session_index, supervisor::SessionSupervisor, CoreError, NarsProviderAdapter, ProviderOutcome,
+    SessionCore, SessionCoreConfig,
 };
 use serde_json::{json, Map, Value};
 use std::env;
@@ -244,7 +245,7 @@ fn sequence_as_u64(value: &Value) -> Option<u64> {
 
 pub struct NativeRuntime {
     config: NativeRuntimeConfig,
-    core: SessionCore,
+    supervisor: SessionSupervisor,
     session_dir: Option<PathBuf>,
     heartbeat_path: Option<PathBuf>,
     authority: Option<AuthorityBinding>,
@@ -271,6 +272,7 @@ impl NarsProviderAdapter for EnvironmentProviderAdapter {
             "echo" => ProviderOutcome::Completed(format!("native-rust: {content}")),
             "refused" => ProviderOutcome::Refused("native_provider_adapter_refused".to_string()),
             "failed" => ProviderOutcome::Failed("native_provider_adapter_failed".to_string()),
+            "error" => ProviderOutcome::Error("native_provider_adapter_error".to_string()),
             "interrupted" => {
                 ProviderOutcome::Interrupted("native_provider_adapter_interrupted".to_string())
             }
@@ -309,7 +311,7 @@ impl NativeRuntime {
         .map_err(|error| error.to_string())?;
         let runtime = Self {
             config,
-            core,
+            supervisor: SessionSupervisor::new(core),
             session_dir,
             heartbeat_path,
             authority,
@@ -395,115 +397,28 @@ impl NativeRuntime {
                 "starting"
             },
         );
-        put(&mut event, "lifecycle_state", self.core.lifecycle_state());
+        put(
+            &mut event,
+            "lifecycle_state",
+            self.supervisor.core().lifecycle_state(),
+        );
         let mut output = vec![self
-            .core
+            .supervisor
+            .core_mut()
             .append_event(Value::Object(event))
             .map_err(core_error)?];
-        if self.core.lifecycle_state() == "starting" {
-            output.extend(
-                self.core
-                    .transition_lifecycle("ready", json!({ "reason": "native_runtime_started" }))
-                    .map_err(core_error)?,
-            );
-        }
+        output.extend(self.supervisor.start().map_err(core_error)?);
         if let Some(authority) = self.authority.as_mut() {
             authority
                 .activate(&now_iso(), Some(std::process::id() as i64))
                 .map_err(|error| error.to_string())?;
         }
-        if self.core.pending_count() > 0 {
-            let mode =
-                env::var("NARADA_NATIVE_PROVIDER_MODE").unwrap_or_else(|_| "blocked".to_string());
-            while self.core.pending_count() > 0 {
-                let head = self
-                    .core
-                    .queue_items()
-                    .first()
-                    .cloned()
-                    .unwrap_or(Value::Null);
-                let head_held = head.get("admission_state").and_then(Value::as_str) == Some("held")
-                    || head
-                        .get("hold_condition")
-                        .and_then(Value::as_str)
-                        .is_some_and(|value| !value.trim().is_empty());
-                if head_held {
-                    break;
-                }
-                let start = self
-                    .core
-                    .cursor()
-                    .get("last_sequence")
-                    .and_then(Value::as_u64)
-                    .unwrap_or(0);
-                let input_id = self
-                    .core
-                    .queue_items()
-                    .first()
-                    .and_then(|item| string_value(item.get("event_id")));
-                let attempt = self
-                    .core
-                    .begin_recovery_attempt(
-                        input_id.as_deref(),
-                        Some("native_startup_queue_replay"),
-                    )
-                    .map_err(core_error)?;
-                let attempt_id = string_value(attempt.get("attempt_id")).unwrap_or_default();
-                self.core
-                    .transition_recovery_attempt(
-                        &attempt_id,
-                        "claimed",
-                        Some("native_runtime_started"),
-                        None,
-                    )
-                    .map_err(core_error)?;
-                self.core
-                    .transition_recovery_attempt(
-                        &attempt_id,
-                        "replaying",
-                        Some("native_runtime_queue_drain"),
-                        None,
-                    )
-                    .map_err(core_error)?;
-                let before = self.core.pending_count();
-                let mut adapter = EnvironmentProviderAdapter { mode: mode.clone() };
-                self.core
-                    .drain_once_with_adapter(&mut adapter)
-                    .map_err(core_error)?;
-                let progressed = self.core.pending_count() < before;
-                if progressed {
-                    self.core
-                        .transition_recovery_attempt(
-                            &attempt_id,
-                            "reconciled",
-                            Some("native_runtime_queue_replayed"),
-                            None,
-                        )
-                        .map_err(core_error)?;
-                    self.core
-                        .transition_recovery_attempt(
-                            &attempt_id,
-                            "completed",
-                            Some("native_runtime_queue_replayed"),
-                            None,
-                        )
-                        .map_err(core_error)?;
-                } else {
-                    self.core
-                        .transition_recovery_attempt(
-                            &attempt_id,
-                            "abandoned",
-                            Some("native_runtime_queue_head_held"),
-                            None,
-                        )
-                        .map_err(core_error)?;
-                }
-                output.extend(self.core.events_after(start));
-                if !progressed {
-                    break;
-                }
-            }
-        }
+        let mut adapter = EnvironmentProviderAdapter::from_environment();
+        output.extend(
+            self.supervisor
+                .recover_with_adapter(&mut adapter)
+                .map_err(core_error)?,
+        );
         self.write_session_projection(Some(&output[0]))?;
         self.write_heartbeat("alive", "session_started")?;
         Ok(output)
@@ -547,11 +462,14 @@ impl NativeRuntime {
     }
 
     fn health(&self, request_id: Option<String>) -> Value {
-        let mut value = self.core.health(if self.config.mcp_scope == "none" {
-            "disabled"
-        } else {
-            "degraded"
-        });
+        let mut value = self
+            .supervisor
+            .core()
+            .health(if self.config.mcp_scope == "none" {
+                "disabled"
+            } else {
+                "degraded"
+            });
         if let Some(object) = value.as_object_mut() {
             object.insert("request_id".to_string(), json!(request_id));
             object.insert("runtime".to_string(), json!("narada-agent-runtime-server"));
@@ -576,7 +494,8 @@ impl NativeRuntime {
     }
 
     fn poll_subscription_events(&mut self) -> Vec<Value> {
-        self.core
+        self.supervisor
+            .core_mut()
             .poll_event_subscriptions()
             .into_iter()
             .map(|mut envelope| {
@@ -589,7 +508,7 @@ impl NativeRuntime {
     }
 
     fn recovery(&self, request_id: Option<String>) -> Value {
-        let mut value = self.core.recovery();
+        let mut value = self.supervisor.recovery();
         if let Some(object) = value.as_object_mut() {
             object.insert("request_id".to_string(), json!(request_id));
             object.insert("runtime_engine_kind".to_string(), json!("rust"));
@@ -615,7 +534,8 @@ impl NativeRuntime {
             return Err("invalid_session_event_params".to_string());
         }
         let page = self
-            .core
+            .supervisor
+            .core()
             .events_page_contract(&options)
             .map_err(core_error)?;
         let mut response = page;
@@ -680,14 +600,17 @@ impl NativeRuntime {
             .cloned()
             .unwrap_or_default();
         filters.insert("view".to_string(), json!(view));
-        self.core
+        self.supervisor
+            .core_mut()
             .subscribe_events(Some(&subscription_id), Value::Object(filters.clone()));
         if include_replay {
-            self.core
+            self.supervisor
+                .core_mut()
                 .begin_event_replay(&subscription_id, json!({ "source": "event_log" }))
                 .map_err(core_error)?;
         } else {
-            self.core
+            self.supervisor
+                .core_mut()
                 .mark_event_subscription_live(
                     &subscription_id,
                     json!({ "source": "subscription_without_replay" }),
@@ -720,7 +643,8 @@ impl NativeRuntime {
                 options.insert("since_timestamp".to_string(), value.clone());
             }
             let page = self
-                .core
+                .supervisor
+                .core()
                 .events_page_contract(&Value::Object(options))
                 .map_err(core_error)?;
             replay = page
@@ -798,7 +722,8 @@ impl NativeRuntime {
                 })
                 .cloned()
                 .unwrap_or(Value::Null);
-            self.core
+            self.supervisor
+                .core_mut()
                 .mark_event_subscription_live(
                     &subscription_id,
                     json!({
@@ -823,19 +748,14 @@ impl NativeRuntime {
             .filter(|value| !value.trim().is_empty())
             .ok_or_else(|| "content_required".to_string())?;
         let input_id = request_id.clone().unwrap_or_else(|| new_id("input"));
-        let start_sequence = self
-            .core
-            .cursor()
-            .get("last_sequence")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
         let mut accepted = map_event("session_control_accepted");
         put(&mut accepted, "request_id", request_id.clone());
         put(&mut accepted, "method", "session.submit");
         put(&mut accepted, "acceptance_state", "accepted");
         put(&mut accepted, "transport", "jsonl_stdio");
         let accepted = self
-            .core
+            .supervisor
+            .core_mut()
             .append_event(Value::Object(accepted))
             .map_err(core_error)?;
         let mut input = json!({ "event_id": input_id, "request_id": request_id, "content": content, "source": "manual_operator", "source_kind": "operator", "transport": "jsonl_stdio", "delivery_mode": "immediate" });
@@ -854,13 +774,13 @@ impl NativeRuntime {
                 }
             }
         }
-        self.core.enqueue(input).map_err(core_error)?;
         let mut adapter = EnvironmentProviderAdapter::from_environment();
-        self.core
-            .drain_once_with_adapter(&mut adapter)
-            .map_err(core_error)?;
         let mut output = vec![accepted];
-        output.extend(self.core.events_after(start_sequence));
+        output.extend(
+            self.supervisor
+                .submit_with_adapter(input, &mut adapter)
+                .map_err(core_error)?,
+        );
         let terminal_state = output
             .iter()
             .rev()
@@ -886,7 +806,8 @@ impl NativeRuntime {
             },
         );
         output.push(
-            self.core
+            self.supervisor
+                .core_mut()
                 .append_event(Value::Object(response))
                 .map_err(core_error)?,
         );
@@ -918,7 +839,8 @@ impl NativeRuntime {
         put(&mut accepted, "method", "session.command.execute");
         put(&mut accepted, "command", command.clone());
         let mut result = vec![self
-            .core
+            .supervisor
+            .core_mut()
             .append_event(Value::Object(accepted))
             .map_err(core_error)?];
         let mut command_result = map_event("command_result");
@@ -934,14 +856,15 @@ impl NativeRuntime {
             &mut command_result,
             "summary",
             if command == "status" || command == "/status" {
-                format!("session {}", self.core.lifecycle_state())
+                format!("session {}", self.supervisor.core().lifecycle_state())
             } else {
                 format!("{command} is handled by native Rust")
             },
         );
         put(&mut command_result, "terminal_state", "completed");
         result.push(
-            self.core
+            self.supervisor
+                .core_mut()
                 .append_event(Value::Object(command_result))
                 .map_err(core_error)?,
         );
@@ -950,7 +873,8 @@ impl NativeRuntime {
         put(&mut response, "method", "session.command.execute");
         put(&mut response, "terminal_state", "completed");
         result.push(
-            self.core
+            self.supervisor
+                .core_mut()
                 .append_event(Value::Object(response))
                 .map_err(core_error)?,
         );
@@ -958,11 +882,12 @@ impl NativeRuntime {
     }
 
     fn cancel(&mut self, request_id: Option<String>) -> Result<Vec<Value>, String> {
-        let mut output = self.core.cancel().map_err(core_error)?;
+        let mut output = self.supervisor.cancel(Value::Null).map_err(core_error)?;
         let mut event = map_event("session_cancel");
         put(&mut event, "request_id", request_id);
         output.push(
-            self.core
+            self.supervisor
+                .core_mut()
                 .append_event(Value::Object(event))
                 .map_err(core_error)?,
         );
@@ -981,32 +906,29 @@ impl NativeRuntime {
         put(&mut accepted, "method", "session.close");
         put(&mut accepted, "acceptance_state", "accepted");
         output.push(
-            self.core
+            self.supervisor
+                .core_mut()
                 .append_event(Value::Object(accepted))
                 .map_err(core_error)?,
         );
-        let start = self
-            .core
-            .cursor()
-            .get("last_sequence")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
         let mut response = map_event("session_control_response");
         put(&mut response, "request_id", request_id.clone());
         put(&mut response, "method", "session.close");
         put(&mut response, "terminal_state", "completed");
         output.push(
-            self.core
+            self.supervisor
+                .core_mut()
                 .append_event(Value::Object(response))
                 .map_err(core_error)?,
         );
-        self.core
-            .close_with_evidence(
-                "control_request",
-                json!({ "request_id": request_id.clone() }),
-            )
-            .map_err(core_error)?;
-        output.extend(self.core.events_after(start + 1));
+        output.extend(
+            self.supervisor
+                .close_with_evidence(
+                    "control_request",
+                    json!({ "request_id": request_id.clone() }),
+                )
+                .map_err(core_error)?,
+        );
         self.closed = true;
         self.write_session_projection(None)?;
         self.write_heartbeat("stopped", "session_closed")?;
@@ -1035,7 +957,8 @@ impl NativeRuntime {
         put(&mut event, "code", error);
         put(&mut event, "error", error);
         Ok(vec![self
-            .core
+            .supervisor
+            .core_mut()
             .append_event(Value::Object(event))
             .map_err(core_error)?])
     }
@@ -1089,7 +1012,7 @@ impl NativeRuntime {
             )
             .map_err(core_error)?;
         }
-        if self.core.lifecycle_state() == "closed" {
+        if self.supervisor.core().lifecycle_state() == "closed" {
             session_index::mark_closed(
                 Some(&session_path),
                 "closed",
@@ -1182,7 +1105,8 @@ mod tests {
         let mut runtime = test_runtime(&root);
         runtime.startup().unwrap();
         runtime
-            .core
+            .supervisor
+            .core_mut()
             .append_event(json!({
                 "event": "user_message",
                 "request_id": "request-1",
@@ -1191,7 +1115,8 @@ mod tests {
             }))
             .unwrap();
         runtime
-            .core
+            .supervisor
+            .core_mut()
             .append_event(json!({
                 "event": "session_health",
                 "event_sequence": 4,

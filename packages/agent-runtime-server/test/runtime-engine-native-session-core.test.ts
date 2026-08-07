@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { createNarsSessionSupervisor } from '@narada-core/nars-session-core/session-supervisor';
 import {
   buildSessionAuthorityEnvironment,
   normalizeSessionPrincipal,
@@ -193,5 +194,100 @@ test('Rust rehydrates a durable queue, records a recovery attempt, and preserves
     assert.deepEqual(sequences, sequences.map((_: number, index: number) => index + 1));
   } finally {
     await rm(siteRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  }
+});
+
+test('Rust supervisor preserves the TypeScript supervisor turn/admission contract', {
+  skip: !existsSync(nativeBinary),
+  timeout: 30_000,
+}, async () => {
+  const tsRoot = await mkdtemp(join(tmpdir(), 'narada-supervisor-parity-ts-'));
+  const rustRoot = await mkdtemp(join(tmpdir(), 'narada-supervisor-parity-rust-'));
+  const summarize = (events: Record<string, any>[]) => ({
+    lifecycle: events
+      .filter((event) => event.event === 'session_lifecycle_transition')
+      .map((event) => event.lifecycle_state),
+    admission: events
+      .filter((event) => (event.input_event_id ?? event.event_id) === 'input_parity' && ['input_event_queued', 'input_event_started'].includes(event.event))
+      .map((event) => event.event === 'input_event_started' ? 'admitted' : 'queued'),
+    turn: events
+      .filter((event) => event.event === 'turn_lifecycle_transition' && event.turn_id === 'input_parity')
+      .map((event) => event.turn_state),
+    terminal: events
+      .filter((event) => event.event === 'input_event_completed' && (event.input_event_id ?? event.event_id) === 'input_parity')
+      .map((event) => event.terminal_state),
+    assistant: events.some((event) => event.event === 'assistant_message' && event.turn_id === 'input_parity'),
+  });
+  try {
+    const tsEventsPath = join(tsRoot, 'events.jsonl');
+    const tsSupervisor = createNarsSessionSupervisor({
+      sessionCoreOptions: {
+        sessionId: 'parity-ts',
+        agentId: 'parity-agent',
+        sessionPath: join(tsRoot, 'session.json'),
+        eventsPath: tsEventsPath,
+        siteRoot: tsRoot,
+      },
+      carrier: {
+        runTurn: async (context, eventSink) => {
+          await eventSink({ kind: 'assistant_message', turn_id: context.turnId, content: 'hello' });
+          return { content: 'hello' };
+        },
+      },
+    });
+    tsSupervisor.start();
+    await tsSupervisor.submit({ event_id: 'input_parity', content: 'hello' });
+    await tsSupervisor.close();
+    const tsEvents = readFileSync(tsEventsPath, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, any>);
+
+    const child = spawn(nativeBinary, [
+      '--raw-jsonl', '--no-health', '--no-events', '--identity', 'parity-agent', '--session', 'parity-rust',
+    ], {
+      cwd: packageRoot,
+      env: {
+        ...process.env,
+        NARADA_AGENT_ID: 'parity-agent',
+        NARADA_SITE_ROOT: rustRoot,
+        NARADA_RUNTIME_ENGINE: 'rust',
+        NARADA_NATIVE_PROVIDER_MODE: 'echo',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    });
+    let stderr = '';
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk) => { stderr += String(chunk); });
+    child.stdin.end([
+      { id: 'input_parity', method: 'session.submit', params: { content: 'hello' } },
+      { id: 'parity-close', method: 'session.close', params: {} },
+    ].map((request) => JSON.stringify(request)).join('\n') + '\n');
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      const timer = setTimeout(() => { child.kill(); reject(new Error(`supervisor_parity_timeout:${stderr.slice(-400)}`)); }, 20_000);
+      child.once('error', reject);
+      child.once('close', (code) => { clearTimeout(timer); resolve(code ?? 1); });
+    });
+    assert.equal(exitCode, 0, stderr);
+    const rustEventsPath = join(rustRoot, '.narada', 'crew', 'nars-sessions', 'parity-rust', 'events.jsonl');
+    const rustEvents = readFileSync(rustEventsPath, 'utf8')
+      .trim()
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .map((line) => JSON.parse(line) as Record<string, any>);
+
+    const tsSummary = summarize(tsEvents);
+    const rustSummary = summarize(rustEvents);
+    assert.deepEqual(rustSummary.admission, tsSummary.admission);
+    assert.deepEqual(rustSummary.turn, tsSummary.turn);
+    assert.deepEqual(rustSummary.terminal, tsSummary.terminal);
+    assert.equal(rustSummary.assistant, tsSummary.assistant);
+    assert.deepEqual(rustSummary.lifecycle.slice(0, 1), tsSummary.lifecycle.slice(0, 1));
+    assert.equal(rustSummary.lifecycle.at(-1), 'closed');
+  } finally {
+    await rm(tsRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+    await rm(rustRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
   }
 });
