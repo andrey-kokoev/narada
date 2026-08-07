@@ -86,7 +86,7 @@ if ($AgentTuiStartingDirectiveFile) { $flags += @("--agent-tui-starting-directiv
 $env:NARADA_AGENT_ID = $Agent
 $env:NARADA_TARGET_SITE_ROOT = $siteRoot
 $env:NARADA_LAUNCH_REGISTRY_SITE_ROOT = $siteRoot
-$tsxLoader = "file:///D:/code/narada/node_modules/.pnpm/tsx@4.21.0/node_modules/tsx/dist/loader.mjs"
+$tsxLoader = [System.Uri]::new((Join-Path $naradaProperRoot 'node_modules\tsx\dist\loader.mjs')).AbsoluteUri
 Push-Location -LiteralPath $PSScriptRoot
 try {
   & node --import $tsxLoader $agentStart @flags

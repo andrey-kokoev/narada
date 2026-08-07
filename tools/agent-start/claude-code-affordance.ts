@@ -24,7 +24,7 @@ function buildAffordance({ siteRoot, launchResult = null }: any) {
     requests: {
       launch: {
         kind: 'launch_request',
-        command: 'node --import tsx packages\\agent-start\\src\\narada-agent-start.ts narada.builder --site-root D:\\code\\narada --target-site-root D:\\code\\narada --runtime claude-code --exec --dry-run --json',
+        command: `node --import tsx packages\\agent-start\\src\\narada-agent-start.ts narada.builder --site-root "${siteRoot}" --target-site-root "${siteRoot}" --runtime claude-code --exec --dry-run --json`,
         authority: 'operator_confirms_process_launch',
       },
       resume: {

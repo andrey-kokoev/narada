@@ -1,11 +1,16 @@
 [CmdletBinding()]
 param(
-  [string]$SiteRoot = "D:\code\narada",
+  [string]$SiteRoot,
   [switch]$DryRun,
   [switch]$NoCodex
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $SiteRoot) {
+  $sourceRoot = if ($env:NARADA_SRC_ROOT) { $env:NARADA_SRC_ROOT } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'src' }
+  $SiteRoot = if ($env:NARADA_PROPER_ROOT) { $env:NARADA_PROPER_ROOT } elseif ($env:NARADA_ROOT) { $env:NARADA_ROOT } else { Join-Path $sourceRoot 'narada' }
+}
 
 function Write-JsonLine {
   param([hashtable]$Object)

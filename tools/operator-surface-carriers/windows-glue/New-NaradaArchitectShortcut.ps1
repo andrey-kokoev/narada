@@ -1,12 +1,19 @@
 [CmdletBinding()]
 param(
-  [string]$SiteRoot = "D:\code\narada",
-  [string]$ShortcutPath = "D:\code\narada\.crew\agent-shortcuts\Narada Architect (codex).lnk",
-  [string]$AliasShortcutPath = "D:\code\narada\.crew\agent-shortcuts\narada-architect.lnk",
+  [string]$SiteRoot,
+  [string]$ShortcutPath,
+  [string]$AliasShortcutPath,
   [switch]$VerifyOnly
 )
 
 $ErrorActionPreference = "Stop"
+
+if (-not $SiteRoot) {
+  $sourceRoot = if ($env:NARADA_SRC_ROOT) { $env:NARADA_SRC_ROOT } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'src' }
+  $SiteRoot = if ($env:NARADA_PROPER_ROOT) { $env:NARADA_PROPER_ROOT } elseif ($env:NARADA_ROOT) { $env:NARADA_ROOT } else { Join-Path $sourceRoot 'narada' }
+}
+if (-not $ShortcutPath) { $ShortcutPath = Join-Path $SiteRoot '.crew\agent-shortcuts\Narada Architect (codex).lnk' }
+if (-not $AliasShortcutPath) { $AliasShortcutPath = Join-Path $SiteRoot '.crew\agent-shortcuts\narada-architect.lnk' }
 
 $resolvedSiteRoot = (Resolve-Path -LiteralPath $SiteRoot).Path
 $scriptPath = Join-Path $resolvedSiteRoot "tools\operator-surface-carriers\windows-glue\Start-NaradaArchitect.ps1"

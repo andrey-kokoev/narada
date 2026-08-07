@@ -1,27 +1,27 @@
 param(
     [string]$VsDevCmd = "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\Common7\Tools\VsDevCmd.bat",
-    [string]$NaradaRoot = "D:\code\narada",
+    [string]$NaradaRoot,
     [string]$NaradaAndreyRoot = "C:\Users\Andrey\Narada",
-    [string]$StaccatoRoot = "D:\code\narada.staccato\.narada",
-    [string]$RevolutionRoot = "D:\code\narada.revolution",
+    [string]$StaccatoRoot,
+    [string]$RevolutionRoot,
     [string]$TimourMarketingAgentRoot = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada",
-    [string]$UtzRoot = "D:\code\narada.utz\.narada",
-    [string]$SonarRoot = "D:\code\narada.sonar",
-    [string]$SmartRoot = "D:\code\smart-scheduling",
+    [string]$UtzRoot,
+    [string]$SonarRoot,
+    [string]$SmartRoot,
     [string]$SmartSiteRoot,
-    [string]$ThoughtsRoot = "D:\code\thoughts",
+    [string]$ThoughtsRoot,
     [string]$ThoughtsSiteRoot,
-    [string]$NaradaProperAgentCliEvidence = "D:\code\narada\.narada\crew\agent-start-results\agent_start_20260531_000417547_narada_architect.result.json",
-    [string]$NaradaProperAgentTuiEvidence = "D:\code\narada\.narada\crew\agent-start-results\agent_start_20260531_041426614_narada_architect.result.json",
+    [string]$NaradaProperAgentCliEvidence,
+    [string]$NaradaProperAgentTuiEvidence,
     [string]$NaradaAndreyAgentCliEvidence = "C:\Users\Andrey\Narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-19_e5147cef.result.json",
     [string]$NaradaAndreyAgentTuiEvidence = "C:\Users\Andrey\Narada\.ai\runtime\agent-start-results\evt-2026-05-31_04-27-29_a23016ab.result.json",
-    [string]$StaccatoAgentCliEvidence = "D:\code\narada.staccato\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-20_131e872d.result.json",
-    [string]$RevolutionAgentCliEvidence = "D:\code\narada.revolution\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-22_c13890e1.result.json",
+    [string]$StaccatoAgentCliEvidence,
+    [string]$RevolutionAgentCliEvidence,
     [string]$TimourMarketingAgentCliEvidence = "C:\Users\Andrey\Vose Software BE\Timour Koupeev - MarketingAgent\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-23_466ee6d9.result.json",
-    [string]$UtzAgentCliEvidence = "D:\code\narada.utz\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-24_747be7a9.result.json",
-    [string]$NaradaSonarAgentCliEvidence = "D:\code\narada.sonar\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-25_28290811.result.json",
-    [string]$SmartSchedulingAgentCliEvidence = "D:\code\smart-scheduling\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-26_b975144f.result.json",
-    [string]$ThoughtsProjectAgentCliEvidence = "D:\code\thoughts\.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-27_275473a1.result.json",
+    [string]$UtzAgentCliEvidence,
+    [string]$NaradaSonarAgentCliEvidence,
+    [string]$SmartSchedulingAgentCliEvidence,
+    [string]$ThoughtsProjectAgentCliEvidence,
     [switch]$RefreshAgentCli,
     [switch]$AllowInteractiveAgentCliRefresh,
     [switch]$RefreshNaradaAndreyTui,
@@ -30,6 +30,23 @@ param(
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
+
+$SourceRoot = if ($env:NARADA_SRC_ROOT) { $env:NARADA_SRC_ROOT } else { Join-Path ([Environment]::GetFolderPath('UserProfile')) 'src' }
+if (-not $NaradaRoot) { $NaradaRoot = if ($env:NARADA_PROPER_ROOT) { $env:NARADA_PROPER_ROOT } else { Join-Path $SourceRoot 'narada' } }
+if (-not $StaccatoRoot) { $StaccatoRoot = Join-Path $SourceRoot 'narada.staccato\.narada' }
+if (-not $RevolutionRoot) { $RevolutionRoot = Join-Path $SourceRoot 'narada.revolution' }
+if (-not $UtzRoot) { $UtzRoot = Join-Path $SourceRoot 'narada.utz\.narada' }
+if (-not $SonarRoot) { $SonarRoot = Join-Path $SourceRoot 'narada.sonar' }
+if (-not $SmartRoot) { $SmartRoot = Join-Path $SourceRoot 'smart-scheduling' }
+if (-not $ThoughtsRoot) { $ThoughtsRoot = Join-Path $SourceRoot 'thoughts' }
+if (-not $NaradaProperAgentCliEvidence) { $NaradaProperAgentCliEvidence = Join-Path $NaradaRoot '.narada\crew\agent-start-results\agent_start_20260531_000417547_narada_architect.result.json' }
+if (-not $NaradaProperAgentTuiEvidence) { $NaradaProperAgentTuiEvidence = Join-Path $NaradaRoot '.narada\crew\agent-start-results\agent_start_20260531_041426614_narada_architect.result.json' }
+if (-not $StaccatoAgentCliEvidence) { $StaccatoAgentCliEvidence = Join-Path $StaccatoRoot '.ai\runtime\agent-start-results\evt-2026-05-31_00-04-20_131e872d.result.json' }
+if (-not $RevolutionAgentCliEvidence) { $RevolutionAgentCliEvidence = Join-Path $RevolutionRoot '.ai\runtime\agent-start-results\evt-2026-05-31_00-04-22_c13890e1.result.json' }
+if (-not $UtzAgentCliEvidence) { $UtzAgentCliEvidence = Join-Path $UtzRoot '.ai\runtime\agent-start-results\evt-2026-05-31_00-04-24_747be7a9.result.json' }
+if (-not $NaradaSonarAgentCliEvidence) { $NaradaSonarAgentCliEvidence = Join-Path $SonarRoot '.ai\runtime\agent-start-results\evt-2026-05-31_00-04-25_28290811.result.json' }
+if (-not $SmartSchedulingAgentCliEvidence) { $SmartSchedulingAgentCliEvidence = Join-Path $SmartRoot '.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-26_b975144f.result.json' }
+if (-not $ThoughtsProjectAgentCliEvidence) { $ThoughtsProjectAgentCliEvidence = Join-Path $ThoughtsRoot '.narada\.ai\runtime\agent-start-results\evt-2026-05-31_00-04-27_275473a1.result.json' }
 
 if ([string]::IsNullOrWhiteSpace($SmartSiteRoot)) {
     $SmartSiteRoot = Join-Path $SmartRoot ".narada"
