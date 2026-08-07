@@ -1282,17 +1282,21 @@ impl SessionCore {
                 }
             }
         };
-        events.push(self.append_event(json!({ "event": "input_event_completed", "input_event_id": event_id, "event_id": event_id, "request_id": input.get("request_id"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted", "terminal_state": terminal, "idempotency_key": input.get("idempotency_key") }))?);
-        events.push(self.append_event(json!({ "event": "input_completed", "input_event_id": event_id, "request_id": input.get("request_id"), "terminal_state": terminal, "idempotency_key": input.get("idempotency_key"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted" }))?);
         let recoverable = adapter_error || cancellation_requested || event_interrupted;
+        if !recoverable {
+            events.push(self.append_event(json!({ "event": "input_event_completed", "input_event_id": event_id, "event_id": event_id, "request_id": input.get("request_id"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted", "terminal_state": terminal, "idempotency_key": input.get("idempotency_key") }))?);
+            events.push(self.append_event(json!({ "event": "input_completed", "input_event_id": event_id, "request_id": input.get("request_id"), "terminal_state": terminal, "idempotency_key": input.get("idempotency_key"), "admission_state_schema": INPUT_ADMISSION_SCHEMA, "admission_state": "admitted" }))?);
+        }
         if !recoverable {
             self.pending.remove(0);
         }
         self.admission
             .insert(event_id.clone(), "admitted".to_string());
-        if let Some(key) = string_field(&input, "idempotency_key") {
-            if let Some(record) = self.idempotency.get_mut(&key) {
-                record["terminal_state"] = json!(terminal);
+        if !recoverable {
+            if let Some(key) = string_field(&input, "idempotency_key") {
+                if let Some(record) = self.idempotency.get_mut(&key) {
+                    record["terminal_state"] = json!(terminal);
+                }
             }
         }
         self.persist_queue(if recoverable {
