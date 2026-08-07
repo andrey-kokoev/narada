@@ -1112,7 +1112,7 @@ Expected coverage:
 - `agent-start` resolves `narada-agent-runtime-server` from the package bin;
 - startup event id and session id propagate to the runtime server boundary;
 - `runtime-engine-boundary-benchmark` reports bounded Node/Bun/Rust process-boundary measurements;
-- `runtime-engine-protocol-conformance.test.ts` compares the Node/Rust lifecycle, control, health, and MCP frame sequence;
+- `runtime-engine-protocol-conformance.test.ts` compares the Node/Bun/Rust lifecycle, control, health, and MCP frame sequence;
 - `runtime-engine-nars-conformance.test.ts` runs the built NARS entrypoint through Node, Bun, and the Rust bridge and compares the real session authority/control trace;
 - runtime-engine conformance tests prove that Rust changes only the process boundary and preserves the NARS host contract;
 - Site MCP fabric is isolated from global/user Codex config;
