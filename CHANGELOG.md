@@ -40,7 +40,7 @@ Concrete outcomes:
 - Native Rust runtime ships inside every released CLI artifact.
 - `scripts/pack-artifact.mjs` emits per-platform manifests with
   `rust_runtime_binary: true`.
-- CI builds the native runtime on win32-x64, linux-x64, darwin-x64, and darwin-arm64.
+- CI builds the native runtime on win32-x64, linux-x64, and darwin-arm64.
 - Runtime selection is an operator convenience, not a trust boundary.
 
 Authority clarifications:

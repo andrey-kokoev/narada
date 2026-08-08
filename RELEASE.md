@@ -40,7 +40,7 @@ CLI.
 - It clones the four sibling workspace repos (`narada-core`, `mcp-surfaces`,
   `agent-cli`, `agent-tui`), installs dependencies, builds the workspace
   (TypeScript + native Rust), and runs `scripts/pack-artifact.mjs` for each
-  platform (`win32-x64`, `linux-x64`, `darwin-x64`, `darwin-arm64`).
+  platform (`win32-x64`, `linux-x64`, `darwin-arm64`).
 - It uploads `narada-cli-<platform>-<arch>.tgz` and
   `manifest-<platform>-<arch>.json` to the `cli-latest` GitHub prerelease,
   clobbering the previous assets.
