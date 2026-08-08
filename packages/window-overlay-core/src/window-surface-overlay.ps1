@@ -34,6 +34,8 @@ $script:ZOrderState = 'topmost'
 $script:FocusState = 'inactive'
 $script:SurfaceRevision = $null
 $script:FocusLeaseUntil = [DateTime]::MinValue
+$script:LaunchPreservedForeground = [IntPtr]::Zero
+$script:LaunchForegroundRestoreAttempts = 0
 $actionRunnerPath = Join-Path $PSScriptRoot 'Invoke-WindowSurfaceOverlayAction.ps1'
 $hostStderrPath = Get-OverlayPath 'host.stderr.log'
 $script:OverlayWindowTitlePrefix = 'Narada Overlay: '
@@ -486,6 +488,29 @@ function Get-OverlayWindowHandle {
     try { return [System.Windows.Interop.WindowInteropHelper]::new($window).Handle } catch { return [IntPtr]::Zero }
 }
 
+function Restore-LaunchForegroundIfNeeded {
+    if ($script:LaunchPreservedForeground -eq [IntPtr]::Zero) { return }
+    if (Test-Path -LiteralPath $focusPath) {
+        $script:LaunchPreservedForeground = [IntPtr]::Zero
+        return
+    }
+    $windowHandle = Get-OverlayWindowHandle
+    $currentForeground = [NaradaWindowSurfaceOverlayNative]::GetForegroundWindow()
+    if ($windowHandle -eq [IntPtr]::Zero -or $currentForeground -ne $windowHandle) {
+        # The operator has another foreground surface, or WPF has not created
+        # the HWND yet. Do not steal focus from that surface.
+        if ($windowHandle -eq [IntPtr]::Zero -or $currentForeground -ne [IntPtr]::Zero) {
+            $script:LaunchPreservedForeground = [IntPtr]::Zero
+        }
+        return
+    }
+    [void][NaradaWindowSurfaceOverlayNative]::ForceForegroundWindow($script:LaunchPreservedForeground)
+    $script:LaunchForegroundRestoreAttempts++
+    if ([NaradaWindowSurfaceOverlayNative]::GetForegroundWindow() -eq $script:LaunchPreservedForeground -or $script:LaunchForegroundRestoreAttempts -ge 8) {
+        $script:LaunchPreservedForeground = [IntPtr]::Zero
+    }
+}
+
 function Focus-Overlay {
     if ($null -eq $window) { return }
     $windowHandle = Get-OverlayWindowHandle
@@ -587,6 +612,7 @@ function Set-OverlayVisibility {
         $appliedVisibility = if ($window.Visibility -eq [Windows.Visibility]::Visible) { 'visible' } else { 'hidden' }
         Set-OverlayVisibilityState $appliedVisibility
         Update-OverlayPresenceButton
+        Restore-LaunchForegroundIfNeeded
         Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
     } catch {
         $script:VisibilityState = 'fault'
@@ -901,10 +927,8 @@ try {
             $previousForegroundWindow = [NaradaWindowSurfaceOverlayNative]::FindTopLevelWindowForProcess([uint32]$focusOwnerPid)
         }
     }
+    $script:LaunchPreservedForeground = $previousForegroundWindow
     $window.Show()
-    if ($previousForegroundWindow -ne [IntPtr]::Zero) {
-        [void][NaradaWindowSurfaceOverlayNative]::ForceForegroundWindow($previousForegroundWindow)
-    }
     [void]$application.Run()
 } finally {
     $timer.Stop()

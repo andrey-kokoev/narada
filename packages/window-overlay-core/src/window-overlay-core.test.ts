@@ -218,6 +218,8 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /ShowWindow/);
   assert.match(source, /SetForegroundWindow/);
   assert.match(source, /AttachThreadInput/);
+  assert.match(source, /Restore-LaunchForegroundIfNeeded/);
+  assert.match(source, /LaunchPreservedForeground/);
   assert.match(source, /ForceForegroundWindow/);
   assert.match(source, /function Focus-Overlay/);
   assert.match(source, /\$script:lastFocusStamp/);
