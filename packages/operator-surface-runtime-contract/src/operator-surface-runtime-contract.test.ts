@@ -395,7 +395,10 @@ import {
 } from './runtime-profile-selection.js';
 import {
   resolveRuntimeMaterializationPlan,
+  runtimeImplementationMatrixContractPath,
+  runtimeImplementationMatrixFingerprint,
   runtimeMaterializationPlanEntry,
+  runtimeMaterializationPlanFingerprint,
 } from './runtime-materialization-plan.js';
 
 test('runtime profiles expose coherent user choices over the implementation matrix', () => {
@@ -464,6 +467,10 @@ test('runtime materialization plan is matrix-derived for every admitted profile'
     const plan = resolveRuntimeMaterializationPlan(profile);
     assert.equal(plan.status, 'accepted');
     assert.equal(plan.schema, 'narada.runtime_materialization_plan.v1');
+    assert.equal((plan.source as any).matrix_fingerprint, runtimeImplementationMatrixFingerprint(runtimeImplementationMatrixContractPath()));
+    const unsignedPlan = { ...plan };
+    delete unsignedPlan.plan_fingerprint;
+    assert.equal(plan.plan_fingerprint, runtimeMaterializationPlanFingerprint(unsignedPlan));
     for (const [componentKind, runtimeEngineKind] of Object.entries(components)) {
       const entry = runtimeMaterializationPlanEntry(plan, componentKind);
       assert.equal(entry?.runtime_engine_kind, runtimeEngineKind, `${profile}:${componentKind}`);

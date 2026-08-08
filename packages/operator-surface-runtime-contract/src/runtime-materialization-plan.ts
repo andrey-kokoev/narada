@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   DEFAULT_RUNTIME_PROFILE,
   RUNTIME_IMPLEMENTATION_MATRIX_CONTRACT_SCHEMA,
@@ -8,6 +11,20 @@ import {
 export const RUNTIME_MATERIALIZATION_PLAN_SCHEMA = 'narada.runtime_materialization_plan.v1' as const;
 
 type JsonRecord = Record<string, any>;
+
+const RUNTIME_IMPLEMENTATION_MATRIX_URL = new URL('../contracts/runtime-implementation-matrix.json', import.meta.url);
+
+export function runtimeImplementationMatrixContractPath(): string {
+  return fileURLToPath(RUNTIME_IMPLEMENTATION_MATRIX_URL);
+}
+
+export function runtimeImplementationMatrixFingerprint(path = runtimeImplementationMatrixContractPath()): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+export function runtimeMaterializationPlanFingerprint(plan: JsonRecord): string {
+  return createHash('sha256').update(JSON.stringify(plan), 'utf8').digest('hex');
+}
 
 /**
  * Resolve the matrix into a carrier-neutral JSON plan.  The plan contains no
@@ -23,7 +40,7 @@ export function resolveRuntimeMaterializationPlan(runtimeProfile: any = DEFAULT_
       ...selection,
     };
   }
-  return {
+  const plan = {
     schema: RUNTIME_MATERIALIZATION_PLAN_SCHEMA,
     status: 'accepted',
     runtime_profile_kind: selection.runtime_profile_kind,
@@ -31,8 +48,13 @@ export function resolveRuntimeMaterializationPlan(runtimeProfile: any = DEFAULT_
     source: {
       matrix_schema: RUNTIME_IMPLEMENTATION_MATRIX_CONTRACT_SCHEMA,
       authority: 'narada.runtime_implementation_matrix',
+      matrix_fingerprint: runtimeImplementationMatrixFingerprint(),
     },
     entries: runtimeProfileImplementationMatrix(selection.runtime_profile_kind),
+  };
+  return {
+    ...plan,
+    plan_fingerprint: runtimeMaterializationPlanFingerprint(plan),
   };
 }
 
