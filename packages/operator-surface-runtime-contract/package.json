@@ -16,6 +16,10 @@
       "types": "./dist/runtime-engine-selection.d.ts",
       "import": "./dist/runtime-engine-selection.js"
     },
+    "./runtime-materialization-plan": {
+      "types": "./dist/runtime-materialization-plan.d.ts",
+      "import": "./dist/runtime-materialization-plan.js"
+    },
     "./runtime-profile-selection": {
       "types": "./dist/runtime-profile-selection.d.ts",
       "import": "./dist/runtime-profile-selection.js"

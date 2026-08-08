@@ -393,6 +393,10 @@ import {
   resolveRuntimeProfileSelection,
   runtimeProfileImplementationMatrix,
 } from './runtime-profile-selection.js';
+import {
+  resolveRuntimeMaterializationPlan,
+  runtimeMaterializationPlanEntry,
+} from './runtime-materialization-plan.js';
 
 test('runtime profiles expose coherent user choices over the implementation matrix', () => {
   const profiles = loadRuntimeProfilesContract();
@@ -448,4 +452,22 @@ test('runtime profiles expose coherent user choices over the implementation matr
   const legacyRefused = resolveRuntimeProfileSelection({ runtimeEngineValue: 'deno' });
   assert.equal(legacyRefused.status, 'refused');
   assert.equal(legacyRefused.reason_code, 'runtime_engine_unsupported');
+});
+
+test('runtime materialization plan is matrix-derived for every admitted profile', () => {
+  const expected: Record<string, Record<string, string>> = {
+    native: { 'mcp-runtime-proxy': 'rust', 'mcp-loader-mcp': 'rust', 'filesystem-mcp': 'rust', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun' },
+    bun: { 'mcp-runtime-proxy': 'bun', 'mcp-loader-mcp': 'bun', 'filesystem-mcp': 'bun', 'agent-context-mcp': 'bun', 'mcp-registrar': 'bun', 'mcp-javascript-surface': 'bun' },
+    'node-compat': { 'mcp-runtime-proxy': 'node', 'mcp-loader-mcp': 'node', 'filesystem-mcp': 'node', 'agent-context-mcp': 'node', 'mcp-registrar': 'node', 'mcp-javascript-surface': 'node' },
+  };
+  for (const [profile, components] of Object.entries(expected)) {
+    const plan = resolveRuntimeMaterializationPlan(profile);
+    assert.equal(plan.status, 'accepted');
+    assert.equal(plan.schema, 'narada.runtime_materialization_plan.v1');
+    for (const [componentKind, runtimeEngineKind] of Object.entries(components)) {
+      const entry = runtimeMaterializationPlanEntry(plan, componentKind);
+      assert.equal(entry?.runtime_engine_kind, runtimeEngineKind, `${profile}:${componentKind}`);
+      assert.equal(entry?.implementation_status, 'admitted', `${profile}:${componentKind}:admitted`);
+    }
+  }
 });
