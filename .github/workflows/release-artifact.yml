@@ -1,0 +1,72 @@
+name: CLI Artifact
+
+# Packs the self-contained narada CLI tarball per platform and uploads it to
+# the cli-latest GitHub release, replacing the previous assets. Manual trigger
+# only: packing ships the dependency closure, so it should be a deliberate act.
+#
+# The pnpm workspace spans five repos (see pnpm-workspace.yaml), so the four
+# sibling repos are cloned next to this checkout before install. Rust is
+# preinstalled on all GitHub-hosted runners; `pnpm build` compiles the native
+# NARS runtime for the runner's platform, and scripts/pack-artifact.mjs ships
+# only the final release binaries in the tarball.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    name: Pack ${{ matrix.platform }}-${{ matrix.arch }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: windows-latest, platform: win32, arch: x64 }
+          - { os: ubuntu-latest, platform: linux, arch: x64 }
+          - { os: macos-13, platform: darwin, arch: x64 }
+          - { os: macos-14, platform: darwin, arch: arm64 }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Clone sibling workspace repos
+        shell: bash
+        run: |
+          set -euo pipefail
+          for repo in narada-core mcp-surfaces agent-cli agent-tui; do
+            git clone --depth 1 "https://github.com/narada-core/${repo}.git" "../${repo}"
+          done
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build workspace (TypeScript + native)
+        run: pnpm build
+
+      - name: Pack CLI artifact
+        run: node scripts/pack-artifact.mjs --platform ${{ matrix.platform }} --arch ${{ matrix.arch }}
+
+      - name: Upload to cli-latest release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload cli-latest \
+            "artifacts/narada-cli-${{ matrix.platform }}-${{ matrix.arch }}.tgz" \
+            "artifacts/manifest-${{ matrix.platform }}-${{ matrix.arch }}.json" \
+            --clobber
