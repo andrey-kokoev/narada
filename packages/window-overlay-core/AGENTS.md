@@ -20,7 +20,7 @@ This package owns the generic overlay contract and mechanics:
 - versioned overlay documents, row/action validation, and semantic presentation data;
 - one host process per stable overlay id;
 - user-local lifecycle and state paths;
-- WPF window creation and behavior: visibility, topmost behavior, positioning, opacity, pinning,
+- WPF window creation and behavior: visibility, topmost behavior, positioning, opacity, layer,
   drag persistence, rendering, and controlled actions;
 - lifecycle operations: start, inspect, refresh request, explicit focus request, and stop;
 - PowerShell host scripts exported through this package;
@@ -60,13 +60,16 @@ The state files are:
 
 - `document.json`: the latest validated versioned document;
 - `overlay.pid`: the host process id used for lifecycle inspection;
-- `visibility.policy`: the validated visibility policy applied to the host; an older host without
-  this file is migrated by the next start request;
-- `preferences.json`: persisted position, opacity, pin, and related window preferences;
+- `visibility.policy`: a legacy one-value marker containing the effective presence policy for older readers;
+- `presence.policy.json`: the per-overlay presence selection (`always`, `terminal-group`, `hidden`,
+  or `surface-default`);
+- `preferences.json`: persisted position, opacity, and explicit layer preference (`normal` or
+  `topmost`); the legacy `pinned` field is read during migration;
 - `refresh.signal`: an asynchronous request for the running host to re-read its document;
 - `focus.signal`: an asynchronous request for the running host to activate its window;
 - `visibility.state.json`: the host's durable lifecycle, visibility, z-order, focus, and policy state;
 - parent `surface.snapshot.json`: the coordinated surface projection of live overlay members and foreground context;
+- parent `surface.preferences.json`: the shared default presence policy for the overlay surface;
 - parent `focus.owner.json`: the shared explicit focus owner, replaced by each successful newer focus request;
 - `restart.command.json`: the fixed restart command supplied by the owning specialization;
 - `action-state.json`: durable state for the typed restart action.
@@ -94,11 +97,13 @@ The host consumes refresh and focus signals asynchronously. A signal is not a se
 authority. Do not add a new signal file when an existing lifecycle operation or typed action
 expresses the intent.
 
-The overlay surface is coordinated, but each host owns its own lifecycle. Visibility policy is
-canonicalized to `always` or `terminal-group`; `windows-terminal` is a legacy ingress alias only.
-Visibility, z-order, and focus are separate state axes. Pinning changes only z-order. A successful
-focus request records one shared owner and keeps it stable for a bounded transition window; it does
-not hide or stop sibling overlays. Surface projection uses a named mutex and atomic JSON replacement.
+The overlay surface is coordinated, but each host owns its own lifecycle. Presence policy is
+canonicalized to `always`, `terminal-group`, or `hidden`; `windows-terminal` is a legacy ingress
+alias only. An overlay may inherit the shared surface default or persist its own presence override.
+Layer (`normal` or `topmost`), presence, and focus are separate state axes. The UI's explicit
+`Above other windows` control changes only layer; it never changes presence. A successful focus
+request records one shared owner and keeps it stable for a bounded transition window; it does not
+hide or stop sibling overlays. Surface projection uses a named mutex and atomic JSON replacement.
 
 ## Focus Contract
 

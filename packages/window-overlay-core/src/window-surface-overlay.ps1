@@ -2,7 +2,7 @@ param(
     [Parameter(Mandatory = $true)][string]$Id,
     [Parameter(Mandatory = $true)][string]$StateRoot,
     [int]$RefreshSeconds = 2,
-    [ValidateSet('always', 'terminal-group', 'windows-terminal')][string]$VisibilityPolicy = 'terminal-group',
+    [ValidateSet('always', 'terminal-group', 'hidden', 'windows-terminal')][string]$VisibilityPolicy = 'terminal-group',
     [switch]$HostProcess
 )
 
@@ -22,6 +22,10 @@ $actionStatePath = Get-OverlayPath 'action-state.json'
 $visibilityStatePath = Get-OverlayPath 'visibility.state.json'
 $surfaceRoot = Split-Path -Parent -Path $StateRoot
 $VisibilityPolicy = Normalize-OverlayVisibilityPolicy $VisibilityPolicy
+$script:StartupVisibilityPolicy = $VisibilityPolicy
+$script:PresencePolicy = $VisibilityPolicy
+$script:PresencePolicySource = 'overlay'
+$script:SurfaceDefaultPresencePolicy = Get-OverlaySurfaceDefaultPresencePolicy $surfaceRoot
 $script:LifecycleState = 'starting'
 $script:VisibilityState = 'unknown'
 $script:DesiredVisibility = 'unknown'
@@ -36,7 +40,7 @@ $script:OverlayWindowTitlePrefix = 'Narada Overlay: '
 trap {
     $script:LifecycleState = 'failed'
     ($_ | Out-String) | Set-Content -Path $hostStderrPath -Encoding UTF8
-    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'failed' -Visibility 'fault' -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -Detail $_.Exception.Message } catch {}
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle 'failed' -Visibility 'fault' -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -Detail $_.Exception.Message } catch {}
     exit 1
 }
 
@@ -51,11 +55,12 @@ function Write-JsonFile([string]$path, [object]$value) {
 . (Join-Path $PSScriptRoot 'WindowSurfaceOverlayPosition.ps1')
 
 function Get-Preferences {
-    $value = Read-JsonFile $preferencesPath ([pscustomobject]@{ position = $null; opacity = 1.0; pinned = $true })
+    $value = Read-JsonFile $preferencesPath ([pscustomobject]@{ position = $null; opacity = 1.0; layer = 'topmost'; pinned = $true })
+    $layer = if ($value.layer -in @('normal', 'topmost')) { [string]$value.layer } elseif ([bool]($value.pinned ?? $true)) { 'topmost' } else { 'normal' }
     [pscustomobject]@{
         position = Read-OverlayPositionPreference $value
         opacity = [double]($value.opacity ?? 1.0)
-        pinned = [bool]($value.pinned ?? $true)
+        layer = $layer
     }
 }
 function Save-Preferences([object]$currentWindow) {
@@ -67,7 +72,7 @@ function Save-Preferences([object]$currentWindow) {
     }
     if ($null -eq $position -or $position.kind -ne 'anchor') { $position = New-OverlayPositionPreference }
     $script:PositionPreference = $position
-    Write-JsonFile $preferencesPath ([ordered]@{
+    Write-OverlaySurfaceJsonAtomic $preferencesPath ([ordered]@{
         schema = Get-OverlayPositionPreferencesSchema
         position = [ordered]@{
             anchor = $position.anchor
@@ -75,13 +80,101 @@ function Save-Preferences([object]$currentWindow) {
             inset_y = [double]$position.inset_y
         }
         opacity = [double]$currentWindow.Opacity
-        pinned = [bool]$currentWindow.Topmost
+        layer = if ($currentWindow.Topmost) { 'topmost' } else { 'normal' }
     })
 }
 
 function Drag-OverlayAndPersistPosition {
     try { [void]$window.DragMove() } catch {}
     try { Save-Preferences $window } catch {}
+}
+
+function Sync-OverlayPresencePolicy {
+    $selection = Read-OverlayPresencePolicySelection -StateRoot $StateRoot -FallbackPolicy $script:StartupVisibilityPolicy
+    $script:PresencePolicySource = [string]$selection.source
+    $script:PresencePolicy = Normalize-OverlayVisibilityPolicy ([string]$selection.policy)
+    $script:SurfaceDefaultPresencePolicy = Get-OverlaySurfaceDefaultPresencePolicy $surfaceRoot
+    return $selection
+}
+
+function Get-OverlayPresencePolicyLabel([string]$Policy) {
+    switch (Normalize-OverlayVisibilityPolicy $Policy) {
+        'always' { return 'Always visible' }
+        'terminal-group' { return 'With terminal group' }
+        'hidden' { return 'Hidden' }
+    }
+}
+
+function Get-OverlayPresenceButtonLabel {
+    $actual = switch ($script:VisibilityState) {
+        'visible' { 'visible' }
+        'hidden' { 'hidden' }
+        default { 'transitioning' }
+    }
+    $source = if ($script:PresencePolicySource -eq 'surface-default') { 'surface default' } else { 'this overlay' }
+    return "Presence: $(Get-OverlayPresencePolicyLabel $script:PresencePolicy) ($source; $actual)"
+}
+
+function Update-OverlayPresenceButton {
+    if ($null -eq $script:PresenceButton) { return }
+    $script:PresenceButton.Content = if ($script:VisibilityState -eq 'hidden') { '◌' } else { '◉' }
+    $script:PresenceButton.ToolTip = Get-OverlayPresenceButtonLabel
+}
+
+function Update-OverlayLayerButton {
+    if ($null -eq $script:LayerButton) { return }
+    $script:LayerButton.Content = if ($window.Topmost) { '⇧' } else { '↕' }
+    $script:LayerButton.ToolTip = if ($window.Topmost) { 'Layer: Above other windows' } else { 'Layer: Normal z-order' }
+}
+
+function Set-OverlayPresenceSelection([string]$Selection) {
+    if ($Selection -eq 'surface-default') {
+        Write-OverlayPresencePolicy -StateRoot $StateRoot -Source 'surface-default'
+    } else {
+        Write-OverlayPresencePolicy -StateRoot $StateRoot -Source 'overlay' -Policy $Selection
+    }
+    Sync-OverlayPresencePolicy | Out-Null
+    Set-OverlayVisibility
+}
+
+function Set-OverlaySurfaceDefault([string]$Policy) {
+    Write-OverlaySurfaceDefaultPresencePolicy -SurfaceRoot $surfaceRoot -Policy $Policy | Out-Null
+    Sync-OverlayPresencePolicy | Out-Null
+    Set-OverlayVisibility
+}
+
+function Add-OverlayPresenceMenuChoice([object]$Menu, [string]$Header, [string]$Selection) {
+    $item = New-Object Windows.Controls.MenuItem
+    $item.Header = $Header
+    $item.Add_Click({ Set-OverlayPresenceSelection $Selection }.GetNewClosure())
+    [void]$Menu.Items.Add($item)
+}
+
+function Add-OverlaySurfaceDefaultMenuChoice([object]$Menu, [string]$Header, [string]$Policy) {
+    $item = New-Object Windows.Controls.MenuItem
+    $item.Header = $Header
+    $item.Add_Click({ Set-OverlaySurfaceDefault $Policy }.GetNewClosure())
+    [void]$Menu.Items.Add($item)
+}
+
+function New-OverlayPresenceMenu {
+    $menu = New-Object Windows.Controls.ContextMenu
+    $thisOverlay = New-Object Windows.Controls.MenuItem
+    $thisOverlay.Header = 'Presence for this overlay'
+    $thisOverlay.IsEnabled = $false
+    [void]$menu.Items.Add($thisOverlay)
+    Add-OverlayPresenceMenuChoice $menu 'Always visible' 'always'
+    Add-OverlayPresenceMenuChoice $menu 'With terminal group' 'terminal-group'
+    Add-OverlayPresenceMenuChoice $menu 'Hidden' 'hidden'
+    [void]$menu.Items.Add((New-Object Windows.Controls.Separator))
+    Add-OverlayPresenceMenuChoice $menu 'Use surface default' 'surface-default'
+    $surfaceMenu = New-Object Windows.Controls.MenuItem
+    $surfaceMenu.Header = 'Change surface default'
+    Add-OverlaySurfaceDefaultMenuChoice $surfaceMenu 'Always visible' 'always'
+    Add-OverlaySurfaceDefaultMenuChoice $surfaceMenu 'With terminal group' 'terminal-group'
+    Add-OverlaySurfaceDefaultMenuChoice $surfaceMenu 'Hidden' 'hidden'
+    [void]$menu.Items.Add($surfaceMenu)
+    return $menu
 }
 
 function Get-Document {
@@ -165,11 +258,6 @@ function Add-Button([object]$parent, [string]$label, [string]$tip, [scriptblock]
     $button.Add_Click($handler)
     $parent.Children.Add($button) | Out-Null
     return $button
-}
-function Update-PinButton {
-    if ($null -eq $script:PinButton) { return }
-    $script:PinButton.Content = if ($window.Topmost) { '◎' } else { '📌' }
-    $script:PinButton.ToolTip = if ($window.Topmost) { 'Use normal z-order' } else { 'Keep above other windows' }
 }
 function Set-OverlayOpacity([double]$delta) {
     $opacity = [Math]::Round([double]$window.Opacity + $delta, 1)
@@ -403,7 +491,7 @@ function Focus-Overlay {
     $windowHandle = Get-OverlayWindowHandle
     if ($windowHandle -eq [IntPtr]::Zero) { return }
     Set-OverlayFocusState 'requested'
-    Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
+    Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
     $window.Visibility = [Windows.Visibility]::Visible
     [void][NaradaWindowSurfaceOverlayNative]::ShowWindow($windowHandle, 9)
     [void][NaradaWindowSurfaceOverlayNative]::BringWindowToTop($windowHandle)
@@ -471,8 +559,9 @@ function Get-OverlayMonitor([switch]$UseCursor) {
 function Set-OverlayVisibility {
     if ($null -eq $window) { return }
     try {
-        $snapshot = Update-OverlaySurfaceProjection -SurfaceRoot $surfaceRoot -CurrentId $Id -CurrentPid $PID -CurrentPolicy $VisibilityPolicy -CurrentLifecycle $script:LifecycleState -CurrentVisibility $script:VisibilityState -CurrentZOrder $script:ZOrderState -CurrentFocus $script:FocusState
-        $decision = Get-OverlaySurfaceDecision -Snapshot $snapshot -Id $Id -Policy $VisibilityPolicy
+        Sync-OverlayPresencePolicy | Out-Null
+        $snapshot = Update-OverlaySurfaceProjection -SurfaceRoot $surfaceRoot -CurrentId $Id -CurrentPid $PID -CurrentPolicy $script:PresencePolicy -CurrentLifecycle $script:LifecycleState -CurrentVisibility $script:VisibilityState -CurrentZOrder $script:ZOrderState -CurrentFocus $script:FocusState
+        $decision = Get-OverlaySurfaceDecision -Snapshot $snapshot -Id $Id -Policy $script:PresencePolicy
         $script:SurfaceRevision = [int]$snapshot.revision
         $script:DesiredVisibility = [string]$decision.desired_visibility
         $script:VisibilityReason = [string]$decision.reason
@@ -492,16 +581,17 @@ function Set-OverlayVisibility {
         if ($window.Visibility -ne $desired) {
             $visibilityTransition = if ($desired -eq [Windows.Visibility]::Visible) { 'showing' } else { 'hiding' }
             Set-OverlayVisibilityState $visibilityTransition
-            Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
+            Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
             $window.Visibility = $desired
         }
         $appliedVisibility = if ($window.Visibility -eq [Windows.Visibility]::Visible) { 'visible' } else { 'hidden' }
         Set-OverlayVisibilityState $appliedVisibility
-        Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
+        Update-OverlayPresenceButton
+        Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle $script:LifecycleState -Visibility $script:VisibilityState -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
     } catch {
         $script:VisibilityState = 'fault'
         $script:VisibilityReason = 'visibility_fault'
-        try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle $script:LifecycleState -Visibility 'fault' -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision -Detail $_.Exception.Message } catch {}
+        try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle $script:LifecycleState -Visibility 'fault' -DesiredVisibility $script:DesiredVisibility -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision -Detail $_.Exception.Message } catch {}
     }
 }
 
@@ -519,7 +609,7 @@ $window.ResizeMode = 'NoResize'
 $window.AllowsTransparency = $true
 $window.Background = [Windows.Media.Brushes]::Transparent
 $window.ShowInTaskbar = $false
-$window.Topmost = $preferences.pinned
+$window.Topmost = $preferences.layer -eq 'topmost'
 $script:ZOrderState = if ($window.Topmost) { 'topmost' } else { 'normal' }
 $window.Opacity = [Math]::Min([Math]::Max($preferences.opacity, 0.55), 1.0)
 $window.ShowActivated = $false
@@ -566,12 +656,21 @@ $headerActions.HorizontalAlignment = 'Right'
 $headerActions.VerticalAlignment = 'Top'
 [Windows.Controls.Grid]::SetColumn($headerActions, 1)
 $header.Children.Add($headerActions) | Out-Null
-$script:PinButton = Add-Button $headerActions '📌' 'Keep above other windows' { $window.Topmost = -not $window.Topmost; $script:ZOrderState = if ($window.Topmost) { 'topmost' } else { 'normal' }; Update-PinButton; Set-OverlayVisibility; Save-Preferences $window } -icon
-$script:PinButton.FontFamily = [Windows.Media.FontFamily]::new('Segoe UI Symbol')
-$script:PinButton.FontSize = 12
-$script:PinButton.Width = 20
-$script:PinButton.Height = 20
-$script:PinButton.MinWidth = 20
+$script:PresenceButton = Add-Button $headerActions '◉' 'Presence' { $script:PresenceButton.ContextMenu.IsOpen = $true } -icon
+$script:PresenceButton.ContextMenu = New-OverlayPresenceMenu
+$script:PresenceButton.FontFamily = [Windows.Media.FontFamily]::new('Segoe UI Symbol')
+$script:PresenceButton.FontSize = 12
+$script:PresenceButton.Width = 20
+$script:PresenceButton.Height = 20
+$script:PresenceButton.MinWidth = 20
+$script:LayerButton = Add-Button $headerActions '⇧' 'Layer: Above other windows' { $window.Topmost = -not $window.Topmost; $script:ZOrderState = if ($window.Topmost) { 'topmost' } else { 'normal' }; Update-OverlayLayerButton; Set-OverlayVisibility; Save-Preferences $window } -icon
+$script:LayerButton.FontFamily = [Windows.Media.FontFamily]::new('Segoe UI Symbol')
+$script:LayerButton.FontSize = 12
+$script:LayerButton.Width = 20
+$script:LayerButton.Height = 20
+$script:LayerButton.MinWidth = 20
+$script:PresenceButton.ToolTip = Get-OverlayPresenceButtonLabel
+$script:LayerButton.ToolTip = if ($window.Topmost) { 'Layer: Above other windows' } else { 'Layer: Normal z-order' }
 $closeButton = Add-Button $headerActions '×' 'Close overlay' { $window.Close() } -icon
 $closeButton.Foreground = New-Brush 170 215 215 225
 $closeButton.Opacity = 0.7
@@ -707,12 +806,12 @@ function Restore-OverlayPosition([switch]$UseCursor) {
 
 $window.Add_Closed({
     Set-OverlayLifecycleState 'stopping'
-    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'stopping' -Visibility 'hiding' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision } catch {}
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle 'stopping' -Visibility 'hiding' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision } catch {}
     try { Save-Preferences $window } catch {}
     Set-OverlayLifecycleState 'stopped'
     $script:VisibilityState = 'hidden'
     Clear-OverlayFocusOwner -SurfaceRoot $surfaceRoot -Id $Id
-    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'stopped' -Visibility 'hidden' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus 'inactive' -ProcessId $null -SurfaceRevision $script:SurfaceRevision } catch {}
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle 'stopped' -Visibility 'hidden' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus 'inactive' -ProcessId $null -SurfaceRevision $script:SurfaceRevision } catch {}
     try { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue } catch {}
 })
 $window.Add_LocationChanged({
@@ -776,7 +875,7 @@ $actionTimer.Add_Tick({ Apply-ActionState })
 $actionTimer.Start()
 
 Set-Content -Path $pidPath -Value ([string]$PID)
-Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'starting' -Visibility 'unknown' -DesiredVisibility 'unknown' -VisibilityReason 'not_projected' -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
+Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle 'starting' -Visibility 'unknown' -DesiredVisibility 'unknown' -VisibilityReason 'not_projected' -ZOrder $script:ZOrderState -Focus $script:FocusState -ProcessId $PID -SurfaceRevision $script:SurfaceRevision
 $application = New-Object Windows.Application
 try {
     # Explicitly show the borderless, non-taskbar window before entering the
@@ -813,6 +912,6 @@ try {
     $actionTimer.Stop()
     if ($script:LifecycleState -in @('starting', 'running')) { Set-OverlayLifecycleState 'stopping' }
     if ($script:LifecycleState -eq 'stopping') { Set-OverlayLifecycleState 'stopped' }
-    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $VisibilityPolicy -Lifecycle 'stopped' -Visibility 'hidden' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus 'inactive' -ProcessId $null -SurfaceRevision $script:SurfaceRevision } catch {}
+    try { Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $script:PresencePolicy -Lifecycle 'stopped' -Visibility 'hidden' -DesiredVisibility 'hidden' -VisibilityReason $script:VisibilityReason -ZOrder $script:ZOrderState -Focus 'inactive' -ProcessId $null -SurfaceRevision $script:SurfaceRevision } catch {}
     try { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue } catch {}
 }

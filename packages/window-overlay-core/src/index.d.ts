@@ -36,6 +36,8 @@ export interface OverlayPaths {
   pid: string;
   preferences: string;
   visibilityPolicy: string;
+  presencePolicy: string;
+  surfacePreferences: string;
   refresh: string;
   focus: string;
   restartCommand: string;
@@ -77,6 +79,12 @@ export interface OverlayDocumentInput extends Record<string, unknown> {
   actions?: unknown;
   updated_at?: unknown;
 }
+export interface OverlayPresencePolicyState {
+  schema: 'narada.window_surface_overlay.presence_policy.v1';
+  source: 'overlay' | 'surface-default';
+  policy: import('./overlay-surface-fsm.js').OverlayVisibilityPolicy | null;
+  updated_at: string;
+}
 interface OverlayPathOptions {
   stateRoot?: string;
   env?: NodeJS.ProcessEnv;
@@ -105,6 +113,8 @@ export function overlayStateDirectory(id: string, options?: OverlayPathOptions):
 export function overlayPaths(id: string, options?: OverlayPathOptions): OverlayPaths;
 export function overlayStatus(id: string, options?: OverlayPathOptions): Promise<OverlayStatus>;
 export function requestOverlayRefresh(id: string, options?: OverlayPathOptions): Promise<Record<string, unknown>>;
+export function setOverlayPresencePolicy(id: string, selection: import('./overlay-surface-fsm.js').OverlayPresenceSelection, options?: OverlayPathOptions): Promise<OverlayPresencePolicyState>;
+export function setOverlaySurfaceDefaultPresencePolicy(policy: import('./overlay-surface-fsm.js').OverlayVisibilityPolicyInput, options?: OverlayPathOptions): Promise<Record<string, unknown>>;
 export function overlayHostScriptPath(): string;
 export function startOverlay(options?: StartOverlayOptions): Promise<OverlayStatus>;
 export function stopOverlay(options?: OverlayLifecycleOptions): Promise<OverlayStatus>;

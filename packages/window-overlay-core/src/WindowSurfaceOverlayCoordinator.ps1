@@ -1,5 +1,7 @@
 $script:OverlaySurfaceSnapshotSchema = 'narada.window_surface_overlay.surface_snapshot.v1'
 $script:OverlayRuntimeStateSchema = 'narada.window_surface_overlay.runtime_state.v1'
+$script:OverlaySurfacePreferencesSchema = 'narada.window_surface_overlay.surface_preferences.v1'
+$script:OverlayPresencePolicySchema = 'narada.window_surface_overlay.presence_policy.v1'
 $script:OverlaySurfaceId = 'narada-desktop-overlay-surface'
 $script:OverlayFocusOwnerSchema = 'narada.window_surface_overlay.focus_owner.v1'
 
@@ -49,7 +51,7 @@ function Set-OverlayFocusState([string]$Next) {
 function Normalize-OverlayVisibilityPolicy([string]$Policy) {
     $value = if ($null -eq $Policy) { '' } else { $Policy.Trim().ToLowerInvariant() }
     if ($value -eq 'windows-terminal') { return 'terminal-group' }
-    if ($value -in @('always', 'terminal-group')) { return $value }
+    if ($value -in @('always', 'terminal-group', 'hidden')) { return $value }
     throw 'overlay_visibility_policy_invalid'
 }
 
@@ -57,6 +59,14 @@ function Get-OverlaySurfaceRoot([string]$StateRoot) {
     $parent = Split-Path -Parent -Path $StateRoot
     if ([string]::IsNullOrWhiteSpace($parent)) { return $StateRoot }
     return $parent
+}
+
+function Get-OverlaySurfacePreferencesPath([string]$SurfaceRoot) {
+    Join-Path $SurfaceRoot 'surface.preferences.json'
+}
+
+function Get-OverlayPresencePolicyPath([string]$StateRoot) {
+    Join-Path $StateRoot 'presence.policy.json'
 }
 
 function Read-OverlaySurfaceJson([string]$Path, [object]$Fallback = $null) {
@@ -72,6 +82,71 @@ function Write-OverlaySurfaceJsonAtomic([string]$Path, [object]$Value) {
     } finally {
         Remove-Item -LiteralPath $temporary -Force -ErrorAction SilentlyContinue
     }
+}
+
+function Get-OverlaySurfaceDefaultPresencePolicy([string]$SurfaceRoot) {
+    $preferences = Read-OverlaySurfaceJson (Get-OverlaySurfacePreferencesPath $SurfaceRoot) $null
+    if ($preferences -and $preferences.schema -eq $script:OverlaySurfacePreferencesSchema) {
+        try { return Normalize-OverlayVisibilityPolicy ([string]$preferences.default_presence_policy) } catch {}
+    }
+    return 'terminal-group'
+}
+
+function Write-OverlaySurfaceDefaultPresencePolicy {
+    param(
+        [Parameter(Mandatory = $true)][string]$SurfaceRoot,
+        [Parameter(Mandatory = $true)][string]$Policy
+    )
+    New-Item -ItemType Directory -Path $SurfaceRoot -Force | Out-Null
+    $normalized = Normalize-OverlayVisibilityPolicy $Policy
+    Write-OverlaySurfaceJsonAtomic (Get-OverlaySurfacePreferencesPath $SurfaceRoot) ([ordered]@{
+        schema = $script:OverlaySurfacePreferencesSchema
+        default_presence_policy = $normalized
+        updated_at = [DateTime]::UtcNow.ToString('o')
+    })
+    return $normalized
+}
+
+function Read-OverlayPresencePolicySelection {
+    param(
+        [Parameter(Mandatory = $true)][string]$StateRoot,
+        [Parameter(Mandatory = $true)][string]$FallbackPolicy
+    )
+    $surfaceRoot = Get-OverlaySurfaceRoot $StateRoot
+    $path = Get-OverlayPresencePolicyPath $StateRoot
+    $stored = Read-OverlaySurfaceJson $path $null
+    if ($stored -and $stored.schema -eq $script:OverlayPresencePolicySchema) {
+        if ([string]$stored.source -eq 'surface-default') {
+            return [pscustomobject]@{
+                source = 'surface-default'
+                policy = Get-OverlaySurfaceDefaultPresencePolicy $surfaceRoot
+            }
+        }
+        try {
+            return [pscustomobject]@{ source = 'overlay'; policy = Normalize-OverlayVisibilityPolicy ([string]$stored.policy) }
+        } catch {}
+    }
+
+    # The old one-value marker was a startup default, not a user override. The
+    # current request remains authoritative when no explicit presence policy exists.
+    return [pscustomobject]@{ source = 'overlay'; policy = Normalize-OverlayVisibilityPolicy $FallbackPolicy }
+}
+
+function Write-OverlayPresencePolicy {
+    param(
+        [Parameter(Mandatory = $true)][string]$StateRoot,
+        [Parameter(Mandatory = $true)][string]$Source,
+        [string]$Policy
+    )
+    New-Item -ItemType Directory -Path $StateRoot -Force | Out-Null
+    if ($Source -notin @('overlay', 'surface-default')) { throw 'overlay_presence_policy_source_invalid' }
+    $normalized = if ($Source -eq 'overlay') { Normalize-OverlayVisibilityPolicy $Policy } else { $null }
+    Write-OverlaySurfaceJsonAtomic (Get-OverlayPresencePolicyPath $StateRoot) ([ordered]@{
+        schema = $script:OverlayPresencePolicySchema
+        source = $Source
+        policy = $normalized
+        updated_at = [DateTime]::UtcNow.ToString('o')
+    })
 }
 
 function Write-OverlayRuntimeState {
@@ -171,6 +246,9 @@ function Get-OverlayVisibilityDecision([string]$Policy, [string]$ForegroundKind)
     if ($normalizedPolicy -eq 'always') {
         return [pscustomobject]@{ desired_visibility = 'visible'; reason = 'policy_always' }
     }
+    if ($normalizedPolicy -eq 'hidden') {
+        return [pscustomobject]@{ desired_visibility = 'hidden'; reason = 'policy_hidden' }
+    }
     if ($ForegroundKind -in @('terminal', 'overlay')) {
         return [pscustomobject]@{ desired_visibility = 'visible'; reason = 'terminal_group_active' }
     }
@@ -215,15 +293,17 @@ function Get-OverlaySurfaceMembers {
                 if ($candidate -gt 0 -and (Get-Process -Id $candidate -ErrorAction SilentlyContinue)) { $memberPid = $candidate }
             }
             if ($null -eq $memberPid) { continue }
-            $policyPath = Join-Path $stateRoot 'visibility.policy'
-            $rawPolicy = if (Test-Path -LiteralPath $policyPath) {
-                (Get-Content -Raw -LiteralPath $policyPath -ErrorAction SilentlyContinue).Trim()
-            } else { 'terminal-group' }
-            try { $policy = Normalize-OverlayVisibilityPolicy $rawPolicy } catch { $policy = 'terminal-group' }
             $lifecycle = if ($runtime -and $runtime.lifecycle) { [string]$runtime.lifecycle } else { 'running' }
             $visibility = if ($runtime -and $runtime.visibility) { [string]$runtime.visibility } else { 'unknown' }
             $zOrder = if ($runtime -and $runtime.z_order) { [string]$runtime.z_order } else { 'topmost' }
             $focus = if ($runtime -and $runtime.focus) { [string]$runtime.focus } else { 'inactive' }
+            try {
+                if ($runtime -and $runtime.policy) {
+                    $policy = Normalize-OverlayVisibilityPolicy ([string]$runtime.policy)
+                } else {
+                    $policy = (Read-OverlayPresencePolicySelection -StateRoot $stateRoot -FallbackPolicy (Get-OverlaySurfaceDefaultPresencePolicy $SurfaceRoot)).policy
+                }
+            } catch { $policy = Get-OverlaySurfaceDefaultPresencePolicy $SurfaceRoot }
         }
         $decision = Get-OverlayVisibilityDecision $policy $ForegroundKind
         $members += [pscustomobject]@{

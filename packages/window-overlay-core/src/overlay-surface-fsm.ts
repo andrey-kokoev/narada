@@ -1,5 +1,6 @@
-export type OverlayVisibilityPolicy = 'always' | 'terminal-group';
+export type OverlayVisibilityPolicy = 'always' | 'terminal-group' | 'hidden';
 export type OverlayVisibilityPolicyInput = OverlayVisibilityPolicy | 'windows-terminal';
+export type OverlayPresenceSelection = OverlayVisibilityPolicy | 'surface-default';
 export type OverlayLifecycleState = 'starting' | 'running' | 'stopping' | 'stopped' | 'failed';
 export type OverlayVisibilityState = 'unknown' | 'showing' | 'visible' | 'hiding' | 'hidden' | 'fault';
 export type OverlayZOrderState = 'normal' | 'topmost';
@@ -9,10 +10,12 @@ export type OverlayVisibilityReason = OverlayVisibilityDecision['reason'] | 'not
 
 export const OVERLAY_SURFACE_SNAPSHOT_SCHEMA = 'narada.window_surface_overlay.surface_snapshot.v1';
 export const OVERLAY_RUNTIME_STATE_SCHEMA = 'narada.window_surface_overlay.runtime_state.v1';
+export const OVERLAY_SURFACE_PREFERENCES_SCHEMA = 'narada.window_surface_overlay.surface_preferences.v1';
+export const OVERLAY_PRESENCE_POLICY_SCHEMA = 'narada.window_surface_overlay.presence_policy.v1';
 
 export interface OverlayVisibilityDecision {
   desired_visibility: 'visible' | 'hidden';
-  reason: 'policy_always' | 'terminal_group_active' | 'foreground_external' | 'foreground_unknown';
+  reason: 'policy_always' | 'policy_hidden' | 'terminal_group_active' | 'foreground_external' | 'foreground_unknown';
 }
 
 export interface OverlaySurfaceMember {
@@ -77,7 +80,7 @@ export type OverlayRuntimeEvent =
 export function normalizeOverlayVisibilityPolicy(value: unknown = 'terminal-group'): OverlayVisibilityPolicy {
   const policy = String(value ?? '').trim().toLowerCase();
   if (policy === 'windows-terminal') return 'terminal-group';
-  if (policy === 'always' || policy === 'terminal-group') return policy;
+  if (policy === 'always' || policy === 'terminal-group' || policy === 'hidden') return policy;
   throw new Error('overlay_visibility_policy_invalid');
 }
 
@@ -87,6 +90,7 @@ export function deriveOverlayVisibilityDecision(
 ): OverlayVisibilityDecision {
   const policy = normalizeOverlayVisibilityPolicy(policyInput);
   if (policy === 'always') return { desired_visibility: 'visible', reason: 'policy_always' };
+  if (policy === 'hidden') return { desired_visibility: 'hidden', reason: 'policy_hidden' };
   if (foregroundKind === 'terminal' || foregroundKind === 'overlay') {
     return { desired_visibility: 'visible', reason: 'terminal_group_active' };
   }

@@ -1,11 +1,12 @@
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import {
   normalizeOverlayVisibilityPolicy,
+  type OverlayPresenceSelection,
   type OverlayRuntimeState,
   type OverlaySurfaceSnapshot,
   type OverlayVisibilityPolicyInput,
@@ -63,6 +64,8 @@ export interface OverlayPaths {
   pid: string;
   preferences: string;
   visibilityPolicy: string;
+  presencePolicy: string;
+  surfacePreferences: string;
   refresh: string;
   focus: string;
   restartCommand: string;
@@ -106,6 +109,13 @@ export interface OverlayDocumentInput extends Record<string, unknown> {
   rows?: unknown;
   actions?: unknown;
   updated_at?: unknown;
+}
+
+export interface OverlayPresencePolicyState {
+  schema: 'narada.window_surface_overlay.presence_policy.v1';
+  source: 'overlay' | 'surface-default';
+  policy: import('./overlay-surface-fsm.js').OverlayVisibilityPolicy | null;
+  updated_at: string;
 }
 
 interface OverlayPathOptions {
@@ -326,6 +336,8 @@ export function overlayPaths(id: string, options: OverlayPathOptions = {}): Over
     pid: join(stateDirectory, 'overlay.pid'),
     preferences: join(stateDirectory, 'preferences.json'),
     visibilityPolicy: join(stateDirectory, 'visibility.policy'),
+    presencePolicy: join(stateDirectory, 'presence.policy.json'),
+    surfacePreferences: join(dirname(stateDirectory), 'surface.preferences.json'),
     refresh: join(stateDirectory, 'refresh.signal'),
     focus: join(stateDirectory, 'focus.signal'),
     restartCommand: join(stateDirectory, 'restart.command.json'),
@@ -354,6 +366,17 @@ async function readJson(path: string): Promise<unknown> {
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
   await writeFile(path, JSON.stringify(value, null, 2) + '\n', 'utf8');
+}
+
+async function writeJsonAtomic(path: string, value: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.${Date.now()}.tmp`;
+  try {
+    await writeFile(temporary, JSON.stringify(value, null, 2) + '\n', 'utf8');
+    await rename(temporary, path);
+  } finally {
+    try { await unlink(temporary); } catch (error: unknown) { if (errorCode(error) !== 'ENOENT') throw error; }
+  }
 }
 
 export async function overlayStatus(id: string, options: OverlayPathOptions = {}): Promise<OverlayStatus> {
@@ -423,6 +446,40 @@ export async function requestOverlayRefresh(id: string, options: OverlayPathOpti
     state: 'refresh_requested',
     state_directory: paths.stateDirectory,
   };
+}
+
+export async function setOverlayPresencePolicy(
+  id: string,
+  selection: OverlayPresenceSelection,
+  options: OverlayPathOptions = {},
+): Promise<OverlayPresencePolicyState> {
+  const normalizedId = requireId(id);
+  const paths = await ensureStateDirectory(normalizedId, options);
+  const source = selection === 'surface-default' ? 'surface-default' : 'overlay';
+  const policy = source === 'overlay' ? normalizeOverlayVisibilityPolicy(selection) : null;
+  const state: OverlayPresencePolicyState = {
+    schema: 'narada.window_surface_overlay.presence_policy.v1',
+    source,
+    policy,
+    updated_at: new Date().toISOString(),
+  };
+  await writeJsonAtomic(paths.presencePolicy, state);
+  return state;
+}
+
+export async function setOverlaySurfaceDefaultPresencePolicy(
+  policyInput: OverlayVisibilityPolicyInput,
+  options: OverlayPathOptions = {},
+): Promise<Record<string, unknown>> {
+  const paths = overlayPaths('surface-default', options);
+  const policy = normalizeOverlayVisibilityPolicy(policyInput);
+  const value = {
+    schema: 'narada.window_surface_overlay.surface_preferences.v1',
+    default_presence_policy: policy,
+    updated_at: new Date().toISOString(),
+  };
+  await writeJsonAtomic(paths.surfacePreferences, value);
+  return value;
 }
 
 function runPowerShell(script: string, args: string[], env: NodeJS.ProcessEnv = process.env): Promise<{ stdout: string; stderr: string }> {

@@ -1,7 +1,7 @@
 param(
     [Parameter(Mandatory = $true)][string]$Id,
     [Parameter(Mandatory = $true)][string]$StateRoot,
-    [ValidateSet('always', 'terminal-group', 'windows-terminal')][string]$VisibilityPolicy = 'terminal-group',
+    [ValidateSet('always', 'terminal-group', 'hidden', 'windows-terminal')][string]$VisibilityPolicy = 'terminal-group',
     [int]$RefreshSeconds = 2,
     [int]$StartupTimeoutSeconds = 30
 )
@@ -49,20 +49,23 @@ function Stop-HostForPolicyChange {
     Remove-Item $pidPath -Force -ErrorAction SilentlyContinue
 }
 $requestedPolicy = Normalize-OverlayVisibilityPolicy $VisibilityPolicy
-$storedPolicy = if (Test-Path $visibilityPolicyPath) {
-    try { Normalize-OverlayVisibilityPolicy ((Get-Content -Raw -Path $visibilityPolicyPath).Trim()) } catch { $null }
-} else { $null }
+$selection = Read-OverlayPresencePolicySelection -StateRoot $StateRoot -FallbackPolicy $requestedPolicy
+$effectivePolicy = [string]$selection.policy
+$storedPolicy = if (Test-Path (Join-Path $StateRoot 'visibility.state.json')) {
+    $runtime = Read-OverlaySurfaceJson (Join-Path $StateRoot 'visibility.state.json') $null
+    try { if ($runtime -and $runtime.policy) { Normalize-OverlayVisibilityPolicy ([string]$runtime.policy) } else { $effectivePolicy } } catch { $effectivePolicy }
+} else { $effectivePolicy }
 $existing = Get-HostProcess
 if ($existing) {
-    if ($storedPolicy -eq $requestedPolicy) {
+    if ($storedPolicy -eq $effectivePolicy) {
         Set-Content -Path $refreshPath -Value ([DateTime]::UtcNow.ToString('o'))
         [pscustomobject]@{ schema = 'narada.window_surface_overlay.result.v1'; id = $Id; state = 'already_running'; pid = $existing.Id; state_directory = $StateRoot } | ConvertTo-Json -Compress
         exit 0
     }
     Stop-HostForPolicyChange $existing
 }
-Set-Content -Path $visibilityPolicyPath -Value $requestedPolicy
-Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $requestedPolicy -Lifecycle 'starting' -Visibility 'unknown' -DesiredVisibility 'unknown' -VisibilityReason 'not_projected' -ZOrder 'topmost' -Focus 'inactive'
+Set-Content -Path $visibilityPolicyPath -Value $effectivePolicy
+Write-OverlayRuntimeState -StateRoot $StateRoot -Id $Id -Policy $effectivePolicy -Lifecycle 'starting' -Visibility 'unknown' -DesiredVisibility 'unknown' -VisibilityReason 'not_projected' -ZOrder 'topmost' -Focus 'inactive'
 if (Test-Path $pidPath) { Remove-Item $pidPath -Force -ErrorAction SilentlyContinue }
 $shell = Get-Command pwsh, powershell -ErrorAction SilentlyContinue | Select-Object -First 1
 if (-not $shell) { throw 'powershell_runtime_not_found' }
@@ -72,7 +75,7 @@ $childArgs = @(
     '-Id', $Id,
     '-StateRoot', $StateRoot,
     '-RefreshSeconds', [string]$RefreshSeconds,
-    '-VisibilityPolicy', $requestedPolicy,
+    '-VisibilityPolicy', $effectivePolicy,
     '-HostProcess'
 )
 $child = Start-Process -WindowStyle Hidden -FilePath $shell.Source -ArgumentList $childArgs -PassThru

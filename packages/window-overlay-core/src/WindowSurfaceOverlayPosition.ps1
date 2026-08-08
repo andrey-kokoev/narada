@@ -1,4 +1,4 @@
-$script:OverlayPositionPreferencesSchema = 'narada.window_surface_overlay.preferences.v2'
+$script:OverlayPositionPreferencesSchema = 'narada.window_surface_overlay.preferences.v3'
 $script:OverlayPositionAnchors = @('top-left', 'top-right', 'bottom-left', 'bottom-right')
 
 function Get-OverlayPositionPreferencesSchema {

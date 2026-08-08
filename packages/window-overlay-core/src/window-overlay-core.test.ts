@@ -18,6 +18,8 @@ import {
   overlayStatus,
   reduceOverlayRuntimeState,
   requestOverlayFocus,
+  setOverlayPresencePolicy,
+  setOverlaySurfaceDefaultPresencePolicy,
 } from './index.js';
 
 test('creates a versioned generic document with controlled actions', () => {
@@ -52,6 +54,10 @@ test('surface FSM separates policy visibility from lifecycle, focus, and z-order
   assert.deepEqual(
     deriveOverlayVisibilityDecision('always', 'external'),
     { desired_visibility: 'visible', reason: 'policy_always' },
+  );
+  assert.deepEqual(
+    deriveOverlayVisibilityDecision('hidden', 'terminal'),
+    { desired_visibility: 'hidden', reason: 'policy_hidden' },
   );
 
   let state = createOverlayRuntimeState('fsm-overlay', 'terminal-group', 42, 'normal');
@@ -132,6 +138,27 @@ test('state root is user-local and overrideable', () => {
   assert.match(paths.focus, /example[\\/]focus\.signal$/);
 });
 
+test('presence policy persists independently from layer preferences', async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-overlay-presence-'));
+  try {
+    const overlay = await setOverlayPresencePolicy('example', 'always', { stateRoot });
+    assert.equal(overlay.schema, 'narada.window_surface_overlay.presence_policy.v1');
+    assert.equal(overlay.source, 'overlay');
+    assert.equal(overlay.policy, 'always');
+    const paths = overlayPaths('example', { stateRoot });
+    const stored = JSON.parse(await readFile(paths.presencePolicy, 'utf8'));
+    assert.equal(stored.policy, 'always');
+    const surface = await setOverlaySurfaceDefaultPresencePolicy('terminal-group', { stateRoot });
+    assert.equal(surface.default_presence_policy, 'terminal-group');
+    assert.match(paths.surfacePreferences, /surface\.preferences\.json$/);
+    await setOverlayPresencePolicy('example', 'surface-default', { stateRoot });
+    const inherited = JSON.parse(await readFile(paths.presencePolicy, 'utf8'));
+    assert.deepEqual({ source: inherited.source, policy: inherited.policy }, { source: 'surface-default', policy: null });
+  } finally {
+    await rm(stateRoot, { recursive: true, force: true });
+  }
+});
+
 test('normalizes the Windows WPF environment without mutating the caller', () => {
   const input: NodeJS.ProcessEnv = { SystemRoot: 'C:\\WINDOWS' };
   const normalized = normalizeOverlayEnvironment(input);
@@ -152,6 +179,7 @@ test('derives the Windows user-local AppData root when carriers omit LOCALAPPDAT
 test('PowerShell host owns presentation mechanics, not provider data logic', async () => {
   const source = await readFile(new URL('./window-surface-overlay.ps1', import.meta.url), 'utf8');
   const positionSource = await readFile(new URL('./WindowSurfaceOverlayPosition.ps1', import.meta.url), 'utf8');
+  const coordinatorSource = await readFile(new URL('./WindowSurfaceOverlayCoordinator.ps1', import.meta.url), 'utf8');
   assert.match(source, /PresentationFramework/);
   assert.match(source, /ShowInTaskbar/);
   assert.match(source, /DragMove/);
@@ -161,7 +189,14 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.doesNotMatch(source, /\$value\.TextDecorations/);
   assert.match(source, /Start-Process -FilePath \$rowTarget/);
   assert.match(source, /\$titleText\.Foreground = Get-ToneBrush/);
-  assert.match(source, /\$script:PinButton\.FontSize = 12/);
+  assert.match(source, /\$script:PresenceButton\.FontSize = 12/);
+  assert.match(source, /\$script:LayerButton\.FontSize = 12/);
+  assert.match(source, /New-OverlayPresenceMenu/);
+  assert.match(source, /Layer: Above other windows/);
+  assert.match(source, /\$window\.Topmost = \$preferences\.layer -eq 'topmost'/);
+  assert.doesNotMatch(source, /\$window\.Topmost = \$preferences\.pinned/);
+  assert.match(source, /Get-OverlayPresencePolicyLabel/);
+  assert.match(coordinatorSource, /presence\.policy\.json/);
   assert.match(source, /CornerRadius\(10\)/);
   assert.match(source, /ControlTemplate/);
   assert.match(source, /MouseEnter/);
@@ -208,7 +243,7 @@ test('PowerShell host owns presentation mechanics, not provider data logic', asy
   assert.match(source, /Restore-OverlayPosition/);
   assert.match(source, /Add_LocationChanged/);
   assert.match(source, /Drag-OverlayAndPersistPosition/);
-  assert.match(positionSource, /narada\.window_surface_overlay\.preferences\.v2/);
+  assert.match(positionSource, /narada\.window_surface_overlay\.preferences\.v3/);
   assert.match(positionSource, /top-left/);
   assert.match(positionSource, /top-right/);
   assert.match(positionSource, /bottom-left/);
@@ -248,7 +283,7 @@ test('PowerShell position helper anchors, clamps, and migrates legacy coordinate
     clamped: { left: number; top: number };
     legacy: { kind: string; anchor: string; inset_x: number; inset_y: number };
   };
-  assert.equal(result.schema, 'narada.window_surface_overlay.preferences.v2');
+  assert.equal(result.schema, 'narada.window_surface_overlay.preferences.v3');
   assert.deepEqual(result.topRight, { left: 900, top: 20 });
   assert.deepEqual(result.bottomLeft, { left: 30, top: 480 });
   assert.deepEqual(result.clamped, { left: 920, top: 520 });
@@ -282,11 +317,15 @@ test('existing overlay hosts are replaced when the requested visibility policy c
   assert.match(start, /window_surface_overlay_policy_change_timeout/);
   assert.match(start, /-VisibilityPolicy/);
   assert.match(start, /terminal-group/);
+  assert.match(start, /effectivePolicy/);
+  assert.match(start, /Read-OverlayPresencePolicySelection/);
   assert.ok(start.includes('[int]$StartupTimeoutSeconds = 30'));
   assert.ok(start.includes('AddSeconds($StartupTimeoutSeconds)'));
   assert.match(coordinator, /stateKey/);
   assert.match(coordinator, /focusKey/);
   assert.match(coordinator, /Write-OverlaySurfaceJsonAtomic/);
+  assert.match(coordinator, /policy_hidden/);
+  assert.match(coordinator, /surface.preferences.json/);
   const host = await readFile(new URL('./window-surface-overlay.ps1', import.meta.url), 'utf8');
   assert.match(host, /VisibilityReason = 'visibility_fault'/);
   assert.match(host, /-Lifecycle \$script:LifecycleState/);

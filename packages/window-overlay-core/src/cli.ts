@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile } from 'node:fs/promises';
-import { createOverlayDocument, inspectOverlay, normalizeOverlayVisibilityPolicy, requestOverlayFocus, requestOverlayRefresh, startOverlay, stopOverlay } from './index.js';
+import { createOverlayDocument, inspectOverlay, normalizeOverlayVisibilityPolicy, requestOverlayFocus, requestOverlayRefresh, setOverlayPresencePolicy, setOverlaySurfaceDefaultPresencePolicy, startOverlay, stopOverlay } from './index.js';
+import type { OverlayPresenceSelection } from './overlay-surface-fsm.js';
 
 const args = process.argv.slice(2);
 const command = args.shift() || 'status';
@@ -11,6 +12,9 @@ const valueOf = (name: string, fallback?: string): string | undefined => {
 const id = valueOf('--id', 'narada-overlay');
 const stateRoot = valueOf('--state-root');
 const emit = (value: unknown): void => { process.stdout.write(JSON.stringify(value, null, 2) + '\n'); };
+const isPresenceSelection = (value: string | undefined): value is OverlayPresenceSelection => (
+  value === 'surface-default' || value === 'always' || value === 'terminal-group' || value === 'hidden'
+);
 
 if (command === 'start') {
   const documentPath = valueOf('--document');
@@ -38,6 +42,16 @@ if (command === 'start') {
   emit(await requestOverlayRefresh(id ?? 'narada-overlay', { stateRoot }));
 } else if (command === 'focus') {
   emit(await requestOverlayFocus(id ?? 'narada-overlay', { stateRoot }));
+} else if (command === 'presence') {
+  const selection = valueOf('--policy', 'surface-default');
+  if (!isPresenceSelection(selection)) throw new Error('overlay_presence_selection_invalid:' + selection);
+  if (selection !== 'surface-default') normalizeOverlayVisibilityPolicy(selection);
+  emit(await setOverlayPresencePolicy(id ?? 'narada-overlay', selection, { stateRoot }));
+} else if (command === 'surface-default') {
+  emit(await setOverlaySurfaceDefaultPresencePolicy(
+    normalizeOverlayVisibilityPolicy(valueOf('--policy', 'terminal-group')),
+    { stateRoot },
+  ));
 } else if (command === 'inspect' || command === 'status') {
   emit(await inspectOverlay({ id: id ?? 'narada-overlay', stateRoot }));
 } else {

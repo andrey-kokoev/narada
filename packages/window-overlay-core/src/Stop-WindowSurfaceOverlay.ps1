@@ -6,14 +6,12 @@ $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'WindowSurfaceOverlayCoordinator.ps1')
 $pidPath = Join-Path $StateRoot 'overlay.pid'
 $focusPath = Join-Path $StateRoot 'focus.signal'
-$visibilityPolicyPath = Join-Path $StateRoot 'visibility.policy'
 $surfaceRoot = Split-Path -Parent -Path $StateRoot
 function Write-StoppedOverlayState {
     $runtime = Read-OverlaySurfaceJson (Join-Path $StateRoot 'visibility.state.json') $null
-    $policy = 'terminal-group'
-    if (Test-Path -LiteralPath $visibilityPolicyPath) {
-        try { $policy = Normalize-OverlayVisibilityPolicy ((Get-Content -Raw -LiteralPath $visibilityPolicyPath).Trim()) } catch {}
-    }
+    $policy = if ($runtime -and $runtime.policy) {
+        try { Normalize-OverlayVisibilityPolicy ([string]$runtime.policy) } catch { 'terminal-group' }
+    } else { (Read-OverlayPresencePolicySelection -StateRoot $StateRoot -FallbackPolicy 'terminal-group').policy }
     $reason = if ($runtime -and $runtime.visibility_reason) { [string]$runtime.visibility_reason } else { 'not_projected' }
     $zOrder = if ($runtime -and $runtime.z_order) { [string]$runtime.z_order } else { 'topmost' }
     $revision = if ($runtime -and $runtime.surface_revision) { [int]$runtime.surface_revision } else { $null }

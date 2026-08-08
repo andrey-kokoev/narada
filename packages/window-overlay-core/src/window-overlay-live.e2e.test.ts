@@ -8,6 +8,8 @@ import {
   overlayPaths,
   overlayStatus,
   requestOverlayFocus,
+  setOverlayPresencePolicy,
+  setOverlaySurfaceDefaultPresencePolicy,
   startOverlay,
   stopOverlay,
 } from './index.js';
@@ -155,32 +157,36 @@ function windowsTerminalPid(): number | null {
 }
 
 const EXTERNAL_WINDOW_SCRIPT = String.raw`
-Add-Type -AssemblyName PresentationFramework
-$window = New-Object Windows.Window
-$window.Title = 'Narada external foreground'
+Add-Type -AssemblyName System.Windows.Forms
+$window = New-Object System.Windows.Forms.Form
+$window.Text = 'Narada external foreground'
 $window.Width = 420
 $window.Height = 220
-$window.WindowStartupLocation = 'CenterScreen'
+$window.StartPosition = 'CenterScreen'
 $window.ShowInTaskbar = $true
-$window.Content = 'External foreground test window'
-$window.Show()
-$application = New-Object Windows.Application
-$application.Run($window)
+$window.TopMost = $false
+$window.Controls.Add((New-Object System.Windows.Forms.Label -Property @{ Text = 'External foreground test window'; AutoSize = $true; Left = 20; Top = 20 }))
+$window.Add_Shown({ $window.Activate(); $window.Focus() })
+[System.Windows.Forms.Application]::Run($window)
 `;
 
 function startExternalForegroundProcess(scriptPath: string) {
+  let stderr = '';
   const child = spawn('pwsh', [
     '-NoLogo',
     '-NoProfile',
     '-NonInteractive',
+    '-WindowStyle',
+    'Normal',
     '-STA',
     '-ExecutionPolicy',
     'Bypass',
     '-File',
     scriptPath,
-  ], { windowsHide: true });
+  ], { windowsHide: false, stdio: ['ignore', 'ignore', 'pipe'] });
+  child.stderr?.on('data', (chunk) => { stderr += String(chunk); });
   if (!child.pid) throw new Error('external_foreground_process_start_failed');
-  return { pid: child.pid, child };
+  return { pid: child.pid, child, getStderr: () => stderr };
 }
 
 function stopExternalForegroundProcess(pid: number): void {
@@ -271,7 +277,7 @@ test('live always visibility is independent from normal z-order', {
   try {
     const paths = overlayPaths('normal-z-order-overlay', { stateRoot });
     await mkdir(paths.stateDirectory, { recursive: true });
-    await writeFile(paths.preferences, JSON.stringify({ position: null, opacity: 1, pinned: false }) + '\n', 'utf8');
+    await writeFile(paths.preferences, JSON.stringify({ position: null, opacity: 1, layer: 'normal' }) + '\n', 'utf8');
     const started = await startOverlay({
       id: 'normal-z-order-overlay',
       stateRoot,
@@ -334,7 +340,7 @@ test('live terminal-group visibility follows terminal and external foreground tr
     while (Date.now() < externalDeadline && !activateNativeProcess(externalPid)) {
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    assert.ok(activateNativeProcess(externalPid), 'external foreground process must expose an activatable window');
+    assert.ok(activateNativeProcess(externalPid), `external foreground process must expose an activatable window: ${JSON.stringify({ snapshot: readNativeWindowSnapshot(externalPid), exitCode: externalProcess.exitCode, signalCode: externalProcess.signalCode, stderr: external.getStderr() })}`);
     let externalStatus = await overlayStatus('terminal-group-live-overlay', { stateRoot });
     const hiddenStateDeadline = Date.now() + 7_000;
     while (Date.now() < hiddenStateDeadline && (
@@ -408,6 +414,57 @@ test('live start applies a changed visibility policy to an existing host', {
     if (firstPid > 0 && firstPid !== secondPid) {
       await stopOverlay({ id: 'live-overlay-policy', stateRoot }).catch(() => undefined);
     }
+    await rm(stateRoot, { recursive: true, force: true });
+    livePid = 0;
+  }
+});
+
+test('live presence selection changes independently from layer state', {
+  skip: process.platform !== 'win32',
+}, async () => {
+  const stateRoot = await mkdtemp(join(tmpdir(), 'narada-window-overlay-presence-live-'));
+  let overlayPid = 0;
+  try {
+    const started = await startOverlay({
+      id: 'presence-layer-live-overlay',
+      stateRoot,
+      visibilityPolicy: 'always',
+      refreshSeconds: 1,
+      document: {
+        title: 'Presence and layer live overlay',
+        rows: [{ label: 'State', value: 'visible', tone: 'success' }],
+      },
+    });
+    overlayPid = started.pid ?? 0;
+    assert.ok(overlayPid > 0);
+    await waitForSnapshot(overlayPid, (snapshot) => snapshot.Windows.some(
+      (window) => window.Visible && window.Title === overlayWindowTitle('presence-layer-live-overlay'),
+    ));
+
+    await setOverlaySurfaceDefaultPresencePolicy('hidden', { stateRoot });
+    await setOverlayPresencePolicy('presence-layer-live-overlay', 'surface-default', { stateRoot });
+    let status = await overlayStatus('presence-layer-live-overlay', { stateRoot });
+    const hiddenDeadline = Date.now() + 7_000;
+    while (Date.now() < hiddenDeadline && status.visibility_state?.visibility !== 'hidden') {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      status = await overlayStatus('presence-layer-live-overlay', { stateRoot });
+    }
+    assert.equal(status.visibility_state?.policy, 'hidden', JSON.stringify(status.visibility_state));
+    assert.equal(status.visibility_state?.visibility, 'hidden', JSON.stringify(status.visibility_state));
+    assert.equal(status.visibility_state?.z_order, 'topmost', JSON.stringify(status.visibility_state));
+
+    await setOverlayPresencePolicy('presence-layer-live-overlay', 'always', { stateRoot });
+    status = await overlayStatus('presence-layer-live-overlay', { stateRoot });
+    const visibleDeadline = Date.now() + 7_000;
+    while (Date.now() < visibleDeadline && status.visibility_state?.visibility !== 'visible') {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      status = await overlayStatus('presence-layer-live-overlay', { stateRoot });
+    }
+    assert.equal(status.visibility_state?.policy, 'always', JSON.stringify(status.visibility_state));
+    assert.equal(status.visibility_state?.visibility, 'visible', JSON.stringify(status.visibility_state));
+    assert.equal(status.visibility_state?.z_order, 'topmost', JSON.stringify(status.visibility_state));
+  } finally {
+    if (overlayPid > 0) await stopOverlay({ id: 'presence-layer-live-overlay', stateRoot }).catch(() => undefined);
     await rm(stateRoot, { recursive: true, force: true });
     livePid = 0;
   }
