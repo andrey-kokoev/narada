@@ -4,6 +4,59 @@ This changelog tracks semantic chapters in Narada's development: concepts that b
 
 It is not a package-level release log. Package publishing changes belong in Changesets.
 
+## Runtime Engine Matrix
+
+Narada's CLI artifact became a runtime-neutral shell: it bundles the native Rust
+NARS runtime by default and keeps Node.js 22 and Bun as selectable engines,
+without letting the runtime choice become an authority boundary.
+
+- **Runtime profile contract** (Task ~runtime-matrix): `docs/concepts/nars-runtime-contract.md`
+  defines the runtime profile model (`native`, `bun`, `node-compat`) and the
+  `runtime_engine_kind` selector (`rust`, `node`, `bun`). Runtime selection is
+  recorded in launch evidence but does not change admission, authority, or
+  reconciliation semantics.
+- **Native Rust NARS runtime**: `packages/agent-runtime-server/native/` builds a
+  self-contained Rust binary (`narada-agent-runtime-server-rust`) that owns the
+  session-core/authority path without delegating to Node or Bun. `pnpm build`
+  compiles it via cargo; the CLI artifact packer (`scripts/pack-artifact.mjs`)
+  includes it and marks `rust_runtime_binary: true` in the platform manifest.
+- **Runtime-engine conformance tests**: four test fixtures prove parity and
+  separation across engines:
+  - `runtime-engine-boundary-benchmark` — bounded Node/Bun/Rust process-boundary measurements
+  - `runtime-engine-protocol-conformance` — lifecycle, control, health, and MCP frame sequence parity
+  - `runtime-engine-nars-conformance` — NARS entrypoint milestones across Node, Bun, and Rust
+  - `runtime-engine-native-session-core` — Rust persistence, input admission, SQLite authority closure, and no-Node delegation
+- **Bun build dependency**: Bun is now installed in CI and documented as an
+  available engine; the TypeScript NARS runtime remains runnable under Node 22.
+- **`--runtime-engine` operator surface**: `narada-agent-start`, workspace launch
+  commands, and carrier launchers accept `--runtime-engine <node|bun|rust>` and
+  the `NARADA_RUNTIME_ENGINE` environment variable. The default is Rust/native.
+- **CLI artifact release workflow**: `.github/workflows/release-artifact.yml`
+  packs per-platform tarballs and uploads them to the `cli-latest` GitHub
+  prerelease, replacing previous assets on each manual run.
+
+Concrete outcomes:
+
+- Native Rust runtime ships inside every released CLI artifact.
+- `scripts/pack-artifact.mjs` emits per-platform manifests with
+  `rust_runtime_binary: true`.
+- CI builds the native runtime on win32-x64, linux-x64, darwin-x64, and darwin-arm64.
+- Runtime selection is an operator convenience, not a trust boundary.
+
+Authority clarifications:
+
+- The runtime engine owns process boundaries and performance characteristics;
+  it does not own truth, permission, lifecycle, or confirmation.
+- `rust`/`node`/`bun` are substrate labels, not authority classes.
+- Launch evidence records the selected engine so variance is observable and
+  auditable.
+
+Deferred:
+
+- Runtime-engine performance tuning and benchmark baselines.
+- Auto-fallback when the selected engine is unavailable.
+- User-facing documentation of engine-specific capability gaps (if any).
+
 ## Construction Operation
 
 Narada's task-graph execution loop was defined, designed, and fixture-proven as a governed Construction Operation — the human-architect-agent development cycle that advances a system while preserving long-horizon coherence.

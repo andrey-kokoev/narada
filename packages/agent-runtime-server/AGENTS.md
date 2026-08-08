@@ -23,21 +23,21 @@ It owns the public runtime-server contract for:
 - artifact HTTP request handling;
 - protocol-facing wrapper behavior around the carrier substrate.
 
-It binds transport and process lifetime to one `@narada-core/nars-session-core` supervisor. The in-process carrier is a stateless turn adapter; provider execution is delegated to `@narada-core/nars-provider-runtime`.
+It binds transport and process lifetime to one nars-session-core supervisor. The TypeScript implementation uses the in-process carrier and shared provider/MCP packages. The native implementation composes the Rust session supervisor, native MCP gateway, and native provider adapter; an external provider process remains a provider locus, never a NARS runtime.
 
-The process engine is selected separately by `agent-start` through
-`runtime_engine_kind` (`node`, `bun`, or `rust`). The Rust backend owns the
-NARS session-core and session-authority paths natively, including their event
-journal, lifecycle, input admission, heartbeat, recovery, and SQLite lease.
-Provider execution and MCP dispatch remain explicit adapter boundaries until
-their native implementations exist; they must not be smuggled into the Rust
-session-core implementation.
+The process engine is selected separately by agent-start through runtime_engine_kind
+(node, bun, or rust). The Rust backend owns the NARS session-core and
+session-authority paths natively, including their event journal, lifecycle,
+input admission, heartbeat, recovery, and SQLite lease. It also owns native MCP
+discovery/stdio/tool dispatch and provider invocation orchestration. The Node/Bun
+implementation remains the compatibility/reference profile; its package
+boundaries are not imported into a Rust native launch.
 
 ## Boundary Rules
 
 Distinguish public NARS ownership from current implementation placement.
 
-NARS owns the public session-control contract, transport binding, health/event projection, and process lifetime. `@narada-core/nars-session-core` owns session and turn lifecycle transitions, durable events, artifacts, input queue state, health, recovery, session indexing, and authority transitions. `@narada-core/carrier-runtime` receives a pure turn context and returns turn evidence; it owns no session persistence or compatibility surface. `@narada-core/nars-provider-runtime` owns provider execution.
+NARS owns the public session-control contract, transport binding, health/event projection, and process lifetime. nars-session-core owns session and turn lifecycle transitions, durable events, artifacts, input queue state, health, recovery, session indexing, and authority transitions. The native modules receive a pure turn context and return turn/provider/tool evidence; they own no session persistence or authority surface outside the supervisor. The TypeScript compatibility profile continues to use carrier-runtime, nars-provider-runtime, and nars-capability-gateway.
 
 Do not move the following into this package as private implementation internals unless the NARS contract and package split are deliberately changed:
 

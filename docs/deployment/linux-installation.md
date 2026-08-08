@@ -20,7 +20,8 @@ where a Site runs.
 ## Prerequisites
 
 - Linux with a supported Node.js release, currently `>=22.0.0`.
-- npm or pnpm for the published CLI path, or Git and pnpm for a repository checkout.
+- Git and pnpm for a repository checkout; the published CLI path uses the
+  self-contained installer and does not require npm/pnpm.
 - `systemd --user` for unattended `linux-user` supervision, or system systemd
   privileges for `linux-system` supervision.
 - A Site-authorized credential source for any provider or external capability
@@ -33,18 +34,19 @@ silently install a second Node runtime into a Site.
 ## Published CLI Installation
 
 ```bash
-npm install -g @narada-core/cli
-# or:
-pnpm add -g @narada-core/cli
+curl -fsSL https://narada.systems/install.sh | bash
 
 narada --help
 narada --version
 ```
 
-The published package is the canonical release artifact. A successful install
-must include the CLI entrypoint, Linux Site adapter, runtime-server assets,
-operator-surface assets, and all runtime dependencies. Workspace-only imports
-or ignored local `dist/` directories are publication failures.
+The installer downloads the self-contained per-platform release artifact from
+the `cli-latest` GitHub release (`narada-cli-linux-x64.tgz`), bundles every
+dependency, and installs it globally. A successful install must include the CLI
+entrypoint, Linux Site adapter, the native Rust runtime-server binary, the Node
+and Bun runtime alternatives, operator-surface assets, and all runtime
+dependencies. Workspace-only imports or ignored local `dist/` directories are
+installation failures.
 
 ## Repository Checkout
 

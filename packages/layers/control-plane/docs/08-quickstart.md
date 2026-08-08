@@ -4,31 +4,37 @@
 
 ## Prerequisites
 
-- **Node.js**: v18+ (tested on v20)
+- **Node.js**: v22+
 - **Microsoft Graph Access**: Azure AD app registration or access token
 
 ## Method 1: CLI (Recommended for Users)
 
 ### Installation
 
+Install the self-contained release artifact for your platform:
+
 ```bash
-npm install -g @narada-core/cli
-# or
-pnpm add -g @narada-core/cli
+# macOS / Linux
+curl -fsSL https://narada.systems/install.sh | bash
+
+# Windows (PowerShell)
+irm https://narada.systems/install.ps1 | iex
 ```
 
 ### First-Time Setup
 
 ```bash
-# Interactive configuration
-narada init --interactive
+# Zero-setup demonstration
+narada demo
 
-# Follow the prompts:
-# - Enter your email address
-# - Choose data directory (default: ./data)
-# - Set Graph API credentials (or use env vars)
-# - Select one or more folders to sync
-# - Test connection before saving
+# Personal User Site onboarding (recommended first use)
+narada onboarding start --scope user-site --interactive
+
+# Or bootstrap an ops repo for a governed operation
+narada init-repo ~/src/my-ops
+cd ~/src/my-ops
+pnpm install
+narada want-mailbox help@company.com
 ```
 
 ### Run Your First Sync

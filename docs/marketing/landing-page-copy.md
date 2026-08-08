@@ -62,7 +62,15 @@ and each checkable in the source.
 You want a deterministic kernel, not another chat framework: one control plane
 for mailboxes, timers, webhooks, filesystems, and processes, with a governed
 tool fabric any agent carrier can plug into.
-→ *Jump to [Capabilities](#capabilities)* · Get the CLI from npm
+→ *Jump to [Capabilities](#capabilities)* · Get the CLI from the installer
+
+**Card 4 — "I'm here for the argument."**
+You believe the hard problem isn't making models smarter — it's that
+intelligence without a harness can silently reshape intent as it executes.
+Narada's governing claim is that some irreducible entropy lives at the
+intent-to-execution boundary, and the only safe move is to make that boundary
+explicit, durable, and checkable.
+→ *Read [The entropy conjecture](/entropy-conjecture)* · Browse the Litmus evidence
 
 ---
 
@@ -148,6 +156,12 @@ Capabilities are declared and admitted, never inferred from a prompt.
 Tasks, checkpoints, and an operator console keep multi-session work resumable,
 reviewable, and auditable. Crash at any point; the system converges back to
 correct state without coordination with the source.
+
+**Card 6 — Native, Node, or Bun — same governance**
+The CLI ships a native Rust NARS runtime by default, with Node.js 22 and Bun
+available through `--runtime-engine`. The same admission, authority, and
+reconciliation invariants run on every engine; the runtime is a substrate, not
+a source of truth.
 
 ---
 
@@ -255,9 +269,10 @@ page in a small trailing section.
 
 **Lead-in (functional, not marketing):**
 
-Requires Node.js 22+. The scripts are plain text served from this domain —
-read them before you run them. Source builds: `/install-source.ps1`,
-`/install-source.sh`.
+Requires Node.js 22+. The artifact includes the native Rust runtime by default;
+use `--runtime-engine node|bun` to run the TypeScript engines instead. The
+scripts are plain text served from this domain — read them before you run them.
+Source builds: `/install-source.ps1`, `/install-source.sh`.
 
 ```
 # Windows (PowerShell)
@@ -300,6 +315,9 @@ Every outward claim above, with its grounding source in this repo:
 | User Site commands (`install windows-user-site`, `onboarding start`) | `QUICKSTART.md`; `README.md` (first-run paths) |
 | Release-artifact install commands (`irm`/`curl` installers) | `scripts/pack-artifact.mjs` (per-platform fully-bundled tarballs); GitHub prerelease `cli-latest` assets (`narada-cli-<platform>-<arch>.tgz`); installers `public/install.ps1` / `public/install.sh` in the narada.systems repo; source path kept at `/install-source.*` (clones all five repos; see task #2235) |
 | `narada demo` zero-setup behavior | `README.md`; `QUICKSTART.md` (path 1) |
+| "I'm here for the argument" route card / entropy-conjecture link | `docs/concepts/intent-interpretation-admission-zones.md` (intent vs. authority separation); site page `/entropy-conjecture` |
+| Native/Node/Bun runtime choice capability card | `docs/concepts/nars-runtime-contract.md` (runtime profiles); `packages/agent-start/src/narada-agent-start.ts` (`--runtime-engine`) |
+| Install runtime-engine note | `docs/concepts/nars-runtime-contract.md`; `scripts/pack-artifact.mjs` (`rust_runtime_binary`) |
 | Two-stage confirmation, draft-first delivery, read-only observation | `AGENTS.md` (critical invariants 16–22) |
 | Invariants lint-checked in CI | `AGENTS.md` (`pnpm control-plane-lint`, CI workflows) |
 | MIT license | `README.md`; `LICENSE` |
@@ -309,8 +327,9 @@ is published on the npm registry. The page therefore does not link npm; it
 routes installation through the narada.systems installers (`/install.ps1`,
 `/install.sh`), which download the self-contained per-platform CLI artifact
 from the `cli-latest` GitHub prerelease and `npm install -g` it — no registry
-resolution at install time. Reinstate the npm CTA once `@narada-core/cli` is
-actually published.
+resolution at install time. The artifact bundles the native Rust runtime by
+default; Node/Bun engines are selectable post-install. Reinstate the npm CTA
+once `@narada-core/cli` is actually published.
 
 **No speed promises:** install and first-run time claims are deliberately
 absent — speed is not Narada's objective; governed correctness is.

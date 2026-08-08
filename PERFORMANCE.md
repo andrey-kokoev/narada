@@ -13,11 +13,8 @@ pnpm benchmark
 # Specific benchmark file
 pnpm benchmark -- sync.bench
 
-# Watch mode
-pnpm benchmark:watch
-
-# Generate report
-pnpm benchmark:report
+# Compare with baseline
+pnpm benchmark:compare
 ```
 
 ## Performance Targets
@@ -92,7 +89,7 @@ Baselines are stored in `.benchmarks/baselines/`:
 
 Update baseline (main branch only):
 ```bash
-pnpm benchmark:baseline
+pnpm benchmark:compare --update
 ```
 
 Compare with baseline:
@@ -122,7 +119,7 @@ View profiles in Chrome DevTools:
 
 Benchmarks assume:
 
-- Node.js 18+
+- Node.js 22+
 - SSD storage
 - 4+ CPU cores
 - 8GB+ RAM

@@ -6,30 +6,35 @@ Command-line interface for the Narada deterministic state compiler and control p
 
 ## Installation
 
+The supported install path is the self-contained release artifact downloaded by
+the narada.systems installer:
+
 ```bash
-npm install -g @narada-core/cli
+curl -fsSL https://narada.systems/install.sh | bash   # macOS / Linux
 # or
-pnpm add -g @narada-core/cli
+irm https://narada.systems/install.ps1 | iex          # Windows (PowerShell)
 ```
+
+Requires Node.js 22+. The installed CLI bundles the agent session runtime;
+Rust is the default engine, with Node and Bun available via
+`--runtime-engine node|bun`.
+
+`@narada-core/cli` is not yet published to the npm public registry.
 
 ## Quick Start
 
 ```bash
-# Interactive configuration (recommended)
-narada init --interactive
+# Zero-setup demonstration
+narada demo
 
-# Or create config manually
-narada init
-
-# Run sync
-narada sync
+# Personal User Site onboarding
+narada onboarding start --scope user-site --interactive
 
 # Check status
-narada status
-
-# Create backup
-narada backup -o backup.tar.gz --encrypt
+narada onboarding status --scope user-site
 ```
+
+For the full first-run path, see [`QUICKSTART.md`](../../../QUICKSTART.md).
 
 ## Commands
 

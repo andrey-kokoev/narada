@@ -62,33 +62,30 @@ Operations live in `config/config.json`. Logs, state, and backups live under the
 
 ## Installation
 
-### CLI (Recommended)
+Install the self-contained CLI release artifact for your platform. The scripts
+are plain text — read them before you run them.
 
-```bash
-npm install -g @narada-core/cli
-# or
-pnpm add -g @narada-core/cli
+### Windows
+
+```powershell
+irm https://narada.systems/install.ps1 | iex
 ```
 
-The single `narada` CLI surfaces every command: runtime, backup, operation shaping, and repo bootstrapping.
-
-### Daemon
+### macOS / Linux
 
 ```bash
-npm install -g @narada-core/daemon
-# or
-pnpm add -g @narada-core/daemon
+curl -fsSL https://narada.systems/install.sh | bash
 ```
 
-The daemon is typically started from inside an ops repo via `pnpm daemon`.
+Requires Node.js 22+. The installed CLI includes the agent session runtime, which
+runs natively in Rust by default; Node or Bun engines are available with
+`--runtime-engine node|bun`.
 
-### Library
+### Daemon / Library
 
-```bash
-npm install @narada-core/control-plane
-# or
-pnpm add @narada-core/control-plane
-```
+For development or embedding, see the source checkout instructions below. The
+published npm packages under `@narada-core/*` are not yet on the public registry;
+the installer above is the supported first-run path.
 
 ## First-Run Paths
 
@@ -120,11 +117,11 @@ See [`docs/product/first-time-operator-success-path.md`](docs/product/first-time
 
 ### Personal User Site on native Linux
 
-For a native Linux host, install the published CLI with npm or pnpm and use
-the CLI-owned resident-first path. PowerShell and WSL are not prerequisites:
+For a native Linux host, use the installer and the CLI-owned resident-first
+path. PowerShell and WSL are not prerequisites:
 
 ```bash
-npm install -g @narada-core/cli
+curl -fsSL https://narada.systems/install.sh | bash
 narada onboarding start --scope user-site --interactive
 ```
 

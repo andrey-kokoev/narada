@@ -64,9 +64,10 @@ The state files are:
 - `presence.policy.json`: the per-overlay presence selection (`always`, `terminal-group`, `hidden`,
   or `surface-default`);
 - `preferences.json`: persisted position, opacity, and explicit layer preference (`normal` or
-  `topmost`); the legacy `pinned` field is read during migration;
+  `topmost`);
 - `refresh.signal`: an asynchronous request for the running host to re-read its document;
 - `focus.signal`: an asynchronous request for the running host to activate its window;
+- `tile.command.json`: a one-target position command emitted by another overlay's tile action;
 - `visibility.state.json`: the host's durable lifecycle, visibility, z-order, focus, and policy state;
 - parent `surface.snapshot.json`: the coordinated surface projection of live overlay members and foreground context;
 - parent `surface.preferences.json`: the shared default presence policy for the overlay surface;
@@ -101,9 +102,19 @@ The overlay surface is coordinated, but each host owns its own lifecycle. Presen
 canonicalized to `always`, `terminal-group`, or `hidden`; `windows-terminal` is a legacy ingress
 alias only. An overlay may inherit the shared surface default or persist its own presence override.
 Layer (`normal` or `topmost`), presence, and focus are separate state axes. The UI's explicit
-`Above other windows` control changes only layer; it never changes presence. A successful focus
-request records one shared owner and keeps it stable for a bounded transition window; it does not
-hide or stop sibling overlays. Surface projection uses a named mutex and atomic JSON replacement.
+`Presence` control opens the visibility-policy menu, while the explicit `Layer` control changes
+only z-order (`Above other windows` versus normal z-order); neither control changes the other
+axis. A successful focus request records one shared owner and keeps it stable for a bounded
+transition window; it does not hide or stop sibling overlays. Surface projection uses a named
+mutex and atomic JSON replacement.
+
+The header's tile control uses the clicked overlay as the stable anchor. It enumerates other
+visible overlay windows, orders them by their current distance from the anchor, and emits one
+short-lived position command per sibling. Each sibling applies and persists only its own command;
+the anchor is not moved. The initial tile is adjacent to the anchor in the direction with available
+space, then fills a compact grid. A sibling that is below and left of the anchor therefore moves
+up and right into the first adjacent tile when that side has room. Tiling never changes presence,
+layer, focus, or document state.
 
 ## Focus Contract
 

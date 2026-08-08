@@ -89,13 +89,15 @@ NARS `session_started`/session-index projections.
 direct-engine choice, and `bun` runs the same NARS JavaScript entrypoint
 through Bun; local SQLite authority uses the conditional
 `@narada-core/sqlite` adapter so the session does not depend on `node:sqlite`.
-`rust` owns the NARS session-core and session-authority paths natively: the
-Rust session supervisor and core own start/replay, durable session events,
+Rust owns the NARS session-core and session-authority paths
+natively: the Rust supervisor and core own start/replay, durable session events,
 lifecycle, turn coordination, input admission, cancellation intent,
-heartbeat/recovery projection, and the SQLite authority lease. Provider
-execution and MCP dispatch remain explicit adapter boundaries until their
-native implementations exist; a native Rust session must not delegate
-session authority or persistence to Node. The engine
+heartbeat/recovery projection, and the SQLite authority lease. The native Rust
+runtime also owns MCP discovery/dispatch and provider invocation orchestration.
+External provider processes remain explicit provider loci, not NARS runtimes,
+and must not own session state or authority. Node/Bun remain
+compatibility/reference profiles; a native Rust session must not delegate NARS
+runtime work to TypeScript, Bun, or Node. The engine
 choice must not change session authority, lifecycle, health/events, MCP, or
 provider-selection semantics. The canonical `launcher workspace-plan`,
 `launcher workspace-launch`, and `operator-surface runtime start` commands

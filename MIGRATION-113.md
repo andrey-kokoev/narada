@@ -1,5 +1,10 @@
 # Migration Guide: Task 113 Package Taxonomy
 
+> **Historical / archived.** This guide describes the Task 113 package taxonomy
+> migration. The compatibility shims it references have been removed; current
+> downstream repos should use the canonical package locations and binary names
+> listed below. Keep this document for historical context only.
+
 This document describes the changes made in Task 113 (package taxonomy migration) and what downstream repos must update.
 
 ## What Changed

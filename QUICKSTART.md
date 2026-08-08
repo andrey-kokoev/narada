@@ -20,6 +20,10 @@ narada install windows-user-site
 narada doctor --bootstrap
 ```
 
+The artifact uses the native Rust NARS runtime by default. To run the Node.js
+or Bun engine instead, pass `--runtime-engine node` or `--runtime-engine bun`
+to launcher commands, or set `$env:NARADA_RUNTIME_ENGINE`.
+
 The default `minimal` profile installs the User Site, one `resident` assistant, and the normal operator-surface path. Use
 the `advanced` profile only when you intentionally need Cloudflare, extra roles, MCP development, or Site administration:
 
@@ -72,6 +76,10 @@ Prerequisite: Node.js 22 or newer. PowerShell and WSL are not prerequisites:
 curl -fsSL https://narada.systems/install.sh | bash
 narada doctor --bootstrap
 ```
+
+The artifact uses the native Rust NARS runtime by default. To run the Node.js
+or Bun engine instead, pass `--runtime-engine node` or `--runtime-engine bun`
+to launcher commands, or set `NARADA_RUNTIME_ENGINE`.
 
 Then continue with the platform-neutral User Site first-use command below. See
 [`docs/deployment/linux-installation.md`](docs/deployment/linux-installation.md)

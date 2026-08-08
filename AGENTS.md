@@ -54,7 +54,7 @@ From that primary shape, the familiar Narada readings follow:
 | Layer | Technology |
 |-------|------------|
 | Language | TypeScript 5.3+ |
-| Runtime | Node.js 18+ (ES modules, `"type": "module"`) |
+| Runtime | Node.js 22+ (ES modules, `"type": "module"`) |
 | Package manager | pnpm 8+ workspace monorepo |
 | Module system | ESM (`NodeNext` module resolution) |
 | Compiler | `tsc` (authoritative); `oxbuild` available as a faster non-authoritative probe |

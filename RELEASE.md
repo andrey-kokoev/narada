@@ -29,6 +29,31 @@ before publication.
 
 Operational knowledge, private mailbox configs, and customer-specific playbooks should not live in the public repo.
 
+## CLI Artifact Release (separate from npm)
+
+The installable Narada CLI is distributed as a self-contained per-platform
+tarball, not through the npm registry. The npm release process below publishes
+`@narada-core/*` packages; the artifact release process publishes the runnable
+CLI.
+
+- Workflow: `.github/workflows/release-artifact.yml` runs on `workflow_dispatch`.
+- It clones the four sibling workspace repos (`narada-core`, `mcp-surfaces`,
+  `agent-cli`, `agent-tui`), installs dependencies, builds the workspace
+  (TypeScript + native Rust), and runs `scripts/pack-artifact.mjs` for each
+  platform (`win32-x64`, `linux-x64`, `darwin-x64`, `darwin-arm64`).
+- It uploads `narada-cli-<platform>-<arch>.tgz` and
+  `manifest-<platform>-<arch>.json` to the `cli-latest` GitHub prerelease,
+  clobbering the previous assets.
+- The narada.systems installers (`/install.ps1`, `/install.sh`) fetch from
+  `cli-latest`, so a new artifact run updates what first-time users install.
+
+To verify a release artifact locally:
+
+```bash
+node scripts/pack-artifact.mjs --platform linux --arch x64
+# inspect artifacts/manifest-linux-x64.json; rust_runtime_binary should be true
+```
+
 ## One-Time Setup
 
 1. Ensure npm ownership exists for the `@narada-core` scope.
