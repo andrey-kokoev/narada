@@ -76,14 +76,14 @@
       "package": "@narada-core/mcp-loader-mcp",
       "required": true,
       "profile_runtime_engine_kinds": {
-        "native": "bun",
+        "native": "rust",
         "bun": "bun",
         "node-compat": "node"
       },
       "implementations": {
         "node": { "status": "admitted", "evidence": ["package-node-tests"] },
         "bun": { "status": "admitted", "evidence": ["package-bun-tests"] },
-        "rust": { "status": "unavailable", "evidence": [] }
+        "rust": { "status": "admitted", "evidence": ["native-loader", "loader-parity-tests", "loader-benchmark"] }
       }
     },
     {

@@ -413,6 +413,8 @@ test('runtime profiles expose coherent user choices over the implementation matr
   const nativeMatrix = runtimeProfileImplementationMatrix('native');
   assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'nars-runtime')?.runtime_engine_kind, 'rust');
   assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'agent-context-mcp')?.runtime_engine_kind, 'bun');
+  assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'mcp-loader-mcp')?.runtime_engine_kind, 'rust');
+  assert.equal(nativeMatrix.find((entry: any) => entry.component_kind === 'mcp-loader-mcp')?.implementation_status, 'admitted');
 
   const bunSelection = resolveRuntimeProfileSelection({ value: 'BUN' });
   assert.equal(bunSelection.status, 'accepted');
