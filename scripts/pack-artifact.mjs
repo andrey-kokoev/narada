@@ -296,8 +296,15 @@ function listNativeBinaries(dir, acc = []) {
   return acc;
 }
 
-function npm(command, cwd) {
-  execFileSync(`npm ${command}`, { cwd, stdio: 'inherit', shell: true });
+function npm(command, cwd, env = {}) {
+  // Windows runners default to MAX_PATH=260; nested workspace package paths
+  // (e.g. @narada-core/invokable-intelligence-registry) easily exceed it.
+  execFileSync(`npm ${command}`, {
+    cwd,
+    stdio: 'inherit',
+    shell: true,
+    env: { ...process.env, npm_config_longpaths: 'true', ...env },
+  });
 }
 
 function main() {
