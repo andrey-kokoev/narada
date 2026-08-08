@@ -348,14 +348,16 @@ function main() {
       stagePackage(index.get(name), join(staging, 'vendor', ...name.split('/')), staging, { full: true });
     }
 
-    // Resolve the full external tree for the target platform. --ignore-scripts
+    // Resolve the full external tree for the target platform. Do not force
+    // symlinks for file: workspace deps: CI Windows runners lack symlink
+    // privileges, and copying the staged packages into node_modules is fine
+    // because vendor/ is excluded from the final tarball anyway. --ignore-scripts
     // is safe here: every native dep in the tree ships prebuilt binaries, and
     // it keeps cross-platform installs (--os linux on a Windows host) viable.
     npm(
       [
         'install',
         '--omit=dev',
-        '--install-links',
         '--ignore-scripts',
         '--no-audit',
         '--no-fund',
@@ -366,9 +368,9 @@ function main() {
       staging,
     );
 
-    // npm links file: deps into node_modules as symlinks into vendor/ despite
-    // --install-links; vendor/ is excluded from the tarball, so the links
-    // would dangle. Replace them with real copies before packing.
+    // npm can still create symlinks for registry deps (e.g. peer dependency
+    // hoisting). Replace symlinked dirs under node_modules with real copies so
+    // npm pack ships the content instead of dangling links.
     materializeSymlinks(join(staging, 'node_modules'));
 
     // Bundle EVERYTHING that landed in node_modules, so install time needs
