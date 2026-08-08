@@ -146,6 +146,10 @@ function stagePackage(srcDir, destDir, stagingRoot, { keepFiles = false, full = 
     const SKIP_COPY = new Set(['node_modules', '.git', 'tmp', '.narada', '.ai', 'coverage', 'package.json']);
     for (const e of readdirSync(srcDir, { withFileTypes: true })) {
       if (SKIP_COPY.has(e.name)) continue;
+      if (e.name === 'native' && e.isDirectory() && existsSync(join(srcDir, 'native', 'Cargo.toml'))) {
+        stageRustCrate(join(srcDir, 'native'), join(destDir, 'native'));
+        continue;
+      }
       cpSync(join(srcDir, e.name), join(destDir, e.name), { recursive: true });
     }
   } else {
@@ -154,6 +158,28 @@ function stagePackage(srcDir, destDir, stagingRoot, { keepFiles = false, full = 
       const src = join(srcDir, entry);
       if (existsSync(src)) cpSync(src, join(destDir, entry), { recursive: true });
     }
+  }
+  stripIgnoreFiles(destDir);
+}
+
+/**
+ * npm pack applies .gitignore/.npmignore of bundled packages, which silently
+ * drops deliberately staged content (a crate's .gitignore excludes
+ * native/target/, so the staged release binary would never reach the
+ * tarball). The staged copy IS the curated subset — remove ignore files so
+ * npm pack takes it verbatim.
+ */
+function stripIgnoreFiles(dir) {
+  let entries;
+  try {
+    entries = readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const e of entries) {
+    const p = join(dir, e.name);
+    if (e.isDirectory()) stripIgnoreFiles(p);
+    else if (e.name === '.gitignore' || e.name === '.npmignore') rmSync(p, { force: true });
   }
 }
 
@@ -168,6 +194,31 @@ function workspaceRefsOf(pkg) {
     }
   }
   return names;
+}
+
+/**
+ * Copy a cargo crate for the artifact. The runtime resolves native binaries at
+ * native/target/release, but a full cargo target dir carries hundreds of MB of
+ * intermediate artifacts (deps/, .fingerprint/, *.rlib, *.pdb). Ship the crate
+ * sources plus only the final release binaries; if the crate was never built
+ * on the pack platform, the staged package simply has no binary and the
+ * launcher reports not_built.
+ */
+function stageRustCrate(srcNative, destNative) {
+  for (const e of readdirSync(srcNative, { withFileTypes: true })) {
+    if (e.name === 'target') continue;
+    cpSync(join(srcNative, e.name), join(destNative, e.name), { recursive: true });
+  }
+  const release = join(srcNative, 'target', 'release');
+  if (!existsSync(release)) return;
+  for (const e of readdirSync(release, { withFileTypes: true })) {
+    if (!e.isFile()) continue;
+    // Final artifacts only: *.exe / *.dll (Windows), *.so / *.dylib (Unix), or
+    // an extensionless file (Unix executable). Everything else is intermediate.
+    if (!/\.(exe|dll|so|dylib)$/.test(e.name) && e.name.includes('.')) continue;
+    mkdirSync(join(destNative, 'target', 'release'), { recursive: true });
+    cpSync(join(release, e.name), join(destNative, 'target', 'release', e.name));
+  }
 }
 
 function rewriteWorkspaceSpecs(pkg, pkgDir, stagingRoot) {
@@ -327,6 +378,13 @@ function main() {
     }
 
     const nativeCount = listNativeBinaries(join(staging, 'node_modules')).length;
+    const rustBinaryName = targetPlatform === 'win32'
+      ? 'narada-agent-runtime-server-rust.exe'
+      : 'narada-agent-runtime-server-rust';
+    const rustBinaryPath = join(
+      staging, 'node_modules', '@narada-core', 'agent-runtime-server',
+      'native', 'target', 'release', rustBinaryName,
+    );
     const hash = createHash('sha256').update(readFileSync(tgz)).digest('hex');
     const manifest = {
       schema: 'narada.cli_artifact_manifest.v1',
@@ -341,6 +399,7 @@ function main() {
       bundled_workspace_packages: toStage.size,
       bundled_packages_total: installed.length,
       native_binaries: nativeCount,
+      rust_runtime_binary: existsSync(rustBinaryPath),
       generated_at: new Date().toISOString(),
     };
     const manifestName = `manifest-${targetPlatform}-${targetArch}.json`;
