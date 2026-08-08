@@ -319,7 +319,14 @@ function main() {
   const index = buildPackageIndex(workspaceRoot);
   const artifactName = `narada-cli-${targetPlatform}-${targetArch}.tgz`;
 
-  const staging = mkdtempSync(join(tmpdir(), 'narada-cli-artifact-'));
+  // Use a short temp root on Windows CI runners to stay well under MAX_PATH.
+  // The default %TEMP% path plus nested node_modules can exceed 260 chars and
+  // cause npm to drop files during install.
+  const shortTempRoot = process.platform === 'win32' && process.env.CI
+    ? 'C:\\np'
+    : tmpdir();
+  mkdirSync(shortTempRoot, { recursive: true });
+  const staging = mkdtempSync(join(shortTempRoot, 'narada-cli-artifact-'));
   try {
     // Stage the CLI at the root and the transitive closure of every workspace
     // package it references — including workspace packages reachable only via
